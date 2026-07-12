@@ -1,0 +1,52 @@
+<header>
+  <h1>Dashboard</h1>
+  <p class="sub">
+    {{ store.totalItems() }} items across {{ store.collections().length }} collections · welcome
+    back, {{ store.profile()?.name?.split(' ')?.[0] }}
+  </p>
+</header>
+
+<div class="stats">
+  @for (stat of stats(); track stat.label) {
+    <ui-card class="stat">
+      <div class="stat__label">{{ stat.label }}</div>
+      <div class="stat__value">{{ stat.money ? (+stat.value | money) : stat.value }}</div>
+      <div class="stat__sub">{{ stat.sub }}</div>
+    </ui-card>
+  }
+</div>
+
+<section class="collections">
+  <ui-section-label>Collections</ui-section-label>
+  <div class="grid">
+    @for (collection of store.collections(); track collection.id) {
+      <ui-card [interactive]="true" [routerLink]="['/c', collection.id]">
+        <div class="banner">
+          <ui-image-slot [slotId]="'banner-' + collection.id" [placeholder]="collection.name" />
+        </div>
+        <div class="card-body">
+          <div class="name">{{ collection.name }}</div>
+          <div class="meta">
+            {{ ownedCount(collection.id) }}/{{ collection.items.length }} owned ·
+            {{ collection.groups.length }} groups
+          </div>
+          <div class="value">{{ ownedValue(collection.id) | money }}</div>
+        </div>
+      </ui-card>
+    }
+    <button type="button" class="new-tile" (click)="newCollection()">+ New collection</button>
+  </div>
+</section>
+
+<ui-card class="recent">
+  <ui-section-label class="recent__heading">Recent additions</ui-section-label>
+  @for (entry of recent(); track entry.itemId) {
+    <a class="recent__row" [routerLink]="['/c', entry.collectionId, 'items', entry.itemId]">
+      <span>
+        <span class="recent__name">{{ entry.name }}</span>
+        <span class="recent__sub">{{ entry.sub }}</span>
+      </span>
+      <span class="recent__value">{{ entry.value | money }}</span>
+    </a>
+  }
+</ui-card>

@@ -1,0 +1,29 @@
+<header>
+  <h1>Collection Store</h1>
+  <p class="sub">Curated checklists — add one to your vault, then track how close you are to completing it.</p>
+</header>
+
+<div class="grid">
+  @for (listing of store.storeListings(); track listing.id) {
+    <ui-card class="listing">
+      <div class="listing__banner">
+        <span class="letter">{{ listing.name.charAt(0) }}</span>
+        <span class="curated">CURATED</span>
+      </div>
+      <div class="listing__body">
+        <div class="name">{{ listing.name }}</div>
+        <div class="meta">by {{ listing.publisher }} · {{ listing.items.length }} items · {{ listing.groups.length }} groups</div>
+        <div class="desc">{{ listing.description }}</div>
+        <div class="fill"></div>
+        <div class="foot">
+          <span class="value">est {{ totalValue(listing) | money }}</span>
+          @if (inVault(listing)) {
+            <ui-button variant="ghost" size="sm" [disabled]="true">✓ In your vault</ui-button>
+          } @else {
+            <ui-button size="sm" (click)="add(listing)">+ Add to vault</ui-button>
+          }
+        </div>
+      </div>
+    </ui-card>
+  }
+</div>

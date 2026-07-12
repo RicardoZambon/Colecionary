@@ -1,0 +1,272 @@
+@use '../../../../styles/mixins' as *;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 30px;
+  max-width: 720px;
+}
+
+.back {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+h1 {
+  @include display-heading;
+  margin: 0;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  color: var(--accent);
+  cursor: pointer;
+
+  &.small {
+    font-size: 11px;
+  }
+}
+
+.remove {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+  flex: none;
+
+  &:hover {
+    color: var(--warn);
+  }
+
+  &.disabled {
+    color: var(--border);
+    cursor: default;
+
+    &:hover {
+      color: var(--border);
+    }
+  }
+}
+
+.general {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  ui-button {
+    align-self: flex-start;
+  }
+}
+
+.groups-card {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 8px;
+
+    .heading {
+      @include mono-label;
+    }
+  }
+}
+
+.group-row {
+  border-top: 1px solid var(--border);
+  padding: 7px 0 9px;
+
+  &__main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .tick {
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    width: 12px;
+    text-align: center;
+    flex: none;
+  }
+
+  .rename {
+    flex: 1;
+    min-width: 0;
+
+    ::ng-deep input {
+      padding: 7px 10px;
+      font-size: 12.5px;
+    }
+  }
+
+  .count {
+    font-size: 11px;
+    color: var(--muted);
+    width: 56px;
+    text-align: right;
+    flex: none;
+  }
+
+  &__fields {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 8px 0 0 22px;
+
+    .fields-label {
+      @include mono-label(9px, 0.1em);
+    }
+  }
+}
+
+.field-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--pill);
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text2);
+
+  .remove {
+    font-size: 11px;
+    width: auto;
+  }
+}
+
+.field-input {
+  border: 1px dashed var(--accent);
+  background: var(--panel2);
+  color: var(--text);
+  border-radius: var(--pill);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  outline: none;
+  width: 140px;
+}
+
+.new-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+
+  .context {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    flex: none;
+  }
+
+  &__input {
+    flex: 1;
+    min-width: 0;
+    background: var(--panel2);
+    border: var(--bw) dashed var(--accent);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 7px 10px;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    outline: none;
+  }
+}
+
+.fine-print {
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 10px;
+
+  a {
+    font-weight: 600;
+  }
+}
+
+.sharing {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 560px;
+}
+
+.invite-row {
+  display: flex;
+  gap: 8px;
+
+  .invite-email {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.members {
+  padding: 4px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 0;
+
+  & + & {
+    border-top: 1px solid var(--border);
+  }
+}
+
+.who {
+  flex: 1;
+  min-width: 0;
+
+  .name {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  .email {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
+
+.link-share {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.done-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.missing {
+  color: var(--muted);
+  font-size: 13px;
+}

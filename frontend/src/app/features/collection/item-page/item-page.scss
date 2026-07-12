@@ -1,0 +1,167 @@
+@use '../../../../styles/mixins' as *;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 30px;
+  max-width: 1020px;
+}
+
+.back {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.layout {
+  display: flex;
+  gap: 26px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.gallery {
+  width: 380px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &__main {
+    height: 300px;
+    @include stripes;
+    border: var(--bw) solid var(--border);
+    border-radius: var(--radius);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  &__thumbs {
+    display: flex;
+    gap: 10px;
+  }
+}
+
+.thumb {
+  width: 74px;
+  height: 58px;
+  @include stripes(6px);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+
+  &--active {
+    border-color: var(--accent);
+  }
+
+  &--add {
+    background: none;
+    border-style: dashed;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-size: 15px;
+    cursor: pointer;
+  }
+}
+
+.details {
+  flex: 1;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+h1 {
+  @include display-heading;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.tags {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 7px;
+  white-space: pre;
+}
+
+.price-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+
+  .value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+
+  .note {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+}
+
+.wantlist {
+  border: var(--bw) dashed var(--accent);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--text2);
+
+  span {
+    flex: 1;
+  }
+}
+
+.description {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text2);
+  text-wrap: pretty;
+  margin: 0;
+}
+
+.fields {
+  padding: 14px 16px;
+
+  &__heading {
+    padding-bottom: 8px;
+  }
+}
+
+.field-row {
+  display: flex;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+
+  .key {
+    width: 150px;
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    padding-top: 1px;
+    text-transform: uppercase;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.missing {
+  color: var(--muted);
+  font-size: 13px;
+}

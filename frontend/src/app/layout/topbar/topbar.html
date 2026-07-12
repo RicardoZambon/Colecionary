@@ -1,0 +1,46 @@
+<a class="brand" routerLink="/dashboard">
+  <span class="brand__mark">◆</span>Vault
+</a>
+
+<span class="crumb">{{ crumb() }}</span>
+
+<span class="spacer"></span>
+
+<ui-text-input
+  class="search"
+  variant="subtle"
+  placeholder="Search items…"
+  [value]="store.query()"
+  (valueChange)="store.query.set($event)"
+/>
+
+<ui-dropdown #themeMenu [width]="236">
+  <button ddTrigger type="button" class="theme-trigger" title="Theme">
+    ◐ {{ theme.currentDef.name }} ▾
+  </button>
+  <ng-container ddPanel>
+    @for (t of theme.themes; track t.id) {
+      <button
+        type="button"
+        class="theme-row"
+        [class.active]="t.id === theme.current()"
+        (click)="theme.apply(t.id); themeMenu.close()"
+      >
+        <span class="theme-row__swatches">
+          <span [style.background]="t.swatches[0]"></span>
+          <span [style.background]="t.swatches[2]"></span>
+          <span [style.background]="t.swatches[4]"></span>
+        </span>
+        <span class="theme-row__name">{{ t.name }}</span>
+        <span class="theme-row__check">@if (t.id === theme.current()) { ✓ }</span>
+      </button>
+    }
+    <a class="theme-more" routerLink="/settings" [queryParams]="{ tab: 'appearance' }" (click)="themeMenu.close()">
+      Browse details in Settings →
+    </a>
+  </ng-container>
+</ui-dropdown>
+
+<a class="gear" routerLink="/settings" title="Settings">⚙</a>
+
+<ui-avatar [initials]="store.profile()?.initials ?? '··'" />

@@ -1,0 +1,136 @@
+@if (draft(); as d) {
+  <a class="back" [routerLink]="['/c', d.id]">← {{ d.name }}</a>
+  <h1>Collection settings</h1>
+
+  <ui-tabs [tabs]="tabs" [active]="activeTab()" (activeChange)="onTabChange($event)" />
+
+  @switch (activeTab()) {
+    @case ('groups') {
+      <ui-card class="groups-card">
+        <div class="groups-card__head">
+          <span class="heading">GROUPS &amp; SUB-GROUPS</span>
+          <button type="button" class="link" (click)="pendingGroupParent.set({ parentId: null })">+ Add group</button>
+        </div>
+
+        @for (row of groupRows(); track row.node.id) {
+          <div class="group-row" [style.margin-left.px]="row.depth * 22">
+            <div class="group-row__main">
+              <span class="tick">{{ row.depth ? '↳' : '●' }}</span>
+              <ui-text-input
+                class="rename"
+                variant="subtle"
+                [value]="row.node.name"
+                (valueChange)="renameGroup(row.node.id, $event)"
+              />
+              <span class="count">{{ row.count }} items</span>
+              <button type="button" class="link" (click)="pendingGroupParent.set({ parentId: row.node.id })">+ Sub</button>
+              <button type="button" class="remove" (click)="removeGroup(row.node.id)">✕</button>
+            </div>
+            <div class="group-row__fields">
+              <span class="fields-label">FIELDS</span>
+              @for (field of row.node.fields; track field) {
+                <span class="field-chip">
+                  {{ field }}
+                  <button type="button" class="remove" (click)="removeField(row.node.id, field)">✕</button>
+                </span>
+              }
+              @if (pendingFieldGroupId() === row.node.id) {
+                <input
+                  class="field-input"
+                  placeholder="Field name… (Enter)"
+                  autofocus
+                  (keydown)="newFieldKeydown($event, row.node.id)"
+                  (blur)="commitNewField(row.node.id, $any($event.target).value)"
+                />
+              }
+              <button type="button" class="link small" (click)="pendingFieldGroupId.set(row.node.id)">+ Field</button>
+            </div>
+          </div>
+        }
+
+        @if (pendingGroupParent()) {
+          <div class="new-group">
+            <span class="context">{{ newGroupContext() }}</span>
+            <input
+              class="new-group__input"
+              placeholder="Group name… (Enter to create, Esc to cancel)"
+              autofocus
+              (keydown)="newGroupKeydown($event)"
+              (blur)="commitNewGroup($any($event.target).value)"
+            />
+          </div>
+        }
+
+        <div class="fine-print">
+          Renames apply as you type. Custom fields apply to every item in the group and its
+          sub-groups. Groups that still contain items can't be deleted — move the items first.
+        </div>
+      </ui-card>
+    }
+    @case ('sharing') {
+      <div class="sharing">
+        <div class="invite-row">
+          <ui-text-input
+            class="invite-email"
+            variant="subtle"
+            placeholder="email@company.com"
+            [value]="inviteEmail()"
+            (valueChange)="inviteEmail.set($event)"
+          />
+          <ui-select [options]="inviteRoleOptions" [value]="inviteRole()" (valueChange)="inviteRole.set($event)" />
+          <ui-button size="sm" (click)="invite()">Invite</ui-button>
+        </div>
+
+        <ui-card class="members">
+          @for (row of memberRows(); track row.member.email) {
+            <div class="member-row">
+              <ui-avatar [initials]="row.member.initials" />
+              <span class="who">
+                <span class="name">{{ row.member.name }}</span>
+                <span class="email">{{ row.member.email }}</span>
+              </span>
+              <ui-select
+                class="compact"
+                [options]="roleOptions"
+                [value]="row.member.role"
+                [disabled]="row.fixed"
+                (valueChange)="setMemberRole(row.member.email, $event)"
+              />
+              <button type="button" class="remove" [class.disabled]="row.fixed" (click)="removeMember(row.member.email, row.fixed)">✕</button>
+            </div>
+          }
+        </ui-card>
+
+        <ui-card class="link-share">
+          <span class="who">
+            <span class="name">Link sharing</span>
+            <span class="email">Anyone with the link can view this collection</span>
+          </span>
+          <ui-toggle [on]="d.linkShare" (onChange)="setLinkShare($event)" />
+        </ui-card>
+
+        <div class="fine-print">
+          Tenant-wide access rules live in
+          <a routerLink="/settings" [queryParams]="{ tab: 'access' }">Settings ▸ Sharing &amp; access</a>.
+        </div>
+      </div>
+    }
+    @default {
+      <div class="general">
+        <ui-field label="Name">
+          <ui-text-input [value]="d.name" (valueChange)="setName($event)" />
+        </ui-field>
+        <ui-field label="Description">
+          <ui-textarea [rows]="2" [value]="d.description" (valueChange)="setDescription($event)" />
+        </ui-field>
+        <ui-button variant="danger" (click)="deleteCollection()">Delete collection</ui-button>
+      </div>
+    }
+  }
+
+  <div class="done-row">
+    <ui-button (click)="done()">Done</ui-button>
+  </div>
+} @else {
+  <div class="missing">Collection not found — <a routerLink="/dashboard">back to Dashboard</a>.</div>
+}

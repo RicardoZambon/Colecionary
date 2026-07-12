@@ -1,0 +1,66 @@
+@if (collection(); as coll) {
+  <a class="back" [routerLink]="['/c', coll.id]" queryParamsHandling="preserve">← {{ coll.name }}</a>
+
+  @if (item(); as it) {
+    <div class="layout">
+      <div class="gallery">
+        <div class="gallery__main">img: {{ it.img }}</div>
+        <div class="gallery__thumbs">
+          <div class="thumb thumb--active"></div>
+          <div class="thumb"></div>
+          <div class="thumb"></div>
+          <button type="button" class="thumb thumb--add">+</button>
+        </div>
+      </div>
+
+      <div class="details">
+        <div>
+          <h1>{{ it.name }}</h1>
+          <div class="tags">{{ tags() }}</div>
+        </div>
+
+        <div class="price-row">
+          <ui-badge [tone]="tone()">{{ badge() }}</ui-badge>
+          <span class="value">{{ it.value | money }}</span>
+          <span class="note">{{ it.owned ? 'paid ' + (it.price | money) : 'market estimate' }}</span>
+        </div>
+
+        @if (!it.owned) {
+          <div class="wantlist">
+            <span>On your wantlist — not in your vault yet.</span>
+            <ui-button size="sm" (click)="markOwned()">✓ Mark as owned</ui-button>
+          </div>
+        }
+
+        <p class="description">{{ it.description }}</p>
+
+        <ui-card class="fields">
+          <ui-section-label class="fields__heading">Details</ui-section-label>
+          <div class="field-row"><span class="key">YEAR</span><span>{{ it.year }}</span></div>
+          <div class="field-row"><span class="key">GROUP</span><span>{{ groupPath() }}</span></div>
+          <div class="field-row"><span class="key">CONDITION</span><span>{{ it.condition }}</span></div>
+          <div class="field-row"><span class="key">PURCHASE PRICE</span><span>{{ it.price | money }}</span></div>
+          <div class="field-row"><span class="key">EST. VALUE</span><span>{{ it.value | money }}</span></div>
+        </ui-card>
+
+        @if (groupFieldRows().length) {
+          <ui-card class="fields">
+            <ui-section-label class="fields__heading">Group fields · {{ groupName() }}</ui-section-label>
+            @for (row of groupFieldRows(); track row.key) {
+              <div class="field-row"><span class="key">{{ row.key }}</span><span>{{ row.value }}</span></div>
+            }
+          </ui-card>
+        }
+
+        <div class="actions">
+          <ui-button [routerLink]="['/c', coll.id, 'items', it.id, 'edit']" queryParamsHandling="preserve">Edit item</ui-button>
+          <ui-button variant="danger" (click)="deleteItem()">Delete</ui-button>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div class="missing">Item not found in this collection.</div>
+  }
+} @else {
+  <div class="missing">Collection not found — <a routerLink="/dashboard">back to Dashboard</a>.</div>
+}

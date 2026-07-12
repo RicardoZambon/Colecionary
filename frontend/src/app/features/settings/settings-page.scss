@@ -1,0 +1,256 @@
+@use '../../../styles/mixins' as *;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 26px 30px;
+  max-width: 1020px;
+}
+
+h1 {
+  @include display-heading;
+  margin: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.heading {
+  @include mono-label(10.5px);
+}
+
+.sub {
+  font-size: 12.5px;
+  color: var(--text2);
+  margin: 5px 0 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+// --- appearance ---
+
+.themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.theme-card {
+  width: 208px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+
+  &--active {
+    border-color: var(--accent);
+    border-width: 2px;
+  }
+
+  .swatches {
+    display: flex;
+    gap: 6px;
+
+    span {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 1px solid rgba(128, 128, 128, 0.35);
+    }
+  }
+
+  .name {
+    font-size: 13.5px;
+    font-weight: 700;
+  }
+
+  .desc {
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .state {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+
+    &.active {
+      color: var(--accent);
+    }
+  }
+}
+
+// --- plan ---
+
+.plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  max-width: 640px;
+}
+
+.plan {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: visible;
+
+  &--active {
+    border-color: var(--accent);
+    border-width: 2px;
+  }
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  &__name {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: var(--ls-display);
+  }
+
+  &__price {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+
+  &__features {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .feature {
+    font-size: 12px;
+    color: var(--text2);
+    display: flex;
+    gap: 7px;
+
+    .tick {
+      color: var(--accent);
+    }
+  }
+}
+
+// --- access ---
+
+.access {
+  gap: 18px;
+  max-width: 760px;
+}
+
+.members,
+.policies {
+  padding: 4px 16px;
+  overflow: visible;
+}
+
+.member-row,
+.policy-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 0;
+
+  & + & {
+    border-top: 1px solid var(--border);
+  }
+}
+
+.policy-row {
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.who {
+  flex: 1;
+  min-width: 0;
+
+  .name {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  .email {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+}
+
+.remove {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+
+  &:hover {
+    color: var(--warn);
+  }
+
+  &.disabled {
+    color: var(--border);
+    cursor: default;
+
+    &:hover {
+      color: var(--border);
+    }
+  }
+}
+
+// --- account ---
+
+.account {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  max-width: 760px;
+}
+
+.account-card {
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  overflow: visible;
+
+  .who .name {
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .who .email {
+    font-size: 12px;
+  }
+}
+
+.plan-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--pill);
+  padding: 3px 10px;
+}

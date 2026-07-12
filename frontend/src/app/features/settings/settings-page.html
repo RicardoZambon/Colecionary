@@ -1,0 +1,132 @@
+<h1>Settings</h1>
+
+<ui-tabs [tabs]="tabs" [active]="activeTab()" (activeChange)="onTabChange($event)" />
+
+@switch (activeTab()) {
+  @case ('plan') {
+    <section class="section">
+      <div>
+        <div class="heading">PLAN</div>
+        <p class="sub">{{ planSub() }}</p>
+      </div>
+      <div class="plans">
+        @for (plan of plans; track plan.id) {
+          <ui-card class="plan" [class.plan--active]="store.profile()?.plan === plan.id">
+            <div class="plan__head">
+              <span class="plan__name">{{ plan.name }}</span>
+              <span class="plan__price">{{ plan.price }}</span>
+            </div>
+            <div class="plan__features">
+              @for (feature of plan.features; track feature) {
+                <div class="feature"><span class="tick">›</span>{{ feature }}</div>
+              }
+            </div>
+            @if (store.profile()?.plan === plan.id) {
+              <ui-button variant="ghost" [block]="true" [disabled]="true">● Current plan</ui-button>
+            } @else if (plan.id === 'pro') {
+              <ui-button [block]="true" (click)="choosePlan('pro')">Upgrade to Pro</ui-button>
+            } @else {
+              <ui-button variant="ghost" [block]="true" (click)="choosePlan('free')">Switch to Free</ui-button>
+            }
+          </ui-card>
+        }
+      </div>
+    </section>
+  }
+  @case ('access') {
+    <section class="section access">
+      <div>
+        <div class="heading">TENANT MEMBERS</div>
+        <p class="sub">
+          Everyone with access to the <span class="mono">acme-vault</span> tenant. Individual
+          collections can also be shared from their own page.
+        </p>
+      </div>
+      <ui-card class="members">
+        @for (member of store.tenantMembers(); track member.email) {
+          <div class="member-row">
+            <ui-avatar [initials]="member.initials" />
+            <span class="who">
+              <span class="name">{{ member.name }}</span>
+              <span class="email">{{ member.email }}</span>
+            </span>
+            <ui-select
+              class="compact"
+              [options]="roleOptions"
+              [value]="member.role"
+              [disabled]="member.role === 'Owner'"
+              (valueChange)="setMemberRole(member.email, $event)"
+            />
+            <button
+              type="button"
+              class="remove"
+              [class.disabled]="member.role === 'Owner'"
+              (click)="removeMember(member.email)"
+            >✕</button>
+          </div>
+        }
+      </ui-card>
+
+      <div class="heading">SHARING POLICY</div>
+      <ui-card class="policies">
+        @for (policy of policyDefs; track policy.key) {
+          <div class="policy-row">
+            <span class="who">
+              <span class="name">{{ policy.label }}</span>
+              <span class="email">{{ policy.description }}</span>
+            </span>
+            <ui-toggle [on]="policies()[policy.key]" (onChange)="togglePolicy(policy.key)" />
+          </div>
+        }
+      </ui-card>
+    </section>
+  }
+  @case ('account') {
+    <section class="account">
+      <ui-card class="account-card">
+        <ui-avatar size="lg" [initials]="store.profile()?.initials ?? '··'" />
+        <span class="who">
+          <span class="name">{{ store.profile()?.name }}</span>
+          <span class="email">{{ store.profile()?.email }}</span>
+        </span>
+        <span class="plan-chip">{{ store.profile()?.plan?.toUpperCase() }}</span>
+      </ui-card>
+      <ui-card class="account-card">
+        <span class="who">
+          <span class="name">Data</span>
+          <span class="email">Last backup 2h ago · {{ store.totalItems() }} items</span>
+        </span>
+        <ui-button variant="ghost" size="sm" (click)="exportJson()">Export JSON</ui-button>
+      </ui-card>
+    </section>
+  }
+  @default {
+    <section class="section">
+      <div>
+        <div class="heading">THEME</div>
+        <p class="sub">Pick a style — applies instantly and is saved to your profile.</p>
+      </div>
+      <div class="themes">
+        @for (t of theme.themes; track t.id) {
+          <ui-card
+            class="theme-card"
+            [interactive]="true"
+            [class.theme-card--active]="t.id === theme.current()"
+            (click)="theme.apply(t.id)"
+          >
+            <div class="swatches">
+              @for (swatch of t.swatches; track $index) {
+                <span [style.background]="swatch"></span>
+              }
+            </div>
+            <div class="name">{{ t.name }}</div>
+            <div class="desc">{{ t.description }}</div>
+            <div class="state" [class.active]="t.id === theme.current()">
+              {{ t.id === theme.current() ? '● ACTIVE' : 'CLICK TO APPLY' }}
+            </div>
+          </ui-card>
+        }
+      </div>
+    </section>
+  }
+}

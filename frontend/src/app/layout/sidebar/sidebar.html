@@ -1,0 +1,19 @@
+<nav class="group">
+  <a class="nav-item" routerLink="/dashboard" routerLinkActive="active">⌂ Dashboard</a>
+  <a class="nav-item" routerLink="/store" routerLinkActive="active">⊞ Store</a>
+</nav>
+
+<nav class="group">
+  <div class="heading">COLLECTIONS</div>
+  @for (collection of store.collections(); track collection.id) {
+    <a class="nav-item nav-item--split" [routerLink]="['/c', collection.id]" routerLinkActive="active">
+      <span class="name">{{ collection.name }}</span>
+      <span class="count">{{ collection.items.length }}</span>
+    </a>
+  }
+</nav>
+
+<div class="footer">
+  <a class="nav-item" routerLink="/settings" routerLinkActive="active">⚙ Settings</a>
+  <div class="status">● synced · v0.1 mock API</div>
+</div>

@@ -1,0 +1,147 @@
+:host {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px;
+  background: var(--panel);
+  border-bottom: var(--bw) solid var(--border);
+  flex: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: var(--ls-display);
+  color: var(--text);
+
+  &:hover {
+    text-decoration: none;
+  }
+
+  &__mark {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    box-shadow: var(--btn-shadow);
+  }
+}
+
+.crumb {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.search {
+  width: 240px;
+
+  ::ng-deep input {
+    padding: 7px 12px;
+    font-size: 12.5px;
+  }
+}
+
+.theme-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: var(--bw) solid var(--border);
+  background: none;
+  border-radius: var(--radius);
+  padding: 6px 11px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text2);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: transparent;
+  text-align: left;
+
+  &:hover,
+  &.active {
+    background: var(--panel2);
+  }
+
+  &__swatches {
+    display: flex;
+    gap: 3px;
+    flex: none;
+
+    span {
+      width: 13px;
+      height: 13px;
+      border-radius: 3px;
+      border: 1px solid rgba(128, 128, 128, 0.4);
+    }
+  }
+
+  &__name {
+    flex: 1;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: var(--font-body);
+  }
+
+  &__check {
+    color: var(--accent);
+    font-size: 12px;
+  }
+}
+
+.theme-more {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+
+  &:hover {
+    color: var(--accent);
+    text-decoration: none;
+  }
+}
+
+.gear {
+  width: 30px;
+  height: 30px;
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--text2);
+
+  &:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    text-decoration: none;
+  }
+}

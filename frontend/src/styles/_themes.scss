@@ -1,0 +1,167 @@
+// ============================================================================
+// Vault theme tokens — single source of truth for every color, radius, font,
+// and shadow in the app. Ported verbatim from "Collection Control.dc.html".
+//
+// A theme is applied by setting `data-theme="<id>"` on <html>
+// (see ThemeService). Components must only ever consume these variables —
+// never hardcode a color or radius in a component style.
+// ============================================================================
+
+:root {
+  // --- Paperwhite (devlight, default) ---
+  --bg: #FAFAF8;
+  --panel: #FFFFFF;
+  --panel2: #F1F1ED;
+  --border: #E7E7E2;
+  --text: #1B1B1F;
+  --text2: #4A4A52;
+  --muted: #9C9CA3;
+  --accent: #5453C4;
+  --accent-contrast: #FFFFFF;
+  --accent2: #1F8A5B;
+  --good: #1F8A5B;
+  --warn: #A16207;
+  --radius: 10px;
+  --pill: 999px;
+  --bw: 1px;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --h1: 26px;
+  --ls-display: -0.02em;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --btn-shadow: 0 1px 2px rgba(84, 83, 196, 0.35);
+}
+
+[data-theme='devdark'] {
+  --bg: #141417;
+  --panel: #1C1C21;
+  --panel2: #25252B;
+  --border: #2E2E36;
+  --text: #ECECF1;
+  --text2: #C0C0CA;
+  --muted: #6E6E78;
+  --accent: #7B7AE8;
+  --accent-contrast: #141417;
+  --accent2: #34B37A;
+  --good: #34B37A;
+  --warn: #D9A521;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --btn-shadow: none;
+}
+
+[data-theme='terminal'] {
+  --bg: #0B0E0B;
+  --panel: #0F140F;
+  --panel2: #121A12;
+  --border: #1D2A1D;
+  --text: #C9E5C9;
+  --text2: #9CC49C;
+  --muted: #557755;
+  --accent: #4ADE80;
+  --accent-contrast: #0B0E0B;
+  --accent2: #FBBF24;
+  --good: #4ADE80;
+  --warn: #FBBF24;
+  --radius: 0px;
+  --pill: 0px;
+  --font-display: 'JetBrains Mono', monospace;
+  --font-body: 'JetBrains Mono', monospace;
+  --h1: 22px;
+  --ls-display: -0.01em;
+  --shadow: none;
+  --btn-shadow: none;
+}
+
+[data-theme='arcade'] {
+  --bg: #131022;
+  --panel: #1A1633;
+  --panel2: #221C42;
+  --border: #2B2550;
+  --text: #E8E6F5;
+  --text2: #B5B0D8;
+  --muted: #7A74AC;
+  --accent: #22D3EE;
+  --accent-contrast: #131022;
+  --accent2: #F472B6;
+  --good: #4ADE80;
+  --warn: #FBBF24;
+  --radius: 0px;
+  --pill: 0px;
+  --bw: 2px;
+  --font-display: 'Press Start 2P', monospace;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --h1: 16px;
+  --ls-display: 0em;
+  --shadow: none;
+  --btn-shadow: 3px 3px 0 #0E7490;
+}
+
+[data-theme='hud'] {
+  --bg: #060B14;
+  --panel: #0B1322;
+  --panel2: #101C33;
+  --border: #1D3A5F;
+  --text: #D8EAFF;
+  --text2: #A6C6E4;
+  --muted: #4E6F94;
+  --accent: #38BDF8;
+  --accent-contrast: #041018;
+  --accent2: #FBBF24;
+  --good: #34D399;
+  --warn: #FBBF24;
+  --radius: 4px;
+  --pill: 3px;
+  --font-display: 'Orbitron', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --h1: 22px;
+  --ls-display: 0.08em;
+  --shadow: none;
+  --btn-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
+}
+
+[data-theme='paper'] {
+  --bg: #F2EFE6;
+  --panel: #FBFAF4;
+  --panel2: #E7E3D5;
+  --border: #1B1A16;
+  --text: #1B1A16;
+  --text2: #45443C;
+  --muted: #8A8778;
+  --accent: #D2481F;
+  --accent-contrast: #FBFAF4;
+  --accent2: #1B1A16;
+  --good: #2A6E4E;
+  --warn: #A16207;
+  --radius: 0px;
+  --pill: 0px;
+  --bw: 1.5px;
+  --font-display: 'Archivo Black', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --h1: 24px;
+  --ls-display: 0em;
+  --shadow: 3px 3px 0 rgba(27, 26, 22, 0.12);
+  --btn-shadow: 3px 3px 0 #1B1A16;
+}
+
+[data-theme='synth'] {
+  --bg: #150A20;
+  --panel: #1E0F2E;
+  --panel2: #2A1540;
+  --border: #45206B;
+  --text: #F5EBFF;
+  --text2: #CDABEA;
+  --muted: #8663AC;
+  --accent: #E879F9;
+  --accent-contrast: #1A0B26;
+  --accent2: #22D3EE;
+  --good: #34D399;
+  --warn: #FBBF24;
+  --radius: 8px;
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-body: 'Outfit', system-ui, sans-serif;
+  --h1: 26px;
+  --ls-display: -0.01em;
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --btn-shadow: 0 0 16px rgba(232, 121, 249, 0.45);
+}

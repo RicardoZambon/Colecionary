@@ -1,0 +1,30 @@
+// Shared style building blocks consumed by component stylesheets.
+
+@mixin panel {
+  background: var(--panel);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+@mixin mono-label($size: 10px, $tracking: 0.13em) {
+  font-family: var(--font-mono);
+  font-size: $size;
+  letter-spacing: $tracking;
+  color: var(--muted);
+}
+
+@mixin display-heading {
+  font-family: var(--font-display);
+  font-size: var(--h1);
+  font-weight: 700;
+  letter-spacing: var(--ls-display);
+}
+
+@mixin stripes($step: 8px) {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--panel2) 0 $step,
+    var(--panel) $step $step * 2
+  );
+}

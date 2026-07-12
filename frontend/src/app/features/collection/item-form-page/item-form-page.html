@@ -1,0 +1,73 @@
+@if (collection(); as coll) {
+  <a class="back" [routerLink]="['/c', coll.id]" queryParamsHandling="preserve">← {{ coll.name }}</a>
+  <h1>{{ editing() ? 'Edit item — ' + editing()!.name : 'Add item to ' + coll.name }}</h1>
+
+  <div class="layout">
+    <div class="photos">
+      <button type="button" class="dropzone">⇪ drop photos here<br />or click to browse</button>
+      <div class="hint">Up to 8 photos · first becomes the cover</div>
+    </div>
+
+    <form class="form" (submit)="$event.preventDefault(); save()">
+      <ui-field label="Name">
+        <ui-text-input [value]="name()" (valueChange)="name.set($event)" />
+      </ui-field>
+
+      <ui-field label="Description">
+        <ui-textarea [rows]="3" [value]="description()" (valueChange)="description.set($event)" />
+      </ui-field>
+
+      <div class="pair">
+        <ui-field label="Group">
+          <ui-select [options]="groupOptions()" [value]="groupId()" (valueChange)="groupId.set($event)" />
+        </ui-field>
+        <ui-field label="Condition">
+          <ui-select [options]="conditionOptions" [value]="condition()" (valueChange)="condition.set($event)" />
+        </ui-field>
+        <ui-field label="Year">
+          <ui-text-input [value]="year()" (valueChange)="year.set($event)" />
+        </ui-field>
+        <ui-field label="Status">
+          <ui-select [options]="statusOptions" [value]="status()" (valueChange)="status.set($event)" />
+        </ui-field>
+      </div>
+
+      <div class="pair">
+        <ui-field label="Purchase price">
+          <ui-text-input [value]="price()" (valueChange)="price.set($event)" />
+        </ui-field>
+        <ui-field label="Est. value">
+          <ui-text-input [value]="value()" (valueChange)="value.set($event)" />
+        </ui-field>
+      </div>
+
+      <ui-card class="group-fields">
+        <div class="group-fields__heading">GROUP FIELDS · {{ groupLabel() }}</div>
+        @for (field of groupFieldNames(); track field) {
+          <div class="group-fields__row">
+            <span class="key">{{ field }}</span>
+            <ui-text-input
+              variant="subtle"
+              placeholder="—"
+              [value]="customValue(field)"
+              (valueChange)="setCustomValue(field, $event)"
+            />
+          </div>
+        } @empty {
+          <div class="group-fields__empty">This group has no custom fields yet.</div>
+        }
+        <div class="group-fields__hint">
+          Fields come from the item's group — manage them in
+          <a [routerLink]="['/c', coll.id, 'settings']" [queryParams]="{ tab: 'groups' }">Collection settings ▸ Groups &amp; fields</a>.
+        </div>
+      </ui-card>
+
+      <div class="actions">
+        <ui-button variant="ghost" (click)="cancel()">Cancel</ui-button>
+        <ui-button type="submit">Save item</ui-button>
+      </div>
+    </form>
+  </div>
+} @else {
+  <div class="missing">Collection not found — <a routerLink="/dashboard">back to Dashboard</a>.</div>
+}
