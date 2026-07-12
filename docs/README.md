@@ -1,30 +1,31 @@
 # Colecionary — Documentation
 
-This folder contains the **design system and brand identity** for Colecionary,
-translated into actionable English-language instructions from the source brand
-manual (`Colecionary_Manual_de_Identidade_Visual_e_Design_System.pdf`, v1.0,
-May/2026).
+Two kinds of documentation live here:
 
-These documents are the canonical reference for building the product. The
-frontend, landing pages, emails, social assets, and any visual artifact must
-conform to them. See the governance rule and cheat-sheet in
-[`../CLAUDE.md`](../CLAUDE.md).
+1. **Frontend standards** — how the shipped Angular app is built and how it
+   must evolve. This is the working reference for day-to-day development.
+2. **Brand manual** — the Colecionary design system and brand identity,
+   translated from the source brand manual
+   (`Colecionary_Manual_de_Identidade_Visual_e_Design_System.pdf`, v1.0,
+   May/2026). Kept as the brand reference pending the identity review that
+   will reconcile it with the implemented "Vault" visual language (see
+   [`frontend-standards.md`](frontend-standards.md) §8).
 
 ## Contents
 
 | File | Purpose |
 | --- | --- |
-| [`brand-identity.md`](brand-identity.md) | Brand essence, strategy & positioning, audience, verbal territory, visual pillars, symbol concept, and the full logo / signature system (lockups, clear space, minimum sizes, permitted variations, prohibited uses). |
-| [`design-system.md`](design-system.md) | The visual system: color palette, semantic colors, rarity system, typography & type scale, spacing/radius/shadow scales, web grid, iconography, photography & illustration rules, SaaS UI architecture & components, item states, accessibility, motion, and the compliance checklist. |
-| [`design-tokens.md`](design-tokens.md) | Implementation tokens: framework-agnostic `:root` CSS variables, an Angular Material theme mapping, the initial component→token table, and design-system evolution rules. |
-| [`voice-and-tone.md`](voice-and-tone.md) | Tone of voice, approved vs. avoid copy (Portuguese product strings preserved with English glosses), and approved taglines. |
+| [`frontend-standards.md`](frontend-standards.md) | **Start here for development.** Architecture, non-negotiable rules (tokens-only, component library as single source of truth, `VaultApi` abstraction, signals, URL-as-state), theming, the `shared/ui` component catalog, data layer, testing, and known deviations. |
+| [`brand-identity.md`](brand-identity.md) | Brand essence, strategy & positioning, audience, verbal territory, visual pillars, symbol concept, and the full logo / signature system. |
+| [`design-system.md`](design-system.md) | Brand visual system: color palette, rarity system, typography, spacing/radius/shadow scales, grid, iconography, UI component rules, accessibility, motion, compliance checklist. |
+| [`design-tokens.md`](design-tokens.md) | Brand implementation tokens: `:root` CSS variables, Angular Material theme mapping, component→token table, evolution rules. |
+| [`voice-and-tone.md`](voice-and-tone.md) | Tone of voice, approved vs. avoid copy, approved taglines. |
 
 ## How to use this
 
-1. Start with [`../CLAUDE.md`](../CLAUDE.md) for the project overview and the
-   non-negotiable rules.
-2. Pull concrete values from [`design-tokens.md`](design-tokens.md) — never
-   hardcode colors/sizes outside the token system.
-3. Check component anatomy and rules in [`design-system.md`](design-system.md).
-4. Write user-facing copy following [`voice-and-tone.md`](voice-and-tone.md).
-5. Validate against the compliance checklist before shipping.
+1. Building or changing the app? Follow
+   [`frontend-standards.md`](frontend-standards.md) and the project rules in
+   [`../CLAUDE.md`](../CLAUDE.md).
+2. Working on brand assets (logo, landing pages, marketing)? Use the brand
+   manual docs above.
+3. Writing user-facing copy? Follow [`voice-and-tone.md`](voice-and-tone.md).

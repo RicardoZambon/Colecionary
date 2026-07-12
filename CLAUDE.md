@@ -5,75 +5,67 @@ Guidance for Claude Code (and any contributor) working in this repository.
 ## Project
 
 **Colecionary** is a SaaS to catalog, organize, value, and showcase personal
-collections — from action figures and manga to hardware, books, comics, consoles,
-and any other personal collection. It should feel like a *digital showcase*, not a
-spreadsheet: every item has a place, a story, a value, and a spotlight.
+collections. The current implementation ships under the working name
+**Vault — Collection Control**, built from the Claude Design project
+*Collection Control* (`27631083-1c42-43e2-8868-174dd8aa138b`).
 
-- **Tagline:** _"Sua coleção, organizada do seu jeito."_ (Your collection,
-  organized your way.)
-- **Personality:** modern, organized, subtly geek, trustworthy, lightly premium.
-- **Visual base:** **dark-first**, purple as primary, cyan as "technology", gold
-  as "rare/premium".
-- **First channel:** web app, with mobile planned later.
-- **MVP focus:** item registration, photos, categories, estimated value, wishlist,
-  and public collections.
+## Repository layout
 
-## Tech direction (assumed, not yet scaffolded)
-
-No application code exists yet. Based on the Visual Studio `.gitignore` and the
-chosen token format, the assumed stack is:
-
-- **Frontend:** Angular + **Angular Material**
-- **Backend:** .NET
-
-Confirm with the maintainer before scaffolding. When the frontend is created, it
-**must** consume the design tokens defined in [`docs/design-tokens.md`](docs/design-tokens.md)
-— do not hardcode colors, sizes, radii, or shadows outside the token system.
-
-## ⚠️ Governance rule (non-negotiable)
-
-> **No new color, typography, shadow, border, radius, tone of voice, or visual
-> component may be created outside the design manual without a formal identity
-> review.** The goal is to preserve consistency from MVP through SaaS evolution.
-
-Before introducing a new variation, first check whether it can be solved with
-**hierarchy, content, or composition** using existing tokens.
-
-## Design non-negotiables (cheat-sheet)
-
-- **Primary action / CTA / focus / active links** → Vault Purple `#7C5CFF`.
-- **Base background** → Colecionary Night `#101827`. **Never** pure black `#000`
-  or pure white `#FFF` for text/background; use Soft White `#F8FAFC` /
-  Light Text `#182033`.
-- **Gold** (`#F5B84B`) = rarity / premium accents only, used **sparingly**; never
-  a dominant or large background color, never dominant in the logo.
-- **Cyan** (`#28D8FF`) = technology/informational accents; **not** the recurring
-  primary CTA.
-- **Rarity and status are never communicated by color alone** — always pair with
-  text and/or an icon.
-- **Visible keyboard focus** is mandatory (`shadow-focus`, purple/cyan outline).
-- **Spacing follows a 4px scale.** No arbitrary spacing values.
-- **Destructive actions** use the semantic Error color with explicit text — never
-  purple for delete.
-- **Minimum hit target:** 40px (web), 44px (future mobile).
-- Cards put **the item's photo first**; the Item Card is the most important
-  component in the product.
-
-## Documentation index
-
-| Doc | Read it when you need… |
+| Path | What it is |
 | --- | --- |
-| [`docs/brand-identity.md`](docs/brand-identity.md) | Brand strategy, positioning, audience, visual pillars, logo system and prohibited logo uses. |
-| [`docs/design-system.md`](docs/design-system.md) | Colors, rarity system, typography, spacing/radius/shadow, grid, iconography, UI components, item states, accessibility, motion, and the compliance checklist. |
-| [`docs/design-tokens.md`](docs/design-tokens.md) | The implementation tokens: `:root` CSS variables, Angular Material theme mapping, component→token table, evolution rules. |
-| [`docs/voice-and-tone.md`](docs/voice-and-tone.md) | How Colecionary writes: voice principles, approved vs. avoid copy, taglines. |
+| `frontend/` | **The app.** Angular 21 + TypeScript, mocked data, backend-ready. |
+| `prototype/` | Frozen dependency-free HTML/JS port of the design file. Reference only — do not add features here. |
+| `docs/frontend-standards.md` | **The frontend rulebook.** Architecture, component catalog, theming, data layer. Read it before touching `frontend/`. |
+| `docs/` (rest) | Colecionary brand manual (identity, design system, brand tokens, voice). Brand reference — not yet the app's visual language (see governance below). |
 
-The original source of truth is `Colecionary_Manual_de_Identidade_Visual_e_Design_System.pdf`
-(brand manual v1.0, May/2026). The docs above are a faithful English translation
-and restructuring of that manual.
+## Commands (run in `frontend/`)
 
-## Before shipping any UI
+```sh
+npm start        # dev server → http://localhost:4200
+npm test         # vitest unit tests
+npm run build    # production build (must pass before merging)
+```
 
-Run the **compliance checklist** in
-[`docs/design-system.md`](docs/design-system.md#compliance-checklist). Every answer
-must be "Yes".
+`.claude/launch.json` defines the `frontend` (4200) and `prototype` (4173)
+preview servers.
+
+## Non-negotiable frontend rules
+
+Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standards.md).
+
+1. **Design tokens only.** All colors/fonts/radii/shadows come from the CSS
+   custom properties in `frontend/src/styles/_themes.scss` (7 themes). Never
+   hardcode visual values in components or pages.
+2. **`shared/ui` is the single source of truth for elements.** Buttons,
+   inputs, selects, chips, cards, badges, toggles, tabs, avatars, dropdowns,
+   etc. are always the `ui-*` components. Need a variant? Extend the
+   component; never restyle raw HTML in a page.
+3. **All data flows through the abstract `VaultApi`**
+   (`frontend/src/app/core/api/vault-api.ts`). It is currently fulfilled by
+   `MockVaultApi` (seed data + latency + localStorage). To connect the real
+   backend, implement the same contract and swap one provider line in
+   `app.config.ts` — feature code must never know the difference.
+4. **Signals + zoneless + OnPush.** State lives in signal stores
+   (`core/state`); no Zone.js patterns.
+5. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
+   the path. In-collection navigation preserves `?g=`
+   (`queryParamsHandling: 'preserve'`).
+6. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
+   `:focus-visible`, status never communicated by color alone.
+7. **Verify before merging:** `npm run build` clean, unit tests green, and
+   the affected flows exercised in the browser in at least one dark theme.
+
+## ⚠️ Brand governance (pending)
+
+The app currently uses the Collection Control design's own "Vault" theming
+(indigo `#5453C4`, 7 switchable themes). The Colecionary brand manual in
+`docs/` defines a different identity (Vault Purple `#7C5CFF`, Colecionary
+Night `#101827`, dark-first). **No new visual language may be invented beyond
+either system.** Reconciling the two requires a formal identity review;
+mechanically it is a one-file change (`styles/_themes.scss`).
+
+## Backend (not started)
+
+Planned stack: **.NET** API. When it lands, implement `HttpVaultApi` against
+the `VaultApi` contract — the models in `frontend/src/app/core/models/`
+define the expected shapes.
