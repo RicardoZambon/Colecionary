@@ -1,12 +1,20 @@
 @if (collection(); as coll) {
   <div class="banner">
-    <ui-image-slot [slotId]="'banner-' + coll.id" placeholder="Drop a banner image for this collection" />
+    <ui-image-slot
+      [src]="images.url(coll.bannerImageId)"
+      placeholder="Drop a banner image for this collection"
+      (fileSelected)="setCollectionImage('banner', $event)"
+    />
     <div class="banner__fade"></div>
   </div>
 
   <div class="header">
     <div class="header__icon">
-      <ui-image-slot [slotId]="'icon-' + coll.id" placeholder="Icon" />
+      <ui-image-slot
+        [src]="images.url(coll.iconImageId)"
+        placeholder="Icon"
+        (fileSelected)="setCollectionImage('icon', $event)"
+      />
     </div>
     <div class="header__text">
       <h1>{{ title() }}</h1>
@@ -98,7 +106,13 @@
           [routerLink]="['/c', coll.id, 'items', item.id]"
           queryParamsHandling="preserve"
         >
-          <div class="item-card__img" [class.dim]="!item.owned">img: {{ item.img }}</div>
+          <div class="item-card__img" [class.dim]="!item.owned">
+            @if (item.photoIds.length) {
+              <div class="cover" [style.background-image]="'url(' + images.url(item.photoIds[0]) + ')'"></div>
+            } @else {
+              img: {{ item.img }}
+            }
+          </div>
           <div class="item-card__body">
             <div class="item-card__name">{{ item.name }}</div>
             <div class="item-card__meta">{{ item.year }} · {{ groupName(item) }}</div>

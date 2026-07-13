@@ -1,0 +1,38 @@
+<ui-card class="panel">
+  <div class="brand">
+    <span class="brand__mark">◆</span>
+    <span class="brand__name">Vault</span>
+  </div>
+  <p class="tagline">Sign in to your collection vault.</p>
+
+  <form (submit)="$event.preventDefault(); submit()">
+    <ui-field label="Email">
+      <ui-text-input
+        type="email"
+        placeholder="you@company.com"
+        [value]="email()"
+        (valueChange)="email.set($event)"
+      />
+    </ui-field>
+    <ui-field label="Password">
+      <ui-text-input
+        type="password"
+        placeholder="••••••••"
+        [value]="password()"
+        (valueChange)="password.set($event)"
+      />
+    </ui-field>
+
+    @if (error(); as message) {
+      <div class="error" role="alert">{{ message }}</div>
+    }
+
+    <ui-button type="submit" [block]="true" [disabled]="busy()">
+      {{ busy() ? 'Signing in…' : 'Sign in' }}
+    </ui-button>
+  </form>
+
+  <div class="demo-hint">
+    demo: <span class="mono">marcus@airia.com</span> · <span class="mono">vault-demo</span>
+  </div>
+</ui-card>

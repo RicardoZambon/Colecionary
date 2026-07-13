@@ -11,4 +11,6 @@ export interface Collection {
   /** People this collection is shared with (the tenant owner is implicit). */
   members: Member[];
   linkShare: boolean;
+  bannerImageId?: string | null;
+  iconImageId?: string | null;
 }

@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, effect, inject, signal } from '@angular/core';
 
-import { THEMES } from '../api/seed-data';
+import { THEMES } from './themes';
 import { ThemeDef, ThemeId } from '../models';
 
 const STORAGE_KEY = 'vault.theme';

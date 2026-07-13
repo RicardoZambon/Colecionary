@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
+import { ImagesApi } from '../../../core/api/images-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { fieldsFor, groupById, pathOf } from '../../../core/utils/groups.util';
@@ -17,11 +18,24 @@ import { UiBadge, UiButton, UiCard, UiSectionLabel } from '../../../shared/ui';
 })
 export class ItemPage {
   protected readonly store = inject(VaultStore);
+  protected readonly images = inject(ImagesApi);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
   readonly collectionId = input.required<string>();
   readonly itemId = input.required<string>();
+
+  protected readonly selectedPhoto = signal(0);
+
+  protected readonly photoUrls = computed(
+    () => this.item()?.photoIds.map(id => this.images.url(id)!) ?? [],
+  );
+
+  protected readonly mainPhotoUrl = computed(() => {
+    const urls = this.photoUrls();
+    if (!urls.length) return null;
+    return urls[Math.min(this.selectedPhoto(), urls.length - 1)];
+  });
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
   protected readonly item = computed(() =>
@@ -65,6 +79,34 @@ export class ItemPage {
     if (!collection || !item) return '';
     return groupById(collection.groups, item.groupId)?.name ?? item.groupId;
   });
+
+  protected addPhoto(): void {
+    const item = this.item();
+    if (!item) return;
+    if (item.photoIds.length >= 8) {
+      this.toast.flash('Up to 8 photos per item');
+      return;
+    }
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/*';
+    picker.onchange = async () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      try {
+        const imageId = await this.images.upload(file);
+        await this.store.upsertItem(this.collectionId(), {
+          ...item,
+          photoIds: [...item.photoIds, imageId],
+        });
+        this.selectedPhoto.set(item.photoIds.length);
+        this.toast.flash('Photo added ✓');
+      } catch (err) {
+        this.toast.flash(err instanceof Error ? err.message : 'Upload failed');
+      }
+    };
+    picker.click();
+  }
 
   protected async markOwned(): Promise<void> {
     const item = this.item();

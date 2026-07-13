@@ -54,6 +54,8 @@ export class Shell {
   protected readonly store = inject(VaultStore);
 
   constructor() {
-    void this.store.load();
+    // A failed load mid-session (e.g. expired token) is handled by the auth
+    // interceptor, which logs out and redirects — nothing to do here.
+    this.store.load().catch(() => undefined);
   }
 }

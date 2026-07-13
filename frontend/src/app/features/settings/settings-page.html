@@ -94,7 +94,7 @@
       <ui-card class="account-card">
         <span class="who">
           <span class="name">Data</span>
-          <span class="email">Last backup 2h ago · {{ store.totalItems() }} items</span>
+          <span class="email">{{ store.totalItems() }} items across {{ store.collections().length }} collections</span>
         </span>
         <ui-button variant="ghost" size="sm" (click)="exportJson()">Export JSON</ui-button>
       </ui-card>

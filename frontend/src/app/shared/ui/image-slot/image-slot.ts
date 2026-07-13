@@ -1,10 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
-
-import { ImageSlotService } from '../../../core/state/image-slot.service';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 
 /**
  * User-fillable image placeholder (collection banners and icons).
- * Click to browse or drop an image file; the image persists per slot id.
+ * Purely presentational: shows `src` when set, the striped placeholder
+ * otherwise, and emits the picked/dropped file — the page owns upload
+ * and persistence.
  */
 @Component({
   selector: 'ui-image-slot',
@@ -58,12 +58,9 @@ import { ImageSlotService } from '../../../core/state/image-slot.service';
   `,
 })
 export class UiImageSlot {
-  private readonly imageSlots = inject(ImageSlotService);
-
-  readonly slotId = input.required<string>();
+  readonly src = input<string | null>(null);
   readonly placeholder = input('');
-
-  protected readonly src = computed(() => this.imageSlots.images()[this.slotId()]);
+  readonly fileSelected = output<File>();
 
   protected browse(): void {
     const input = document.createElement('input');
@@ -71,7 +68,7 @@ export class UiImageSlot {
     input.accept = 'image/*';
     input.onchange = () => {
       const file = input.files?.[0];
-      if (file) void this.imageSlots.setImage(this.slotId(), file);
+      if (file) this.fileSelected.emit(file);
     };
     input.click();
   }
@@ -83,6 +80,6 @@ export class UiImageSlot {
   protected onDrop(event: DragEvent): void {
     event.preventDefault();
     const file = event.dataTransfer?.files?.[0];
-    if (file) void this.imageSlots.setImage(this.slotId(), file);
+    if (file) this.fileSelected.emit(file);
   }
 }

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
+import { ImagesApi } from '../../core/api/images-api';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
@@ -14,13 +15,8 @@ interface RecentEntry {
   value: number;
 }
 
-/** [collectionId, itemId, when] — demo "recently added" feed. */
-const RECENT_SEED: [string, string, string][] = [
-  ['retro', 'n64', '2h ago'],
-  ['comics', 'saga', '1d ago'],
-  ['vinyl', 'doomost', '2d ago'],
-  ['cards', 'charizard', '4d ago'],
-];
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const RECENT_COUNT = 4;
 
 @Component({
   selector: 'app-dashboard-page',
@@ -31,23 +27,57 @@ const RECENT_SEED: [string, string, string][] = [
 })
 export class DashboardPage {
   protected readonly store = inject(VaultStore);
+  protected readonly images = inject(ImagesApi);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
+  private readonly allItems = computed(() =>
+    this.store.collections().flatMap(collection =>
+      collection.items.map(item => ({ collection, item })),
+    ),
+  );
+
+  protected readonly addedThisWeek = computed(() => {
+    const cutoff = Date.now() - WEEK_MS;
+    return this.allItems().filter(
+      x => x.item.createdAt && new Date(x.item.createdAt).getTime() >= cutoff,
+    ).length;
+  });
+
+  /** Owned value vs what was actually paid — the only honest "trend" we have. */
+  protected readonly appreciationLabel = computed(() => {
+    const owned = this.allItems()
+      .map(x => x.item)
+      .filter(i => i.owned && i.price > 0);
+    const paid = owned.reduce((acc, i) => acc + i.price, 0);
+    if (!paid) return 'no purchase data yet';
+    const value = owned.reduce((acc, i) => acc + i.value, 0);
+    const pct = ((value - paid) / paid) * 100;
+    return `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% vs purchase`;
+  });
+
   protected readonly stats = computed(() => [
     { label: 'ITEMS', value: String(this.store.totalItems()), sub: `across ${this.store.collections().length} collections`, money: false },
-    { label: 'EST. VALUE', value: this.store.totalOwnedValue(), sub: '▲ 4.2% this month', money: true },
+    { label: 'EST. VALUE', value: this.store.totalOwnedValue(), sub: this.appreciationLabel(), money: true },
     { label: 'GROUPS', value: String(this.store.totalGroups()), sub: `in ${this.store.collections().length} collections`, money: false },
-    { label: 'ADDED', value: '4', sub: 'this week', money: false },
+    { label: 'ADDED', value: String(this.addedThisWeek()), sub: 'this week', money: false },
   ]);
 
   protected readonly recent = computed<RecentEntry[]>(() =>
-    RECENT_SEED.flatMap(([collectionId, itemId, when]) => {
-      const collection = this.store.collection(collectionId);
-      const item = collection?.items.find(i => i.id === itemId);
-      if (!collection || !item) return [];
-      return [{ collectionId, itemId, name: item.name, sub: `${collection.name} · added ${when}`, value: item.value }];
-    }),
+    this.allItems()
+      .filter(x => x.item.createdAt)
+      .sort(
+        (a, b) =>
+          new Date(b.item.createdAt!).getTime() - new Date(a.item.createdAt!).getTime(),
+      )
+      .slice(0, RECENT_COUNT)
+      .map(x => ({
+        collectionId: x.collection.id,
+        itemId: x.item.id,
+        name: x.item.name,
+        sub: `${x.collection.name} · added ${timeAgo(x.item.createdAt!)}`,
+        value: x.item.value,
+      })),
   );
 
   protected ownedCount(collectionId: string): number {
@@ -68,4 +98,13 @@ export class DashboardPage {
     this.toast.flash('Collection created — name it here');
     void this.router.navigate(['/c', created.id, 'settings'], { queryParams: { tab: 'general' } });
   }
+}
+
+function timeAgo(iso: string): string {
+  const elapsedMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.max(1, Math.floor(elapsedMs / 60_000));
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }

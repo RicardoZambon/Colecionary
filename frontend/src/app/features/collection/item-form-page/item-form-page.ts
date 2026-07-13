@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
+import { ImagesApi } from '../../../core/api/images-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { Condition, Item } from '../../../core/models';
@@ -18,6 +19,8 @@ const STATUS_OPTIONS: SelectOption[] = [
   { value: 'Wanted', label: 'Wanted — on the hunt' },
 ];
 
+const MAX_PHOTOS = 8;
+
 @Component({
   selector: 'app-item-form-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -27,6 +30,7 @@ const STATUS_OPTIONS: SelectOption[] = [
 })
 export class ItemFormPage {
   protected readonly store = inject(VaultStore);
+  protected readonly images = inject(ImagesApi);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
@@ -52,6 +56,8 @@ export class ItemFormPage {
   protected readonly price = signal('');
   protected readonly value = signal('');
   protected readonly custom = signal<Record<string, string>>({});
+  protected readonly photoIds = signal<string[]>([]);
+  protected readonly uploading = signal(false);
 
   private initializedFor: string | null = null;
 
@@ -73,7 +79,46 @@ export class ItemFormPage {
       this.price.set(item ? String(item.price) : '');
       this.value.set(item ? String(item.value) : '');
       this.custom.set(Object.fromEntries((item?.custom ?? []).map(c => [c.key, c.value])));
+      this.photoIds.set([...(item?.photoIds ?? [])]);
     });
+  }
+
+  protected browsePhotos(): void {
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/*';
+    picker.multiple = true;
+    picker.onchange = () => void this.addPhotos([...(picker.files ?? [])]);
+    picker.click();
+  }
+
+  protected onPhotoDrop(event: DragEvent): void {
+    event.preventDefault();
+    void this.addPhotos([...(event.dataTransfer?.files ?? [])]);
+  }
+
+  protected async addPhotos(files: File[]): Promise<void> {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (!imageFiles.length) return;
+    this.uploading.set(true);
+    try {
+      for (const file of imageFiles) {
+        if (this.photoIds().length >= MAX_PHOTOS) {
+          this.toast.flash('Up to 8 photos per item');
+          break;
+        }
+        const imageId = await this.images.upload(file);
+        this.photoIds.update(ids => [...ids, imageId]);
+      }
+    } catch (err) {
+      this.toast.flash(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      this.uploading.set(false);
+    }
+  }
+
+  protected removePhoto(index: number): void {
+    this.photoIds.update(ids => ids.filter((_, i) => i !== index));
   }
 
   protected readonly groupOptions = computed<SelectOption[]>(() =>
@@ -128,6 +173,8 @@ export class ItemFormPage {
       owned,
       tags: [...tags],
       img: existing?.img ?? slugify(name) + '.jpg',
+      photoIds: this.photoIds(),
+      createdAt: existing?.createdAt,
       custom: this.groupFieldNames()
         .map(key => ({ key, value: (this.custom()[key] ?? '').trim() }))
         .filter(c => c.value),

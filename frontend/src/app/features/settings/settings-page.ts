@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { PLANS } from '../../core/api/seed-data';
+import { PLANS } from './plans';
 import { ThemeService } from '../../core/state/theme.service';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';

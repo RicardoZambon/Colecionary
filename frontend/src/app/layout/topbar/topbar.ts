@@ -3,6 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, map } from 'rxjs/operators';
 
+import { AuthService } from '../../core/auth/auth.service';
 import { ThemeService } from '../../core/state/theme.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { pathOf } from '../../core/utils/groups.util';
@@ -18,6 +19,7 @@ import { UiAvatar, UiDropdown, UiTextInput } from '../../shared/ui';
 export class Topbar {
   protected readonly store = inject(VaultStore);
   protected readonly theme = inject(ThemeService);
+  protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
   private readonly url = toSignal(

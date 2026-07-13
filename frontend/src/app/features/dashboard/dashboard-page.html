@@ -22,7 +22,7 @@
     @for (collection of store.collections(); track collection.id) {
       <ui-card [interactive]="true" [routerLink]="['/c', collection.id]">
         <div class="banner">
-          <ui-image-slot [slotId]="'banner-' + collection.id" [placeholder]="collection.name" />
+          <ui-image-slot [src]="images.url(collection.bannerImageId)" [placeholder]="collection.name" />
         </div>
         <div class="card-body">
           <div class="name">{{ collection.name }}</div>

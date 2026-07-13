@@ -129,6 +129,51 @@
   }
 }
 
+.avatar-trigger {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: block;
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+
+  &__name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  &__email {
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
+
+.signout {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  color: var(--text2);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--panel2);
+    color: var(--warn);
+  }
+}
+
 .gear {
   width: 30px;
   height: 30px;

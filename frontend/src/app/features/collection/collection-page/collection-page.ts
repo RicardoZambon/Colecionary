@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
+import { ImagesApi } from '../../../core/api/images-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { Collection, Condition, GroupNode, Item } from '../../../core/models';
@@ -59,6 +60,7 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
 })
 export class CollectionPage {
   protected readonly store = inject(VaultStore);
+  protected readonly images = inject(ImagesApi);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -204,6 +206,22 @@ export class CollectionPage {
 
   protected toggleOwn(value: Exclude<OwnFilter, null>): void {
     this.own.update(current => (current === value ? null : value));
+  }
+
+  protected async setCollectionImage(slot: 'banner' | 'icon', file: File): Promise<void> {
+    const collection = this.collection();
+    if (!collection) return;
+    try {
+      const imageId = await this.images.upload(file);
+      await this.store.updateCollection({
+        ...collection,
+        bannerImageId: slot === 'banner' ? imageId : collection.bannerImageId,
+        iconImageId: slot === 'icon' ? imageId : collection.iconImageId,
+      });
+      this.toast.flash('Image updated ✓');
+    } catch (err) {
+      this.toast.flash(err instanceof Error ? err.message : 'Upload failed');
+    }
   }
 
   protected newGroupKeydown(event: KeyboardEvent): void {

@@ -37,6 +37,11 @@
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--muted);
+
+    &--photo {
+      background-size: cover;
+      background-position: center;
+    }
   }
 
   &__thumbs {
@@ -51,6 +56,13 @@
   @include stripes(6px);
   border: var(--bw) solid var(--border);
   border-radius: var(--radius);
+  padding: 0;
+
+  &--photo {
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+  }
 
   &--active {
     border-color: var(--accent);
@@ -64,6 +76,11 @@
     color: var(--muted);
     font-size: 15px;
     cursor: pointer;
+
+    &:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
   }
 }
 

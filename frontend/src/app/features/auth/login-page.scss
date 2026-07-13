@@ -1,0 +1,67 @@
+:host {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.panel {
+  width: 360px;
+  padding: 28px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: visible;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: var(--ls-display);
+
+  &__mark {
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    box-shadow: var(--btn-shadow);
+  }
+}
+
+.tagline {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--warn);
+  border: var(--bw) dashed var(--warn);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.demo-hint {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+
+  .mono {
+    font-family: var(--font-mono);
+  }
+}

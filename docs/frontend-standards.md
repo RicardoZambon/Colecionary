@@ -114,7 +114,7 @@ All are exported from `shared/ui/index.ts`.
 | Progress | `ui-progress` | `pct` (required, 0–100) |
 | Section label | `ui-section-label` | content-projected mono uppercase micro-heading |
 | Dropdown | `ui-dropdown` | `width`; project trigger via `[ddTrigger]`, panel via `[ddPanel]`; call `close()` from panel handlers |
-| Image slot | `ui-image-slot` | `slotId` (required), `placeholder` — click/drop to fill, persists via `ImageSlotService` |
+| Image slot | `ui-image-slot` | `src`, `placeholder`; output `fileSelected(File)` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
 | Toast | `ui-toast` | none — global outlet in the shell, driven by `ToastService.flash()` |
 | Money pipe | `\| money` | formats numbers as `$1,234` |
 
@@ -122,21 +122,25 @@ All are exported from `shared/ui/index.ts`.
 only, export it from the barrel, and document it in this table. If two pages
 style the same raw element the same way, that's the signal to promote it here.
 
-## 5. Data layer — mocked now, backend-ready
+## 5. Data layer
 
 - `VaultApi` (abstract class = DI token) defines the full backend contract:
   collections CRUD, item upsert/delete, store listings + import, tenant
   members, profile. All methods return `Observable`s.
-- `MockVaultApi` implements it with seed data (`core/api/seed-data.ts`),
-  ~120 ms simulated latency, deep-copied responses (no shared references with
-  "server" state), and `localStorage` persistence.
-- The provider is wired in `app.config.ts`:
-  ```ts
-  { provide: VaultApi, useExisting: MockVaultApi }
-  ```
-  **Connecting the real .NET backend** = implement `HttpVaultApi` against the
-  same contract and change this one line. No store, page, or component
-  changes.
+- **`HttpVaultApi` is the only implementation** (wired in `app.config.ts`),
+  talking to the .NET API in `backend/` (`environment.apiBaseUrl`). It unwraps
+  ProblemDetails errors into plain `Error`s so toast paths keep working.
+  There is no mocked data in the frontend — demo data lives in the backend
+  seeder (`backend/src/Vault.Infrastructure/Persistence/Seeding/`).
+- **Images** go through `ImagesApi` (`core/api/images-api.ts`): authenticated
+  multipart upload returning an id; reads are plain `<img>`-compatible URLs
+  (`/api/images/{id}`). `ui-image-slot` is presentational — it renders `src`
+  and emits the picked file; pages own upload + persistence (photo ids travel
+  on the item/collection DTOs).
+- **Auth** (`core/auth/`): `AuthService` (signal store; JWT session in
+  `localStorage('vault.auth')`), a functional interceptor that attaches the
+  bearer token and logs out on mid-session 401s, and `authGuard` protecting
+  every routed page except `/login`.
 - `VaultStore` (`core/state/vault.store.ts`) is the single client-side state
   holder: private writable signals, public `asReadonly()` views, `computed()`
   aggregates, and async mutation methods that call the API first and update

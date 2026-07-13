@@ -13,21 +13,50 @@ collections. The current implementation ships under the working name
 
 | Path | What it is |
 | --- | --- |
-| `frontend/` | **The app.** Angular 21 + TypeScript, mocked data, backend-ready. |
+| `frontend/` | **The app.** Angular 21 + TypeScript. Talks to the backend via `HttpVaultApi` (JWT auth). No mocked data — everything comes from the API. |
+| `backend/` | **The API.** .NET 10 clean-architecture solution (Domain / Application / Infrastructure / Api), PostgreSQL + EF Core, JWT auth, multi-tenancy via global query filters. See `backend/README.md`. |
 | `prototype/` | Frozen dependency-free HTML/JS port of the design file. Reference only — do not add features here. |
 | `docs/frontend-standards.md` | **The frontend rulebook.** Architecture, component catalog, theming, data layer. Read it before touching `frontend/`. |
 | `docs/` (rest) | Colecionary brand manual (identity, design system, brand tokens, voice). Brand reference — not yet the app's visual language (see governance below). |
 
-## Commands (run in `frontend/`)
+## Commands
 
 ```sh
-npm start        # dev server → http://localhost:4200
+# backend/  — requires Docker for Postgres
+docker compose up -d                  # Postgres 17 → localhost:5433
+dotnet run --project src/Vault.Api    # API → http://localhost:5100 (migrates + seeds in dev)
+dotnet test                           # unit + integration (Testcontainers)
+dotnet format --verify-no-changes
+
+# frontend/
+npm start        # dev server → http://localhost:4200 (expects the API on 5100)
 npm test         # vitest unit tests
 npm run build    # production build (must pass before merging)
 ```
 
+Demo login: `marcus@airia.com` / `vault-demo` (also `ana@` Editor, `dev@` Viewer).
 `.claude/launch.json` defines the `frontend` (4200) and `prototype` (4173)
 preview servers.
+
+## Non-negotiable backend rules
+
+Full detail in [`backend/README.md`](backend/README.md).
+
+1. **Tenant isolation is enforced by the database layer, not by services.**
+   Every tenant-owned entity implements `ITenantOwned`; `VaultDbContext`
+   applies a global query filter by convention and the
+   `TenantStampingInterceptor` stamps/validates `TenantId` on writes. Never
+   hand-write `WHERE TenantId = …`, never bypass the filter outside
+   login/seeding, and any new tenant-owned entity just implements the
+   interface.
+2. **Layering:** controllers are thin; behavior lives in Application services;
+   EF mechanics live in Infrastructure repositories (one per aggregate root —
+   no generic repository). Domain references nothing.
+3. **The API contract mirrors `VaultApi`** (frontend). JSON stays camelCase
+   with string enums so the Angular models never change. Contract changes must
+   update both sides plus the integration tests.
+4. **Tests:** integration tests run against real Postgres (Testcontainers);
+   tenant isolation has dedicated coverage that must stay green.
 
 ## Non-negotiable frontend rules
 
@@ -64,8 +93,11 @@ Night `#101827`, dark-first). **No new visual language may be invented beyond
 either system.** Reconciling the two requires a formal identity review;
 mechanically it is a one-file change (`styles/_themes.scss`).
 
-## Backend (not started)
+## Known v1 tradeoffs (documented follow-ups)
 
-Planned stack: **.NET** API. When it lands, implement `HttpVaultApi` against
-the `VaultApi` contract — the models in `frontend/src/app/core/models/`
-define the expected shapes.
+JWT in localStorage without refresh tokens; no optimistic concurrency on the
+full-document collection PUT; collection members are denormalized snapshots;
+invited members can't log in until an invite/set-password flow exists; images
+are stored as Postgres bytea and served via unguessable-GUID URLs (move to
+object storage + signed URLs later); replaced/removed images are not
+garbage-collected yet.

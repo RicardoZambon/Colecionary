@@ -43,4 +43,15 @@
 
 <a class="gear" routerLink="/settings" title="Settings">⚙</a>
 
-<ui-avatar [initials]="store.profile()?.initials ?? '··'" />
+<ui-dropdown #profileMenu [width]="200">
+  <button ddTrigger type="button" class="avatar-trigger" title="Account">
+    <ui-avatar [initials]="store.profile()?.initials ?? '··'" />
+  </button>
+  <ng-container ddPanel>
+    <div class="profile-info">
+      <span class="profile-info__name">{{ store.profile()?.name }}</span>
+      <span class="profile-info__email">{{ store.profile()?.email }}</span>
+    </div>
+    <button type="button" class="signout" (click)="profileMenu.close(); auth.logout()">Sign out</button>
+  </ng-container>
+</ui-dropdown>

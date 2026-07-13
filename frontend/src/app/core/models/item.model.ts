@@ -21,6 +21,10 @@ export interface Item {
   custom: CustomFieldValue[];
   /** false = on the wantlist, not in the vault yet. */
   owned: boolean;
+  /** Uploaded photo ids, ordered — the first one is the cover. */
+  photoIds: string[];
+  /** Server-controlled creation timestamp (ISO). */
+  createdAt?: string;
 }
 
 export type ItemDraft = Omit<Item, 'id' | 'img' | 'tags'>;

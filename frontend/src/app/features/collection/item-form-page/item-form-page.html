@@ -4,7 +4,32 @@
 
   <div class="layout">
     <div class="photos">
-      <button type="button" class="dropzone">⇪ drop photos here<br />or click to browse</button>
+      <button
+        type="button"
+        class="dropzone"
+        [disabled]="uploading()"
+        (click)="browsePhotos()"
+        (dragover)="$event.preventDefault()"
+        (drop)="onPhotoDrop($event)"
+      >
+        @if (uploading()) {
+          uploading…
+        } @else {
+          ⇪ drop photos here<br />or click to browse
+        }
+      </button>
+      @if (photoIds().length) {
+        <div class="photo-grid">
+          @for (id of photoIds(); track id) {
+            <div class="photo" [style.background-image]="'url(' + images.url(id) + ')'">
+              @if ($index === 0) {
+                <span class="cover-tag">COVER</span>
+              }
+              <button type="button" class="photo__remove" title="Remove photo" (click)="removePhoto($index)">✕</button>
+            </div>
+          }
+        </div>
+      }
       <div class="hint">Up to 8 photos · first becomes the cover</div>
     </div>
 

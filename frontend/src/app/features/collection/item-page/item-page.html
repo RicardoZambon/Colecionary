@@ -4,12 +4,24 @@
   @if (item(); as it) {
     <div class="layout">
       <div class="gallery">
-        <div class="gallery__main">img: {{ it.img }}</div>
+        @if (mainPhotoUrl(); as url) {
+          <div class="gallery__main gallery__main--photo" [style.background-image]="'url(' + url + ')'"></div>
+        } @else {
+          <div class="gallery__main">img: {{ it.img }}</div>
+        }
         <div class="gallery__thumbs">
-          <div class="thumb thumb--active"></div>
-          <div class="thumb"></div>
-          <div class="thumb"></div>
-          <button type="button" class="thumb thumb--add">+</button>
+          @for (url of photoUrls(); track $index) {
+            <button
+              type="button"
+              class="thumb thumb--photo"
+              [class.thumb--active]="$index === selectedPhoto()"
+              [style.background-image]="'url(' + url + ')'"
+              (click)="selectedPhoto.set($index)"
+            ></button>
+          }
+          @if (it.photoIds.length < 8) {
+            <button type="button" class="thumb thumb--add" (click)="addPhoto()" title="Add photo">+</button>
+          }
         </div>
       </div>
 
