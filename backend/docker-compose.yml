@@ -1,21 +1,21 @@
 services:
-  postgres:
-    image: postgres:17
-    container_name: vault-postgres
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: vault-sqlserver
     environment:
-      POSTGRES_DB: vault
-      POSTGRES_USER: vault
-      POSTGRES_PASSWORD: vault
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Your_strong_Pass123"
+      MSSQL_PID: "Developer"
     ports:
-      # 5433 on the host — 5432 is commonly taken by other local Postgres instances.
-      - "5433:5432"
+      - "1433:1433"
     volumes:
-      - vault-pgdata:/var/lib/postgresql/data
+      - vault-sqldata:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vault -d vault"]
-      interval: 5s
-      timeout: 3s
+      # sqlcmd ships under mssql-tools18 in the 2022 image; -C trusts the dev cert.
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
       retries: 10
 
 volumes:
-  vault-pgdata:
+  vault-sqldata:

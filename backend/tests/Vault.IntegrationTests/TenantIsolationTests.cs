@@ -102,7 +102,7 @@ public class TenantIsolationTests(VaultApiFactory factory)
     public async Task Interceptor_RejectsForeignTenantWrites()
     {
         var options = new DbContextOptionsBuilder<VaultDbContext>()
-            .UseNpgsql(factory.ConnectionString)
+            .UseSqlServer(factory.ConnectionString)
             .AddInterceptors(new TenantStampingInterceptor(new FakeTenant(Guid.NewGuid())))
             .Options;
 

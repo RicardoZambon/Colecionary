@@ -6,7 +6,7 @@ namespace Vault.Domain.Entities;
 /// Uploaded image bytes (item photos, collection banners/icons). The GUID id
 /// doubles as an unguessable capability for the anonymous read endpoint —
 /// browsers can't attach Authorization headers to &lt;img&gt; requests.
-/// Postgres bytea storage is deliberate for v1; swap for object storage later.
+/// SQL Server varbinary(max) storage is deliberate for v1; swap for object storage later.
 /// </summary>
 public class StoredImage : ITenantOwned
 {

@@ -1,13 +1,13 @@
 # Vault API — .NET 10 backend
 
-ASP.NET Core Web API for Vault (Collection Control): PostgreSQL + EF Core,
+ASP.NET Core Web API for Vault (Collection Control): SQL Server + EF Core,
 JWT auth, and **server-enforced multi-tenancy via EF Core global query
 filters**. Implements the frontend's `VaultApi` contract 1:1.
 
 ## Run it
 
 ```sh
-docker compose up -d              # Postgres 17 on localhost:5433
+docker compose up -d              # SQL Server 2022 on localhost:1433 (sa / Your_strong_Pass123)
 dotnet run --project src/Vault.Api   # http://localhost:5100 (migrates + seeds in Development)
 ```
 

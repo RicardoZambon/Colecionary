@@ -19,7 +19,7 @@ public static class DependencyInjection
         services.AddScoped<TenantStampingInterceptor>();
         services.AddDbContext<VaultDbContext>((sp, options) =>
             options
-                .UseNpgsql(configuration.GetConnectionString("Vault"))
+                .UseSqlServer(configuration.GetConnectionString("Vault"))
                 .AddInterceptors(sp.GetRequiredService<TenantStampingInterceptor>()));
 
         services.AddScoped<ICollectionRepository, CollectionRepository>();

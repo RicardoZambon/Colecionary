@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Testcontainers.PostgreSql;
+using Testcontainers.MsSql;
 using Vault.Application.Abstractions;
 using Vault.Application.Auth;
 using Vault.Domain.Entities;
@@ -14,7 +14,7 @@ using Vault.Infrastructure.Persistence;
 namespace Vault.IntegrationTests;
 
 /// <summary>
-/// Boots the real API against a throwaway Postgres container. The app's own
+/// Boots the real API against a throwaway SQL Server container. The app's own
 /// startup seeding populates the demo tenant; <see cref="EnsureSecondTenantAsync"/>
 /// adds a second tenant ("globex") for isolation tests.
 /// </summary>
@@ -23,12 +23,12 @@ public sealed class VaultApiFactory : WebApplicationFactory<Program>, IAsyncLife
     public const string DemoPassword = "vault-demo";
     public const string GlobexOwnerEmail = "gary@globex.com";
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17").Build();
+    private readonly MsSqlContainer _sqlServer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
-        builder.UseSetting("ConnectionStrings:Vault", _postgres.GetConnectionString());
+        builder.UseSetting("ConnectionStrings:Vault", _sqlServer.GetConnectionString());
         builder.UseSetting("Seed:Enabled", "true");
         builder.UseSetting("Seed:DemoPassword", DemoPassword);
         builder.UseSetting("Jwt:SigningKey", "integration-test-signing-key-0123456789abcdef");
@@ -84,13 +84,13 @@ public sealed class VaultApiFactory : WebApplicationFactory<Program>, IAsyncLife
         return await query(db);
     }
 
-    public string ConnectionString => _postgres.GetConnectionString();
+    public string ConnectionString => _sqlServer.GetConnectionString();
 
-    Task IAsyncLifetime.InitializeAsync() => _postgres.StartAsync();
+    Task IAsyncLifetime.InitializeAsync() => _sqlServer.StartAsync();
 
     async Task IAsyncLifetime.DisposeAsync()
     {
         await base.DisposeAsync();
-        await _postgres.DisposeAsync();
+        await _sqlServer.DisposeAsync();
     }
 }

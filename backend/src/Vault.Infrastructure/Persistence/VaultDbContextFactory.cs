@@ -9,7 +9,7 @@ public sealed class VaultDbContextFactory : IDesignTimeDbContextFactory<VaultDbC
     public VaultDbContext CreateDbContext(string[] args)
     {
         var options = new DbContextOptionsBuilder<VaultDbContext>()
-            .UseNpgsql("Host=localhost;Port=5433;Database=vault;Username=vault;Password=vault")
+            .UseSqlServer("Server=umbrel.local,1433;Database=Vault_DEV;User Id=Vault;Password=Vault;TrustServerCertificate=true")
             .Options;
         return new VaultDbContext(options, NoOpCurrentTenant.Instance);
     }

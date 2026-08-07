@@ -14,6 +14,6 @@ public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
         builder.Property(g => g.Id).HasMaxLength(64);
         builder.Property(g => g.Name).HasMaxLength(200);
         builder.Property(g => g.ParentId).HasMaxLength(64);
-        // List<string> Fields maps to text[] natively via Npgsql.
+        // List<string> Fields maps to an nvarchar(max) JSON column (EF primitive collection).
     }
 }
