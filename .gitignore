@@ -430,3 +430,8 @@ FodyWeavers.xsd
 
 # macOS
 .DS_Store
+
+# Core dumps
+core
+core.[0-9]*
+*.core
