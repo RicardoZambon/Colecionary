@@ -12,7 +12,7 @@ frontend and stores data in SQL Server. One container, one port.
 docker run -d --name colecionary \
   -p 8080:80 \
   -v colecionary-config:/data/config \
-  ricardozambon/colecionary:latest
+  ricardozambon/vault:latest
 ```
 
 Then open **http://localhost:8080/** (swap in your host). TLS is expected to
@@ -28,7 +28,7 @@ You provide a SQL Server yourself (2022+). Docker Compose example:
 ```yaml
 services:
   colecionary:
-    image: ricardozambon/colecionary:latest
+    image: ricardozambon/vault:latest
     ports:
       - "8080:80"
     volumes:
@@ -62,7 +62,7 @@ docker run -d --name colecionary -p 8080:80 \
   -v colecionary-config:/data/config \
   -e ConnectionStrings__Vault="Server=db-host,1433;Database=Colecionary;User Id=sa;Password=…;TrustServerCertificate=true" \
   -e Jwt__SigningKey="a-long-random-secret-at-least-32-bytes" \
-  ricardozambon/colecionary:latest
+  ricardozambon/vault:latest
 ```
 
 ### Build the image yourself
