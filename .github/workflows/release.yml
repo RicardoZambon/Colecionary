@@ -17,7 +17,10 @@ env:
 
 jobs:
   # 1) Gate: everything must build and test before we consider a release.
+  #    Job display name is "Build validation" to match the required status check
+  #    configured in branch protection.
   validate:
+    name: Build validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
