@@ -52,12 +52,13 @@
         <ui-button variant="ghost" size="sm" [disabled]="testing() || !dbValid() || !tokenValid()" (click)="test()">
           {{ testing() ? 'Testing…' : 'Test connection' }}
         </ui-button>
-        @if (testResult(); as result) {
-          <span class="test-result" [class.ok]="result === 'Success' || result === 'DatabaseMissingButCanBeCreated'">
-            {{ result }}
-          </span>
-        }
       </div>
+      @if (testNote(); as note) {
+        <p class="note" [class.ok]="note.tone === 'ok'" role="status">
+          <span class="note__icon" aria-hidden="true">{{ note.tone === 'ok' ? '✓' : '!' }}</span>
+          <span>{{ note.text }}</span>
+        </p>
+      }
     }
 
     <!-- 2 — Administrator -->
@@ -80,8 +81,16 @@
           <ui-text-input type="password" [value]="ownerPasswordConfirm()" (valueChange)="ownerPasswordConfirm.set($event)" />
         </ui-field>
       </div>
-      @if (ownerPassword() && ownerPassword() !== ownerPasswordConfirm()) {
-        <div class="warn">Passwords don't match.</div>
+      @if (ownerPassword() && ownerPassword().length < 8) {
+        <p class="note" role="status">
+          <span class="note__icon" aria-hidden="true">!</span>
+          <span>The password needs at least 8 characters.</span>
+        </p>
+      } @else if (ownerPasswordConfirm() && ownerPassword() !== ownerPasswordConfirm()) {
+        <p class="note" role="status">
+          <span class="note__icon" aria-hidden="true">!</span>
+          <span>The two passwords don't match.</span>
+        </p>
       }
     }
 
@@ -89,7 +98,7 @@
     @if (step() === 3) {
       <p class="hint">Pick a default theme. You can change it any time in settings.</p>
       <ui-field label="Default theme">
-        <ui-select [options]="themeOptions" [value]="defaultTheme()" (valueChange)="defaultTheme.set($event)" />
+        <ui-select [options]="themeOptions" [value]="defaultTheme()" (valueChange)="pickTheme($event)" />
       </ui-field>
     }
 
@@ -100,12 +109,15 @@
         <dt>Database</dt><dd>{{ server() }},{{ port() }} / {{ database() }}</dd>
         <dt>Organization</dt><dd>{{ organizationName() }}</dd>
         <dt>Owner</dt><dd>{{ ownerName() }} &lt;{{ ownerEmail() }}&gt;</dd>
-        <dt>Theme</dt><dd>{{ defaultTheme() }}</dd>
+        <dt>Theme</dt><dd>{{ themeLabel() }}</dd>
       </dl>
     }
 
     @if (error(); as message) {
-      <div class="error" role="alert">{{ message }}</div>
+      <p class="note" role="alert">
+        <span class="note__icon" aria-hidden="true">!</span>
+        <span>{{ message }}</span>
+      </p>
     }
 
     <div class="nav">

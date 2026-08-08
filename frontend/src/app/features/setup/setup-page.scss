@@ -9,9 +9,11 @@
 .panel {
   width: 100%;
   max-width: 560px;
+  padding: 28px 26px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
+  overflow: visible;
 }
 
 .brand {
@@ -61,7 +63,7 @@
     }
 
     &.done {
-      color: var(--ok, var(--accent));
+      color: var(--good);
     }
   }
 
@@ -78,14 +80,16 @@
 
 .hint {
   font-size: 12.5px;
+  line-height: 1.5;
   color: var(--text2);
   margin: 0;
 }
 
+/* Collapses to a single column when the panel gets narrow. */
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px 12px;
 }
 
 .test-row {
@@ -94,20 +98,39 @@
   gap: 10px;
 }
 
-.test-result {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--danger, #c0392b);
+/* Status/validation messages: bordered note so they read as guidance, not
+   as a stray line of text. `.bad` is the default tone. */
+.note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: var(--bw) dashed var(--warn);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text2);
 
   &.ok {
-    color: var(--ok, #1f8a5b);
+    border-color: var(--good);
+  }
+
+  &__icon {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--warn);
+  }
+
+  &.ok &__icon {
+    color: var(--good);
   }
 }
 
 .review {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 6px 16px;
+  gap: 8px 16px;
   margin: 0;
   font-size: 13px;
 
@@ -123,13 +146,8 @@
   dd {
     margin: 0;
     color: var(--text);
+    overflow-wrap: anywhere;
   }
-}
-
-.warn,
-.error {
-  font-size: 12px;
-  color: var(--danger, #c0392b);
 }
 
 .nav {
