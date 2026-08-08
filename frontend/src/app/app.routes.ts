@@ -1,17 +1,24 @@
 import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
+import { setupCompletedGuard, setupGuard } from './core/setup/setup.guards';
 import { Shell } from './layout/shell/shell';
 
 export const routes: Routes = [
   {
+    path: 'setup',
+    canActivate: [setupCompletedGuard],
+    loadComponent: () => import('./features/setup/setup-page').then(m => m.SetupPage),
+  },
+  {
     path: 'login',
+    canActivate: [setupGuard],
     loadComponent: () => import('./features/auth/login-page').then(m => m.LoginPage),
   },
   {
     path: '',
     component: Shell,
-    canActivate: [authGuard],
+    canActivate: [setupGuard, authGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       {

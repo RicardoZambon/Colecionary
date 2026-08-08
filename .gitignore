@@ -431,8 +431,7 @@ FodyWeavers.xsd
 # macOS
 .DS_Store
 
-# Core dumps
-core
+# Core dumps (do NOT use a bare `core` — it matches the src/app/core directory)
 core.[0-9]*
 *.core
 
