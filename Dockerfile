@@ -31,7 +31,11 @@ WORKDIR /app
 COPY --from=backend /out ./
 COPY --from=frontend /src/frontend/dist/frontend/browser ./wwwroot
 ENV ASPNETCORE_ENVIRONMENT=Production \
-    ASPNETCORE_HTTP_PORTS=80
+    ASPNETCORE_HTTP_PORTS=80 \
+    Setup__ConfigDirectory=/data/config
+# First-run setup persists colecionary.json here — mount a volume so it and the
+# generated JWT key survive container recreation (otherwise the wizard re-runs).
+VOLUME ["/data/config"]
 EXPOSE 80
 # Run as the image's non-root user.
 USER $APP_UID

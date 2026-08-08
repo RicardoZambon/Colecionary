@@ -42,13 +42,36 @@ write` so semantic-release can tag and publish the release.
 ## Running the image
 
 ```sh
-docker run -d --name colecionary -p 8080:80 ricardozambon/colecionary:latest
+docker run -d --name colecionary \
+  -p 8080:80 \
+  -v colecionary-config:/data/config \
+  ricardozambon/colecionary:latest
 ```
 
-Open `http://<host>:8080/`. On first run — with no database connection
-provided by the environment — the app boots into a **setup wizard** (see the
-first-run setup, Phase 3). TLS is expected to terminate at the host/reverse
+Open `http://<host>:8080/`. TLS is expected to terminate at the host/reverse
 proxy; the container speaks plain HTTP on `80`.
+
+### First-run setup
+
+With no connection string provided by the environment, the app boots into
+**setup mode** and serves a wizard:
+
+1. On boot it prints a one-time token to the container log
+   (`docker logs colecionary` → `SETUP MODE — … token …`).
+2. Open the app; it redirects to `/setup`. Enter the token, then the SQL Server
+   connection (the login needs rights to create the database if absent), the
+   first organization + owner account, and a default theme.
+3. Apply. The app migrates, creates the tenant + owner, writes
+   `/data/config/colecionary.json` (connection string + a generated JWT key),
+   and restarts into the normal sign-in screen.
+
+Mounting `/data/config` is what makes this survive container recreation — the
+config lives there, so setup runs exactly once. To reconfigure, delete
+`colecionary.json` from that volume.
+
+Alternatively, skip the wizard entirely by supplying the connection string
+directly: `-e ConnectionStrings__Vault="Server=…;Database=…;User Id=…;Password=…;TrustServerCertificate=true"`
+(and `-e Jwt__SigningKey=…`, ≥32 chars).
 
 > Building the image locally: `docker build -t colecionary:dev .` from the repo
 > root. (Not runnable in every dev sandbox — the CI build is the source of
