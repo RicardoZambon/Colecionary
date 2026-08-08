@@ -8,8 +8,14 @@ public sealed class VaultDbContextFactory : IDesignTimeDbContextFactory<VaultDbC
 {
     public VaultDbContext CreateDbContext(string[] args)
     {
+        // `dotnet ef` design-time connection. Defaults to the local docker-compose
+        // server; override per-developer with the ConnectionStrings__Vault env var.
+        var connectionString =
+            Environment.GetEnvironmentVariable("ConnectionStrings__Vault")
+            ?? "Server=localhost,1433;Database=Vault_DEV;User Id=sa;Password=Your_strong_Pass123;TrustServerCertificate=true";
+
         var options = new DbContextOptionsBuilder<VaultDbContext>()
-            .UseSqlServer("Server=umbrel.local,1433;Database=Vault_DEV;User Id=Vault;Password=Vault;TrustServerCertificate=true")
+            .UseSqlServer(connectionString)
             .Options;
         return new VaultDbContext(options, NoOpCurrentTenant.Instance);
     }
