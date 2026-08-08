@@ -12,6 +12,7 @@ public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.HasKey(t => t.Id);
         builder.Property(t => t.Slug).HasMaxLength(64);
         builder.Property(t => t.Name).HasMaxLength(200);
+        builder.Property(t => t.DefaultTheme).HasMaxLength(32);
         builder.HasIndex(t => t.Slug).IsUnique();
     }
 }

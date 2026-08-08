@@ -22,6 +22,8 @@ public static class DependencyInjection
                 .UseSqlServer(configuration.GetConnectionString("Vault"))
                 .AddInterceptors(sp.GetRequiredService<TenantStampingInterceptor>()));
 
+        services.AddScoped<Vault.Application.Setup.ISetupBootstrapper, Vault.Infrastructure.Setup.SetupBootstrapper>();
+
         services.AddScoped<ICollectionRepository, CollectionRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IStoreListingRepository, StoreListingRepository>();

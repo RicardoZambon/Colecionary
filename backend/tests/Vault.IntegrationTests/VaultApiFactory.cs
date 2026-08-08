@@ -86,7 +86,14 @@ public sealed class VaultApiFactory : WebApplicationFactory<Program>, IAsyncLife
 
     public string ConnectionString => _sqlServer.GetConnectionString();
 
-    Task IAsyncLifetime.InitializeAsync() => _sqlServer.StartAsync();
+    async Task IAsyncLifetime.InitializeAsync()
+    {
+        await _sqlServer.StartAsync();
+        // Program.cs decides setup-vs-configured from configuration read before the
+        // host is built, so the connection string must be visible that early. An
+        // environment variable is present from WebApplication.CreateBuilder onward.
+        Environment.SetEnvironmentVariable("ConnectionStrings__Vault", _sqlServer.GetConnectionString());
+    }
 
     async Task IAsyncLifetime.DisposeAsync()
     {
