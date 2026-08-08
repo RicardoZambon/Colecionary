@@ -7,12 +7,12 @@ import { AuthService } from '../../core/auth/auth.service';
 import { ThemeService } from '../../core/state/theme.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { pathOf } from '../../core/utils/groups.util';
-import { UiAvatar, UiDropdown, UiTextInput } from '../../shared/ui';
+import { UiAvatar, UiDropdown, UiIcon, UiTextInput } from '../../shared/ui';
 
 @Component({
   selector: 'app-topbar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, UiAvatar, UiDropdown, UiTextInput],
+  imports: [RouterLink, UiAvatar, UiDropdown, UiIcon, UiTextInput],
   templateUrl: './topbar.html',
   styleUrl: './topbar.scss',
 })

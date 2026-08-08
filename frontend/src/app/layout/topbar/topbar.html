@@ -1,5 +1,5 @@
 <a class="brand" routerLink="/dashboard">
-  <span class="brand__mark">◆</span>Vault
+  <span class="brand__mark"><ui-icon name="diamond" [size]="12" /></span>Vault
 </a>
 
 <span class="crumb">{{ crumb() }}</span>
@@ -41,7 +41,9 @@
   </ng-container>
 </ui-dropdown>
 
-<a class="gear" routerLink="/settings" title="Settings">⚙</a>
+<a class="gear" routerLink="/settings" title="Settings" aria-label="Settings">
+  <ui-icon name="gear" [size]="16" />
+</a>
 
 <ui-dropdown #profileMenu [width]="200">
   <button ddTrigger type="button" class="avatar-trigger" title="Account">
