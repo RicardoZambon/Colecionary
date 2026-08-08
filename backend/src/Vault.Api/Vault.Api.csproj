@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Overwritten by the release workflow (semantic-release computed version). -->
+    <Version>0.0.0</Version>
     <!-- Per-developer dev overrides (e.g. a non-local DB) live in user-secrets,
          read automatically in Development. Keeps env-specific hosts/passwords out of git. -->
     <UserSecretsId>7df75f9d-d12f-42bc-ad29-aa77405a9f72</UserSecretsId>
