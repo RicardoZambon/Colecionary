@@ -17,7 +17,7 @@ dispatch). It mirrors the Panthor pipeline:
    release happens if there is nothing releasable (e.g. only `chore:`/`docs:`).
 3. **publish** — stamps the version into `Vault.Api.csproj` and
    `frontend/package.json`, then builds and pushes the image to Docker Hub as
-   `ricardozambon/colecionary:<version>` and `:latest`.
+   `ricardozambon/vault:<version>` and `:latest`.
 4. **release** — creates the git tag + GitHub Release **after** the image
    exists, so a tag never points at a missing artifact.
 
@@ -27,14 +27,18 @@ semantic-release decides the bump from commit messages: `fix:` → patch,
 `feat:` → minor, `feat!:`/`BREAKING CHANGE:` → major. `chore:`, `docs:`,
 `refactor:`, etc. do not trigger a release. Write commits accordingly.
 
-### Required repository secrets
+### Required repository secrets & variables
 
 Add under **Settings → Secrets and variables → Actions**:
 
-| Secret | What |
-| --- | --- |
-| `DOCKERHUB_USERNAME` | Docker Hub account that owns `ricardozambon/colecionary` |
-| `DOCKERHUB_TOKEN` | Docker Hub access token (Read/Write) |
+| Name | Where | What |
+| --- | --- | --- |
+| `DOCKERHUB_USERNAME` | Variable **or** Secret | Docker Hub account that owns `ricardozambon/vault` (not sensitive) |
+| `DOCKERHUB_TOKEN` | Secret | Docker Hub access token (Read/Write) |
+
+Both must be **repository-level** (not scoped to a deployment Environment) — the
+publish job doesn't declare an `environment:`, so Environment-scoped values won't
+be visible.
 
 `GITHUB_TOKEN` is provided automatically; the workflow requests `contents:
 write` so semantic-release can tag and publish the release.
@@ -45,7 +49,7 @@ write` so semantic-release can tag and publish the release.
 docker run -d --name colecionary \
   -p 8080:80 \
   -v colecionary-config:/data/config \
-  ricardozambon/colecionary:latest
+  ricardozambon/vault:latest
 ```
 
 Open `http://<host>:8080/`. TLS is expected to terminate at the host/reverse
