@@ -435,3 +435,6 @@ FodyWeavers.xsd
 core
 core.[0-9]*
 *.core
+
+# Claude Code local (per-developer) settings — never commit
+.claude/settings.local.json

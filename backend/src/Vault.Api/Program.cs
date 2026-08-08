@@ -54,10 +54,22 @@ builder.Services.AddAuthorization(options =>
 });
 
 const string frontendCorsPolicy = "frontend";
-builder.Services.AddCors(options => options.AddPolicy(frontendCorsPolicy, policy => policy
-    .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [])
-    .AllowAnyHeader()
-    .AllowAnyMethod()));
+builder.Services.AddCors(options => options.AddPolicy(frontendCorsPolicy, policy =>
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        // Dev is reached via varying hosts (container IP, umbrel.local, localhost).
+        // Auth is bearer-token (no cookies), so reflecting any origin is safe here.
+        policy.SetIsOriginAllowed(_ => true).AllowAnyHeader().AllowAnyMethod();
+    }
+    else
+    {
+        policy
+            .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [])
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    }
+}));
 
 var app = builder.Build();
 
