@@ -1,0 +1,17 @@
+# Keep the build context small and reproducible — everything below is either
+# rebuilt inside the image or must never ship in it.
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/.angular
+**/.vs
+backend/src/Vault.Api/wwwroot
+backend/src/Vault.Api/appsettings.Development.json
+.git
+.github
+.claude
+docs
+prototype
+*.md
+Colecionary_Manual_de_Identidade_Visual_e_Design_System.pdf

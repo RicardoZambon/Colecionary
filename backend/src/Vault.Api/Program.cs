@@ -75,6 +75,24 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseSerilogRequestLogging();
+
+// Serve the built Angular SPA from wwwroot (populated in the published image).
+// Static files run before auth: the shell is public; only /api needs a token.
+var spaFileOptions = new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        // index.html must never be cached — a deploy would otherwise leave
+        // clients pinned to a stale shell referencing purged hashed bundles.
+        if (ctx.File.Name.Equals("index.html", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+        }
+    },
+};
+app.UseDefaultFiles();
+app.UseStaticFiles(spaFileOptions);
+
 app.UseCors(frontendCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
@@ -86,6 +104,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+
+// Unmatched /api/* → JSON 404, so the SPA fallback never hijacks an API route
+// (a literal segment out-specifies the catch-all below).
+app.MapFallback("/api/{**path}", () => Results.NotFound()).AllowAnonymous();
+// Every other unmatched route → SPA entry point for client-side routing.
+// AllowAnonymous: the deny-by-default fallback policy would otherwise 401 the shell.
+app.MapFallbackToFile("index.html", spaFileOptions).AllowAnonymous();
 
 // Development convenience: migrate + seed on boot when enabled.
 using (var scope = app.Services.CreateScope())

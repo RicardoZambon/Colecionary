@@ -438,3 +438,6 @@ core.[0-9]*
 
 # Claude Code local (per-developer) settings — never commit
 .claude/settings.local.json
+
+# Built SPA copied into the API at publish/image time (never committed)
+backend/src/Vault.Api/wwwroot/
