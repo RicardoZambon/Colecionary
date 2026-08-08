@@ -54,12 +54,14 @@ public class ImagesAndTimestampsTests(VaultApiFactory factory)
         var image = (await upload.Content.ReadFromJsonAsync<ImageUploadResponse>())!;
 
         var item = new ItemDto(
-            "i-photo-test", "Photographed", "", 2020, "Good", 10, 5, "Sega",
-            [], "x.jpg", [], true, [image.Id]);
+            "i-photo-test", "Photographed", "", 2020, 10, "Sega", [], "x.jpg", [],
+            Copies: [new ItemCopyDto("i-photo-test_c1", "Good", 5)],
+            PhotoIds: [image.Id]);
         var put = await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", item);
         Assert.Equal(HttpStatusCode.Created, put.StatusCode);
         var saved = (await put.Content.ReadFromJsonAsync<ItemDto>())!;
         Assert.Equal([image.Id], saved.PhotoIds);
+        Assert.Equal(5, Assert.Single(saved.Copies).Price); // copies and photos coexist
         Assert.NotNull(saved.CreatedAt); // server-stamped
 
         await client.DeleteAsync($"/api/collections/retro/items/{item.Id}");

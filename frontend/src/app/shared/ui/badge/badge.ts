@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
-import { Condition } from '../../../core/models';
+import { Condition, Item } from '../../../core/models';
+import { bestCondition } from '../../../core/utils/copies.util';
 
 export type BadgeTone = 'good' | 'warn' | 'accent' | 'neutral';
 
@@ -33,14 +34,22 @@ export class UiBadge {
   readonly tone = input<BadgeTone>('neutral');
 }
 
-/** Maps an item's state to the badge tone used across the app. */
-export function conditionTone(condition: Condition, owned: boolean): BadgeTone {
-  if (!owned) return 'accent';
+/** Maps a single copy's condition to the badge tone used across the app. */
+export function conditionTone(condition: Condition): BadgeTone {
   if (condition === 'Mint') return 'good';
   if (condition === 'Fair') return 'warn';
   return 'neutral';
 }
 
-export function conditionLabel(condition: Condition, owned: boolean): string {
-  return owned ? condition.toUpperCase() : 'WANTED';
+/** An item's tone: its best copy, or the wantlist accent when it has none. */
+export function itemTone(item: Item): BadgeTone {
+  const best = bestCondition(item);
+  return best ? conditionTone(best) : 'accent';
+}
+
+/** "WANTED", "MINT", or "MINT ×3" once there is more than one copy. */
+export function itemBadgeLabel(item: Item): string {
+  const best = bestCondition(item);
+  if (!best) return 'WANTED';
+  return item.copies.length > 1 ? `${best.toUpperCase()} ×${item.copies.length}` : best.toUpperCase();
 }

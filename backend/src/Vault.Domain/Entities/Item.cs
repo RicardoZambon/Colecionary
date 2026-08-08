@@ -1,12 +1,12 @@
 using Vault.Domain.Abstractions;
-using Vault.Domain.Enums;
 using Vault.Domain.ValueObjects;
 
 namespace Vault.Domain.Entities;
 
 /// <summary>
-/// A collected (or wanted) item. Id is client-generated. GroupId is a plain
-/// string that may dangle when groups are edited — mirrors the frontend model.
+/// A catalogued item. Id is client-generated. GroupId is a plain string that may
+/// dangle when groups are edited — mirrors the frontend model. Ownership is not
+/// a field: an item with at least one copy is owned, one with none is wanted.
 /// </summary>
 public class Item : ITenantOwned
 {
@@ -22,13 +22,8 @@ public class Item : ITenantOwned
 
     public int Year { get; set; }
 
-    public Condition Condition { get; set; } = Condition.Good;
-
-    /// <summary>Estimated market value, USD.</summary>
+    /// <summary>Per-unit reference estimate, USD. A copy's own Value overrides it.</summary>
     public decimal Value { get; set; }
-
-    /// <summary>Purchase price, USD. 0 for wanted items.</summary>
-    public decimal Price { get; set; }
 
     public string GroupId { get; set; } = string.Empty;
 
@@ -38,8 +33,8 @@ public class Item : ITenantOwned
 
     public List<CustomFieldValue> Custom { get; set; } = [];
 
-    /// <summary>False = on the wantlist, not in the vault yet.</summary>
-    public bool Owned { get; set; } = true;
+    /// <summary>Physical copies owned. Empty = on the wantlist, not in the vault yet.</summary>
+    public List<ItemCopy> Copies { get; set; } = [];
 
     public int SortOrder { get; set; }
 

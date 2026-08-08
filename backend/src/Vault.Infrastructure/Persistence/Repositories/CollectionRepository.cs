@@ -49,14 +49,12 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
                 current.Name = incoming.Name;
                 current.Description = incoming.Description;
                 current.Year = incoming.Year;
-                current.Condition = incoming.Condition;
                 current.Value = incoming.Value;
-                current.Price = incoming.Price;
                 current.GroupId = incoming.GroupId;
                 current.Tags = incoming.Tags;
                 current.Img = incoming.Img;
                 current.Custom = incoming.Custom;
-                current.Owned = incoming.Owned;
+                current.Copies = incoming.Copies;
                 current.SortOrder = incoming.SortOrder;
                 current.PhotoIds = incoming.PhotoIds;
                 // CreatedAtUtc deliberately kept — server-controlled.

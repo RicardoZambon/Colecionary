@@ -39,8 +39,14 @@ describe('HttpVaultApi', () => {
 
   it('routes item upserts to the collection-scoped endpoint', async () => {
     const item = {
-      id: 'i1', name: 'X', description: '', year: 2000, condition: 'Good' as const,
-      value: 1, price: 1, groupId: 'g', tags: [], img: 'x.jpg', custom: [], owned: true, photoIds: [],
+      id: 'i1', name: 'X', description: '', year: 2000,
+      value: 1, groupId: 'g', tags: [], img: 'x.jpg', custom: [], photoIds: [],
+      copies: [
+        {
+          id: 'i1_c1', condition: 'Good' as const, price: 1, value: null,
+          acquiredOn: null, status: 'Keep' as const, notes: '',
+        },
+      ],
     };
     const pending = firstValueFrom(api.upsertItem('retro', item));
     const req = http.expectOne(`${environment.apiBaseUrl}/collections/retro/items/i1`);

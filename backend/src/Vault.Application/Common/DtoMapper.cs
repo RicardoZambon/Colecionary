@@ -29,16 +29,23 @@ public static class DtoMapper
         item.Name,
         item.Description,
         item.Year,
-        item.Condition.ToString(),
         item.Value,
-        item.Price,
         item.GroupId,
         item.Tags,
         item.Img,
         [.. item.Custom.Select(c => new CustomFieldValueDto(c.Key, c.Value))],
-        item.Owned,
+        [.. item.Copies.Select(ToDto)],
         item.PhotoIds,
         item.CreatedAtUtc);
+
+    public static ItemCopyDto ToDto(this ItemCopy copy) => new(
+        copy.Id,
+        copy.Condition.ToString(),
+        copy.Price,
+        copy.Value,
+        copy.AcquiredOn,
+        copy.Status.ToString(),
+        copy.Notes);
 
     public static MemberDto ToDto(this CollectionMember member) =>
         new(member.Name, member.Email, member.Initials, member.Role.ToString());
@@ -78,18 +85,27 @@ public static class DtoMapper
         Name = dto.Name,
         Description = dto.Description,
         Year = dto.Year,
-        Condition = ParseCondition(dto.Condition),
         Value = dto.Value,
-        Price = dto.Price,
         GroupId = dto.GroupId,
         Tags = [.. dto.Tags],
         Img = dto.Img,
         Custom = [.. dto.Custom.Select(c => new CustomFieldValue { Key = c.Key, Value = c.Value })],
-        Owned = dto.Owned,
+        Copies = [.. dto.Copies.Select(ToEntity)],
         SortOrder = sortOrder,
         PhotoIds = [.. dto.PhotoIds],
         // Server-controlled: client-provided createdAt is ignored.
         CreatedAtUtc = createdAtUtc,
+    };
+
+    public static ItemCopy ToEntity(this ItemCopyDto dto) => new()
+    {
+        Id = dto.Id,
+        Condition = ParseCondition(dto.Condition),
+        Price = dto.Price,
+        Value = dto.Value,
+        AcquiredOn = dto.AcquiredOn,
+        Status = ParseCopyStatus(dto.Status),
+        Notes = dto.Notes,
     };
 
     public static CollectionMember ToEntity(this MemberDto dto, string collectionId, Guid tenantId) => new()
@@ -107,14 +123,12 @@ public static class DtoMapper
         item.Name = dto.Name;
         item.Description = dto.Description;
         item.Year = dto.Year;
-        item.Condition = ParseCondition(dto.Condition);
         item.Value = dto.Value;
-        item.Price = dto.Price;
         item.GroupId = dto.GroupId;
         item.Tags = [.. dto.Tags];
         item.Img = dto.Img;
         item.Custom = [.. dto.Custom.Select(c => new CustomFieldValue { Key = c.Key, Value = c.Value })];
-        item.Owned = dto.Owned;
+        item.Copies = [.. dto.Copies.Select(ToEntity)];
         item.PhotoIds = [.. dto.PhotoIds];
         // CreatedAtUtc deliberately untouched — server-controlled.
     }
@@ -123,6 +137,11 @@ public static class DtoMapper
         Enum.TryParse<Condition>(value, ignoreCase: true, out var parsed)
             ? parsed
             : throw new DomainRuleException($"Unknown condition '{value}'.");
+
+    public static CopyStatus ParseCopyStatus(string value) =>
+        Enum.TryParse<CopyStatus>(value, ignoreCase: true, out var parsed)
+            ? parsed
+            : throw new DomainRuleException($"Unknown copy status '{value}'.");
 
     public static MemberRole ParseRole(string value) =>
         Enum.TryParse<MemberRole>(value, ignoreCase: true, out var parsed)

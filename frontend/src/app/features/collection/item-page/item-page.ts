@@ -4,10 +4,19 @@ import { Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../../core/api/images-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
+import { CopyStatus } from '../../../core/models';
+import { copyValue, isOwned, newCopy, ownedValue, paidTotal, syncWantedTag } from '../../../core/utils/copies.util';
 import { fieldsFor, groupById, pathOf } from '../../../core/utils/groups.util';
-import { conditionLabel, conditionTone } from '../../../shared/ui/badge/badge';
+import { conditionTone, itemBadgeLabel, itemTone } from '../../../shared/ui/badge/badge';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import { UiBadge, UiButton, UiCard, UiSectionLabel } from '../../../shared/ui';
+
+/** Empty for the default, so only a notable status shows up on a copy row. */
+const STATUS_LABELS: Record<CopyStatus, string> = {
+  Keep: '',
+  ForTrade: 'FOR TRADE',
+  ForSale: 'FOR SALE',
+};
 
 @Component({
   selector: 'app-item-page',
@@ -44,11 +53,36 @@ export class ItemPage {
 
   protected readonly tone = computed(() => {
     const item = this.item();
-    return item ? conditionTone(item.condition, item.owned) : 'neutral';
+    return item ? itemTone(item) : 'neutral';
   });
   protected readonly badge = computed(() => {
     const item = this.item();
-    return item ? conditionLabel(item.condition, item.owned) : '';
+    return item ? itemBadgeLabel(item) : '';
+  });
+
+  protected readonly owned = computed(() => {
+    const item = this.item();
+    return item ? isOwned(item) : false;
+  });
+  protected readonly ownedValue = computed(() => {
+    const item = this.item();
+    return item ? ownedValue(item) : 0;
+  });
+  protected readonly paidTotal = computed(() => {
+    const item = this.item();
+    return item ? paidTotal(item) : 0;
+  });
+
+  protected readonly copyRows = computed(() => {
+    const item = this.item();
+    if (!item) return [];
+    return item.copies.map(copy => ({
+      ...copy,
+      tone: conditionTone(copy.condition),
+      value: copyValue(item, copy),
+      // Status is only worth showing when it is not the default.
+      statusLabel: STATUS_LABELS[copy.status],
+    }));
   });
 
   protected readonly tags = computed(
@@ -111,12 +145,12 @@ export class ItemPage {
   protected async markOwned(): Promise<void> {
     const item = this.item();
     if (!item) return;
-    await this.store.upsertItem(this.collectionId(), {
-      ...item,
-      owned: true,
-      tags: item.tags.filter(t => t !== 'wanted'),
-    });
-    this.toast.flash('Marked as owned ✓');
+    // Owning something means having a copy of it — so add one.
+    await this.store.upsertItem(
+      this.collectionId(),
+      syncWantedTag({ ...item, copies: [...item.copies, newCopy()] }),
+    );
+    this.toast.flash('Copy added ✓');
   }
 
   protected async deleteItem(): Promise<void> {

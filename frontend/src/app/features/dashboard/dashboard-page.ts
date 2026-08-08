@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../core/api/images-api';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
+import { isOwned, ownedValue, paidTotal, sortValue } from '../../core/utils/copies.util';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { UiCard, UiImageSlot, UiSectionLabel } from '../../shared/ui';
 
@@ -46,12 +47,10 @@ export class DashboardPage {
 
   /** Owned value vs what was actually paid — the only honest "trend" we have. */
   protected readonly appreciationLabel = computed(() => {
-    const owned = this.allItems()
-      .map(x => x.item)
-      .filter(i => i.owned && i.price > 0);
-    const paid = owned.reduce((acc, i) => acc + i.price, 0);
+    const owned = this.allItems().map(x => x.item).filter(isOwned);
+    const paid = owned.reduce((acc, i) => acc + paidTotal(i), 0);
     if (!paid) return 'no purchase data yet';
-    const value = owned.reduce((acc, i) => acc + i.value, 0);
+    const value = owned.reduce((acc, i) => acc + ownedValue(i), 0);
     const pct = ((value - paid) / paid) * 100;
     return `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% vs purchase`;
   });
@@ -76,20 +75,17 @@ export class DashboardPage {
         itemId: x.item.id,
         name: x.item.name,
         sub: `${x.collection.name} · added ${timeAgo(x.item.createdAt!)}`,
-        value: x.item.value,
+        value: sortValue(x.item),
       })),
   );
 
   protected ownedCount(collectionId: string): number {
-    return this.store.collection(collectionId)?.items.filter(i => i.owned).length ?? 0;
+    return this.store.collection(collectionId)?.items.filter(isOwned).length ?? 0;
   }
 
   protected ownedValue(collectionId: string): number {
     return (
-      this.store
-        .collection(collectionId)
-        ?.items.filter(i => i.owned)
-        .reduce((acc, i) => acc + i.value, 0) ?? 0
+      this.store.collection(collectionId)?.items.reduce((acc, i) => acc + ownedValue(i), 0) ?? 0
     );
   }
 

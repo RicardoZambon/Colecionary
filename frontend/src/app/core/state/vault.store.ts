@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { VaultApi } from '../api/vault-api';
 import { ToastService } from './toast.service';
 import { Collection, Item, Member, StoreListing, UserProfile } from '../models';
+import { ownedValue } from '../utils/copies.util';
 
 /**
  * Signal-based application state for collections, store listings, tenant
@@ -33,9 +34,15 @@ export class VaultStore {
   readonly totalItems = computed(() =>
     this.collections().reduce((acc, c) => acc + c.items.length, 0),
   );
+  readonly totalCopies = computed(() =>
+    this.collections().reduce(
+      (acc, c) => acc + c.items.reduce((x, i) => x + i.copies.length, 0),
+      0,
+    ),
+  );
   readonly totalOwnedValue = computed(() =>
     this.collections().reduce(
-      (acc, c) => acc + c.items.filter(i => i.owned).reduce((x, i) => x + i.value, 0),
+      (acc, c) => acc + c.items.reduce((x, i) => x + ownedValue(i), 0),
       0,
     ),
   );

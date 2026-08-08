@@ -106,7 +106,7 @@ All are exported from `shared/ui/index.ts`.
 | Select | `ui-select` | `value` (model), `options: SelectOption[]`, `disabled`; add class `compact` for dense rows |
 | Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count` — content-projected label; attach `(click)` at usage site |
 | Card | `ui-card` | `interactive` (hover affordance), `dashed` — the panel surface |
-| Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone()` / `conditionLabel()` map item state → badge |
+| Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone(condition)` for one copy, `itemTone(item)` / `itemBadgeLabel(item)` for an item ("WANTED", "MINT", "MINT ×3") |
 | Toggle | `ui-toggle` | `on` (model) — rendered as `role="switch"` |
 | Tabs | `ui-tabs` | `tabs: TabDef[]`, `active` (model, required) |
 | Avatar | `ui-avatar` | `initials` (required), `size: 'sm' \| 'md' \| 'lg'` |
@@ -145,6 +145,17 @@ style the same raw element the same way, that's the signal to promote it here.
   holder: private writable signals, public `asReadonly()` views, `computed()`
   aggregates, and async mutation methods that call the API first and update
   local state from the response.
+- **Items own their copies, and ownership is derived.** An `Item` is the
+  catalogue entry (name, year, photos, `value` = per-unit reference estimate)
+  and carries `copies: ItemCopy[]`; each copy has its own `condition`, `price`
+  paid, optional `value` override, `acquiredOn`, `status`
+  (`Keep`/`ForTrade`/`ForSale`) and `notes`. There is **no `owned` flag and no
+  item-level `condition`/`price`** — an item with at least one copy is owned,
+  one with none is on the wantlist. Never re-derive that inline: use the pure
+  helpers in `core/utils/copies.util.ts` (`isOwned`, `bestCondition`,
+  `copyValue`, `ownedValue`, `paidTotal`, `sortValue`, `newCopy`,
+  `syncWantedTag`). A copy's `value` is `null` when it inherits the item's —
+  keep the null, it distinguishes "inherited" from "overridden".
 
 ## 6. Testing & verification
 

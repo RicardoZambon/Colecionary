@@ -33,14 +33,14 @@
 
         <div class="price-row">
           <ui-badge [tone]="tone()">{{ badge() }}</ui-badge>
-          <span class="value">{{ it.value | money }}</span>
-          <span class="note">{{ it.owned ? 'paid ' + (it.price | money) : 'market estimate' }}</span>
+          <span class="value">{{ owned() ? (ownedValue() | money) : (it.value | money) }}</span>
+          <span class="note">{{ owned() ? 'paid ' + (paidTotal() | money) : 'market estimate' }}</span>
         </div>
 
-        @if (!it.owned) {
+        @if (!owned()) {
           <div class="wantlist">
             <span>On your wantlist — not in your vault yet.</span>
-            <ui-button size="sm" (click)="markOwned()">✓ Mark as owned</ui-button>
+            <ui-button size="sm" (click)="markOwned()">✓ I own one — add a copy</ui-button>
           </div>
         }
 
@@ -50,10 +50,34 @@
           <ui-section-label class="fields__heading">Details</ui-section-label>
           <div class="field-row"><span class="key">YEAR</span><span>{{ it.year }}</span></div>
           <div class="field-row"><span class="key">GROUP</span><span>{{ groupPath() }}</span></div>
-          <div class="field-row"><span class="key">CONDITION</span><span>{{ it.condition }}</span></div>
-          <div class="field-row"><span class="key">PURCHASE PRICE</span><span>{{ it.price | money }}</span></div>
-          <div class="field-row"><span class="key">EST. VALUE</span><span>{{ it.value | money }}</span></div>
+          <div class="field-row"><span class="key">EST. VALUE / COPY</span><span>{{ it.value | money }}</span></div>
         </ui-card>
+
+        @if (owned()) {
+          <ui-card class="fields copies">
+            <ui-section-label class="fields__heading">Copies · {{ it.copies.length }}</ui-section-label>
+            @for (copy of copyRows(); track copy.id) {
+              <div class="copy-row">
+                <ui-badge [tone]="copy.tone">{{ copy.condition.toUpperCase() }}</ui-badge>
+                <span class="copy-row__paid">paid {{ copy.price | money }}</span>
+                <span class="copy-row__est">{{ copy.value | money }}</span>
+                @if (copy.acquiredOn) {
+                  <span class="copy-row__date">{{ copy.acquiredOn }}</span>
+                }
+                @if (copy.statusLabel) {
+                  <span class="copy-row__status">{{ copy.statusLabel }}</span>
+                }
+                @if (copy.notes) {
+                  <span class="copy-row__notes">{{ copy.notes }}</span>
+                }
+              </div>
+            }
+            <div class="copies__total">
+              {{ it.copies.length }} {{ it.copies.length === 1 ? 'copy' : 'copies' }}
+              · paid {{ paidTotal() | money }} · est. {{ ownedValue() | money }}
+            </div>
+          </ui-card>
+        }
 
         @if (groupFieldRows().length) {
           <ui-card class="fields">

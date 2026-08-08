@@ -23,7 +23,12 @@
     <div class="header__actions">
       <div class="progress-box">
         <div class="progress-box__row">
-          <span>{{ ownedCount() }} / {{ coll.items.length }} OWNED</span>
+          <span>
+            {{ ownedCount() }} / {{ coll.items.length }} OWNED
+            @if (totalCopies() > coll.items.length) {
+              <span class="copies-note">· {{ totalCopies() }} COPIES</span>
+            }
+          </span>
           <span class="pct">{{ ownedPct() }}%</span>
         </div>
         <ui-progress [pct]="ownedPct()" />
@@ -64,8 +69,8 @@
 
   <div class="filters-row">
     <span class="row-label">CONDITION</span>
-    @for (value of ['Mint', 'Good', 'Fair']; track value) {
-      <ui-chip [small]="true" [selected]="condition() === value" (click)="toggleCondition($any(value))">{{ value }}</ui-chip>
+    @for (value of conditions; track value) {
+      <ui-chip [small]="true" [selected]="condition() === value" (click)="toggleCondition(value)">{{ value }}</ui-chip>
     }
     <span class="row-label spaced">STATUS</span>
     <ui-chip [small]="true" [selected]="own() === 'owned'" (click)="toggleOwn('owned')">Owned</ui-chip>
@@ -102,11 +107,11 @@
         <ui-card
           [interactive]="true"
           class="item-card"
-          [class.item-card--wanted]="!item.owned"
+          [class.item-card--wanted]="!isOwned(item)"
           [routerLink]="['/c', coll.id, 'items', item.id]"
           queryParamsHandling="preserve"
         >
-          <div class="item-card__img" [class.dim]="!item.owned">
+          <div class="item-card__img" [class.dim]="!isOwned(item)">
             @if (item.photoIds.length) {
               <div class="cover" [style.background-image]="'url(' + images.url(item.photoIds[0]) + ')'"></div>
             } @else {
