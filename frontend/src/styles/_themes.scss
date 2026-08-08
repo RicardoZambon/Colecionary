@@ -24,9 +24,9 @@
   --radius: 10px;
   --pill: 999px;
   --bw: 1px;
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'Space Grotesk', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-display: 'Space Grotesk', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
+  --font-body: 'Space Grotesk', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Noto Sans Symbols 2', 'Noto Sans Symbols', ui-monospace, monospace;
   --h1: 26px;
   --ls-display: -0.02em;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -65,8 +65,8 @@
   --warn: #FBBF24;
   --radius: 0px;
   --pill: 0px;
-  --font-display: 'JetBrains Mono', monospace;
-  --font-body: 'JetBrains Mono', monospace;
+  --font-display: 'JetBrains Mono', 'Noto Sans Symbols 2', 'Noto Sans Symbols', monospace;
+  --font-body: 'JetBrains Mono', 'Noto Sans Symbols 2', 'Noto Sans Symbols', monospace;
   --h1: 22px;
   --ls-display: -0.01em;
   --shadow: none;
@@ -89,8 +89,8 @@
   --radius: 0px;
   --pill: 0px;
   --bw: 2px;
-  --font-display: 'Press Start 2P', monospace;
-  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Press Start 2P', 'Noto Sans Symbols 2', 'Noto Sans Symbols', monospace;
+  --font-body: 'DM Sans', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
   --h1: 16px;
   --ls-display: 0em;
   --shadow: none;
@@ -112,8 +112,8 @@
   --warn: #FBBF24;
   --radius: 4px;
   --pill: 3px;
-  --font-display: 'Orbitron', system-ui, sans-serif;
-  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Orbitron', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
+  --font-body: 'DM Sans', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
   --h1: 22px;
   --ls-display: 0.08em;
   --shadow: none;
@@ -136,8 +136,8 @@
   --radius: 0px;
   --pill: 0px;
   --bw: 1.5px;
-  --font-display: 'Archivo Black', system-ui, sans-serif;
-  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Archivo Black', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
+  --font-body: 'DM Sans', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
   --h1: 24px;
   --ls-display: 0em;
   --shadow: 3px 3px 0 rgba(27, 26, 22, 0.12);
@@ -158,8 +158,8 @@
   --good: #34D399;
   --warn: #FBBF24;
   --radius: 8px;
-  --font-display: 'Outfit', system-ui, sans-serif;
-  --font-body: 'Outfit', system-ui, sans-serif;
+  --font-display: 'Outfit', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
+  --font-body: 'Outfit', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
   --h1: 26px;
   --ls-display: -0.01em;
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
