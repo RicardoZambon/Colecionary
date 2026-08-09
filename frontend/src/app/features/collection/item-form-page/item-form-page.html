@@ -46,25 +46,76 @@
         <ui-field label="Group">
           <ui-select [options]="groupOptions()" [value]="groupId()" (valueChange)="groupId.set($event)" />
         </ui-field>
-        <ui-field label="Condition">
-          <ui-select [options]="conditionOptions" [value]="condition()" (valueChange)="condition.set($event)" />
-        </ui-field>
         <ui-field label="Year">
           <ui-text-input [value]="year()" (valueChange)="year.set($event)" />
         </ui-field>
-        <ui-field label="Status">
-          <ui-select [options]="statusOptions" [value]="status()" (valueChange)="status.set($event)" />
-        </ui-field>
-      </div>
-
-      <div class="pair">
-        <ui-field label="Purchase price">
-          <ui-text-input [value]="price()" (valueChange)="price.set($event)" />
-        </ui-field>
-        <ui-field label="Est. value">
+        <ui-field label="Est. value (per copy)">
           <ui-text-input [value]="value()" (valueChange)="value.set($event)" />
         </ui-field>
       </div>
+
+      <ui-card class="copies">
+        <div class="copies__heading">COPIES · {{ copies().length }}</div>
+        @for (copy of copies(); track copy.id) {
+          <div class="copies__row">
+            <div class="copies__row-head">
+              <span class="tag">COPY #{{ $index + 1 }}</span>
+              <ui-select
+                class="compact"
+                [options]="conditionOptions"
+                [value]="copy.condition"
+                (valueChange)="patchCopy($index, { condition: $any($event) })"
+              />
+              <ui-select
+                class="compact"
+                [options]="copyStatusOptions"
+                [value]="copy.status"
+                (valueChange)="patchCopy($index, { status: $any($event) })"
+              />
+              <button type="button" class="copies__remove" title="Remove copy" (click)="removeCopy($index)">✕</button>
+            </div>
+            <div class="copies__fields">
+              <ui-field label="Paid">
+                <ui-text-input
+                  variant="subtle"
+                  placeholder="0"
+                  [value]="copy.price"
+                  (valueChange)="patchCopy($index, { price: $event })"
+                />
+              </ui-field>
+              <ui-field label="Est. value">
+                <ui-text-input
+                  variant="subtle"
+                  placeholder="— uses item value"
+                  [value]="copy.value"
+                  (valueChange)="patchCopy($index, { value: $event })"
+                />
+              </ui-field>
+              <ui-field label="Acquired">
+                <ui-text-input
+                  variant="subtle"
+                  type="date"
+                  [value]="copy.acquiredOn"
+                  (valueChange)="patchCopy($index, { acquiredOn: $event })"
+                />
+              </ui-field>
+            </div>
+            <ui-field label="Notes">
+              <ui-text-input
+                variant="subtle"
+                placeholder="sealed · box A shelf 2 · missing manual…"
+                [value]="copy.notes"
+                (valueChange)="patchCopy($index, { notes: $event })"
+              />
+            </ui-field>
+          </div>
+        } @empty {
+          <div class="copies__empty">No copies yet — this item stays on your wantlist.</div>
+        }
+        <div class="copies__actions">
+          <ui-button variant="ghost" size="sm" (click)="addCopy()">+ Add copy</ui-button>
+        </div>
+      </ui-card>
 
       <ui-card class="group-fields">
         <div class="group-fields__heading">GROUP FIELDS · {{ groupLabel() }}</div>

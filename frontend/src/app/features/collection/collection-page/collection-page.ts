@@ -4,9 +4,10 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../../core/api/images-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
-import { Collection, Condition, GroupNode, Item } from '../../../core/models';
+import { CONDITIONS, Collection, Condition, GroupNode, Item } from '../../../core/models';
+import { isOwned, ownedValue, sortValue } from '../../../core/utils/copies.util';
 import { childrenOf, groupById, pathOf, subtreeIds } from '../../../core/utils/groups.util';
-import { conditionLabel, conditionTone } from '../../../shared/ui/badge/badge';
+import { itemBadgeLabel, itemTone } from '../../../shared/ui/badge/badge';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import {
   UiAvatarStack,
@@ -71,6 +72,7 @@ export class CollectionPage {
   readonly g = input<string | undefined>(undefined);
 
   protected readonly sortOptions = SORT_OPTIONS;
+  protected readonly conditions = CONDITIONS;
   protected readonly condition = signal<Condition | null>(null);
   protected readonly own = signal<OwnFilter>(null);
   protected readonly sort = signal<SortKey>('recent');
@@ -93,14 +95,18 @@ export class CollectionPage {
   });
 
   protected readonly ownedCount = computed(
-    () => this.collection()?.items.filter(i => i.owned).length ?? 0,
+    () => this.collection()?.items.filter(isOwned).length ?? 0,
   );
   protected readonly ownedPct = computed(() => {
     const total = this.collection()?.items.length ?? 0;
     return total ? Math.round((this.ownedCount() / total) * 100) : 0;
   });
+  protected readonly totalCopies = computed(
+    () => this.collection()?.items.reduce((acc, i) => acc + i.copies.length, 0) ?? 0,
+  );
+  /** Estimated value of the copies actually held — wanted items count for nothing. */
   protected readonly totalValue = computed(
-    () => this.collection()?.items.reduce((acc, i) => acc + i.value, 0) ?? 0,
+    () => this.collection()?.items.reduce((acc, i) => acc + ownedValue(i), 0) ?? 0,
   );
 
   protected readonly headerMembers = computed(() => {
@@ -154,8 +160,9 @@ export class CollectionPage {
     const filtered = collection.items.filter(
       item =>
         (!groupFilter || groupFilter.has(item.groupId)) &&
-        (!this.condition() || item.condition === this.condition()) &&
-        (!this.own() || (this.own() === 'owned' ? item.owned : !item.owned)) &&
+        // An item matches a condition when any of its copies is in it.
+        (!this.condition() || item.copies.some(c => c.condition === this.condition())) &&
+        (!this.own() || (this.own() === 'owned' ? isOwned(item) : !isOwned(item))) &&
         (!query || item.name.toLowerCase().includes(query)),
     );
 
@@ -163,8 +170,8 @@ export class CollectionPage {
     switch (this.sort()) {
       case 'recent': sorted.reverse(); break;
       case 'name': sorted.sort((a, b) => a.name.localeCompare(b.name)); break;
-      case 'valueDesc': sorted.sort((a, b) => b.value - a.value); break;
-      case 'valueAsc': sorted.sort((a, b) => a.value - b.value); break;
+      case 'valueDesc': sorted.sort((a, b) => sortValue(b) - sortValue(a)); break;
+      case 'valueAsc': sorted.sort((a, b) => sortValue(a) - sortValue(b)); break;
       case 'yearAsc': sorted.sort((a, b) => a.year - b.year); break;
       case 'yearDesc': sorted.sort((a, b) => b.year - a.year); break;
     }
@@ -182,11 +189,15 @@ export class CollectionPage {
   }
 
   protected badgeTone(item: Item) {
-    return conditionTone(item.condition, item.owned);
+    return itemTone(item);
   }
 
   protected badgeLabel(item: Item): string {
-    return conditionLabel(item.condition, item.owned);
+    return itemBadgeLabel(item);
+  }
+
+  protected isOwned(item: Item): boolean {
+    return isOwned(item);
   }
 
   // --- actions ---

@@ -48,7 +48,7 @@ public static class SeedData
                 Items =
                 [
                     Item("retro", "nes", "NES Console (boxed)", 1985, Condition.Mint, 340, 260, "Nintendo", ["boxed", "cib"], "nes_console.jpg", "Complete-in-box NES-001 with original styrofoam, manuals, two controllers and Zapper. Shell has almost no yellowing; tested and working.", Custom(("Serial no.", "N8054321"), ("Region", "NTSC-U"), ("Completeness", "CIB — console, box, manuals"))),
-                    Item("retro", "snes", "SNES (PAL)", 1992, Condition.Good, 120, 70, "Nintendo", ["loose"], "snes_pal.jpg", "Loose PAL SNES, one controller. Light yellowing on the top shell, ports clean.", Custom(("Region", "PAL"))),
+                    Item("retro", "snes", "SNES (PAL)", 1992, Condition.Good, 120, 70, "Nintendo", ["loose"], "snes_pal.jpg", "Loose PAL SNES, one controller. Light yellowing on the top shell, ports clean.", Custom(("Region", "PAL")), extraCopies: [Copy("snes_c2", Condition.Fair, 45, CopyStatus.ForSale, value: 80, acquiredOn: new DateOnly(2023, 11, 2), notes: "Yellowed spare with a scuffed shell — parts donor or a cheap sale.")]),
                     Item("retro", "gameboy", "Game Boy DMG-01", 1989, Condition.Fair, 85, 40, "Handhelds", ["loose"], "gameboy_dmg.jpg", "Original DMG with a few dead pixel lines. Candidate for an IPS screen mod.", Custom(("Screen", "2 dead lines"), ("Mods", "None (IPS planned)"))),
                     Item("retro", "n64", "N64 Gold Edition", 1998, Condition.Mint, 610, 420, "Nintendo", ["cib", "rare"], "n64_gold.jpg", "Toys \"R\" Us exclusive gold console, complete in box with matching gold controller. The crown of the Nintendo shelf.", Custom(("Edition", "Gold — TRU exclusive"), ("Serial no.", "NS1189223"))),
                     Item("retro", "famicom", "Famicom (JP)", 1983, Condition.Good, 210, 140, "Nintendo", ["boxed", "import"], "famicom.jpg", "Japanese import Famicom with hardwired controllers, boxed. Box has shelf wear.", Custom(("Region", "NTSC-J"))),
@@ -77,8 +77,8 @@ public static class SeedData
                 ],
                 Items =
                 [
-                    Item("pokemon", "pk_squirtle", "Squirtle (Base Set)", 1999, Condition.Good, 8, 2, "pk_cards_reg", ["raw"], "squirtle_base.jpg", "Base Set Squirtle, lightly played. Binder filler with sentimental value."),
-                    Item("pokemon", "pk_eevee", "Eevee (Jungle)", 1999, Condition.Mint, 6, 1, "pk_cards_reg", ["raw"], "eevee_jungle.jpg", "Pack-fresh Jungle Eevee, sleeved since the day it was pulled."),
+                    Item("pokemon", "pk_squirtle", "Squirtle (Base Set)", 1999, Condition.Good, 8, 2, "pk_cards_reg", ["raw"], "squirtle_base.jpg", "Base Set Squirtle, lightly played. Binder filler with sentimental value.", extraCopies: [Copy("pk_squirtle_c2", Condition.Mint, 3, CopyStatus.ForTrade, acquiredOn: new DateOnly(2024, 6, 15), notes: "Pulled from a bundle — trade bait."), Copy("pk_squirtle_c3", Condition.Fair, 1, CopyStatus.ForSale, value: 4, acquiredOn: new DateOnly(2022, 3, 8), notes: "Creased corner, playable only.")]),
+                    Item("pokemon", "pk_eevee", "Eevee (Jungle)", 1999, Condition.Mint, 6, 1, "pk_cards_reg", ["raw"], "eevee_jungle.jpg", "Pack-fresh Jungle Eevee, sleeved since the day it was pulled.", extraCopies: [Copy("pk_eevee_c2", Condition.Good, 2, CopyStatus.ForTrade, acquiredOn: new DateOnly(2025, 1, 19), notes: "Duplicate from a lot — happy to trade.")]),
                     Item("pokemon", "pk_zard_ex", "Charizard ex (FireRed)", 2004, Condition.Good, 380, 210, "pk_cards_rare", ["holo"], "charizard_ex.jpg", "FireRed & LeafGreen Charizard ex, light edgewear on the back.", Custom(("Set no.", "105/112"))),
                     Item("pokemon", "pk_umbreon", "Umbreon Gold Star", 2005, Condition.Good, 1900, 0, "pk_cards_rare", ["wanted", "grail"], "umbreon_star.jpg", "POP Series 5 grail — hunting a clean raw copy.", [], owned: false),
                     Item("pokemon", "pk_stadium", "Pokémon Stadium (CIB)", 2000, Condition.Good, 120, 70, "pk_games_n64", ["cib"], "pk_stadium.jpg", "Complete in box with Transfer Pak. Box has light shelf wear."),
@@ -103,7 +103,7 @@ public static class SeedData
                 [
                     Item("cards", "charizard", "Charizard Holo (Base Set)", 1999, Condition.Mint, 4200, 3100, "Pokémon", ["graded", "psa8"], "charizard_base.jpg", "Base Set Unlimited Charizard, PSA 8. Strong centering, minor whitening on the back only.", Custom(("Grade", "PSA 8"), ("Cert no.", "82736411"))),
                     Item("cards", "blastoise", "Blastoise Holo (Base Set)", 1999, Condition.Good, 380, 240, "Pokémon", ["raw"], "blastoise_base.jpg", "Raw Base Set Blastoise, light edgewear. Solid candidate for grading.", Custom(("Grade", "Raw (est. 6-7)"))),
-                    Item("cards", "shivan", "Shivan Dragon (Revised)", 1994, Condition.Good, 45, 30, "Magic", ["raw"], "shivan_revised.jpg", "Revised edition Shivan Dragon, lightly played. Childhood nostalgia pull.", Custom(("Set", "Revised (3ED)"))),
+                    Item("cards", "shivan", "Shivan Dragon (Revised)", 1994, Condition.Good, 45, 30, "Magic", ["raw"], "shivan_revised.jpg", "Revised edition Shivan Dragon, lightly played. Childhood nostalgia pull.", Custom(("Set", "Revised (3ED)")), extraCopies: [Copy("shivan_c2", Condition.Fair, 18, CopyStatus.ForTrade, value: 25, acquiredOn: new DateOnly(2021, 9, 30), notes: "Playset spare, moderate edge wear.")]),
                     Item("cards", "griffey", "Ken Griffey Jr. RC (Upper Deck)", 1989, Condition.Mint, 120, 60, "Sports", ["rookie"], "griffey_rc.jpg", "The iconic 1989 Upper Deck #1 rookie card. Sharp corners, clean surface.", Custom(("Card no.", "#1"))),
                     Item("cards", "venusaur", "Venusaur Holo (Base Set)", 1999, Condition.Good, 340, 0, "Pokémon", ["wanted"], "venusaur_base.jpg", "The missing starter — would complete the Base Set holo trio.", [], owned: false),
                 ],
@@ -122,7 +122,7 @@ public static class SeedData
                     Item("vinyl", "okcomputer", "OK Computer — 1st UK press", 1997, Condition.Good, 260, 180, "Rock", ["first-press"], "ok_computer.jpg", "First UK pressing, double LP. Sleeve VG+, vinyl plays clean with faint surface noise on side D.", Custom(("Pressing", "1st UK, NODATA 02"), ("Sleeve", "VG+"))),
                     Item("vinyl", "akira", "Akira — Symphonic Suite OST", 1988, Condition.Mint, 340, 220, "OSTs", ["import", "rare"], "akira_ost.jpg", "Original Japanese pressing of the Geinoh Yamashirogumi score. Obi strip intact.", Custom(("Obi", "Present"))),
                     Item("vinyl", "kindofblue", "Kind of Blue — mono", 1959, Condition.Fair, 480, 300, "Jazz", ["mono", "rare"], "kind_of_blue.jpg", "Mono six-eye pressing. Sleeve is rough but the record itself grades VG.", Custom(("Label", "Columbia six-eye"))),
-                    Item("vinyl", "doomost", "DOOM (2016) OST — red splatter", 2018, Condition.Mint, 95, 80, "OSTs", ["limited"], "doom_ost.jpg", "Limited red splatter variant, still sealed. Mick Gordon at his heaviest.", Custom(("Variant", "Red splatter /3000"))),
+                    Item("vinyl", "doomost", "DOOM (2016) OST — red splatter", 2018, Condition.Mint, 95, 80, "OSTs", ["limited"], "doom_ost.jpg", "Limited red splatter variant, still sealed. Mick Gordon at his heaviest.", Custom(("Variant", "Red splatter /3000")), extraCopies: [Copy("doomost_c2", Condition.Good, 35, CopyStatus.ForSale, value: 60, acquiredOn: new DateOnly(2025, 12, 5), notes: "Opened play copy — the sealed one stays.")]),
                 ],
             },
             new()
@@ -296,6 +296,11 @@ public static class SeedData
         Role = role,
     };
 
+    /// <summary>
+    /// Demo item. <paramref name="condition"/> and <paramref name="price"/>
+    /// describe the first copy; <paramref name="owned"/> false means no copies
+    /// at all (wantlist). Extra copies are appended after the first.
+    /// </summary>
     private static Item Item(
         string collectionId,
         string id,
@@ -309,21 +314,42 @@ public static class SeedData
         string img,
         string description,
         List<CustomFieldValue>? custom = null,
-        bool owned = true) => new()
+        bool owned = true,
+        List<ItemCopy>? extraCopies = null) => new()
         {
             CollectionId = collectionId,
             Id = id,
             Name = name,
             Year = year,
-            Condition = condition,
             Value = value,
-            Price = price,
             GroupId = groupId,
             Tags = tags,
             Img = img,
             Description = description,
             Custom = custom ?? [],
-            Owned = owned,
+            // The `{id}_c1` scheme matches the AddItemCopies backfill, so a
+            // migrated database and a freshly seeded one look identical.
+            Copies = owned
+                ? [Copy($"{id}_c1", condition, price), .. extraCopies ?? []]
+                : [],
+        };
+
+    private static ItemCopy Copy(
+        string id,
+        Condition condition,
+        decimal price,
+        CopyStatus status = CopyStatus.Keep,
+        decimal? value = null,
+        DateOnly? acquiredOn = null,
+        string notes = "") => new()
+        {
+            Id = id,
+            Condition = condition,
+            Price = price,
+            Status = status,
+            Value = value,
+            AcquiredOn = acquiredOn,
+            Notes = notes,
         };
 
     private static List<CustomFieldValue> Custom(params (string Key, string Value)[] pairs) =>

@@ -78,3 +78,26 @@ documented follow-ups.
 
 JSON is camelCase with string enums — byte-compatible with the Angular
 models in `frontend/src/app/core/models/`.
+
+### Item copies
+
+An `Item` is the catalogue entry; the physical copies live in
+`Copies : List<ItemCopy>`, persisted as a single JSON column (`copies`) via
+`OwnsMany(...).ToJson()`, the same pattern as `custom`. Each copy carries its
+own `Condition`, `Price` paid, optional `Value` override (null = inherit the
+item's per-unit `Value`), `AcquiredOn` (`DateOnly?`, serialised `yyyy-MM-dd`),
+`Status` (`Keep`/`ForTrade`/`ForSale`) and `Notes`.
+
+**Ownership is derived, never transported:** an item with at least one copy is
+owned, one with none is on the wantlist. `ItemDto` deliberately has no `owned`
+field — it round-trips GET → PUT, so a value the server computes but ignores on
+input would desynchronise silently. `Item.Condition`, `Item.Price` and
+`Item.Owned` were removed in the `AddItemCopies` migration, which backfills one
+copy per previously-owned item.
+
+Two details are load-bearing and pinned by unit tests
+(`Vault.UnitTests/ItemCopyJsonShapeTests.cs`): the copy enums must keep their
+`HasConversion<string>()` (an unconverted enum is written into JSON as an
+integer), and the JSON property names must keep their `HasJsonPropertyName` —
+the migration wrote that document once from raw T-SQL and never regenerates it,
+so a rename would orphan existing data with no error anywhere.

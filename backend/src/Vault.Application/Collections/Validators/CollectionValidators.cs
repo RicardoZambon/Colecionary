@@ -37,11 +37,8 @@ public sealed class ItemDtoValidator : AbstractValidator<ItemDto>
         RuleFor(i => i.Id).NotEmpty().Matches(IdRules.PublicId());
         RuleFor(i => i.Name).NotEmpty().MaximumLength(200);
         RuleFor(i => i.Description).NotNull().MaximumLength(4000);
-        RuleFor(i => i.Condition).Must(c => c is "Mint" or "Good" or "Fair")
-            .WithMessage("Condition must be Mint, Good or Fair.");
         RuleFor(i => i.Year).InclusiveBetween(0, 3000);
         RuleFor(i => i.Value).GreaterThanOrEqualTo(0);
-        RuleFor(i => i.Price).GreaterThanOrEqualTo(0);
         RuleFor(i => i.GroupId).MaximumLength(64);
         RuleFor(i => i.Img).NotNull().MaximumLength(260);
         RuleForEach(i => i.Tags).NotEmpty().MaximumLength(50);
@@ -51,6 +48,30 @@ public sealed class ItemDtoValidator : AbstractValidator<ItemDto>
         {
             custom.RuleFor(c => c.Key).NotEmpty().MaximumLength(100);
             custom.RuleFor(c => c.Value).NotNull().MaximumLength(1000);
+        });
+        // No copies at all is valid — that is the wantlist.
+        RuleFor(i => i.Copies).Must(c => c.Count <= 50)
+            .WithMessage("An item can have at most 50 copies.");
+        // EF keys the JSON collection by ordinal, not by Id, so duplicates would
+        // persist happily and only break the UI that edits copies by id.
+        RuleFor(i => i.Copies)
+            .Must(c => c.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() == c.Count)
+            .WithMessage("Copy ids must be unique within an item.");
+        // Lengths and ranges are enforced here only: a JSON column carries no
+        // per-field constraints of its own.
+        RuleForEach(i => i.Copies).ChildRules(copy =>
+        {
+            copy.RuleFor(c => c.Id).NotEmpty().Matches(IdRules.PublicId());
+            copy.RuleFor(c => c.Condition).Must(c => c is "Mint" or "Good" or "Fair")
+                .WithMessage("Condition must be Mint, Good or Fair.");
+            copy.RuleFor(c => c.Status).Must(s => s is "Keep" or "ForTrade" or "ForSale")
+                .WithMessage("Status must be Keep, ForTrade or ForSale.");
+            copy.RuleFor(c => c.Price).GreaterThanOrEqualTo(0);
+            copy.RuleFor(c => c.Value).GreaterThanOrEqualTo(0).When(c => c.Value.HasValue);
+            copy.RuleFor(c => c.AcquiredOn).Must(d => d!.Value.Year is >= 1 and <= 3000)
+                .When(c => c.AcquiredOn.HasValue)
+                .WithMessage("AcquiredOn must be a plausible date.");
+            copy.RuleFor(c => c.Notes).NotNull().MaximumLength(1000);
         });
     }
 }

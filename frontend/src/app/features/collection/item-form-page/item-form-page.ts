@@ -4,22 +4,61 @@ import { Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../../core/api/images-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
-import { Condition, Item } from '../../../core/models';
+import { CONDITIONS, Condition, CopyStatus, Item, ItemCopy } from '../../../core/models';
+import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
 import { fieldsFor, flattenTree, groupById } from '../../../core/utils/groups.util';
 import { SelectOption, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea } from '../../../shared/ui';
 
-const CONDITION_OPTIONS: SelectOption[] = [
-  { value: 'Mint', label: 'Mint' },
-  { value: 'Good', label: 'Good' },
-  { value: 'Fair', label: 'Fair' },
-];
+const CONDITION_OPTIONS: SelectOption[] = CONDITIONS.map(c => ({ value: c, label: c }));
 
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: 'Owned', label: 'Owned — in my vault' },
-  { value: 'Wanted', label: 'Wanted — on the hunt' },
+const COPY_STATUS_OPTIONS: SelectOption[] = [
+  { value: 'Keep', label: 'Keeping' },
+  { value: 'ForTrade', label: 'For trade' },
+  { value: 'ForSale', label: 'For sale' },
 ];
 
 const MAX_PHOTOS = 8;
+const MAX_COPIES = 50;
+
+/**
+ * Money and dates stay as raw text while editing — parsing on every keystroke
+ * would swallow the decimal point as you type it. Converted on save, like the
+ * rest of this form.
+ */
+interface CopyDraft {
+  id: string;
+  condition: Condition;
+  /** Empty means "inherit the item's estimate" and round-trips as null. */
+  value: string;
+  price: string;
+  acquiredOn: string;
+  status: CopyStatus;
+  notes: string;
+}
+
+function toDraft(copy: ItemCopy): CopyDraft {
+  return {
+    id: copy.id,
+    condition: copy.condition,
+    price: String(copy.price),
+    value: copy.value === null ? '' : String(copy.value),
+    acquiredOn: copy.acquiredOn ?? '',
+    status: copy.status,
+    notes: copy.notes,
+  };
+}
+
+function fromDraft(draft: CopyDraft): ItemCopy {
+  return {
+    id: draft.id,
+    condition: draft.condition,
+    price: parseNumber(draft.price),
+    value: draft.value.trim() ? parseNumber(draft.value) : null,
+    acquiredOn: draft.acquiredOn.trim() || null,
+    status: draft.status,
+    notes: draft.notes.trim(),
+  };
+}
 
 @Component({
   selector: 'app-item-form-page',
@@ -39,7 +78,7 @@ export class ItemFormPage {
   readonly itemId = input<string | undefined>(undefined);
 
   protected readonly conditionOptions = CONDITION_OPTIONS;
-  protected readonly statusOptions = STATUS_OPTIONS;
+  protected readonly copyStatusOptions = COPY_STATUS_OPTIONS;
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
   protected readonly editing = computed(() =>
@@ -50,11 +89,9 @@ export class ItemFormPage {
   protected readonly name = signal('');
   protected readonly description = signal('');
   protected readonly groupId = signal('');
-  protected readonly condition = signal<string>('Good');
-  protected readonly status = signal<string>('Owned');
   protected readonly year = signal('');
-  protected readonly price = signal('');
   protected readonly value = signal('');
+  protected readonly copies = signal<CopyDraft[]>([]);
   protected readonly custom = signal<Record<string, string>>({});
   protected readonly photoIds = signal<string[]>([]);
   protected readonly uploading = signal(false);
@@ -73,11 +110,12 @@ export class ItemFormPage {
       this.name.set(item?.name ?? '');
       this.description.set(item?.description ?? '');
       this.groupId.set(item?.groupId ?? collection.groups[0]?.id ?? '');
-      this.condition.set(item?.condition ?? 'Good');
-      this.status.set(item && !item.owned ? 'Wanted' : 'Owned');
       this.year.set(item ? String(item.year) : '');
-      this.price.set(item ? String(item.price) : '');
       this.value.set(item ? String(item.value) : '');
+      // A new item starts with one copy — adding something you own is the
+      // common case, and the old form defaulted to "Owned". Remove it to put
+      // the item on the wantlist instead.
+      this.copies.set(item ? item.copies.map(toDraft) : [toDraft(newCopy())]);
       this.custom.set(Object.fromEntries((item?.custom ?? []).map(c => [c.key, c.value])));
       this.photoIds.set([...(item?.photoIds ?? [])]);
     });
@@ -121,6 +159,24 @@ export class ItemFormPage {
     this.photoIds.update(ids => ids.filter((_, i) => i !== index));
   }
 
+  // --- copies ---
+
+  protected addCopy(): void {
+    if (this.copies().length >= MAX_COPIES) {
+      this.toast.flash(`Up to ${MAX_COPIES} copies per item`);
+      return;
+    }
+    this.copies.update(copies => [...copies, toDraft(newCopy())]);
+  }
+
+  protected removeCopy(index: number): void {
+    this.copies.update(copies => copies.filter((_, i) => i !== index));
+  }
+
+  protected patchCopy(index: number, patch: Partial<CopyDraft>): void {
+    this.copies.update(copies => copies.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  }
+
   protected readonly groupOptions = computed<SelectOption[]>(() =>
     flattenTree(this.collection()?.groups ?? []).map(({ node, depth }) => ({
       value: node.id,
@@ -156,22 +212,16 @@ export class ItemFormPage {
     }
 
     const existing = this.editing();
-    const owned = this.status() !== 'Wanted';
-    const tags = new Set(existing?.tags ?? []);
-    if (owned) tags.delete('wanted');
-    else tags.add('wanted');
 
     const item: Item = {
       id: existing?.id ?? `i${Date.now()}`,
       name,
       description: this.description().trim(),
       groupId: this.groupId(),
-      condition: (this.condition() as Condition) || 'Good',
       year: parseNumber(this.year()) || new Date().getFullYear(),
-      price: parseNumber(this.price()),
       value: parseNumber(this.value()),
-      owned,
-      tags: [...tags],
+      copies: this.copies().map(fromDraft),
+      tags: [...(existing?.tags ?? [])],
       img: existing?.img ?? slugify(name) + '.jpg',
       photoIds: this.photoIds(),
       createdAt: existing?.createdAt,
@@ -180,7 +230,7 @@ export class ItemFormPage {
         .filter(c => c.value),
     };
 
-    await this.store.upsertItem(collection.id, item);
+    await this.store.upsertItem(collection.id, syncWantedTag(item));
     this.toast.flash('Saved ✓');
     void this.router.navigate(
       existing ? ['/c', collection.id, 'items', existing.id] : ['/c', collection.id],

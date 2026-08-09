@@ -44,8 +44,14 @@ public class ContractTests(VaultApiFactory factory)
 
         Assert.Contains("\"linkShare\":", raw);
         Assert.Contains("\"groupId\":", raw);
+        Assert.Contains("\"copies\":[", raw);
+        // Condition and status live on the copy now, still as strings.
         Assert.Contains("\"condition\":\"Mint\"", raw);
-        Assert.Contains("\"owned\":false", raw);
+        Assert.Contains("\"status\":\"ForTrade\"", raw);
+        // Pins DateOnly's wire format end to end (SQL Server → EF → STJ).
+        Assert.Contains("\"acquiredOn\":\"2024-06-15\"", raw);
+        // Ownership is derived from the copies, never transported.
+        Assert.DoesNotContain("\"owned\":", raw);
         Assert.Contains("\"parentId\":\"pk_cards\"", raw);
         Assert.DoesNotContain("\"TenantId\"", raw);
     }
@@ -72,7 +78,13 @@ public class ContractTests(VaultApiFactory factory)
             ],
             Items =
             [
-                new ItemDto("i1", "One Piece Vol. 1", "1st print", 1997, "Good", 45, 12, "g2", ["first-press"], "op1.jpg", [new CustomFieldValueDto("Volumes", "1")], true),
+                new ItemDto("i1", "One Piece Vol. 1", "1st print", 1997, 45, "g2", ["first-press"], "op1.jpg",
+                    [new CustomFieldValueDto("Volumes", "1")],
+                    Copies:
+                    [
+                        new ItemCopyDto("i1_c1", "Good", 12, null, new DateOnly(2019, 5, 4), "Keep", "reading copy"),
+                        new ItemCopyDto("i1_c2", "Mint", 30, 55m, null, "ForSale", ""),
+                    ]),
             ],
             Members = [new MemberDto("Ana Pereira", "ana@airia.com", "AP", "Editor")],
             LinkShare = false,
@@ -90,7 +102,39 @@ public class ContractTests(VaultApiFactory factory)
         Assert.Single(fetched.Members);
         Assert.Equal("One Piece Vol. 1", Assert.Single(fetched.Items).Name);
 
-        // Second PUT dropping the item — wholesale replace must remove it.
+        var savedItem = Assert.Single(fetched.Items);
+        Assert.Equal(["i1_c1", "i1_c2"], savedItem.Copies.Select(c => c.Id));
+        Assert.Equal("ForSale", savedItem.Copies[1].Status);
+        Assert.Equal(new DateOnly(2019, 5, 4), savedItem.Copies[0].AcquiredOn);
+        Assert.Null(savedItem.Copies[0].Value);       // falls back to the item's Value
+        Assert.Equal(55m, savedItem.Copies[1].Value); // per-copy override survives
+        Assert.Equal("reading copy", savedItem.Copies[0].Notes);
+
+        // A second PUT of the SAME collection: i1 already exists, so this goes
+        // through ReplaceGraph's per-field update lambda rather than its
+        // add-newcomer branch. Without it, a dropped `current.Copies` assignment
+        // would never be exercised.
+        var edited = updated with
+        {
+            Items =
+            [
+                updated.Items[0] with
+                {
+                    Copies = [new ItemCopyDto("i1_c2", "Good", 30, null, new DateOnly(2020, 1, 2), "ForTrade", "regraded")],
+                },
+            ],
+        };
+        (await client.PutAsJsonAsync($"/api/collections/{created.Id}", edited)).EnsureSuccessStatusCode();
+        all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var reFetched = all!.Single(c => c.Id == created.Id).Items.Single();
+        var only = Assert.Single(reFetched.Copies);   // i1_c1 removed
+        Assert.Equal("i1_c2", only.Id);
+        Assert.Equal("ForTrade", only.Status);        // status edit persisted
+        Assert.Equal("Good", only.Condition);         // condition edit persisted
+        Assert.Null(only.Value);                      // override cleared back to null
+        Assert.Equal(new DateOnly(2020, 1, 2), only.AcquiredOn);
+
+        // Third PUT dropping the item — wholesale replace must remove it.
         var emptied = updated with { Items = [] };
         (await client.PutAsJsonAsync($"/api/collections/{created.Id}", emptied)).EnsureSuccessStatusCode();
         all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
@@ -103,23 +147,78 @@ public class ContractTests(VaultApiFactory factory)
     public async Task Items_UpsertByClientId_AndIdempotentDelete()
     {
         var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
-        var item = new ItemDto("i1752300000000", "Panzer Dragoon Saga", "Grail hunt", 1998, "Good", 900, 0, "Sega", ["wanted"], "pds.jpg", [], false);
+        // No copies at all — a wantlist item.
+        var item = new ItemDto("i1752300000000", "Panzer Dragoon Saga", "Grail hunt", 1998, 900, "Sega", ["wanted"], "pds.jpg", []);
 
         var createResponse = await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", item);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        Assert.Empty((await createResponse.Content.ReadFromJsonAsync<ItemDto>())!.Copies);
 
-        var updateResponse = await client.PutAsJsonAsync(
-            $"/api/collections/retro/items/{item.Id}",
-            item with { Owned = true, Price = 650, Tags = [] });
+        // Found two of them — the wantlist item becomes owned. This is the
+        // ApplyTo path: a missed field here saves with 200 and loses the edit.
+        var owned = item with
+        {
+            Tags = [],
+            Copies =
+            [
+                new ItemCopyDto("pds_c1", "Good", 650, null, new DateOnly(2026, 2, 14), "Keep", "finally"),
+                new ItemCopyDto("pds_c2", "Fair", 400, 700m, null, "ForSale", ""),
+            ],
+        };
+        var updateResponse = await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", owned);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
         var collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
         var fetched = collections!.Single(c => c.Id == "retro").Items.Single(i => i.Id == item.Id);
-        Assert.True(fetched.Owned);
-        Assert.Equal(650, fetched.Price);
+        Assert.Equal(["pds_c1", "pds_c2"], fetched.Copies.Select(c => c.Id));
+        Assert.Equal(650, fetched.Copies[0].Price);
+        Assert.Equal(700m, fetched.Copies[1].Value);
+        Assert.Equal(new DateOnly(2026, 2, 14), fetched.Copies[0].AcquiredOn);
+        Assert.Equal("ForSale", fetched.Copies[1].Status);
+
+        // Sold one — shrink back to a single copy, still through ApplyTo.
+        var sold = owned with { Copies = [owned.Copies[0] with { Notes = "kept the good one" }] };
+        (await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", sold)).EnsureSuccessStatusCode();
+        collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        fetched = collections!.Single(c => c.Id == "retro").Items.Single(i => i.Id == item.Id);
+        Assert.Equal("kept the good one", Assert.Single(fetched.Copies).Notes);
 
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/collections/retro/items/{item.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/collections/retro/items/{item.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task SeededDemo_ExposesMultiCopyItems()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+
+        var squirtle = collections!.Single(c => c.Id == "pokemon").Items.Single(i => i.Id == "pk_squirtle");
+        Assert.Equal(3, squirtle.Copies.Count);
+        Assert.Equal(["Keep", "ForTrade", "ForSale"], squirtle.Copies.Select(c => c.Status));
+        Assert.Null(squirtle.Copies[0].Value);  // inherits the item's reference value
+        Assert.Equal(4m, squirtle.Copies[2].Value);
+
+        // A single-copy item and a wantlist item, for contrast.
+        Assert.Single(collections!.Single(c => c.Id == "retro").Items.Single(i => i.Id == "nes").Copies);
+        Assert.Empty(collections!.Single(c => c.Id == "retro").Items.Single(i => i.Id == "saturn").Copies);
+    }
+
+    [Fact]
+    public async Task Import_CreatesWantlistItemsWithNoCopies()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+
+        var imported = await client.PostAsync("/api/collections/import/store_ps1", null);
+        Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
+        var dto = (await imported.Content.ReadFromJsonAsync<CollectionDto>())!;
+
+        Assert.NotEmpty(dto.Items);
+        Assert.All(dto.Items, i => Assert.Empty(i.Copies));
+        Assert.All(dto.Items, i => Assert.Contains("wanted", i.Tags));
+
+        // The fixture shares one seeded tenant across tests — clean up.
+        (await client.DeleteAsync($"/api/collections/{dto.Id}")).EnsureSuccessStatusCode();
     }
 
     [Fact]

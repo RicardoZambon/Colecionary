@@ -69,19 +69,27 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    inputs, selects, chips, cards, badges, toggles, tabs, avatars, dropdowns,
    etc. are always the `ui-*` components. Need a variant? Extend the
    component; never restyle raw HTML in a page.
-3. **All data flows through the abstract `VaultApi`**
+3. **Items own their copies; ownership is derived.** An `Item` is the
+   catalogue entry (`value` = per-unit reference estimate) and carries
+   `copies: ItemCopy[]` — each with its own condition, price paid, optional
+   value override, acquisition date, status (keep/trade/sale) and notes. There
+   is no `owned` flag and no item-level condition/price: at least one copy
+   means owned, none means wantlist. Always go through the pure helpers in
+   `core/utils/copies.util.ts` (backend mirror: `ItemCopy` in a `copies` JSON
+   column).
+4. **All data flows through the abstract `VaultApi`**
    (`frontend/src/app/core/api/vault-api.ts`). It is currently fulfilled by
    `MockVaultApi` (seed data + latency + localStorage). To connect the real
    backend, implement the same contract and swap one provider line in
    `app.config.ts` — feature code must never know the difference.
-4. **Signals + zoneless + OnPush.** State lives in signal stores
+5. **Signals + zoneless + OnPush.** State lives in signal stores
    (`core/state`); no Zone.js patterns.
-5. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
+6. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
    the path. In-collection navigation preserves `?g=`
    (`queryParamsHandling: 'preserve'`).
-6. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
+7. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
    `:focus-visible`, status never communicated by color alone.
-7. **Verify before merging:** `npm run build` clean, unit tests green, and
+8. **Verify before merging:** `npm run build` clean, unit tests green, and
    the affected flows exercised in the browser in at least one dark theme.
 
 ## ⚠️ Brand governance (pending)

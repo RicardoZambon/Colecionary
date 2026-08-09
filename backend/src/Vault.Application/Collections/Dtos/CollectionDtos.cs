@@ -8,22 +8,43 @@ public sealed record CustomFieldValueDto(string Key, string Value);
 
 public sealed record GroupNodeDto(string Id, string Name, string? ParentId, IReadOnlyList<string> Fields);
 
+/// <summary>One physical copy. A null Value means "use the item's Value".</summary>
+public sealed record ItemCopyDto(
+    string Id,
+    string Condition,
+    decimal Price,
+    decimal? Value = null,
+    DateOnly? AcquiredOn = null,
+    string? Status = null,
+    string? Notes = null)
+{
+    public string Status { get; init; } = Status ?? "Keep";
+
+    public string Notes { get; init; } = Notes ?? string.Empty;
+}
+
+/// <summary>
+/// Ownership is derived, not transported: an item with copies is owned, one
+/// without is on the wantlist. There is deliberately no `owned` field — this
+/// DTO round-trips GET → PUT, and a field the server computes but ignores on
+/// input desynchronises silently.
+/// </summary>
 public sealed record ItemDto(
     string Id,
     string Name,
     string Description,
     int Year,
-    string Condition,
     decimal Value,
-    decimal Price,
     string GroupId,
     IReadOnlyList<string> Tags,
     string Img,
     IReadOnlyList<CustomFieldValueDto> Custom,
-    bool Owned,
+    IReadOnlyList<ItemCopyDto>? Copies = null,
     IReadOnlyList<Guid>? PhotoIds = null,
     DateTimeOffset? CreatedAt = null)
 {
+    public IReadOnlyList<ItemCopyDto> Copies { get; init; } = Copies ?? [];
+
     public IReadOnlyList<Guid> PhotoIds { get; init; } = PhotoIds ?? [];
 }
 

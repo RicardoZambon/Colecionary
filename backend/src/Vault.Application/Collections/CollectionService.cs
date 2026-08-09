@@ -120,14 +120,13 @@ public class CollectionService(
                 Value = it.Value,
                 GroupId = it.Group,
                 Img = it.Img,
-                Price = 0,
-                Condition = Domain.Enums.Condition.Good,
                 Tags = ["wanted"],
                 Custom = [],
-                Owned = false,
+                // An imported checklist is a wantlist by definition: no copies.
+                Copies = [],
                 SortOrder = i,
                 CreatedAtUtc = importedAt,
-                Description = $"From the \"{listing.Name}\" curated checklist — not in your vault yet. Mark it as owned once you find it.",
+                Description = $"From the \"{listing.Name}\" curated checklist — not in your vault yet. Add a copy once you find it.",
             })],
         };
 
