@@ -144,15 +144,67 @@ public class DtoMapperTests
     }
 
     [Fact]
+    public void ToDto_RoundTripsTypedFieldsAndSort()
+    {
+        var group = new Group
+        {
+            Id = "revistas",
+            Name = "Revistas",
+            Fields =
+            [
+                new GroupField { Name = "Número", Type = GroupFieldType.Number },
+                new GroupField { Name = "Editora" },
+            ],
+            SortBy = "field:Número",
+            SortDirection = "asc",
+        };
+
+        var dto = group.ToDto();
+
+        // The wire form is lowercase, matching the frontend's GroupFieldType.
+        Assert.Equal([("Número", "number"), ("Editora", "text")], dto.Fields.Select(f => (f.Name, f.Type)));
+        Assert.Equal(new GroupSortDto("field:Número", "asc"), dto.Sort);
+
+        var roundTripped = dto.ToEntity("c1", Guid.NewGuid(), 0);
+        Assert.Equal(
+            group.Fields.Select(f => (f.Name, f.Type)),
+            roundTripped.Fields.Select(f => (f.Name, f.Type)));
+        Assert.Equal("field:Número", roundTripped.SortBy);
+        Assert.Equal("asc", roundTripped.SortDirection);
+    }
+
+    [Fact]
+    public void GroupWithNoSort_TravelsAsNull_AndComesBackUnset()
+    {
+        var dto = new Group { Id = "g", Name = "G" }.ToDto();
+        Assert.Null(dto.Sort);
+
+        var entity = dto.ToEntity("c1", Guid.NewGuid(), 0);
+        Assert.Null(entity.SortBy);
+        Assert.Null(entity.SortDirection);
+    }
+
+    [Fact]
+    public void SortByWithoutADirection_DefaultsToAscending()
+    {
+        // Half a configuration would otherwise reach the client as a sort with
+        // an empty direction, which no comparator knows how to apply.
+        var dto = new Group { Id = "g", Name = "G", SortBy = "name" }.ToDto();
+        Assert.Equal(new GroupSortDto("name", "asc"), dto.Sort);
+    }
+
+    [Fact]
     public void ParseHelpers_AreCaseInsensitive_AndRejectUnknowns()
     {
         Assert.Equal(Condition.Fair, DtoMapper.ParseCondition("fair"));
         Assert.Equal(CopyStatus.ForTrade, DtoMapper.ParseCopyStatus("fortrade"));
         Assert.Equal(MemberRole.Owner, DtoMapper.ParseRole("OWNER"));
         Assert.Equal(PlanId.Pro, DtoMapper.ParsePlan("pro"));
+        Assert.Equal(GroupFieldType.Number, DtoMapper.ParseGroupFieldType("NUMBER"));
         Assert.Throws<DomainRuleException>(() => DtoMapper.ParseCondition("Sealed"));
         Assert.Throws<DomainRuleException>(() => DtoMapper.ParseCopyStatus("Gifted"));
         Assert.Throws<DomainRuleException>(() => DtoMapper.ParsePlan("enterprise"));
+        Assert.Throws<DomainRuleException>(() => DtoMapper.ParseGroupFieldType("currency"));
     }
 
     [Fact]

@@ -6,7 +6,21 @@ namespace Vault.Application.Collections.Dtos;
 
 public sealed record CustomFieldValueDto(string Key, string Value);
 
-public sealed record GroupNodeDto(string Id, string Name, string? ParentId, IReadOnlyList<string> Fields);
+public sealed record GroupFieldDto(string Name, string Type);
+
+/// <summary>
+/// A group's default ordering. By is a built-in key ("manual", "added",
+/// "name", "value", "year") or "field:&lt;field name&gt;".
+/// </summary>
+public sealed record GroupSortDto(string By, string Direction);
+
+/// <summary>A null Sort means the nearest ancestor that sets one decides.</summary>
+public sealed record GroupNodeDto(
+    string Id,
+    string Name,
+    string? ParentId,
+    IReadOnlyList<GroupFieldDto> Fields,
+    GroupSortDto? Sort = null);
 
 /// <summary>One physical copy. A null Value means "use the item's Value".</summary>
 public sealed record ItemCopyDto(

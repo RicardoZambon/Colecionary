@@ -101,9 +101,9 @@ export class ItemPage {
     const collection = this.collection();
     const item = this.item();
     if (!collection || !item) return [];
-    return fieldsFor(collection.groups, item.groupId).map(name => ({
-      key: name,
-      value: item.custom.find(c => c.key === name)?.value || '—',
+    return fieldsFor(collection.groups, item.groupId).map(field => ({
+      key: field.name,
+      value: item.custom.find(c => c.key === field.name)?.value || '—',
     }));
   });
 

@@ -37,6 +37,8 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
                 current.Name = incoming.Name;
                 current.ParentId = incoming.ParentId;
                 current.Fields = incoming.Fields;
+                current.SortBy = incoming.SortBy;
+                current.SortDirection = incoming.SortDirection;
                 current.SortOrder = incoming.SortOrder;
             });
 

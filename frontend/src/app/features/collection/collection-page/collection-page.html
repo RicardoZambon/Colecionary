@@ -78,18 +78,18 @@
 
     <span class="spacer"></span>
 
-    <ui-dropdown #sortMenu [width]="190">
+    <ui-dropdown #sortMenu [width]="230">
       <button ddTrigger type="button" class="sort-trigger">Sort: {{ sortLabel() }} ▾</button>
       <ng-container ddPanel>
-        @for (option of sortOptions; track option.id) {
+        @for (option of sortOptions(); track option.id) {
           <button
             type="button"
             class="sort-option"
-            [class.active]="sort() === option.id"
-            (click)="sort.set(option.id); sortMenu.close()"
+            [class.active]="activeSortId() === option.id"
+            (click)="pickSort(option); sortMenu.close()"
           >
             <span>{{ option.label }}</span>
-            <span class="check">@if (sort() === option.id) { ✓ }</span>
+            <span class="check">@if (activeSortId() === option.id) { ✓ }</span>
           </button>
         }
       </ng-container>
@@ -103,15 +103,26 @@
 
   @if (view() === 'grid') {
     <div class="items-grid">
-      @for (item of items(); track item.id) {
+      @for (item of items(); track item.id; let i = $index) {
         <ui-card
           [interactive]="true"
           class="item-card"
           [class.item-card--wanted]="!isOwned(item)"
+          [class.dragging]="dragIndex() === i"
+          [attr.draggable]="manual() ? true : null"
+          (dragstart)="onDragStart($event, i)"
+          (dragover)="onDragOver($event)"
+          (drop)="onDrop($event, i)"
+          (dragend)="onDragEnd()"
           [routerLink]="['/c', coll.id, 'items', item.id]"
           queryParamsHandling="preserve"
         >
           <div class="item-card__img" [class.dim]="!isOwned(item)">
+            @if (fieldChip(item); as chip) {
+              <span class="item-card__chip">
+                <ui-badge tone="accent" [attr.title]="sortFieldName() + ': ' + chip">{{ chip }}</ui-badge>
+              </span>
+            }
             @if (item.photoIds.length) {
               <div class="cover" [style.background-image]="'url(' + images.url(item.photoIds[0]) + ')'"></div>
             } @else {
@@ -126,23 +137,57 @@
               <ui-badge [tone]="badgeTone(item)">{{ badgeLabel(item) }}</ui-badge>
             </div>
           </div>
+          @if (manual()) {
+            <ui-reorder
+              [label]="item.name"
+              [first]="i === 0"
+              [last]="i === items().length - 1"
+              (moved)="moveItem(i, i + $event)"
+            />
+          }
         </ui-card>
       }
       <a class="add-tile" [routerLink]="['/c', coll.id, 'items', 'new']" queryParamsHandling="preserve">+ Add item</a>
     </div>
   } @else {
     <ui-card>
-      <div class="list-head">
+      <div class="list-head" [class.list--manual]="manual()">
         <span>NAME</span><span>GROUP</span><span>YEAR</span><span>COND</span><span class="right">VALUE</span>
       </div>
-      @for (item of items(); track item.id) {
-        <a class="list-row" [routerLink]="['/c', coll.id, 'items', item.id]" queryParamsHandling="preserve">
-          <span class="name">{{ item.name }}</span>
-          <span class="group">{{ groupName(item) }}</span>
-          <span class="year">{{ item.year }}</span>
-          <span class="cond" [class]="'tone-' + badgeTone(item)">{{ badgeLabel(item) }}</span>
-          <span class="right value">{{ item.value | money }}</span>
-        </a>
+      @for (item of items(); track item.id; let i = $index) {
+        <div
+          class="list-line"
+          [class.dragging]="dragIndex() === i"
+          [attr.draggable]="manual() ? true : null"
+          (dragstart)="onDragStart($event, i)"
+          (dragover)="onDragOver($event)"
+          (drop)="onDrop($event, i)"
+          (dragend)="onDragEnd()"
+        >
+          <a
+            class="list-row"
+            [class.list--manual]="manual()"
+            [routerLink]="['/c', coll.id, 'items', item.id]"
+            queryParamsHandling="preserve"
+          >
+            <span class="name">
+              @if (fieldChip(item); as chip) { <span class="field">{{ chip }}</span> }
+              {{ item.name }}
+            </span>
+            <span class="group">{{ groupName(item) }}</span>
+            <span class="year">{{ item.year }}</span>
+            <span class="cond" [class]="'tone-' + badgeTone(item)">{{ badgeLabel(item) }}</span>
+            <span class="right value">{{ item.value | money }}</span>
+          </a>
+          @if (manual()) {
+            <ui-reorder
+              [label]="item.name"
+              [first]="i === 0"
+              [last]="i === items().length - 1"
+              (moved)="moveItem(i, i + $event)"
+            />
+          }
+        </div>
       }
     </ui-card>
   }

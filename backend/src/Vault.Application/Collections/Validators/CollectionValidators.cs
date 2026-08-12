@@ -21,12 +21,40 @@ public sealed class CreateCollectionRequestValidator : AbstractValidator<CreateC
 
 public sealed class GroupNodeDtoValidator : AbstractValidator<GroupNodeDto>
 {
+    /// <summary>Ordering keys the frontend knows how to apply.</summary>
+    private static readonly string[] BuiltInSorts = ["manual", "added", "name", "value", "year"];
+
+    private const string FieldPrefix = "field:";
+
     public GroupNodeDtoValidator()
     {
         RuleFor(g => g.Id).NotEmpty().Matches(IdRules.PublicId());
         RuleFor(g => g.Name).NotEmpty().MaximumLength(200);
         RuleFor(g => g.ParentId).Matches(IdRules.PublicId()).When(g => g.ParentId is not null);
-        RuleForEach(g => g.Fields).NotEmpty().MaximumLength(100);
+
+        // Field names double as the keys in an item's `custom` list and as the
+        // tail of a "field:<name>" sort key, so they have to stay unique.
+        RuleFor(g => g.Fields)
+            .Must(f => f.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() == f.Count)
+            .WithMessage("Field names must be unique within a group.");
+        // A JSON column carries no per-field constraints of its own.
+        RuleForEach(g => g.Fields).ChildRules(field =>
+        {
+            field.RuleFor(f => f.Name).NotEmpty().MaximumLength(100);
+            field.RuleFor(f => f.Type).Must(t => t is "text" or "number" or "date")
+                .WithMessage("Field type must be text, number or date.");
+        });
+
+        When(g => g.Sort is not null, () =>
+        {
+            RuleFor(g => g.Sort!.Direction).Must(d => d is "asc" or "desc")
+                .WithMessage("Sort direction must be asc or desc.");
+            RuleFor(g => g.Sort!.By).Must(by => BuiltInSorts.Contains(by, StringComparer.Ordinal)
+                    || (by.StartsWith(FieldPrefix, StringComparison.Ordinal)
+                        && by.Length > FieldPrefix.Length
+                        && by.Length <= FieldPrefix.Length + 100))
+                .WithMessage("Sort key must be a built-in key or 'field:<field name>'.");
+        });
     }
 }
 

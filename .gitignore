@@ -440,3 +440,10 @@ core.[0-9]*
 
 # Built SPA copied into the API at publish/image time (never committed)
 backend/src/Vault.Api/wwwroot/
+
+# Uploaded image bytes (ImageStorage:Root) — user data, never committed
+backend/src/Vault.Api/App_Data/
+
+# Claude Code worktrees: throwaway checkouts of this same repo. Without this,
+# `git add -A` from the root sweeps a whole nested copy of the tree into the commit.
+.claude/worktrees/

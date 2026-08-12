@@ -3,8 +3,16 @@ import { Router, RouterLink } from '@angular/router';
 
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
-import { Collection, GroupNode, MemberRole } from '../../../core/models';
-import { flattenTree, subtreeIds } from '../../../core/utils/groups.util';
+import {
+  Collection,
+  GROUP_FIELD_TYPES,
+  GroupFieldType,
+  GroupNode,
+  MemberRole,
+  SortDirection,
+} from '../../../core/models';
+import { fieldsFor, flattenTree, sortFor, subtreeIds } from '../../../core/utils/groups.util';
+import { fieldSortKey, sortByOptions, sortLabel } from '../../../core/utils/sort.util';
 import {
   SelectOption,
   TabDef,
@@ -36,6 +44,16 @@ const INVITE_ROLE_OPTIONS: SelectOption[] = [
   { value: 'Editor', label: 'Can edit' },
 ];
 
+const FIELD_TYPE_OPTIONS: SelectOption[] = GROUP_FIELD_TYPES.map(t => ({ value: t, label: t }));
+
+const DIRECTION_OPTIONS: SelectOption[] = [
+  { value: 'asc', label: '↑ Asc' },
+  { value: 'desc', label: '↓ Desc' },
+];
+
+/** Sentinel for "this group defines no ordering of its own". */
+const INHERIT = 'inherit';
+
 const PERSIST_DEBOUNCE_MS = 400;
 
 /**
@@ -60,11 +78,14 @@ export class CollectionSettingsPage {
   protected readonly tabs = TABS;
   protected readonly roleOptions = ROLE_OPTIONS;
   protected readonly inviteRoleOptions = INVITE_ROLE_OPTIONS;
+  protected readonly fieldTypeOptions = FIELD_TYPE_OPTIONS;
+  protected readonly directionOptions = DIRECTION_OPTIONS;
 
   protected readonly activeTab = signal('general');
   protected readonly draft = signal<Collection | null>(null);
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
   protected readonly pendingFieldGroupId = signal<string | null>(null);
+  protected readonly pendingFieldType = signal<GroupFieldType>('text');
   protected readonly inviteEmail = signal('');
   protected readonly inviteRole = signal<string>('Viewer');
 
@@ -85,11 +106,28 @@ export class CollectionSettingsPage {
   protected readonly groupRows = computed(() => {
     const draft = this.draft();
     if (!draft) return [];
-    return flattenTree(draft.groups).map(({ node, depth }) => ({
-      node,
-      depth,
-      count: draft.items.filter(i => new Set(subtreeIds(draft.groups, node.id)).has(i.groupId)).length,
-    }));
+    return flattenTree(draft.groups).map(({ node, depth }) => {
+      // The picker offers inherited fields too — ordering by a field the
+      // parent declared is exactly what a sub-group usually wants.
+      const fields = fieldsFor(draft.groups, node.id);
+      const parentSort = node.parentId ? sortFor(draft.groups, node.parentId) : null;
+      return {
+        node,
+        depth,
+        count: draft.items.filter(i => new Set(subtreeIds(draft.groups, node.id)).has(i.groupId))
+          .length,
+        sortBy: node.sort?.by ?? INHERIT,
+        sortDirection: node.sort?.direction ?? 'asc',
+        showDirection: !!node.sort && node.sort.by !== 'manual',
+        sortByOptions: [
+          {
+            value: INHERIT,
+            label: parentSort ? `Inherited — ${sortLabel(parentSort)}` : 'Not set',
+          },
+          ...sortByOptions(fields),
+        ] satisfies SelectOption[],
+      };
+    });
   });
 
   protected readonly memberRows = computed(() => {
@@ -186,19 +224,37 @@ export class CollectionSettingsPage {
     this.pendingGroupParent.set(null);
     const trimmed = name.trim();
     if (!pending || !trimmed) return;
-    const node: GroupNode = { id: `g${Date.now()}`, name: trimmed, parentId: pending.parentId, fields: [] };
+    const node: GroupNode = {
+      id: `g${Date.now()}`,
+      name: trimmed,
+      parentId: pending.parentId,
+      fields: [],
+      sort: null,
+    };
     this.mutate(d => ({ ...d, groups: [...d.groups, node] }));
     this.toast.flash(`Group "${trimmed}" added`);
   }
 
-  protected removeField(groupId: string, field: string): void {
-    this.mutate(d => ({
-      ...d,
-      groups: d.groups.map(g =>
-        g.id === groupId ? { ...g, fields: g.fields.filter(f => f !== field) } : g,
-      ),
+  private mutateGroup(groupId: string, fn: (group: GroupNode) => GroupNode): void {
+    this.mutate(d => ({ ...d, groups: d.groups.map(g => (g.id === groupId ? fn(g) : g)) }));
+  }
+
+  protected removeField(groupId: string, name: string): void {
+    this.mutateGroup(groupId, g => ({
+      ...g,
+      fields: g.fields.filter(f => f.name !== name),
+      // A sort pointing at a field that no longer exists would silently fall
+      // back to "everything missing" — drop it with the field.
+      sort: g.sort?.by === fieldSortKey(name) ? null : g.sort,
     }));
     this.toast.flash('Field removed');
+  }
+
+  protected setFieldType(groupId: string, name: string, type: string): void {
+    this.mutateGroup(groupId, g => ({
+      ...g,
+      fields: g.fields.map(f => (f.name === name ? { ...f, type: type as GroupFieldType } : f)),
+    }));
   }
 
   protected newFieldKeydown(event: KeyboardEvent, groupId: string): void {
@@ -212,16 +268,32 @@ export class CollectionSettingsPage {
 
   protected commitNewField(groupId: string, name: string): void {
     if (this.pendingFieldGroupId() !== groupId) return;
+    const type = this.pendingFieldType();
     this.pendingFieldGroupId.set(null);
+    this.pendingFieldType.set('text');
     const trimmed = name.trim();
     if (!trimmed) return;
-    this.mutate(d => ({
-      ...d,
-      groups: d.groups.map(g =>
-        g.id === groupId ? { ...g, fields: [...g.fields, trimmed] } : g,
-      ),
-    }));
+    if (this.draft()?.groups.find(g => g.id === groupId)?.fields.some(f => f.name === trimmed)) {
+      this.toast.flash(`"${trimmed}" is already a field here`);
+      return;
+    }
+    this.mutateGroup(groupId, g => ({ ...g, fields: [...g.fields, { name: trimmed, type }] }));
     this.toast.flash(`Field "${trimmed}" added`);
+  }
+
+  // --- group ordering ---
+
+  protected setGroupSortBy(groupId: string, by: string): void {
+    this.mutateGroup(groupId, g => ({
+      ...g,
+      sort: by === INHERIT ? null : { by, direction: g.sort?.direction ?? 'asc' },
+    }));
+  }
+
+  protected setGroupSortDirection(groupId: string, direction: string): void {
+    this.mutateGroup(groupId, g =>
+      g.sort ? { ...g, sort: { ...g.sort, direction: direction as SortDirection } } : g,
+    );
   }
 
   // --- sharing ---

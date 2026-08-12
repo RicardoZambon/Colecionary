@@ -119,14 +119,15 @@
 
       <ui-card class="group-fields">
         <div class="group-fields__heading">GROUP FIELDS · {{ groupLabel() }}</div>
-        @for (field of groupFieldNames(); track field) {
+        @for (field of groupFields(); track field.name) {
           <div class="group-fields__row">
-            <span class="key">{{ field }}</span>
+            <span class="key">{{ field.name }}</span>
             <ui-text-input
               variant="subtle"
               placeholder="—"
-              [value]="customValue(field)"
-              (valueChange)="setCustomValue(field, $event)"
+              [type]="inputType(field)"
+              [value]="customValue(field.name)"
+              (valueChange)="setCustomValue(field.name, $event)"
             />
           </div>
         } @empty {

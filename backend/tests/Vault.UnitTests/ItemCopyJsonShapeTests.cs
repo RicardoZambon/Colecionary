@@ -7,10 +7,13 @@ using Vault.Infrastructure.Persistence;
 namespace Vault.UnitTests;
 
 /// <summary>
-/// Pins the persisted shape of the `copies` JSON column. The AddItemCopies
+/// Pins the persisted shape of the `Copies` JSON column. The AddItemCopies
 /// migration writes that document once, from raw T-SQL, and never regenerates
 /// it — so a drifted property name or a dropped enum conversion would be
 /// completely silent: missing keys deserialize to CLR defaults with no error.
+/// The column itself was named `copies` until UseSchemaQualifiedPascalCaseNames
+/// renamed it; that rename is an explicit migration operation, unlike the
+/// property names inside the document, which stay pinned.
 /// These assertions need no database, so CI (which runs only the unit tests)
 /// still catches the drift.
 /// </summary>
@@ -26,7 +29,7 @@ public class ItemCopyJsonShapeTests
     [Fact]
     public void Copies_LiveInTheirOwnJsonColumn()
     {
-        Assert.Equal("copies", CopyType().GetContainerColumnName());
+        Assert.Equal("Copies", CopyType().GetContainerColumnName());
     }
 
     [Fact]

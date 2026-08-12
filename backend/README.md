@@ -49,6 +49,97 @@ dotnet format --verify-no-changes
 Tenant isolation has dedicated integration coverage in
 `tests/Vault.IntegrationTests/TenantIsolationTests.cs`.
 
+## Physical naming
+
+Every table is **PascalCase and explicitly schema-qualified** — no object
+resolves through the caller's default schema. Schemas are declared once in
+`VaultSchemas` and grouped by concern, so a role can be granted the store
+catalogue without being granted the whole database:
+
+| Schema | Tables |
+| --- | --- |
+| `Identity` | `Tenants`, `Users` |
+| `Catalog` | `Collections`, `CollectionMembers`, `Groups`, `Items` |
+| `Store` | `StoreListings` |
+| `Storage` | `Images` |
+
+Columns are PascalCase too, including the JSON container columns
+(`Items.Custom`, `Items.Copies`, `Groups.Fields`, `StoreListings.Items`).
+`TableNamingConventionTests` enforces all of this against the built model, so a
+new entity mapped with a bare `ToTable("thing")` fails the unit tests instead of
+shipping a stray lowercase table into `dbo`.
+
+Two deliberate exceptions:
+
+- **`dbo.__EFMigrationsHistory` stays in `dbo`.** EF reads it *before* it can
+  apply anything, so relocating it on an existing database would make EF see
+  zero applied migrations and try to re-run the whole chain.
+- **Migrations before `UseSchemaQualifiedPascalCaseNames` still reference the
+  old lowercase names.** That is correct: they ran against the old shape, and
+  the raw-T-SQL backfills in `AddItemCopies` / `AddGroupFieldTypesAndSort`
+  execute before the rename. Never retro-edit them.
+
+Note that `Identity` and `Storage` are T-SQL keywords: hand-written ad-hoc SQL
+needs `[Identity].[Tenants]`. EF always brackets, so application code is fine.
+
+## Image storage
+
+Image **bytes live on disk, not in SQL.** `Storage.Images` is metadata only —
+which tenant owns an id, its content type, when it was uploaded — and the bytes
+go through `IImageStore`. `FileSystemImageStore` lays them out as:
+
+```
+{ImageStorage:Root}/{tenantId}/{imageId}.{ext}      # default root: App_Data/images
+```
+
+**One directory per tenant**, so images are a unit you can copy, quota or delete,
+and no lookup can wander into another tenant's files. Both path segments are
+GUIDs we format ourselves, never caller-supplied strings, so nothing can traverse
+out of its folder. The extension comes from the content type, which is immutable
+once written — retyping an image would orphan the file it names.
+
+The read endpoint stays anonymous (an `<img>` tag can't send an Authorization
+header), and is still safe because the **tenant is resolved from the image's own
+row before storage is touched**: a guessed GUID can only ever resolve inside the
+tenant that owns it. Never pass the ambient request tenant instead.
+
+Uploads write the file *before* the row. The failure modes aren't symmetric — a
+file with no row is unreachable garbage, while a row with no file is a broken
+image in the UI. (Orphans are the same known gap as replaced images; collecting
+them is a documented follow-up.)
+
+### Migrating an existing database
+
+`MoveImageBytesToFileStorage` drops the old `varbinary(max)` column, and a
+migration can't write files — so `LegacyImageBlobExporter` runs at startup
+**before** `Database.Migrate()`, copies every blob to the store, and lets the
+migration drop the column immediately after. One deployment, no data loss, and a
+no-op on every subsequent start.
+
+Because the export lives in startup, **don't apply this migration with a bare
+`dotnet ef database update`** against a database that still holds blobs — that
+drops the bytes. Start the API instead; it does both, in the right order.
+
+## Export
+
+`GET /api/export` streams a zip of the caller's tenant:
+
+```
+collections.json          # same shape as GET /api/collections
+images/{imageId}.{ext}    # every image that tenant owns
+```
+
+This used to be a browser-side JSON blob of whatever the tab had in memory. It
+moved server-side so it can include image bytes (unreachable from the client as
+data) and so the same global query filters that protect every other read also
+scope the export. Images are stored uncompressed in the zip — every format we
+accept is already compressed.
+
+The archive is built into a temp file rather than written straight to the
+response: `ZipArchive` emits its central directory with a *synchronous* write on
+dispose, which Kestrel rejects on the response body. The alternative,
+`AllowSynchronousIO`, would block a request thread for the whole download.
+
 ## Auth
 
 `POST /api/auth/login` verifies credentials (ASP.NET Identity's
@@ -75,6 +166,7 @@ documented follow-ups.
 | GET | `/api/images/{id}` | anonymous by design — the GUID is the capability (`<img>` can't send auth headers) |
 | GET / PUT | `/api/tenant/members` | PUT is Owner-only |
 | GET / PUT | `/api/profile` | email immutable in v1 |
+| GET | `/api/export` | zip: `collections.json` + `images/…` for the caller's tenant |
 
 JSON is camelCase with string enums — byte-compatible with the Angular
 models in `frontend/src/app/core/models/`.
@@ -101,3 +193,39 @@ Two details are load-bearing and pinned by unit tests
 integer), and the JSON property names must keep their `HasJsonPropertyName` —
 the migration wrote that document once from raw T-SQL and never regenerates it,
 so a rename would orphan existing data with no error anywhere.
+
+### Group fields and ordering
+
+A `Group` declares the custom fields its items (and its sub-groups' items) can
+carry, plus the order those items default to:
+
+- `Fields : List<GroupField>` — `{ Name, Type }` where `Type` is
+  `Text`/`Number`/`Date`. Persisted as a JSON document in the **existing**
+  `Fields` column via `OwnsMany(...).ToJson("Fields")`; it used to be an EF
+  primitive collection of plain strings, and `AddGroupFieldTypesAndSort`
+  rewrites the documents in place. The same two rules as `copies` apply and are
+  pinned by `Vault.UnitTests/GroupFieldJsonShapeTests.cs`: keep the
+  `HasConversion<string>()` on `Type` and the `HasJsonPropertyName` on both
+  properties.
+- `SortBy` / `SortDirection` — two nullable scalar columns rather than a JSON
+  document, so they carry no pinned-name risk. `SortBy` is a built-in key
+  (`manual`, `added`, `name`, `value`, `year`) or `field:<field name>`;
+  `SortDirection` is `asc`/`desc`. They travel as one nullable `sort` object on
+  the wire (`GroupSortDto`), because half a configuration is not a
+  configuration — `ToDto` defaults a missing direction to `asc`.
+
+Values still live on the item as `Custom` strings: the type belongs to the
+declaration, so retyping a field never rewrites item data. Sorting itself stays
+client-side; the server only stores the preference. There are **no group
+endpoints** — groups change only through the full-document collection PUT,
+which means `CollectionRepository.ReplaceGraph` must copy `SortBy` and
+`SortDirection` in its group lambda. Miss one and the setting saves on create
+and then silently never changes again; `ContractTests` PUTs the same collection
+three times specifically to catch that, and the third PUT clears the sort back
+to null.
+
+`AddGroupFieldTypesAndSort` converts `["Número"]` to
+`[{"Name":"Número","Type":"Text"}]` with `OPENJSON` + `FOR JSON PATH` (which
+escapes user-supplied field names for us). The `COALESCE(..., N'[]')` around it
+is load-bearing: `FOR JSON PATH` over zero rows returns `NULL`, so without it
+every group that had no fields would have its column nulled out.

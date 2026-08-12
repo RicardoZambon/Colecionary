@@ -8,7 +8,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
     {
-        builder.ToTable("users");
+        builder.ToTable("Users", VaultSchemas.Identity);
         builder.HasKey(u => u.Id);
         builder.Property(u => u.Email).HasMaxLength(320);
         builder.Property(u => u.Name).HasMaxLength(200);

@@ -12,5 +12,12 @@ public interface IImageRepository
     /// </summary>
     Task<StoredImage?> GetUnfilteredAsync(Guid id, CancellationToken ct);
 
+    /// <summary>
+    /// Every image belonging to the current tenant, for the export archive.
+    /// Tenant-filtered by the context's global query filter — deliberately NOT
+    /// unfiltered, unlike <see cref="GetUnfilteredAsync"/>.
+    /// </summary>
+    Task<List<StoredImage>> ListForCurrentTenantAsync(CancellationToken ct);
+
     Task SaveChangesAsync(CancellationToken ct);
 }

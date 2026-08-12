@@ -57,6 +57,20 @@ Full detail in [`backend/README.md`](backend/README.md).
    update both sides plus the integration tests.
 4. **Tests:** integration tests run against real SQL Server (Testcontainers);
    tenant isolation has dedicated coverage that must stay green.
+5. **Tables are PascalCase and explicitly schema-qualified.** Schemas are
+   declared only in `VaultSchemas` (`Identity`, `Catalog`, `Store`, `Storage`);
+   every configuration calls `ToTable("Name", VaultSchemas.X)` and columns —
+   JSON container columns included — are PascalCase.
+   `TableNamingConventionTests` fails the build otherwise. Migrations predating
+   `UseSchemaQualifiedPascalCaseNames` keep their old lowercase names; never
+   retro-edit an applied migration.
+6. **Image bytes live in `IImageStore`, never in the database.** The `Images`
+   row is metadata only (id → tenant, content type). `FileSystemImageStore`
+   writes `{ImageStorage:Root}/{tenantId}/{imageId}.{ext}` — **one directory per
+   tenant**, so a tenant's images are a unit you can copy, quota or delete, and
+   no lookup can cross tenants. Always pass the tenant id read from the image's
+   own row, not the ambient request tenant; that is what keeps the anonymous
+   GUID read endpoint safe.
 
 ## Non-negotiable frontend rules
 
@@ -77,20 +91,30 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    means owned, none means wantlist. Always go through the pure helpers in
    `core/utils/copies.util.ts` (backend mirror: `ItemCopy` in a `copies` JSON
    column).
-4. **All data flows through the abstract `VaultApi`**
-   (`frontend/src/app/core/api/vault-api.ts`). It is currently fulfilled by
-   `MockVaultApi` (seed data + latency + localStorage). To connect the real
-   backend, implement the same contract and swap one provider line in
-   `app.config.ts` — feature code must never know the difference.
-5. **Signals + zoneless + OnPush.** State lives in signal stores
+4. **Groups declare typed fields and their default order.** A `GroupNode`
+   carries `fields: GroupField[]` (`{ name, type: text|number|date }`) and
+   `sort: GroupSort | null`; field *values* stay on the item as `custom`
+   strings, so retyping a field never rewrites data. Fields merge down the
+   whole ancestor path, `sort` takes only the nearest ancestor that sets one,
+   and all comparison lives in `core/utils/sort.util.ts` — never sort items
+   inline. Manual order is the array order of `collection.items`, persisted by
+   index; the item DTO has no `sortOrder`.
+5. **All data flows through the abstract `VaultApi`**
+   (`frontend/src/app/core/api/vault-api.ts`), fulfilled by `HttpVaultApi`
+   against the .NET backend. There is no mocked data in the frontend — demo
+   data lives in the backend seeder. Feature code only ever sees the abstract
+   contract.
+6. **Signals + zoneless + OnPush.** State lives in signal stores
    (`core/state`); no Zone.js patterns.
-6. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
+7. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
    the path. In-collection navigation preserves `?g=`
    (`queryParamsHandling: 'preserve'`).
-7. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
-   `:focus-visible`, status never communicated by color alone.
-8. **Verify before merging:** `npm run build` clean, unit tests green, and
-   the affected flows exercised in the browser in at least one dark theme.
+8. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
+   `:focus-visible`, status never communicated by color alone. Anything
+   draggable also needs a keyboard path (`ui-reorder`).
+9. **Verify before merging:** `npm run build` clean (warnings included — the
+   6 kB per-component style budget is real), unit tests green, and the
+   affected flows exercised in the browser in at least one dark theme.
 
 ## ⚠️ Brand governance (pending)
 
@@ -106,6 +130,5 @@ mechanically it is a one-file change (`styles/_themes.scss`).
 JWT in localStorage without refresh tokens; no optimistic concurrency on the
 full-document collection PUT; collection members are denormalized snapshots;
 invited members can't log in until an invite/set-password flow exists; images
-are stored as SQL Server varbinary(max) and served via unguessable-GUID URLs (move to
-object storage + signed URLs later); replaced/removed images are not
-garbage-collected yet.
+are served via unguessable-GUID URLs (signed URLs later); replaced/removed
+images are not garbage-collected yet.

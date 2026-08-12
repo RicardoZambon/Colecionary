@@ -55,7 +55,7 @@ namespace Vault.Infrastructure.Migrations
 
                     b.HasKey("TenantId", "Id");
 
-                    b.ToTable("collections", (string)null);
+                    b.ToTable("Collections", "Catalog");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.CollectionMember", b =>
@@ -88,7 +88,7 @@ namespace Vault.Infrastructure.Migrations
 
                     b.HasKey("TenantId", "CollectionId", "Email");
 
-                    b.ToTable("collection_members", (string)null);
+                    b.ToTable("CollectionMembers", "Catalog");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.Group", b =>
@@ -104,10 +104,6 @@ namespace Vault.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
-                    b.PrimitiveCollection<string>("Fields")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -117,12 +113,20 @@ namespace Vault.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<string>("SortBy")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("SortDirection")
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
                     b.HasKey("TenantId", "CollectionId", "Id");
 
-                    b.ToTable("groups", (string)null);
+                    b.ToTable("Groups", "Catalog");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.Item", b =>
@@ -181,7 +185,7 @@ namespace Vault.Infrastructure.Migrations
 
                     b.HasKey("TenantId", "CollectionId", "Id");
 
-                    b.ToTable("items", (string)null);
+                    b.ToTable("Items", "Catalog");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.StoreListing", b =>
@@ -211,7 +215,7 @@ namespace Vault.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("store_listings", (string)null);
+                    b.ToTable("StoreListings", "Store");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.StoredImage", b =>
@@ -228,10 +232,6 @@ namespace Vault.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<byte[]>("Data")
-                        .IsRequired()
-                        .HasColumnType("varbinary(max)");
-
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
@@ -239,7 +239,7 @@ namespace Vault.Infrastructure.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("images", (string)null);
+                    b.ToTable("Images", "Storage");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.Tenant", b =>
@@ -267,7 +267,7 @@ namespace Vault.Infrastructure.Migrations
                     b.HasIndex("Slug")
                         .IsUnique();
 
-                    b.ToTable("tenants", (string)null);
+                    b.ToTable("Tenants", "Identity");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.User", b =>
@@ -312,7 +312,7 @@ namespace Vault.Infrastructure.Migrations
                     b.HasIndex("TenantId", "Email")
                         .IsUnique();
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("Users", "Identity");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.Collection", b =>
@@ -340,6 +340,39 @@ namespace Vault.Infrastructure.Migrations
                         .HasForeignKey("TenantId", "CollectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.OwnsMany("Vault.Domain.ValueObjects.GroupField", "Fields", b1 =>
+                        {
+                            b1.Property<Guid>("GroupTenantId");
+
+                            b1.Property<string>("GroupCollectionId");
+
+                            b1.Property<string>("GroupId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAddOrUpdate();
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasJsonPropertyName("Name");
+
+                            b1.Property<string>("Type")
+                                .IsRequired()
+                                .HasJsonPropertyName("Type");
+
+                            b1.HasKey("GroupTenantId", "GroupCollectionId", "GroupId", "__synthesizedOrdinal");
+
+                            b1.ToTable("Groups", "Catalog");
+
+                            b1
+                                .ToJson("Fields")
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.WithOwner()
+                                .HasForeignKey("GroupTenantId", "GroupCollectionId", "GroupId");
+                        });
+
+                    b.Navigation("Fields");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.Item", b =>
@@ -369,10 +402,10 @@ namespace Vault.Infrastructure.Migrations
 
                             b1.HasKey("ItemTenantId", "ItemCollectionId", "ItemId", "__synthesizedOrdinal");
 
-                            b1.ToTable("items");
+                            b1.ToTable("Items", "Catalog");
 
                             b1
-                                .ToJson("custom")
+                                .ToJson("Custom")
                                 .HasColumnType("nvarchar(max)");
 
                             b1.WithOwner()
@@ -418,10 +451,10 @@ namespace Vault.Infrastructure.Migrations
 
                             b1.HasKey("ItemTenantId", "ItemCollectionId", "ItemId", "__synthesizedOrdinal");
 
-                            b1.ToTable("items");
+                            b1.ToTable("Items", "Catalog");
 
                             b1
-                                .ToJson("copies")
+                                .ToJson("Copies")
                                 .HasColumnType("nvarchar(max)");
 
                             b1.WithOwner()
@@ -459,10 +492,10 @@ namespace Vault.Infrastructure.Migrations
 
                             b1.HasKey("StoreListingId", "__synthesizedOrdinal");
 
-                            b1.ToTable("store_listings");
+                            b1.ToTable("StoreListings", "Store");
 
                             b1
-                                .ToJson("items")
+                                .ToJson("Items")
                                 .HasColumnType("nvarchar(max)");
 
                             b1.WithOwner()
