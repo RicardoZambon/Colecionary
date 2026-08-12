@@ -4,7 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../../core/api/images-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
-import { CONDITIONS, Condition, CopyStatus, Item, ItemCopy } from '../../../core/models';
+import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
 import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
 import { fieldsFor, flattenTree, groupById } from '../../../core/utils/groups.util';
 import { SelectOption, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea } from '../../../shared/ui';
@@ -184,9 +184,14 @@ export class ItemFormPage {
     })),
   );
 
-  protected readonly groupFieldNames = computed(() =>
+  protected readonly groupFields = computed(() =>
     fieldsFor(this.collection()?.groups ?? [], this.groupId() || null),
   );
+
+  /** A declared field type maps straight onto the native input type. */
+  protected inputType(field: GroupField): string {
+    return field.type === 'text' ? 'text' : field.type;
+  }
 
   protected readonly groupLabel = computed(() => {
     const collection = this.collection();
@@ -225,8 +230,8 @@ export class ItemFormPage {
       img: existing?.img ?? slugify(name) + '.jpg',
       photoIds: this.photoIds(),
       createdAt: existing?.createdAt,
-      custom: this.groupFieldNames()
-        .map(key => ({ key, value: (this.custom()[key] ?? '').trim() }))
+      custom: this.groupFields()
+        .map(field => ({ key: field.name, value: (this.custom()[field.name] ?? '').trim() }))
         .filter(c => c.value),
     };
 

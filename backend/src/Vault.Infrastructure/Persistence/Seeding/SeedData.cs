@@ -147,15 +147,30 @@ public static class SeedData
                 Id = "comics",
                 Name = "Comics",
                 Description = "Silver age + modern keys",
-                Groups = FlatGroups("comics",
-                    ("Marvel", new[] { "Grade", "Key" }),
-                    ("DC", new[] { "Print" }),
-                    ("Indie", new[] { "Print" })),
+                // Issue numbers are what a run is actually ordered by, so the
+                // groups declare it as a number and sort by it — the number
+                // needn't be repeated in every item's name.
+                Groups =
+                [
+                    Group("comics", "Marvel", "Marvel", null,
+                        [Field("Issue", GroupFieldType.Number), Field("Grade"), Field("Key")],
+                        0, sortBy: "field:Issue", sortDirection: "asc"),
+                    Group("comics", "DC", "DC", null,
+                        [Field("Issue", GroupFieldType.Number), Field("Print")],
+                        1, sortBy: "field:Issue", sortDirection: "asc"),
+                    Group("comics", "Indie", "Indie", null,
+                        [Field("Issue", GroupFieldType.Number), Field("Print")],
+                        2, sortBy: "field:Issue", sortDirection: "asc"),
+                ],
                 Items =
                 [
-                    Item("comics", "xmen101", "X-Men #101", 1976, Condition.Good, 850, 520, "Marvel", ["key", "graded"], "xmen_101.jpg", "First appearance of Phoenix. CGC 6.5 with off-white pages.", Custom(("Grade", "CGC 6.5"), ("Key", "1st Phoenix"))),
-                    Item("comics", "watchmen", "Watchmen #1", 1986, Condition.Mint, 240, 120, "DC", ["key"], "watchmen_1.jpg", "First print, raw but immaculate. Stored bagged and boarded since the 90s.", Custom(("Print", "1st"))),
-                    Item("comics", "saga", "Saga #1 (1st print)", 2012, Condition.Mint, 180, 90, "Indie", ["key"], "saga_1.jpg", "First print of the Image hit. Modern key that keeps climbing.", Custom(("Print", "1st"))),
+                    // Deliberately seeded out of order: the group's sort is what
+                    // puts them back in sequence.
+                    Item("comics", "xmen101", "X-Men #101", 1976, Condition.Good, 850, 520, "Marvel", ["key", "graded"], "xmen_101.jpg", "First appearance of Phoenix. CGC 6.5 with off-white pages.", Custom(("Issue", "101"), ("Grade", "CGC 6.5"), ("Key", "1st Phoenix"))),
+                    Item("comics", "xmen94", "X-Men #94", 1975, Condition.Fair, 1200, 780, "Marvel", ["key"], "xmen_94.jpg", "First issue of the new team in the regular run. Well read, complete and flat.", Custom(("Issue", "94"), ("Grade", "Raw VG"), ("Key", "New team begins"))),
+                    Item("comics", "xmen9", "X-Men #9", 1965, Condition.Fair, 640, 400, "Marvel", [], "xmen_9.jpg", "Early Silver Age crossover with the Avengers. Spine wear, no restoration.", Custom(("Issue", "9"), ("Grade", "Raw GD"))),
+                    Item("comics", "watchmen", "Watchmen #1", 1986, Condition.Mint, 240, 120, "DC", ["key"], "watchmen_1.jpg", "First print, raw but immaculate. Stored bagged and boarded since the 90s.", Custom(("Issue", "1"), ("Print", "1st"))),
+                    Item("comics", "saga", "Saga #1 (1st print)", 2012, Condition.Mint, 180, 90, "Indie", ["key"], "saga_1.jpg", "First print of the Image hit. Modern key that keeps climbing.", Custom(("Issue", "1"), ("Print", "1st"))),
                 ],
             },
             new()
@@ -274,18 +289,41 @@ public static class SeedData
 
     // --- helpers ---
 
+    /// <summary>Flat root groups whose fields are all plain text.</summary>
     private static List<Group> FlatGroups(string collectionId, params (string Name, string[] Fields)[] defs) =>
-        [.. defs.Select((d, i) => Group(collectionId, d.Name, d.Name, null, [.. d.Fields], i))];
+        [.. defs.Select((d, i) => Group(collectionId, d.Name, d.Name, null, [.. d.Fields.Select(f => Field(f))], i))];
 
-    private static Group Group(string collectionId, string id, string name, string? parentId, List<string> fields, int sortOrder) => new()
-    {
-        CollectionId = collectionId,
-        Id = id,
-        Name = name,
-        ParentId = parentId,
-        Fields = fields,
-        SortOrder = sortOrder,
-    };
+    private static GroupField Field(string name, GroupFieldType type = GroupFieldType.Text) =>
+        new() { Name = name, Type = type };
+
+    private static Group Group(
+        string collectionId,
+        string id,
+        string name,
+        string? parentId,
+        List<string> fields,
+        int sortOrder) =>
+        Group(collectionId, id, name, parentId, [.. fields.Select(f => Field(f))], sortOrder);
+
+    private static Group Group(
+        string collectionId,
+        string id,
+        string name,
+        string? parentId,
+        List<GroupField> fields,
+        int sortOrder,
+        string? sortBy = null,
+        string? sortDirection = null) => new()
+        {
+            CollectionId = collectionId,
+            Id = id,
+            Name = name,
+            ParentId = parentId,
+            Fields = fields,
+            SortBy = sortBy,
+            SortDirection = sortDirection,
+            SortOrder = sortOrder,
+        };
 
     private static CollectionMember Member(string collectionId, string name, string email, string initials, MemberRole role) => new()
     {

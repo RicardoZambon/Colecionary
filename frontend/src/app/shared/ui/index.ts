@@ -9,6 +9,7 @@ export * from './field/field';
 export * from './icon/icon';
 export * from './image-slot/image-slot';
 export * from './progress/progress';
+export * from './reorder/reorder';
 export * from './section-label/section-label';
 export * from './select/select';
 export * from './tabs/tabs';

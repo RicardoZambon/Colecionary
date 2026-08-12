@@ -15,6 +15,8 @@ export type ButtonSize = 'md' | 'sm';
     <button
       [type]="type()"
       [disabled]="disabled()"
+      [attr.aria-label]="ariaLabel() || null"
+      [attr.title]="ariaLabel() || null"
       class="btn"
       [class.btn--primary]="variant() === 'primary'"
       [class.btn--ghost]="variant() === 'ghost'"
@@ -95,6 +97,11 @@ export class UiButton {
   readonly size = input<ButtonSize>('md');
   readonly disabled = input(false);
   readonly type = input<'button' | 'submit'>('button');
+  /**
+   * Accessible name for buttons whose content is a bare glyph (↑ ↓ ✕). Also
+   * becomes the tooltip, so the meaning is reachable by mouse too.
+   */
+  readonly ariaLabel = input('');
   /** Stretch to the full width of the container (e.g. plan cards). */
   readonly block = input(false);
 }

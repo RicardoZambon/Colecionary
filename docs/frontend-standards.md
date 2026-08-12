@@ -99,7 +99,7 @@ All are exported from `shared/ui/index.ts`.
 
 | Component | Selector | API (inputs / models / outputs) |
 | --- | --- | --- |
-| Button | `ui-button` | `variant: 'primary' \| 'ghost' \| 'danger'`, `size: 'md' \| 'sm'`, `block`, `disabled`, `type` — content-projected label |
+| Button | `ui-button` | `variant: 'primary' \| 'ghost' \| 'danger'`, `size: 'md' \| 'sm'`, `block`, `disabled`, `type`, `ariaLabel` (required when the label is a bare glyph; also becomes the tooltip) — content-projected label |
 | Field | `ui-field` | `label` (required) — wraps any control with the mono uppercase label |
 | Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`; outputs `keydown`, `blurred` |
 | Textarea | `ui-textarea` | `value` (model), `rows`, `placeholder` |
@@ -112,6 +112,7 @@ All are exported from `shared/ui/index.ts`.
 | Avatar | `ui-avatar` | `initials` (required), `size: 'sm' \| 'md' \| 'lg'` |
 | Avatar stack | `ui-avatar-stack` | `members: Member[]` (shows first 4, overlapped) |
 | Progress | `ui-progress` | `pct` (required, 0–100) |
+| Reorder | `ui-reorder` | `label` (names the item for screen readers), `first`, `last`; output `moved(-1 | 1)` — the keyboard half of a drag-to-reorder list, absolutely positioned over a `position: relative` parent |
 | Section label | `ui-section-label` | content-projected mono uppercase micro-heading |
 | Dropdown | `ui-dropdown` | `width`; project trigger via `[ddTrigger]`, panel via `[ddPanel]`; call `close()` from panel handlers |
 | Image slot | `ui-image-slot` | `src`, `placeholder`; output `fileSelected(File)` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
@@ -156,6 +157,22 @@ style the same raw element the same way, that's the signal to promote it here.
   `copyValue`, `ownedValue`, `paidTotal`, `sortValue`, `newCopy`,
   `syncWantedTag`). A copy's `value` is `null` when it inherits the item's —
   keep the null, it distinguishes "inherited" from "overridden".
+- **Groups declare typed fields and their own ordering.** A `GroupNode` carries
+  `fields: GroupField[]` (`{ name, type: 'text' | 'number' | 'date' }`) and
+  `sort: GroupSort | null` (`{ by, direction }`). `by` is a built-in key
+  (`manual`, `added`, `name`, `value`, `year`) or `field:<field name>`; `null`
+  means "inherit". Values still live on the item as `custom: CustomFieldValue[]`
+  strings — the type belongs to the declaration, not the value, so retyping a
+  field never rewrites item data. Both are inherited down the tree, with
+  different rules: `fieldsFor()` merges every ancestor's fields (a redeclared
+  name overrides the type, keeping the ancestor's position) while `sortFor()`
+  takes only the nearest ancestor that sets one. Never compare items inline —
+  `core/utils/sort.util.ts` owns it (`sortItems`, `sortChoices`, `sortLabel`,
+  `applyManualOrder`, `moveInList`). Text fields compare through a numeric-aware
+  `Intl.Collator`, so `1 · 2 · 10 · 12A` orders correctly even when the field is
+  free text, and items with no value always sink to the bottom in either
+  direction. `manual` ordering is simply the array order of `collection.items`,
+  which the API persists by index — there is no `sortOrder` on the item DTO.
 
 ## 6. Testing & verification
 

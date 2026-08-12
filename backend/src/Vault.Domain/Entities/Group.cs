@@ -1,4 +1,5 @@
 using Vault.Domain.Abstractions;
+using Vault.Domain.ValueObjects;
 
 namespace Vault.Domain.Entities;
 
@@ -18,7 +19,17 @@ public class Group : ITenantOwned
 
     public string? ParentId { get; set; }
 
-    public List<string> Fields { get; set; } = [];
+    public List<GroupField> Fields { get; set; } = [];
+
+    /// <summary>
+    /// Default ordering for the items in this group, as a built-in key
+    /// ("manual", "added", "name", "value", "year") or "field:&lt;field name&gt;".
+    /// Null means the nearest ancestor that sets one decides.
+    /// </summary>
+    public string? SortBy { get; set; }
+
+    /// <summary>"asc" or "desc". Only meaningful alongside <see cref="SortBy"/>.</summary>
+    public string? SortDirection { get; set; }
 
     /// <summary>Preserves the frontend's array ordering.</summary>
     public int SortOrder { get; set; }

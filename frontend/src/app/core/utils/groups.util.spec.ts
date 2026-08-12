@@ -1,13 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
-import { GroupNode } from '../models';
-import { childrenOf, fieldsFor, flattenTree, pathOf, subtreeIds } from './groups.util';
+import { GroupField, GroupNode } from '../models';
+import { childrenOf, fieldsFor, flattenTree, pathOf, sortFor, subtreeIds } from './groups.util';
+
+const text = (name: string): GroupField => ({ name, type: 'text' });
 
 const TREE: GroupNode[] = [
-  { id: 'cards', name: 'Cards', parentId: null, fields: ['Set no.', 'Language'] },
-  { id: 'rare', name: 'Rare & holo', parentId: 'cards', fields: ['Grade'] },
-  { id: 'regular', name: 'Regular cards', parentId: 'cards', fields: [] },
-  { id: 'games', name: 'Games', parentId: null, fields: ['Completeness'] },
+  {
+    id: 'cards',
+    name: 'Cards',
+    parentId: null,
+    fields: [text('Set no.'), text('Language')],
+    sort: { by: 'field:Set no.', direction: 'asc' },
+  },
+  { id: 'rare', name: 'Rare & holo', parentId: 'cards', fields: [text('Grade')], sort: null },
+  {
+    id: 'regular',
+    name: 'Regular cards',
+    parentId: 'cards',
+    // Redeclares an ancestor's field with a different type.
+    fields: [{ name: 'Set no.', type: 'number' }],
+    sort: { by: 'name', direction: 'asc' },
+  },
+  { id: 'games', name: 'Games', parentId: null, fields: [text('Completeness')], sort: null },
 ];
 
 describe('groups.util', () => {
@@ -27,9 +42,22 @@ describe('groups.util', () => {
   });
 
   it('inherits custom fields from ancestors', () => {
-    expect(fieldsFor(TREE, 'rare')).toEqual(['Set no.', 'Language', 'Grade']);
-    expect(fieldsFor(TREE, 'regular')).toEqual(['Set no.', 'Language']);
+    expect(fieldsFor(TREE, 'rare')).toEqual([text('Set no.'), text('Language'), text('Grade')]);
     expect(fieldsFor(TREE, null)).toEqual([]);
+  });
+
+  it('lets a sub-group override an inherited field type without moving it', () => {
+    expect(fieldsFor(TREE, 'regular')).toEqual([
+      { name: 'Set no.', type: 'number' },
+      text('Language'),
+    ]);
+  });
+
+  it('takes the sort from the nearest ancestor that defines one', () => {
+    expect(sortFor(TREE, 'regular')).toEqual({ by: 'name', direction: 'asc' });
+    expect(sortFor(TREE, 'rare')).toEqual({ by: 'field:Set no.', direction: 'asc' });
+    expect(sortFor(TREE, 'games')).toBeNull();
+    expect(sortFor(TREE, null)).toBeNull();
   });
 
   it('flattens depth-first with depths', () => {

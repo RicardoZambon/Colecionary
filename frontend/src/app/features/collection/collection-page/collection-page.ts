@@ -1,12 +1,29 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
-import { CONDITIONS, Collection, Condition, GroupNode, Item } from '../../../core/models';
-import { isOwned, ownedValue, sortValue } from '../../../core/utils/copies.util';
-import { childrenOf, groupById, pathOf, subtreeIds } from '../../../core/utils/groups.util';
+import { CONDITIONS, Condition, GroupNode, GroupSort, Item } from '../../../core/models';
+import { isOwned, ownedValue } from '../../../core/utils/copies.util';
+import {
+  childrenOf,
+  fieldsFor,
+  groupById,
+  pathOf,
+  sortFor,
+  subtreeIds,
+} from '../../../core/utils/groups.util';
+import {
+  DEFAULT_SORT,
+  applyManualOrder,
+  customFieldName,
+  fieldValue,
+  moveInList,
+  sortChoices,
+  sortItems,
+  sortLabel,
+} from '../../../core/utils/sort.util';
 import { itemBadgeLabel, itemTone } from '../../../shared/ui/badge/badge';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import {
@@ -18,9 +35,9 @@ import {
   UiDropdown,
   UiImageSlot,
   UiProgress,
+  UiReorder,
 } from '../../../shared/ui';
 
-type SortKey = 'recent' | 'name' | 'valueDesc' | 'valueAsc' | 'yearAsc' | 'yearDesc';
 type ViewMode = 'grid' | 'list';
 type OwnFilter = 'owned' | 'wanted' | null;
 
@@ -32,14 +49,21 @@ interface GroupChip {
   onPath: boolean;
 }
 
-const SORT_OPTIONS: { id: SortKey; label: string }[] = [
-  { id: 'recent', label: 'Recently added' },
-  { id: 'name', label: 'Name A–Z' },
-  { id: 'valueDesc', label: 'Value high → low' },
-  { id: 'valueAsc', label: 'Value low → high' },
-  { id: 'yearAsc', label: 'Year old → new' },
-  { id: 'yearDesc', label: 'Year new → old' },
-];
+/** A row in the sort menu. A null `sort` means "follow the group's default". */
+interface SortMenuOption {
+  id: string;
+  label: string;
+  sort: GroupSort | null;
+}
+
+const GROUP_DEFAULT_ID = 'group';
+
+function sortId(sort: GroupSort): string {
+  return `${sort.by}|${sort.direction}`;
+}
+
+/** Reordering writes the whole collection back, so coalesce rapid drags. */
+const ORDER_DEBOUNCE_MS = 400;
 
 @Component({
   selector: 'app-collection-page',
@@ -55,6 +79,7 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
     UiDropdown,
     UiImageSlot,
     UiProgress,
+    UiReorder,
   ],
   templateUrl: './collection-page.html',
   styleUrl: './collection-page.scss',
@@ -71,13 +96,31 @@ export class CollectionPage {
   /** Selected group id — lives in the URL so back/refresh keep context. */
   readonly g = input<string | undefined>(undefined);
 
-  protected readonly sortOptions = SORT_OPTIONS;
   protected readonly conditions = CONDITIONS;
   protected readonly condition = signal<Condition | null>(null);
   protected readonly own = signal<OwnFilter>(null);
-  protected readonly sort = signal<SortKey>('recent');
+  /** Null means "use the selected group's configured order". */
+  protected readonly sortOverride = signal<GroupSort | null>(null);
   protected readonly view = signal<ViewMode>('grid');
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
+  protected readonly dragIndex = signal<number | null>(null);
+
+  /**
+   * Item order held locally while a manual reorder is being saved, so a drag
+   * lands instantly instead of waiting on the round-trip. Scoped to a
+   * collection id so switching collections can't show a stale order.
+   */
+  private readonly pendingOrder = signal<{ id: string; items: Item[] } | null>(null);
+  private orderTimer: ReturnType<typeof setTimeout> | undefined;
+
+  constructor() {
+    // Each group carries its own default; a pick made in one group shouldn't
+    // leak into the next.
+    effect(() => {
+      this.g();
+      this.sortOverride.set(null);
+    });
+  }
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
   protected readonly groups = computed(() => this.collection()?.groups ?? []);
@@ -149,15 +192,29 @@ export class CollectionPage {
     ];
   });
 
-  protected readonly items = computed(() => {
+  /** Custom fields available in the current group, own plus inherited. */
+  protected readonly groupFields = computed(() => fieldsFor(this.groups(), this.g() ?? null));
+  protected readonly groupSort = computed(() => sortFor(this.groups(), this.g() ?? null));
+  protected readonly effectiveSort = computed<GroupSort>(
+    () => this.sortOverride() ?? this.groupSort() ?? DEFAULT_SORT,
+  );
+  protected readonly manual = computed(() => this.effectiveSort().by === 'manual');
+  /** Set only while ordering by a custom field — drives the card chip. */
+  protected readonly sortFieldName = computed(() => customFieldName(this.effectiveSort().by));
+
+  /** The collection's items, preferring an unsaved manual reorder. */
+  private readonly sourceItems = computed(() => {
     const collection = this.collection();
     if (!collection) return [];
-    const groupFilter = this.g()
-      ? new Set(subtreeIds(this.groups(), this.g()!))
-      : null;
+    const pending = this.pendingOrder();
+    return pending?.id === collection.id ? pending.items : collection.items;
+  });
+
+  protected readonly items = computed(() => {
+    const groupFilter = this.g() ? new Set(subtreeIds(this.groups(), this.g()!)) : null;
     const query = this.store.query().toLowerCase();
 
-    const filtered = collection.items.filter(
+    const filtered = this.sourceItems().filter(
       item =>
         (!groupFilter || groupFilter.has(item.groupId)) &&
         // An item matches a condition when any of its copies is in it.
@@ -166,21 +223,35 @@ export class CollectionPage {
         (!query || item.name.toLowerCase().includes(query)),
     );
 
-    const sorted = [...filtered];
-    switch (this.sort()) {
-      case 'recent': sorted.reverse(); break;
-      case 'name': sorted.sort((a, b) => a.name.localeCompare(b.name)); break;
-      case 'valueDesc': sorted.sort((a, b) => sortValue(b) - sortValue(a)); break;
-      case 'valueAsc': sorted.sort((a, b) => sortValue(a) - sortValue(b)); break;
-      case 'yearAsc': sorted.sort((a, b) => a.year - b.year); break;
-      case 'yearDesc': sorted.sort((a, b) => b.year - a.year); break;
-    }
-    return sorted;
+    return sortItems(filtered, this.effectiveSort(), this.groupFields());
   });
 
-  protected readonly sortLabel = computed(
-    () => SORT_OPTIONS.find(o => o.id === this.sort())!.label,
-  );
+  protected readonly sortOptions = computed<SortMenuOption[]>(() => {
+    const groupSort = this.groupSort();
+    const choices = sortChoices(this.groupFields()).map(choice => ({
+      id: sortId(choice),
+      label: choice.label,
+      sort: { by: choice.by, direction: choice.direction },
+    }));
+    return groupSort
+      ? [
+          {
+            id: GROUP_DEFAULT_ID,
+            label: `Group default — ${sortLabel(groupSort)}`,
+            sort: null,
+          },
+          ...choices,
+        ]
+      : choices;
+  });
+
+  protected readonly activeSortId = computed(() => {
+    const override = this.sortOverride();
+    if (override) return sortId(override);
+    return this.groupSort() ? GROUP_DEFAULT_ID : sortId(this.effectiveSort());
+  });
+
+  protected readonly sortLabel = computed(() => sortLabel(this.effectiveSort()));
 
   // --- template helpers ---
 
@@ -198,6 +269,79 @@ export class CollectionPage {
 
   protected isOwned(item: Item): boolean {
     return isOwned(item);
+  }
+
+  /** The sort field's value for an item, or null when there is nothing to show. */
+  protected fieldChip(item: Item): string | null {
+    const name = this.sortFieldName();
+    return name ? fieldValue(item, name) || null : null;
+  }
+
+  // --- ordering ---
+
+  protected pickSort(option: SortMenuOption): void {
+    this.sortOverride.set(option.sort);
+  }
+
+  /** Moves a visible item, leaving anything the filters hid where it is. */
+  protected moveItem(from: number, to: number): void {
+    const collection = this.collection();
+    if (!collection) return;
+    const visible = this.items();
+    const reordered = moveInList(visible, from, to);
+    if (reordered === visible) return;
+
+    const next = applyManualOrder(
+      this.sourceItems(),
+      visible.map(i => i.id),
+      reordered.map(i => i.id),
+    );
+    this.pendingOrder.set({ id: collection.id, items: next });
+    clearTimeout(this.orderTimer);
+    this.orderTimer = setTimeout(() => void this.persistOrder(), ORDER_DEBOUNCE_MS);
+  }
+
+  private async persistOrder(): Promise<void> {
+    const pending = this.pendingOrder();
+    const collection = this.collection();
+    if (!pending || !collection || pending.id !== collection.id) return;
+    try {
+      await this.store.updateCollection({ ...collection, items: pending.items });
+      this.toast.flash('Order saved ✓');
+    } catch (err) {
+      this.toast.flash(err instanceof Error ? err.message : 'Could not save the order');
+    } finally {
+      // Either way the store is now the authority again.
+      this.pendingOrder.set(null);
+    }
+  }
+
+  protected onDragStart(event: DragEvent, index: number): void {
+    if (!this.manual()) return;
+    this.dragIndex.set(index);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(index));
+    }
+  }
+
+  protected onDragOver(event: DragEvent): void {
+    if (!this.manual() || this.dragIndex() === null) return;
+    // Without preventDefault the browser never fires a drop.
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  }
+
+  protected onDrop(event: DragEvent, index: number): void {
+    if (!this.manual()) return;
+    event.preventDefault();
+    const from = this.dragIndex();
+    this.dragIndex.set(null);
+    if (from !== null) this.moveItem(from, index);
+  }
+
+  protected onDragEnd(): void {
+    this.dragIndex.set(null);
   }
 
   // --- actions ---
@@ -255,6 +399,7 @@ export class CollectionPage {
       name: trimmed,
       parentId: pending.parentId,
       fields: [],
+      sort: null,
     };
     void this.store
       .updateCollection({ ...collection, groups: [...collection.groups, node] })

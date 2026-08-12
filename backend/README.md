@@ -101,3 +101,39 @@ Two details are load-bearing and pinned by unit tests
 integer), and the JSON property names must keep their `HasJsonPropertyName` —
 the migration wrote that document once from raw T-SQL and never regenerates it,
 so a rename would orphan existing data with no error anywhere.
+
+### Group fields and ordering
+
+A `Group` declares the custom fields its items (and its sub-groups' items) can
+carry, plus the order those items default to:
+
+- `Fields : List<GroupField>` — `{ Name, Type }` where `Type` is
+  `Text`/`Number`/`Date`. Persisted as a JSON document in the **existing**
+  `Fields` column via `OwnsMany(...).ToJson("Fields")`; it used to be an EF
+  primitive collection of plain strings, and `AddGroupFieldTypesAndSort`
+  rewrites the documents in place. The same two rules as `copies` apply and are
+  pinned by `Vault.UnitTests/GroupFieldJsonShapeTests.cs`: keep the
+  `HasConversion<string>()` on `Type` and the `HasJsonPropertyName` on both
+  properties.
+- `SortBy` / `SortDirection` — two nullable scalar columns rather than a JSON
+  document, so they carry no pinned-name risk. `SortBy` is a built-in key
+  (`manual`, `added`, `name`, `value`, `year`) or `field:<field name>`;
+  `SortDirection` is `asc`/`desc`. They travel as one nullable `sort` object on
+  the wire (`GroupSortDto`), because half a configuration is not a
+  configuration — `ToDto` defaults a missing direction to `asc`.
+
+Values still live on the item as `Custom` strings: the type belongs to the
+declaration, so retyping a field never rewrites item data. Sorting itself stays
+client-side; the server only stores the preference. There are **no group
+endpoints** — groups change only through the full-document collection PUT,
+which means `CollectionRepository.ReplaceGraph` must copy `SortBy` and
+`SortDirection` in its group lambda. Miss one and the setting saves on create
+and then silently never changes again; `ContractTests` PUTs the same collection
+three times specifically to catch that, and the third PUT clears the sort back
+to null.
+
+`AddGroupFieldTypesAndSort` converts `["Número"]` to
+`[{"Name":"Número","Type":"Text"}]` with `OPENJSON` + `FOR JSON PATH` (which
+escapes user-supplied field names for us). The `COALESCE(..., N'[]')` around it
+is load-bearing: `FOR JSON PATH` over zero rows returns `NULL`, so without it
+every group that had no fields would have its column nulled out.

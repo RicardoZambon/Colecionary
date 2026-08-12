@@ -77,20 +77,30 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    means owned, none means wantlist. Always go through the pure helpers in
    `core/utils/copies.util.ts` (backend mirror: `ItemCopy` in a `copies` JSON
    column).
-4. **All data flows through the abstract `VaultApi`**
-   (`frontend/src/app/core/api/vault-api.ts`). It is currently fulfilled by
-   `MockVaultApi` (seed data + latency + localStorage). To connect the real
-   backend, implement the same contract and swap one provider line in
-   `app.config.ts` — feature code must never know the difference.
-5. **Signals + zoneless + OnPush.** State lives in signal stores
+4. **Groups declare typed fields and their default order.** A `GroupNode`
+   carries `fields: GroupField[]` (`{ name, type: text|number|date }`) and
+   `sort: GroupSort | null`; field *values* stay on the item as `custom`
+   strings, so retyping a field never rewrites data. Fields merge down the
+   whole ancestor path, `sort` takes only the nearest ancestor that sets one,
+   and all comparison lives in `core/utils/sort.util.ts` — never sort items
+   inline. Manual order is the array order of `collection.items`, persisted by
+   index; the item DTO has no `sortOrder`.
+5. **All data flows through the abstract `VaultApi`**
+   (`frontend/src/app/core/api/vault-api.ts`), fulfilled by `HttpVaultApi`
+   against the .NET backend. There is no mocked data in the frontend — demo
+   data lives in the backend seeder. Feature code only ever sees the abstract
+   contract.
+6. **Signals + zoneless + OnPush.** State lives in signal stores
    (`core/state`); no Zone.js patterns.
-6. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
+7. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
    the path. In-collection navigation preserves `?g=`
    (`queryParamsHandling: 'preserve'`).
-7. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
-   `:focus-visible`, status never communicated by color alone.
-8. **Verify before merging:** `npm run build` clean, unit tests green, and
-   the affected flows exercised in the browser in at least one dark theme.
+8. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
+   `:focus-visible`, status never communicated by color alone. Anything
+   draggable also needs a keyboard path (`ui-reorder`).
+9. **Verify before merging:** `npm run build` clean (warnings included — the
+   6 kB per-component style budget is real), unit tests green, and the
+   affected flows exercised in the browser in at least one dark theme.
 
 ## ⚠️ Brand governance (pending)
 

@@ -28,22 +28,60 @@
             </div>
             <div class="group-row__fields">
               <span class="fields-label">FIELDS</span>
-              @for (field of row.node.fields; track field) {
+              @for (field of row.node.fields; track field.name) {
                 <span class="field-chip">
-                  {{ field }}
-                  <button type="button" class="remove" (click)="removeField(row.node.id, field)">✕</button>
+                  {{ field.name }}
+                  <ui-select
+                    class="compact type"
+                    [options]="fieldTypeOptions"
+                    [value]="field.type"
+                    (valueChange)="setFieldType(row.node.id, field.name, $event)"
+                  />
+                  <button
+                    type="button"
+                    class="remove"
+                    [attr.aria-label]="'Remove field ' + field.name"
+                    (click)="removeField(row.node.id, field.name)"
+                  >✕</button>
                 </span>
               }
               @if (pendingFieldGroupId() === row.node.id) {
-                <input
-                  class="field-input"
-                  placeholder="Field name… (Enter)"
-                  autofocus
-                  (keydown)="newFieldKeydown($event, row.node.id)"
-                  (blur)="commitNewField(row.node.id, $any($event.target).value)"
-                />
+                <span class="field-chip field-chip--new">
+                  <input
+                    class="field-input"
+                    placeholder="Field name… (Enter)"
+                    aria-label="New field name"
+                    autofocus
+                    (keydown)="newFieldKeydown($event, row.node.id)"
+                    (blur)="commitNewField(row.node.id, $any($event.target).value)"
+                  />
+                  <ui-select
+                    class="compact type"
+                    [options]="fieldTypeOptions"
+                    [value]="pendingFieldType()"
+                    (valueChange)="pendingFieldType.set($any($event))"
+                  />
+                </span>
               }
               <button type="button" class="link small" (click)="pendingFieldGroupId.set(row.node.id)">+ Field</button>
+            </div>
+
+            <div class="group-row__order">
+              <span class="fields-label">ORDER BY</span>
+              <ui-select
+                class="compact order-by"
+                [options]="row.sortByOptions"
+                [value]="row.sortBy"
+                (valueChange)="setGroupSortBy(row.node.id, $event)"
+              />
+              @if (row.showDirection) {
+                <ui-select
+                  class="compact direction"
+                  [options]="directionOptions"
+                  [value]="row.sortDirection"
+                  (valueChange)="setGroupSortDirection(row.node.id, $event)"
+                />
+              }
             </div>
           </div>
         }
@@ -63,7 +101,9 @@
 
         <div class="fine-print">
           Renames apply as you type. Custom fields apply to every item in the group and its
-          sub-groups. Groups that still contain items can't be deleted — move the items first.
+          sub-groups, and the field type decides how it sorts. <strong>Order by</strong> is the
+          default the collection uses when that group is open — sub-groups inherit it unless they
+          set their own. Groups that still contain items can't be deleted — move the items first.
         </div>
       </ui-card>
     }

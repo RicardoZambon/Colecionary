@@ -53,6 +53,9 @@ public class ContractTests(VaultApiFactory factory)
         // Ownership is derived from the copies, never transported.
         Assert.DoesNotContain("\"owned\":", raw);
         Assert.Contains("\"parentId\":\"pk_cards\"", raw);
+        // Group fields are typed objects and the group's sort round-trips.
+        Assert.Contains("\"fields\":[{\"name\":\"Issue\",\"type\":\"number\"}", raw);
+        Assert.Contains("\"sort\":{\"by\":\"field:Issue\",\"direction\":\"asc\"}", raw);
         Assert.DoesNotContain("\"TenantId\"", raw);
     }
 
@@ -73,7 +76,12 @@ public class ContractTests(VaultApiFactory factory)
             Name = "Manga (renamed)",
             Groups =
             [
-                new GroupNodeDto("g1", "Shonen", null, ["Volumes"]),
+                new GroupNodeDto(
+                    "g1",
+                    "Shonen",
+                    null,
+                    [new GroupFieldDto("Volumes", "number")],
+                    new GroupSortDto("field:Volumes", "asc")),
                 new GroupNodeDto("g2", "Jump", "g1", []),
             ],
             Items =
@@ -98,6 +106,9 @@ public class ContractTests(VaultApiFactory factory)
         Assert.Equal("Manga (renamed)", fetched.Name);
         Assert.Equal(["g1", "g2"], fetched.Groups.Select(g => g.Id));
         Assert.Equal("g1", fetched.Groups[1].ParentId);
+        Assert.Equal("number", Assert.Single(fetched.Groups[0].Fields).Type);
+        Assert.Equal(new GroupSortDto("field:Volumes", "asc"), fetched.Groups[0].Sort);
+        Assert.Null(fetched.Groups[1].Sort);
         Assert.False(fetched.LinkShare);
         Assert.Single(fetched.Members);
         Assert.Equal("One Piece Vol. 1", Assert.Single(fetched.Items).Name);
@@ -116,6 +127,18 @@ public class ContractTests(VaultApiFactory factory)
         // would never be exercised.
         var edited = updated with
         {
+            // g1 already exists too, so its sort goes through the same update
+            // lambda — a dropped SortBy/SortDirection assignment saves on
+            // create and then silently never changes again.
+            Groups =
+            [
+                updated.Groups[0] with
+                {
+                    Fields = [new GroupFieldDto("Volumes", "text")],
+                    Sort = new GroupSortDto("name", "desc"),
+                },
+                updated.Groups[1],
+            ],
             Items =
             [
                 updated.Items[0] with
@@ -126,6 +149,10 @@ public class ContractTests(VaultApiFactory factory)
         };
         (await client.PutAsJsonAsync($"/api/collections/{created.Id}", edited)).EnsureSuccessStatusCode();
         all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var reFetchedGroup = all!.Single(c => c.Id == created.Id).Groups[0];
+        Assert.Equal(new GroupSortDto("name", "desc"), reFetchedGroup.Sort);
+        Assert.Equal("text", Assert.Single(reFetchedGroup.Fields).Type);
+
         var reFetched = all!.Single(c => c.Id == created.Id).Items.Single();
         var only = Assert.Single(reFetched.Copies);   // i1_c1 removed
         Assert.Equal("i1_c2", only.Id);
@@ -134,11 +161,18 @@ public class ContractTests(VaultApiFactory factory)
         Assert.Null(only.Value);                      // override cleared back to null
         Assert.Equal(new DateOnly(2020, 1, 2), only.AcquiredOn);
 
-        // Third PUT dropping the item — wholesale replace must remove it.
-        var emptied = updated with { Items = [] };
+        // Third PUT dropping the item — wholesale replace must remove it. It
+        // also clears g1's sort back to null, which only works if the update
+        // lambda overwrites rather than coalesces.
+        var emptied = updated with
+        {
+            Groups = [updated.Groups[0] with { Sort = null }, updated.Groups[1]],
+            Items = [],
+        };
         (await client.PutAsJsonAsync($"/api/collections/{created.Id}", emptied)).EnsureSuccessStatusCode();
         all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
         Assert.Empty(all!.Single(c => c.Id == created.Id).Items);
+        Assert.Null(all!.Single(c => c.Id == created.Id).Groups[0].Sort);
 
         (await client.DeleteAsync($"/api/collections/{created.Id}")).EnsureSuccessStatusCode();
     }

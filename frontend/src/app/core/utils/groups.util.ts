@@ -1,4 +1,4 @@
-import { GroupNode } from '../models';
+import { GroupField, GroupNode, GroupSort } from '../models';
 
 /** Pure helpers for navigating a collection's group tree. */
 
@@ -32,9 +32,32 @@ export function pathOf(groups: GroupNode[], id: string | null): GroupNode[] {
   return path;
 }
 
-/** Custom field names a group inherits from its ancestors plus its own. */
-export function fieldsFor(groups: GroupNode[], id: string | null): string[] {
-  return pathOf(groups, id).reduce<string[]>((acc, g) => acc.concat(g.fields), []);
+/**
+ * Custom fields a group inherits from its ancestors plus its own. Redeclaring
+ * a name deeper in the tree overrides the ancestor's type but keeps the
+ * ancestor's position, so the field order a user sees stays stable as they
+ * drill down.
+ */
+export function fieldsFor(groups: GroupNode[], id: string | null): GroupField[] {
+  const byName = new Map<string, GroupField>();
+  for (const group of pathOf(groups, id)) {
+    for (const field of group.fields) {
+      byName.set(field.name, field);
+    }
+  }
+  return [...byName.values()];
+}
+
+/**
+ * The ordering a group uses: its own if set, otherwise the nearest ancestor
+ * that defines one. Null when nothing along the path configures ordering.
+ */
+export function sortFor(groups: GroupNode[], id: string | null): GroupSort | null {
+  const path = pathOf(groups, id);
+  for (let i = path.length - 1; i >= 0; i--) {
+    if (path[i].sort) return path[i].sort;
+  }
+  return null;
 }
 
 /** Depth-first flattening of the tree, with the nesting depth of each node. */

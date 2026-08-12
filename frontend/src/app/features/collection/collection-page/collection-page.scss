@@ -239,9 +239,12 @@
   gap: 15px;
 }
 
+.list-line { position: relative; }
+
 .item-card {
   display: flex;
   flex-direction: column;
+  position: relative;
 
   &--wanted {
     border-style: dashed;
@@ -269,6 +272,17 @@
       background-size: cover;
       background-position: center;
     }
+  }
+
+  /** The value the list is ordered by, so it needn't be repeated in the name. */
+  &__img ui-badge {
+    position: absolute;
+    top: 7px;
+    left: 7px;
+    z-index: 1;
+    background: var(--panel);
+    text-transform: none;
+    font-size: 10px;
   }
 
   &__body {
@@ -325,6 +339,10 @@
   gap: 10px;
   padding: 9px 16px;
   align-items: center;
+
+  // Manual mode keeps the columns and just clears room for the floating
+  // move buttons on the right.
+  &.list--manual { padding-right: 78px; }
 }
 
 .list-head {
@@ -355,11 +373,13 @@
     color: var(--muted);
   }
 
-  .cond {
+  .cond,
+  .field {
     font-family: var(--font-mono);
     font-size: 9.5px;
     font-weight: 700;
 
+    &.field { font-size: 11px; color: var(--accent); }
     &.tone-good { color: var(--good); }
     &.tone-warn { color: var(--warn); }
     &.tone-accent { color: var(--accent); }

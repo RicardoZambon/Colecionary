@@ -45,3 +45,12 @@ textarea::placeholder {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
+
+/* Drag-to-reorder affordances, shared by every sortable list. */
+[draggable='true'] {
+  cursor: grab;
+}
+
+.dragging {
+  opacity: 0.45;
+}
