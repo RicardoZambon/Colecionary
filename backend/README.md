@@ -49,6 +49,36 @@ dotnet format --verify-no-changes
 Tenant isolation has dedicated integration coverage in
 `tests/Vault.IntegrationTests/TenantIsolationTests.cs`.
 
+## Physical naming
+
+Every table is **PascalCase and explicitly schema-qualified** — no object
+resolves through the caller's default schema. Schemas are declared once in
+`VaultSchemas` and grouped by concern, so a role can be granted the store
+catalogue without being granted the whole database:
+
+| Schema | Tables |
+| --- | --- |
+| `Identity` | `Tenants`, `Users` |
+| `Catalog` | `Collections`, `CollectionMembers`, `Groups`, `Items` |
+| `Store` | `StoreListings` |
+| `Storage` | `Images` |
+
+Columns are PascalCase too, including the JSON container columns
+(`Items.Custom`, `Items.Copies`, `Groups.Fields`, `StoreListings.Items`).
+`TableNamingConventionTests` enforces all of this against the built model, so a
+new entity mapped with a bare `ToTable("thing")` fails the unit tests instead of
+shipping a stray lowercase table into `dbo`.
+
+Two deliberate exceptions:
+
+- **`dbo.__EFMigrationsHistory` stays in `dbo`.** EF reads it *before* it can
+  apply anything, so relocating it on an existing database would make EF see
+  zero applied migrations and try to re-run the whole chain.
+- **Migrations before `UseSchemaQualifiedPascalCaseNames` still reference the
+  old lowercase names.** That is correct: they ran against the old shape, and
+  the raw-T-SQL backfills in `AddItemCopies` / `AddGroupFieldTypesAndSort`
+  execute before the rename. Never retro-edit them.
+
 ## Auth
 
 `POST /api/auth/login` verifies credentials (ASP.NET Identity's

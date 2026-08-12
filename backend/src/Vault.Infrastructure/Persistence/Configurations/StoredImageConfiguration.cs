@@ -8,7 +8,7 @@ public sealed class StoredImageConfiguration : IEntityTypeConfiguration<StoredIm
 {
     public void Configure(EntityTypeBuilder<StoredImage> builder)
     {
-        builder.ToTable("images");
+        builder.ToTable("Images", VaultSchemas.Storage);
         builder.HasKey(i => i.Id);
         builder.Property(i => i.ContentType).HasMaxLength(100);
         builder.HasOne<Tenant>().WithMany().HasForeignKey(i => i.TenantId).OnDelete(DeleteBehavior.Cascade);

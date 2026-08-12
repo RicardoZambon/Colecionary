@@ -8,7 +8,7 @@ public sealed class CollectionMemberConfiguration : IEntityTypeConfiguration<Col
 {
     public void Configure(EntityTypeBuilder<CollectionMember> builder)
     {
-        builder.ToTable("collection_members");
+        builder.ToTable("CollectionMembers", VaultSchemas.Catalog);
         builder.HasKey(m => new { m.TenantId, m.CollectionId, m.Email });
         builder.Property(m => m.CollectionId).HasMaxLength(64);
         builder.Property(m => m.Email).HasMaxLength(320);

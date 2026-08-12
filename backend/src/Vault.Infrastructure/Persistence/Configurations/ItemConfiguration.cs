@@ -8,7 +8,7 @@ public sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
 {
     public void Configure(EntityTypeBuilder<Item> builder)
     {
-        builder.ToTable("items");
+        builder.ToTable("Items", VaultSchemas.Catalog);
         builder.HasKey(i => new { i.TenantId, i.CollectionId, i.Id });
         builder.Property(i => i.CollectionId).HasMaxLength(64);
         builder.Property(i => i.Id).HasMaxLength(64);
@@ -20,16 +20,19 @@ public sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
         builder.Property(i => i.GroupId).HasMaxLength(64);
         builder.Property(i => i.Img).HasMaxLength(260);
         // List<string> Tags maps to an nvarchar(max) JSON column; Custom is a JSON document.
-        builder.OwnsMany(i => i.Custom, custom => custom.ToJson("custom"));
+        builder.OwnsMany(i => i.Custom, custom => custom.ToJson("Custom"));
 
-        // Physical copies live as one JSON document, same pattern as `custom`.
-        // Unlike `custom`, the JSON property names are PINNED: the AddItemCopies
-        // migration writes this document from raw T-SQL and never regenerates it,
-        // so a CLR rename would silently orphan every existing copy's data with
-        // no compiler error, no migration and no exception.
+        // Physical copies live as one JSON document, same pattern as `Custom`.
+        // Unlike `Custom`, the JSON property names *inside* the document are
+        // PINNED: the AddItemCopies migration writes this document from raw T-SQL
+        // and never regenerates it, so a CLR rename would silently orphan every
+        // existing copy's data with no compiler error, no migration and no
+        // exception. The containing column is a different matter — it was named
+        // `copies` up to AddItemCopies and renamed by UseSchemaQualifiedPascalCaseNames;
+        // that rename is a real migration operation, so it is safe.
         builder.OwnsMany(i => i.Copies, copies =>
         {
-            copies.ToJson("copies");
+            copies.ToJson("Copies");
             copies.Property(c => c.Id).HasJsonPropertyName("Id");
             // The string conversions are load-bearing: an unconverted enum is
             // written to JSON as an integer, which neither the backfill nor the

@@ -8,7 +8,7 @@ public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
 {
     public void Configure(EntityTypeBuilder<Group> builder)
     {
-        builder.ToTable("groups");
+        builder.ToTable("Groups", VaultSchemas.Catalog);
         builder.HasKey(g => new { g.TenantId, g.CollectionId, g.Id });
         builder.Property(g => g.CollectionId).HasMaxLength(64);
         builder.Property(g => g.Id).HasMaxLength(64);

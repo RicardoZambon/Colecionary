@@ -57,6 +57,13 @@ Full detail in [`backend/README.md`](backend/README.md).
    update both sides plus the integration tests.
 4. **Tests:** integration tests run against real SQL Server (Testcontainers);
    tenant isolation has dedicated coverage that must stay green.
+5. **Tables are PascalCase and explicitly schema-qualified.** Schemas are
+   declared only in `VaultSchemas` (`Identity`, `Catalog`, `Store`, `Storage`);
+   every configuration calls `ToTable("Name", VaultSchemas.X)` and columns —
+   JSON container columns included — are PascalCase.
+   `TableNamingConventionTests` fails the build otherwise. Migrations predating
+   `UseSchemaQualifiedPascalCaseNames` keep their old lowercase names; never
+   retro-edit an applied migration.
 
 ## Non-negotiable frontend rules
 

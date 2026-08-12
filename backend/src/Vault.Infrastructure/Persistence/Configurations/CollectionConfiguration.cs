@@ -8,7 +8,7 @@ public sealed class CollectionConfiguration : IEntityTypeConfiguration<Collectio
 {
     public void Configure(EntityTypeBuilder<Collection> builder)
     {
-        builder.ToTable("collections");
+        builder.ToTable("Collections", VaultSchemas.Catalog);
 
         // Composite key: the public string id is unique per tenant only —
         // two tenants can both import the same store listing id.

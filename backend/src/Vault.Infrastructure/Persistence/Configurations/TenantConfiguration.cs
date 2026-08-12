@@ -8,7 +8,7 @@ public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
 {
     public void Configure(EntityTypeBuilder<Tenant> builder)
     {
-        builder.ToTable("tenants");
+        builder.ToTable("Tenants", VaultSchemas.Identity);
         builder.HasKey(t => t.Id);
         builder.Property(t => t.Slug).HasMaxLength(64);
         builder.Property(t => t.Name).HasMaxLength(200);
