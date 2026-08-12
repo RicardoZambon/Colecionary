@@ -138,6 +138,12 @@ style the same raw element the same way, that's the signal to promote it here.
   (`/api/images/{id}`). `ui-image-slot` is presentational — it renders `src`
   and emits the picked file; pages own upload + persistence (photo ids travel
   on the item/collection DTOs).
+- **Export** goes through `ExportApi` (`core/api/export-api.ts`), which fetches
+  `/api/export` as a `Blob` and hands it to a download anchor. Like `ImagesApi`
+  it sits beside `VaultApi` rather than on it, because it deals in a binary
+  payload rather than the DTO graph the abstract contract describes. The archive
+  is assembled by the backend — image bytes aren't reachable from the browser as
+  data, so a client-built export could only ever omit the pictures.
 - **Auth** (`core/auth/`): `AuthService` (signal store; JWT session in
   `localStorage('vault.auth')`), a functional interceptor that attaches the
   bearer token and logs out on mid-session 401s, and `authGuard` protecting

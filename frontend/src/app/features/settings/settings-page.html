@@ -96,7 +96,9 @@
           <span class="name">Data</span>
           <span class="email">{{ store.totalItems() }} items across {{ store.collections().length }} collections</span>
         </span>
-        <ui-button variant="ghost" size="sm" (click)="exportJson()">Export JSON</ui-button>
+        <ui-button variant="ghost" size="sm" [disabled]="exporting()" (click)="exportArchive()">
+          {{ exporting() ? 'Preparing…' : 'Export ZIP' }}
+        </ui-button>
       </ui-card>
     </section>
   }

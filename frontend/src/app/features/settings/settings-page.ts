@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router } from '@angular/router';
 
 import { PLANS } from './plans';
+import { ExportApi } from '../../core/api/export-api';
 import { ThemeService } from '../../core/state/theme.service';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
@@ -54,6 +55,7 @@ export class SettingsPage {
   protected readonly theme = inject(ThemeService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly exportApi = inject(ExportApi);
 
   readonly tab = input<string>('appearance');
 
@@ -112,15 +114,32 @@ export class SettingsPage {
     this.toast.flash('Access removed');
   }
 
-  protected exportJson(): void {
-    const blob = new Blob([JSON.stringify(this.store.collections(), null, 2)], {
-      type: 'application/json',
-    });
-    const anchor = document.createElement('a');
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = 'vault-export.json';
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
-    this.toast.flash('Exported vault-export.json ✓');
+  protected readonly exporting = signal(false);
+
+  /**
+   * Downloads collections *and* their images as one archive. The server builds
+   * it: image bytes live on disk behind the API now, so a browser-side JSON blob
+   * could only ever have exported the data without the pictures.
+   */
+  protected async exportArchive(): Promise<void> {
+    if (this.exporting()) {
+      return;
+    }
+
+    this.exporting.set(true);
+    try {
+      const blob = await this.exportApi.downloadArchive();
+      const anchor = document.createElement('a');
+      anchor.href = URL.createObjectURL(blob);
+      anchor.download = 'vault-export.zip';
+      anchor.click();
+      URL.revokeObjectURL(anchor.href);
+      this.toast.flash('Exported vault-export.zip ✓');
+    } catch {
+      // A failed download is otherwise silent — the anchor just never fires.
+      this.toast.flash("Export failed — couldn't build the archive");
+    } finally {
+      this.exporting.set(false);
+    }
   }
 }

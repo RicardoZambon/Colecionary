@@ -15,6 +15,7 @@ using Vault.Infrastructure.Auth;
 using Vault.Infrastructure.Persistence;
 using Vault.Infrastructure.Persistence.Seeding;
 using Vault.Infrastructure.Setup;
+using Vault.Infrastructure.Storage;
 
 var setup = new SetupCoordinator(ResolveConfigurationDirectory(args));
 
@@ -126,7 +127,7 @@ static WebApplication BuildConfiguredApplication(WebApplicationBuilder builder, 
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
     builder.Services.AddApplication();
-    builder.Services.AddInfrastructure(builder.Configuration);
+    builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
 
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentTenant, CurrentTenantFromHttpContext>();
@@ -212,6 +213,11 @@ static void BootstrapDatabase(WebApplication app, SetupCoordinator setup)
 {
     using var scope = app.Services.CreateScope();
     var sp = scope.ServiceProvider;
+
+    // Must precede every path below: all of them migrate, and the migration that
+    // drops Storage.Images.Data would otherwise destroy the bytes this rescues.
+    // No-ops once the column is gone.
+    sp.GetRequiredService<LegacyImageBlobExporter>().ExportAsync().GetAwaiter().GetResult();
 
     if (setup.PendingBootstrap is not null)
     {

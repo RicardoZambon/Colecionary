@@ -79,6 +79,67 @@ Two deliberate exceptions:
   the raw-T-SQL backfills in `AddItemCopies` / `AddGroupFieldTypesAndSort`
   execute before the rename. Never retro-edit them.
 
+Note that `Identity` and `Storage` are T-SQL keywords: hand-written ad-hoc SQL
+needs `[Identity].[Tenants]`. EF always brackets, so application code is fine.
+
+## Image storage
+
+Image **bytes live on disk, not in SQL.** `Storage.Images` is metadata only —
+which tenant owns an id, its content type, when it was uploaded — and the bytes
+go through `IImageStore`. `FileSystemImageStore` lays them out as:
+
+```
+{ImageStorage:Root}/{tenantId}/{imageId}.{ext}      # default root: App_Data/images
+```
+
+**One directory per tenant**, so images are a unit you can copy, quota or delete,
+and no lookup can wander into another tenant's files. Both path segments are
+GUIDs we format ourselves, never caller-supplied strings, so nothing can traverse
+out of its folder. The extension comes from the content type, which is immutable
+once written — retyping an image would orphan the file it names.
+
+The read endpoint stays anonymous (an `<img>` tag can't send an Authorization
+header), and is still safe because the **tenant is resolved from the image's own
+row before storage is touched**: a guessed GUID can only ever resolve inside the
+tenant that owns it. Never pass the ambient request tenant instead.
+
+Uploads write the file *before* the row. The failure modes aren't symmetric — a
+file with no row is unreachable garbage, while a row with no file is a broken
+image in the UI. (Orphans are the same known gap as replaced images; collecting
+them is a documented follow-up.)
+
+### Migrating an existing database
+
+`MoveImageBytesToFileStorage` drops the old `varbinary(max)` column, and a
+migration can't write files — so `LegacyImageBlobExporter` runs at startup
+**before** `Database.Migrate()`, copies every blob to the store, and lets the
+migration drop the column immediately after. One deployment, no data loss, and a
+no-op on every subsequent start.
+
+Because the export lives in startup, **don't apply this migration with a bare
+`dotnet ef database update`** against a database that still holds blobs — that
+drops the bytes. Start the API instead; it does both, in the right order.
+
+## Export
+
+`GET /api/export` streams a zip of the caller's tenant:
+
+```
+collections.json          # same shape as GET /api/collections
+images/{imageId}.{ext}    # every image that tenant owns
+```
+
+This used to be a browser-side JSON blob of whatever the tab had in memory. It
+moved server-side so it can include image bytes (unreachable from the client as
+data) and so the same global query filters that protect every other read also
+scope the export. Images are stored uncompressed in the zip — every format we
+accept is already compressed.
+
+The archive is built into a temp file rather than written straight to the
+response: `ZipArchive` emits its central directory with a *synchronous* write on
+dispose, which Kestrel rejects on the response body. The alternative,
+`AllowSynchronousIO`, would block a request thread for the whole download.
+
 ## Auth
 
 `POST /api/auth/login` verifies credentials (ASP.NET Identity's
@@ -105,6 +166,7 @@ documented follow-ups.
 | GET | `/api/images/{id}` | anonymous by design — the GUID is the capability (`<img>` can't send auth headers) |
 | GET / PUT | `/api/tenant/members` | PUT is Owner-only |
 | GET / PUT | `/api/profile` | email immutable in v1 |
+| GET | `/api/export` | zip: `collections.json` + `images/…` for the caller's tenant |
 
 JSON is camelCase with string enums — byte-compatible with the Angular
 models in `frontend/src/app/core/models/`.

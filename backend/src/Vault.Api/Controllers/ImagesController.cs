@@ -31,8 +31,10 @@ public class ImagesController(ImageService images) : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     {
-        var image = await images.GetAsync(id, ct);
+        var image = await images.OpenAsync(id, ct);
         Response.Headers.CacheControl = "private, max-age=86400, immutable";
-        return File(image.Data, image.ContentType);
+        // File(Stream, ...) streams and disposes the handle — the bytes never
+        // land in a buffer, which matters now that they come off disk.
+        return File(image.Bytes, image.ContentType);
     }
 }

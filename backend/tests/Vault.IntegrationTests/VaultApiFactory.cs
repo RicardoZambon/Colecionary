@@ -25,6 +25,13 @@ public sealed class VaultApiFactory : WebApplicationFactory<Program>, IAsyncLife
 
     private readonly MsSqlContainer _sqlServer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
 
+    /// <summary>
+    /// Per-run image directory. An absolute path so it bypasses content-root
+    /// resolution entirely — tests must never write uploads into the source tree.
+    /// </summary>
+    public string ImageRoot { get; } =
+        Path.Combine(Path.GetTempPath(), $"vault-images-{Guid.NewGuid():N}");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -32,6 +39,7 @@ public sealed class VaultApiFactory : WebApplicationFactory<Program>, IAsyncLife
         builder.UseSetting("Seed:Enabled", "true");
         builder.UseSetting("Seed:DemoPassword", DemoPassword);
         builder.UseSetting("Jwt:SigningKey", "integration-test-signing-key-0123456789abcdef");
+        builder.UseSetting("ImageStorage:Root", ImageRoot);
     }
 
     public async Task<HttpClient> CreateAuthenticatedClientAsync(string email, string password = DemoPassword)
@@ -99,5 +107,10 @@ public sealed class VaultApiFactory : WebApplicationFactory<Program>, IAsyncLife
     {
         await base.DisposeAsync();
         await _sqlServer.DisposeAsync();
+
+        if (Directory.Exists(ImageRoot))
+        {
+            Directory.Delete(ImageRoot, recursive: true);
+        }
     }
 }

@@ -6,12 +6,16 @@ namespace Vault.Application.Images;
 
 public sealed record ImageUploadResponse(Guid Id);
 
-public class ImageService(IImageRepository images, ICurrentTenant currentTenant, TimeProvider timeProvider)
+/// <summary>Open image bytes plus the content type to serve them as.</summary>
+public sealed record ImageContent(string ContentType, Stream Bytes);
+
+public class ImageService(
+    IImageRepository images,
+    IImageStore store,
+    ICurrentTenant currentTenant,
+    TimeProvider timeProvider)
 {
     public const int MaxBytes = 5 * 1024 * 1024;
-
-    private static readonly string[] AllowedContentTypes =
-        ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
 
     public async Task<ImageUploadResponse> UploadAsync(byte[] data, string contentType, CancellationToken ct)
     {
@@ -25,7 +29,7 @@ public class ImageService(IImageRepository images, ICurrentTenant currentTenant,
             throw new DomainRuleException("Images are limited to 5 MB.");
         }
 
-        if (!AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
+        if (!ImageContentTypes.IsAllowed(contentType))
         {
             throw new DomainRuleException("Only JPEG, PNG, WebP, GIF or AVIF images are accepted.");
         }
@@ -35,15 +39,32 @@ public class ImageService(IImageRepository images, ICurrentTenant currentTenant,
             Id = Guid.NewGuid(),
             TenantId = currentTenant.TenantId,
             ContentType = contentType.ToLowerInvariant(),
-            Data = data,
             CreatedAtUtc = timeProvider.GetUtcNow(),
         };
+
+        // Bytes first, then the row. The failure modes are not symmetric: a file
+        // with no row is invisible garbage (the id is unreachable), while a row
+        // with no file is a broken image in the UI. Orphaned files are the same
+        // known gap as replaced images — collection is a documented follow-up.
+        await store.SaveAsync(image.TenantId, image.Id, image.ContentType, data, ct);
         images.Add(image);
         await images.SaveChangesAsync(ct);
         return new ImageUploadResponse(image.Id);
     }
 
-    public async Task<StoredImage> GetAsync(Guid id, CancellationToken ct) =>
-        await images.GetUnfilteredAsync(id, ct)
+    /// <summary>
+    /// Resolves an id to its bytes. The tenant comes from the image's own row,
+    /// never from the ambient request, so a guessed id can only ever read inside
+    /// the tenant that owns it.
+    /// </summary>
+    public async Task<ImageContent> OpenAsync(Guid id, CancellationToken ct)
+    {
+        var image = await images.GetUnfilteredAsync(id, ct)
             ?? throw new NotFoundException($"Image '{id}' not found.");
+
+        var bytes = await store.OpenReadAsync(image.TenantId, image.Id, image.ContentType, ct)
+            ?? throw new NotFoundException($"Image '{id}' has no stored bytes.");
+
+        return new ImageContent(image.ContentType, bytes);
+    }
 }

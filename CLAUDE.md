@@ -64,6 +64,13 @@ Full detail in [`backend/README.md`](backend/README.md).
    `TableNamingConventionTests` fails the build otherwise. Migrations predating
    `UseSchemaQualifiedPascalCaseNames` keep their old lowercase names; never
    retro-edit an applied migration.
+6. **Image bytes live in `IImageStore`, never in the database.** The `Images`
+   row is metadata only (id → tenant, content type). `FileSystemImageStore`
+   writes `{ImageStorage:Root}/{tenantId}/{imageId}.{ext}` — **one directory per
+   tenant**, so a tenant's images are a unit you can copy, quota or delete, and
+   no lookup can cross tenants. Always pass the tenant id read from the image's
+   own row, not the ambient request tenant; that is what keeps the anonymous
+   GUID read endpoint safe.
 
 ## Non-negotiable frontend rules
 
@@ -123,6 +130,5 @@ mechanically it is a one-file change (`styles/_themes.scss`).
 JWT in localStorage without refresh tokens; no optimistic concurrency on the
 full-document collection PUT; collection members are denormalized snapshots;
 invited members can't log in until an invite/set-password flow exists; images
-are stored as SQL Server varbinary(max) and served via unguessable-GUID URLs (move to
-object storage + signed URLs later); replaced/removed images are not
-garbage-collected yet.
+are served via unguessable-GUID URLs (signed URLs later); replaced/removed
+images are not garbage-collected yet.
