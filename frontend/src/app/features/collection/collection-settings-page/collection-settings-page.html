@@ -30,6 +30,7 @@
                 variant="subtle"
                 [value]="row.node.name"
                 (valueChange)="renameGroup(row.node.id, $event)"
+                (blurred)="endRename()"
               />
               <span class="count">{{ row.count }} items</span>
               <button type="button" class="link" (click)="pendingGroupParent.set({ parentId: row.node.id })">+ Sub</button>

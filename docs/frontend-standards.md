@@ -221,6 +221,19 @@ style the same raw element the same way, that's the signal to promote it here.
   free text, and items with no value always sink to the bottom in either
   direction. `manual` ordering is simply the array order of `collection.items`,
   which the API persists by index — there is no `sortOrder` on the item DTO.
+  All of that governs a group's *items*. **The groups themselves always list
+  alphabetically**, because nothing persists a position for a group the way
+  `manual` does for items — the array order is only the order they happened to
+  be created in, which tells the reader nothing. `childrenOf()` in
+  `core/utils/groups.util.ts` sorts by name through the same numeric- and
+  accent-aware collator (exported as `compareNames`), and `flattenTree()` /
+  `visibleTree()` build on it, so the sidebar tree, the dashboard cards, the
+  item form's group picker and the settings list can never disagree about
+  where a group sits. Never sort or list groups inline. The one wrinkle is the
+  settings page's inline rename: an alphabetical list would re-sort on every
+  keystroke, and moving the focused input in the DOM blurs it, so the page
+  freezes the row order for the duration of a rename and releases it on
+  `(blurred)`.
 
 ## 6. Testing & verification
 

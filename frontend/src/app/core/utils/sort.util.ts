@@ -18,6 +18,15 @@ const FIELD_PREFIX = 'field:';
 /** Numeric-aware so a free-text field still orders 1 · 2 · 10 · 12A. */
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
+/**
+ * Accent- and numeric-aware A–Z comparison of two names, shared by every
+ * alphabetical listing so "Álbuns" files next to "Albuns" and "Volume 2" still
+ * precedes "Volume 10".
+ */
+export function compareNames(a: string, b: string): number {
+  return collator.compare(a, b);
+}
+
 /** `field:Número` → `Número`; null for built-in keys. */
 export function customFieldName(by: string): string | null {
   return by.startsWith(FIELD_PREFIX) ? by.slice(FIELD_PREFIX.length) : null;

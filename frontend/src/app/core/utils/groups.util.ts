@@ -1,9 +1,18 @@
 import { GroupField, GroupNode, GroupSort } from '../models';
+import { compareNames } from './sort.util';
 
 /** Pure helpers for navigating a collection's group tree. */
 
+/**
+ * A parent's children, always alphabetical. Groups have no manual order —
+ * unlike items, nothing persists a position for one — so the array order is
+ * merely the order they happened to be created in, which tells the reader
+ * nothing. Sorting here instead of at each call site is what keeps the sidebar
+ * tree, the dashboard cards, the item form's picker and the settings list
+ * agreeing on where a group sits. Ties keep array order (`sort` is stable).
+ */
 export function childrenOf(groups: GroupNode[], parentId: string | null): GroupNode[] {
-  return groups.filter(g => g.parentId === parentId);
+  return groups.filter(g => g.parentId === parentId).sort((a, b) => compareNames(a.name, b.name));
 }
 
 export function groupById(groups: GroupNode[], id: string | null): GroupNode | undefined {

@@ -94,6 +94,14 @@ export class CollectionSettingsPage {
   protected readonly pendingFieldType = signal<GroupFieldType>('text');
   protected readonly inviteEmail = signal('');
   protected readonly inviteRole = signal<string>('Viewer');
+  /**
+   * The row order frozen while a rename is being typed. Groups list
+   * alphabetically, so without this the row would re-sort on every keystroke —
+   * moving the focused input in the DOM, which blurs it, so renaming "Zeta" to
+   * "Alpha" would end after the first letter. Captured on the first keystroke
+   * and released on blur, when the list settles into its new order.
+   */
+  private readonly renameOrderPin = signal<string[] | null>(null);
 
   private persistTimer: ReturnType<typeof setTimeout> | undefined;
   private draftFor: string | null = null;
@@ -126,9 +134,20 @@ export class CollectionSettingsPage {
     // flush left instead of pushed halfway across the card for no reason.
     const offset = scope ? pathOf(draft.groups, scope.id).length - 1 : 0;
 
-    return flattenTree(draft.groups)
-      .filter(({ node }) => !scoped || scoped.has(node.id))
-      .map(({ node, depth }) => {
+    const pin = this.renameOrderPin();
+    const pinned = pin ? new Map(pin.map((id, index) => [id, index])) : null;
+
+    const rows = flattenTree(draft.groups).filter(({ node }) => !scoped || scoped.has(node.id));
+    if (pinned) {
+      // Stable sort, so a group the pin does not know about (there should be
+      // none — the pin only outlives a keystroke) keeps its place at the end.
+      rows.sort(
+        (a, b) =>
+          (pinned.get(a.node.id) ?? pinned.size) - (pinned.get(b.node.id) ?? pinned.size),
+      );
+    }
+
+    return rows.map(({ node, depth }) => {
         // The picker offers inherited fields too — ordering by a field the
         // parent declared is exactly what a sub-group usually wants.
         const fields = fieldsFor(draft.groups, node.id);
@@ -217,10 +236,19 @@ export class CollectionSettingsPage {
   // --- groups & fields ---
 
   protected renameGroup(id: string, name: string): void {
+    const draft = this.draft();
+    if (draft && !this.renameOrderPin()) {
+      this.renameOrderPin.set(flattenTree(draft.groups).map(row => row.node.id));
+    }
     this.mutate(d => ({
       ...d,
       groups: d.groups.map(g => (g.id === id ? { ...g, name } : g)),
     }));
+  }
+
+  /** Leaving the rename field lets the list re-sort into the new alphabetical order. */
+  protected endRename(): void {
+    this.renameOrderPin.set(null);
   }
 
   protected removeGroup(id: string): void {

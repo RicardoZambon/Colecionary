@@ -108,7 +108,11 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    **null means "not declared"** and must survive round-trips, and all the
    owned/missing arithmetic lives in `core/utils/group-stats.util.ts` — never
    count items inline. Manual order is the array order of `collection.items`,
-   persisted by index; the item DTO has no `sortOrder`.
+   persisted by index; the item DTO has no `sortOrder`. That ordering is for a
+   group's *items*: **the groups themselves always list alphabetically**, since
+   nothing persists a position for a group. `childrenOf` in
+   `core/utils/groups.util.ts` sorts by name (and `flattenTree`/`visibleTree`
+   build on it) — never list or sort groups inline.
 5. **Image framing is a focal point, never a crop.** Every surface renders with
    `background-size: cover`, so which part shows is one property:
    `background-position`. An image carries `focal: {x, y}` (0–1) on its own row,

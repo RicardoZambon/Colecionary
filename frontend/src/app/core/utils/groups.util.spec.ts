@@ -55,6 +55,52 @@ describe('groups.util', () => {
     expect(childrenOf(TREE, null).map(g => g.id)).toEqual(['cards', 'games']);
   });
 
+  describe('alphabetical ordering', () => {
+    const named = (...names: string[]): GroupNode[] =>
+      names.map(name => ({ id: name, name, parentId: null, fields: [], sort: null, target: null }));
+
+    it('lists children A–Z, not in the order they were created', () => {
+      const created = named('Revistas', 'Filmes', 'Bonecos');
+      expect(childrenOf(created, null).map(g => g.name)).toEqual(['Bonecos', 'Filmes', 'Revistas']);
+    });
+
+    it('leaves the array it was given untouched', () => {
+      const created = named('Revistas', 'Filmes', 'Bonecos');
+      childrenOf(created, null);
+      expect(created.map(g => g.name)).toEqual(['Revistas', 'Filmes', 'Bonecos']);
+    });
+
+    it('orders numerically and ignores case and accents', () => {
+      const created = named('volume 10', 'Álbuns', 'Volume 2', 'albuns raros');
+      expect(childrenOf(created, null).map(g => g.name)).toEqual([
+        'Álbuns',
+        'albuns raros',
+        'Volume 2',
+        'volume 10',
+      ]);
+    });
+
+    it('sorts every level of the tree, not just the roots', () => {
+      const scrambled: GroupNode[] = [
+        ...named('Revistas', 'Bonecos'),
+        {
+          id: 'super',
+          name: 'Super-heróis',
+          parentId: 'Revistas',
+          fields: [],
+          sort: null,
+          target: null,
+        },
+        { id: 'humor', name: 'Humor', parentId: 'Revistas', fields: [], sort: null, target: null },
+      ];
+      const rows = ['0:Bonecos', '0:Revistas', '1:Humor', '1:Super-heróis'];
+      expect(flattenTree(scrambled).map(r => `${r.depth}:${r.node.name}`)).toEqual(rows);
+      expect(
+        visibleTree(scrambled, new Set(['Revistas'])).map(r => `${r.depth}:${r.node.name}`),
+      ).toEqual(rows);
+    });
+  });
+
   it('collects the full subtree including the root id', () => {
     expect(subtreeIds(TREE, 'cards')).toEqual(['cards', 'rare', 'regular']);
     expect(subtreeIds(TREE, 'games')).toEqual(['games']);
