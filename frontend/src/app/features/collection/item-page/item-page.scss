@@ -52,17 +52,13 @@
 }
 
 /**
- * Not owned yet: the photographs lose their colour, the same cue the grid card
- * uses, so an item reads the same way wherever you meet it.
- *
- * Deliberately no fade to go with it, unlike the card. There, the picture is a
- * thumbnail among many and dimming helps it recede; here it is the subject of
- * the page, and dimming a close-up reads as "unavailable" rather than "wanted"
- * — which would be wrong, since a wantlist entry is precisely what the user is
- * still after.
+ * Not owned yet: drained of colour and faded, the same pair of cues the grid
+ * card uses and at the same strength, so an item looks identical wherever you
+ * meet it.
  */
 .wanted {
   filter: grayscale(1);
+  opacity: 0.55;
 }
 
 .thumb {
@@ -78,8 +74,13 @@
     cursor: pointer;
   }
 
+  /** Thicker as well as accented: a filter applies to the whole element, border
+      included, so on a wantlist item's greyed thumbnails colour alone would no
+      longer say which one is selected. Width survives any filter, and
+      border-box keeps it from shifting the picture. */
   &--active {
     border-color: var(--accent);
+    border-width: 2px;
   }
 
   &--add {
