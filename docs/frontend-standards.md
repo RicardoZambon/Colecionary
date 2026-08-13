@@ -116,7 +116,7 @@ All are exported from `shared/ui/index.ts`.
 | Section label | `ui-section-label` | content-projected mono uppercase micro-heading |
 | Dropdown | `ui-dropdown` | `width`; project trigger via `[ddTrigger]`, panel via `[ddPanel]`; call `close()` from panel handlers |
 | Image slot | `ui-image-slot` | `src`, `focal` (CSS `background-position`), `placeholder`, `reframable`; outputs `fileSelected(File)`, `reframeRequested()` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
-| Image focus | `ui-image-focus` | none — global outlet in the shell, driven by `ImageFocusService`; the focal-point editor (drag or arrow keys, live previews of every surface) |
+| Image focus | `ui-image-focus` | none — global outlet in the shell, driven by `ImageFocusService`; the focal-point editor (drag or arrow keys, live previews of the surfaces that match the image's `usage`) |
 | Toast | `ui-toast` | none — global outlet in the shell, driven by `ToastService.flash()` |
 | Money pipe | `\| money` | formats numbers as `$1,234` |
 
@@ -152,8 +152,13 @@ style the same raw element the same way, that's the signal to promote it here.
   distinguishes an untouched image from one deliberately centred. The bytes are
   never modified, so an image id — and its `immutable`-cached URL — stays valid
   after reframing, and the edit is reversible. Uploads go through
-  `ImageFocusService.uploadAndFrame(file)`, which offers the editor once and is
-  skippable; `frame(id)` reopens it later.
+  `ImageFocusService.uploadAndFrame(file, usage)`, which offers the editor once
+  and is skippable; `frame(id, usage)` reopens it later. **`usage`
+  (`'item' | 'banner' | 'icon'`) is required** because it decides which surfaces
+  the editor previews: an item photo never appears in a collection banner, so
+  previewing that frame would invent a constraint the user doesn't have. A new
+  surface adds its ratio to the `SURFACES` map in `ui-image-focus` under the
+  usage that renders it.
 - **Export** goes through `ExportApi` (`core/api/export-api.ts`), which fetches
   `/api/export` as a `Blob` and hands it to a download anchor. Like `ImagesApi`
   it sits beside `VaultApi` rather than on it, because it deals in a binary

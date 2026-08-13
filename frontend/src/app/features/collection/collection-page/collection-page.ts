@@ -369,7 +369,7 @@ export class CollectionPage {
     const collection = this.collection();
     if (!collection) return;
     try {
-      const imageId = await this.focus.uploadAndFrame(file);
+      const imageId = await this.focus.uploadAndFrame(file, slot);
       await this.store.updateCollection({
         ...collection,
         bannerImageId: slot === 'banner' ? imageId : collection.bannerImageId,
@@ -385,7 +385,7 @@ export class CollectionPage {
   protected reframeCollectionImage(slot: 'banner' | 'icon'): void {
     const collection = this.collection();
     const imageId = slot === 'banner' ? collection?.bannerImageId : collection?.iconImageId;
-    if (imageId) void this.focus.frame(imageId);
+    if (imageId) void this.focus.frame(imageId, slot);
   }
 
   protected newGroupKeydown(event: KeyboardEvent): void {

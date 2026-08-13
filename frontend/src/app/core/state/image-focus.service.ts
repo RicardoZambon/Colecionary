@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { ImagesApi } from '../api/images-api';
-import { FocalPoint } from '../models';
+import { FocalPoint, ImageUsage } from '../models';
 import { focalToPosition } from '../utils/focal.util';
 import { ToastService } from './toast.service';
 
@@ -9,6 +9,8 @@ import { ToastService } from './toast.service';
 export interface FramingRequest {
   imageId: string;
   url: string;
+  /** Decides which surfaces the editor previews. */
+  usage: ImageUsage;
 }
 
 /**
@@ -57,14 +59,18 @@ export class ImageFocusService {
     return focalToPosition(id ? this.focals().get(id) : null);
   }
 
-  /** Opens the editor for an existing image; resolves when it closes. */
-  frame(imageId: string): Promise<void> {
+  /**
+   * Opens the editor for an existing image; resolves when it closes.
+   * `usage` says what the image is for, so the editor previews only the
+   * surfaces that will actually show it.
+   */
+  frame(imageId: string, usage: ImageUsage): Promise<void> {
     const url = this.images.url(imageId);
     if (!url) return Promise.resolve();
 
     // Two overlays at once would strand the first promise unresolved.
     this.close();
-    this.request.set({ imageId, url });
+    this.request.set({ imageId, url, usage });
     return new Promise<void>(resolve => {
       this.settle = resolve;
     });
@@ -75,9 +81,9 @@ export class ImageFocusService {
    * The framing step is skippable: closing without choosing leaves the image
    * unframed and centred, which is exactly how it behaved before this existed.
    */
-  async uploadAndFrame(file: File): Promise<string> {
+  async uploadAndFrame(file: File, usage: ImageUsage): Promise<string> {
     const id = await this.images.upload(file);
-    await this.frame(id);
+    await this.frame(id, usage);
     return id;
   }
 

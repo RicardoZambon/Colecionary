@@ -45,7 +45,7 @@ describe('ImageFocusService', () => {
 
   it('applies the new framing immediately, before the write lands', async () => {
     const { focus, http } = setup();
-    void focus.frame('a');
+    void focus.frame('a', 'item');
     const saved = focus.save({ x: 0.1, y: 0.2 });
 
     // Not waiting on the network: the overlay closes and every surface repaints
@@ -60,12 +60,12 @@ describe('ImageFocusService', () => {
   it('rolls the framing back when the write fails', async () => {
     const { focus, http } = setup();
 
-    void focus.frame('a');
+    void focus.frame('a', 'item');
     const first = focus.save({ x: 0.3, y: 0.3 });
     http.expectOne(focalUrl('a')).flush({ id: 'a', contentType: 'image/png', focal: null });
     await first;
 
-    void focus.frame('a');
+    void focus.frame('a', 'item');
     const second = focus.save({ x: 0.8, y: 0.8 });
     http.expectOne(focalUrl('a')).flush('nope', { status: 500, statusText: 'Server Error' });
     await second;
@@ -78,12 +78,12 @@ describe('ImageFocusService', () => {
   it('clears framing back to centred on reset', async () => {
     const { focus, http } = setup();
 
-    void focus.frame('a');
+    void focus.frame('a', 'item');
     const saved = focus.save({ x: 0.3, y: 0.3 });
     http.expectOne(focalUrl('a')).flush({ id: 'a', contentType: 'image/png', focal: null });
     await saved;
 
-    void focus.frame('a');
+    void focus.frame('a', 'item');
     const cleared = focus.reset();
     const request = http.expectOne(focalUrl('a'));
     expect(request.request.body).toEqual({ focal: null });
@@ -96,8 +96,8 @@ describe('ImageFocusService', () => {
   it('resolves a pending frame request when a second one replaces it', async () => {
     const { focus } = setup();
 
-    const first = focus.frame('a');
-    void focus.frame('b');
+    const first = focus.frame('a', 'item');
+    void focus.frame('b', 'item');
 
     // Otherwise an upload awaiting the first editor would hang forever.
     await expect(first).resolves.toBeUndefined();

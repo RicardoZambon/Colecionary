@@ -22,3 +22,13 @@ export interface ImageMeta {
   contentType: string;
   focal: FocalPoint | null;
 }
+
+/**
+ * What an image is being used for, which decides the shapes it gets cropped to.
+ *
+ * An item photo never appears in a collection banner, and a banner never
+ * appears in an item card — so the framing editor previews only the surfaces
+ * that will actually show this picture. Showing the others would imply a
+ * trade-off the user does not have to make.
+ */
+export type ImageUsage = 'item' | 'banner' | 'icon';

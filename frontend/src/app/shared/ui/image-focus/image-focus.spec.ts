@@ -4,6 +4,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { ImageUsage } from '../../../core/models';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { UiImageFocus } from './image-focus';
 
@@ -19,11 +20,15 @@ function mount() {
   return {
     fixture,
     focus,
-    open: (id = 'img-1') => {
-      const closed = focus.frame(id);
+    open: (id = 'img-1', usage: ImageUsage = 'item') => {
+      const closed = focus.frame(id, usage);
       fixture.detectChanges();
       return closed;
     },
+    previewLabels: (): string[] =>
+      [...fixture.nativeElement.querySelectorAll('.preview__label')].map((el: Element) =>
+        (el.textContent ?? '').trim(),
+      ),
     target: () => fixture.nativeElement.querySelector('.target') as HTMLButtonElement,
     press: (key: string, shiftKey = false) => {
       const el = fixture.nativeElement.querySelector('.target') as HTMLButtonElement;
@@ -119,6 +124,31 @@ describe('UiImageFocus', () => {
     // The upload flow awaits this; leaving it unresolved would hang the save.
     await expect(closed).resolves.toBeUndefined();
     expect(ui.fixture.nativeElement.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('previews only the surfaces that will show an item photo', () => {
+    const ui = mount();
+    ui.open('img-1', 'item');
+
+    // A collection banner never renders an item photo, so previewing one would
+    // invent a constraint the user does not actually have to satisfy.
+    expect(ui.previewLabels()).toEqual(['Item card', 'Item gallery']);
+  });
+
+  it('previews the banner surfaces, with the header overlap, for a banner', () => {
+    const ui = mount();
+    ui.open('img-1', 'banner');
+
+    expect(ui.previewLabels()).toEqual(['Collection banner', 'Dashboard card']);
+    // The page header hides the banner's bottom; the preview has to say so.
+    expect(ui.fixture.nativeElement.querySelectorAll('.preview__covered').length).toBe(1);
+  });
+
+  it('previews just the square for a collection icon', () => {
+    const ui = mount();
+    ui.open('img-1', 'icon');
+
+    expect(ui.previewLabels()).toEqual(['Collection icon']);
   });
 
   it('follows a pointer drag across the picture', () => {

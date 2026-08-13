@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 
 import { ImageFocusService } from '../../../core/state/image-focus.service';
-import { FocalPoint } from '../../../core/models';
+import { FocalPoint, ImageUsage } from '../../../core/models';
 import { clampFocal, focalFromPoint, focalToPosition } from '../../../core/utils/focal.util';
 import { UiButton } from '../button/button';
 
@@ -18,17 +18,34 @@ import { UiButton } from '../button/button';
 const STEP = 0.01;
 const COARSE_STEP = 0.1;
 
+interface Surface {
+  label: string;
+  ratio: number;
+  /** Reproduces the page header that covers the collection banner's bottom. */
+  banner?: boolean;
+}
+
 /**
- * The surfaces that crop this image, at their real aspect ratios. Previewing
- * all of them at once is the whole point: one focal point has to satisfy every
- * one, so the user needs to see the trade-off as they make it.
+ * The surfaces that crop an image, by what the image is for, at their real
+ * aspect ratios.
+ *
+ * Previewing every surface of a usage at once is the point: one focal point has
+ * to satisfy all of them, so the user needs to see the trade-off as they make
+ * it. Previewing surfaces of *other* usages would be worse than useless — an
+ * item photo never appears in a collection banner, so showing that frame would
+ * invent a constraint the user does not have.
  */
-const SURFACES: readonly { label: string; ratio: number; banner?: boolean }[] = [
-  { label: 'Item card', ratio: 215 / 116 },
-  { label: 'Item gallery', ratio: 380 / 300 },
-  { label: 'Dashboard card', ratio: 330 / 70 },
-  { label: 'Collection banner', ratio: 1000 / 150, banner: true },
-];
+const SURFACES: Record<ImageUsage, readonly Surface[]> = {
+  item: [
+    { label: 'Item card', ratio: 215 / 116 },
+    { label: 'Item gallery', ratio: 380 / 300 },
+  ],
+  banner: [
+    { label: 'Collection banner', ratio: 1000 / 150, banner: true },
+    { label: 'Dashboard card', ratio: 330 / 70 },
+  ],
+  icon: [{ label: 'Collection icon', ratio: 1 }],
+};
 
 /**
  * Editor for an image's focal point — which part of the picture every surface
@@ -77,7 +94,7 @@ const SURFACES: readonly { label: string; ratio: number; banner?: boolean }[] = 
           </div>
 
           <div class="previews">
-            @for (surface of surfaces; track surface.label) {
+            @for (surface of surfaces(); track surface.label) {
               <div class="preview">
                 <span class="preview__label">{{ surface.label }}</span>
                 <div
@@ -264,7 +281,12 @@ const SURFACES: readonly { label: string; ratio: number; banner?: boolean }[] = 
 })
 export class UiImageFocus {
   protected readonly focus = inject(ImageFocusService);
-  protected readonly surfaces = SURFACES;
+
+  /** Only the surfaces that will actually show the image being framed. */
+  protected readonly surfaces = computed(() => {
+    const open = this.focus.pending();
+    return open ? SURFACES[open.usage] : [];
+  });
 
   private readonly source = viewChild<ElementRef<HTMLImageElement>>('source');
   private readonly target = viewChild<ElementRef<HTMLButtonElement>>('target');

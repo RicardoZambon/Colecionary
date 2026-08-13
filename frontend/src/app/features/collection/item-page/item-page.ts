@@ -131,7 +131,7 @@ export class ItemPage {
       const file = picker.files?.[0];
       if (!file) return;
       try {
-        const imageId = await this.focus.uploadAndFrame(file);
+        const imageId = await this.focus.uploadAndFrame(file, 'item');
         await this.store.upsertItem(this.collectionId(), {
           ...item,
           photoIds: [...item.photoIds, imageId],
@@ -147,7 +147,7 @@ export class ItemPage {
 
   /** Reopens the editor for an existing photo — framing is never final. */
   protected reframe(imageId: string): void {
-    void this.focus.frame(imageId);
+    void this.focus.frame(imageId, 'item');
   }
 
   protected async markOwned(): Promise<void> {

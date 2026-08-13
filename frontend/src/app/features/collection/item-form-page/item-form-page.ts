@@ -151,7 +151,7 @@ export class ItemFormPage {
         // one drop would be hostile. The rest land centred and can be adjusted
         // from the grid whenever the user wants.
         const imageId =
-          index === 0 ? await this.focus.uploadAndFrame(file) : await this.images.upload(file);
+          index === 0 ? await this.focus.uploadAndFrame(file, 'item') : await this.images.upload(file);
         this.photoIds.update(ids => [...ids, imageId]);
       }
     } catch (err) {
@@ -167,7 +167,7 @@ export class ItemFormPage {
 
   /** Reopens the editor for a photo already on the item. */
   protected reframe(imageId: string): void {
-    void this.focus.frame(imageId);
+    void this.focus.frame(imageId, 'item');
   }
 
   // --- copies ---
