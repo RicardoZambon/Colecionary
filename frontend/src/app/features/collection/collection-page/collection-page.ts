@@ -370,6 +370,9 @@ export class CollectionPage {
     if (!collection) return;
     try {
       const imageId = await this.focus.uploadAndFrame(file, slot);
+      // Discarded in the editor: the picture that was there stays there.
+      if (!imageId) return;
+
       await this.store.updateCollection({
         ...collection,
         bannerImageId: slot === 'banner' ? imageId : collection.bannerImageId,

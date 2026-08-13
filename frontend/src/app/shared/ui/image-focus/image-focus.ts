@@ -70,7 +70,12 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
       <div class="panel" role="dialog" aria-modal="true" aria-label="Choose what to show">
         <header>
           <h2>Choose what to show</h2>
-          <p>Drag the target onto what matters. Every size crops around it.</p>
+          <p>
+            Drag the target onto what matters. Every size crops around it.
+            @if (focus.isNew()) {
+              Discarding leaves the picture unchanged.
+            }
+          </p>
         </header>
 
         <div class="body">
@@ -120,8 +125,12 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
         <footer>
           <span class="coords">{{ targetLabel() }}</span>
           <div class="actions">
-            <ui-button variant="ghost" (click)="reset()">Reset</ui-button>
-            <ui-button variant="ghost" (click)="cancel()">Cancel</ui-button>
+            <ui-button variant="ghost" (click)="reset()">
+              {{ focus.isNew() ? 'Use centred' : 'Reset' }}
+            </ui-button>
+            <ui-button variant="ghost" (click)="cancel()">
+              {{ focus.isNew() ? 'Discard upload' : 'Cancel' }}
+            </ui-button>
             <ui-button variant="primary" (click)="save()">Save framing</ui-button>
           </div>
         </footer>

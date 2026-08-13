@@ -122,7 +122,9 @@ describe('UiImageFocus', () => {
     ui.fixture.detectChanges();
 
     // The upload flow awaits this; leaving it unresolved would hang the save.
-    await expect(closed).resolves.toBeUndefined();
+    // It must report a cancel, not a silent close — that distinction is what
+    // stops a discarded upload from replacing the picture anyway.
+    await expect(closed).resolves.toEqual({ status: 'cancelled' });
     expect(ui.fixture.nativeElement.querySelector('[role="dialog"]')).toBeNull();
   });
 

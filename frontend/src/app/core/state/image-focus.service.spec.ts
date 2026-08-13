@@ -100,7 +100,66 @@ describe('ImageFocusService', () => {
     void focus.frame('b', 'item');
 
     // Otherwise an upload awaiting the first editor would hang forever.
-    await expect(first).resolves.toBeUndefined();
+    await expect(first).resolves.toEqual({ status: 'cancelled' });
     expect(focus.pending()?.imageId).toBe('b');
+  });
+
+  describe('uploadAndFrame', () => {
+    const file = () => new File([new Uint8Array([1, 2, 3])], 'photo.png', { type: 'image/png' });
+
+    /** The upload is issued after the editor's promise resumes, a tick later. */
+    const settled = () => new Promise(resolve => setTimeout(resolve, 0));
+
+    it('uploads nothing at all when the editor is discarded', async () => {
+      const { focus, http } = setup();
+      const pending = focus.uploadAndFrame(file(), 'item');
+
+      focus.close();
+      await settled();
+
+      // The whole point of framing before uploading: a discarded picture leaves
+      // no bytes on a server that has no way to delete them.
+      await expect(pending).resolves.toBeNull();
+      http.expectNone(`${environment.apiBaseUrl}/images`);
+    });
+
+    it('uploads and stores the framing once the user commits', async () => {
+      const { focus, http } = setup();
+      const pending = focus.uploadAndFrame(file(), 'item');
+
+      void focus.save({ x: 0.2, y: 0.4 });
+      await settled();
+
+      http.expectOne(`${environment.apiBaseUrl}/images`).flush({ id: 'new' });
+      await settled();
+      const write = http.expectOne(focalUrl('new'));
+      expect(write.request.body).toEqual({ focal: { x: 0.2, y: 0.4 } });
+      write.flush({ id: 'new', contentType: 'image/png', focal: { x: 0.2, y: 0.4 } });
+
+      await expect(pending).resolves.toBe('new');
+      expect(focus.position('new')).toBe('20% 40%');
+    });
+
+    it('uploads without a framing write when the user keeps it centred', async () => {
+      const { focus, http } = setup();
+      const pending = focus.uploadAndFrame(file(), 'item');
+
+      void focus.reset();
+      await settled();
+
+      http.expectOne(`${environment.apiBaseUrl}/images`).flush({ id: 'new' });
+      await settled();
+      // Centred is the stored default, so there is nothing to write.
+      http.expectNone(focalUrl('new'));
+      await expect(pending).resolves.toBe('new');
+    });
+
+    it('knows a picked file is not saved anywhere yet', () => {
+      const { focus } = setup();
+      void focus.uploadAndFrame(file(), 'item');
+
+      expect(focus.isNew()).toBe(true);
+      expect(focus.pending()?.imageId).toBeNull();
+    });
   });
 });

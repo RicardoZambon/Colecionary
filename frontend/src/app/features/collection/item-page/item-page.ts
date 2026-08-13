@@ -132,6 +132,9 @@ export class ItemPage {
       if (!file) return;
       try {
         const imageId = await this.focus.uploadAndFrame(file, 'item');
+        // Discarded in the editor: nothing is added to the item.
+        if (!imageId) return;
+
         await this.store.upsertItem(this.collectionId(), {
           ...item,
           photoIds: [...item.photoIds, imageId],

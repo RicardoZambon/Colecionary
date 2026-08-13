@@ -152,8 +152,15 @@ style the same raw element the same way, that's the signal to promote it here.
   distinguishes an untouched image from one deliberately centred. The bytes are
   never modified, so an image id — and its `immutable`-cached URL — stays valid
   after reframing, and the edit is reversible. Uploads go through
-  `ImageFocusService.uploadAndFrame(file, usage)`, which offers the editor once
-  and is skippable; `frame(id, usage)` reopens it later. **`usage`
+  `ImageFocusService.uploadAndFrame(file, usage)`, which frames a **local object
+  url and only uploads once the user commits** — there is no delete endpoint, so
+  uploading first would strand a file every time someone changed their mind. It
+  returns the new id, or **`null` if the user discarded**; every call site must
+  treat null as "do nothing", or cancelling still replaces the picture.
+  `frame(id, usage)` reopens the editor for an image that already exists.
+  Discarding and choosing "centred" are deliberately distinct outcomes
+  (`FramingResult`): collapsing them is what made a cancelled upload apply
+  anyway. **`usage`
   (`'item' | 'banner' | 'icon'`) is required** because it decides which surfaces
   the editor previews: an item photo never appears in a collection banner, so
   previewing that frame would invent a constraint the user doesn't have. A new

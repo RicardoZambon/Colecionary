@@ -151,7 +151,13 @@ export class ItemFormPage {
         // one drop would be hostile. The rest land centred and can be adjusted
         // from the grid whenever the user wants.
         const imageId =
-          index === 0 ? await this.focus.uploadAndFrame(file, 'item') : await this.images.upload(file);
+          index === 0
+            ? await this.focus.uploadAndFrame(file, 'item')
+            : await this.images.upload(file);
+        // Discarded in the editor: skip this one, but a batch's remaining
+        // photos were still picked deliberately, so they carry on.
+        if (!imageId) continue;
+
         this.photoIds.update(ids => [...ids, imageId]);
       }
     } catch (err) {
