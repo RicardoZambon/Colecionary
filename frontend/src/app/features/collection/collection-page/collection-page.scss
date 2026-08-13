@@ -13,10 +13,10 @@
   border-radius: var(--radius);
   overflow: hidden;
 
+  /* No radius of its own: the banner is already a rounded clipping box. */
   &__fade {
     position: absolute;
     inset: 0;
-    border-radius: var(--radius);
     background: linear-gradient(
       180deg,
       rgba(0, 0, 0, 0) 30%,
@@ -262,15 +262,24 @@
     border-bottom: var(--bw) solid var(--border);
     position: relative;
 
+    /** Not owned yet: faded, and the photograph drained of colour so a wantlist
+        entry reads as one at a glance, across a grid, without counting badges. */
     &.dim {
       opacity: 0.55;
+
+      /* Only the photograph — the field chip sitting on top of it still needs
+         its accent to read as a value rather than as something disabled. */
+      .cover {
+        filter: grayscale(1);
+      }
     }
 
+    /** Framing comes in as an inline background-position, always set (centred
+        when the image was never framed), so declaring one here would be dead. */
     .cover {
       position: absolute;
       inset: 0;
       background-size: cover;
-      background-position: center;
     }
   }
 
