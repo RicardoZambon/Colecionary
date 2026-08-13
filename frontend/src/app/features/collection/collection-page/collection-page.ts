@@ -1,12 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { ImagesApi } from '../../../core/api/images-api';
-import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
-import { CONDITIONS, Condition, GroupNode, GroupSort, Item } from '../../../core/models';
-import { isOwned, ownedValue } from '../../../core/utils/copies.util';
+import { Condition, GroupNode, GroupSort, Item } from '../../../core/models';
+import { isOwned } from '../../../core/utils/copies.util';
+import { UNGROUPED_ID, scopeStats, statsIndex } from '../../../core/utils/group-stats.util';
 import {
   childrenOf,
   fieldsFor,
@@ -15,80 +14,56 @@ import {
   sortFor,
   subtreeIds,
 } from '../../../core/utils/groups.util';
+import { ChildChip } from './group-breadcrumb/group-breadcrumb';
 import {
   DEFAULT_SORT,
   applyManualOrder,
   customFieldName,
-  fieldValue,
   moveInList,
-  sortChoices,
   sortItems,
-  sortLabel,
 } from '../../../core/utils/sort.util';
-import { itemBadgeLabel, itemTone } from '../../../shared/ui/badge/badge';
-import { MoneyPipe } from '../../../shared/pipes/money.pipe';
+import { CollectionHero } from './collection-hero/collection-hero';
+import { CollectionFilters, OwnFilter } from './collection-toolbar/collection-filters';
+import { CollectionToolbar } from './collection-toolbar/collection-toolbar';
+import { GroupBreadcrumb } from './group-breadcrumb/group-breadcrumb';
+import { GroupDashboard } from './group-dashboard/group-dashboard';
+import { GroupTree } from './group-tree/group-tree';
+import { ItemGrid } from './item-grid/item-grid';
+import { ItemList } from './item-list/item-list';
+import { ViewMode, resolveView, viewParam } from './view-mode';
 import {
-  UiAvatarStack,
-  UiBadge,
-  UiButton,
-  UiCard,
-  UiChip,
-  UiDropdown,
-  UiImageSlot,
-  UiProgress,
-  UiReorder,
-} from '../../../shared/ui';
-
-type ViewMode = 'grid' | 'list';
-type OwnFilter = 'owned' | 'wanted' | null;
-
-interface GroupChip {
-  id: string | null;
-  label: string;
-  count: string | null;
-  selected: boolean;
-  onPath: boolean;
-}
-
-/** A row in the sort menu. A null `sort` means "follow the group's default". */
-interface SortMenuOption {
-  id: string;
-  label: string;
-  sort: GroupSort | null;
-}
-
-const GROUP_DEFAULT_ID = 'group';
-
-function sortId(sort: GroupSort): string {
-  return `${sort.by}|${sort.direction}`;
-}
+  initialExpanded,
+  readCollapsed,
+  readExpanded,
+  writeCollapsed,
+  writeExpanded,
+} from './tree-prefs';
 
 /** Reordering writes the whole collection back, so coalesce rapid drags. */
 const ORDER_DEBOUNCE_MS = 400;
+
+/** Below this the shell's own 226px sidebar leaves no room for a second column. */
+const WIDE_ENOUGH = '(min-width: 1200px)';
 
 @Component({
   selector: 'app-collection-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
-    MoneyPipe,
-    UiAvatarStack,
-    UiBadge,
-    UiButton,
-    UiCard,
-    UiChip,
-    UiDropdown,
-    UiImageSlot,
-    UiProgress,
-    UiReorder,
+    CollectionHero,
+    CollectionFilters,
+    CollectionToolbar,
+    GroupBreadcrumb,
+    GroupDashboard,
+    GroupTree,
+    ItemGrid,
+    ItemList,
   ],
   templateUrl: './collection-page.html',
   styleUrl: './collection-page.scss',
 })
 export class CollectionPage {
   protected readonly store = inject(VaultStore);
-  protected readonly images = inject(ImagesApi);
-  protected readonly focus = inject(ImageFocusService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -97,15 +72,16 @@ export class CollectionPage {
   readonly collectionId = input.required<string>();
   /** Selected group id — lives in the URL so back/refresh keep context. */
   readonly g = input<string | undefined>(undefined);
+  /** Chosen view. Absent means "derive it from whether this group has children". */
+  readonly v = input<string | undefined>(undefined);
 
-  protected readonly conditions = CONDITIONS;
   protected readonly condition = signal<Condition | null>(null);
   protected readonly own = signal<OwnFilter>(null);
   /** Null means "use the selected group's configured order". */
   protected readonly sortOverride = signal<GroupSort | null>(null);
-  protected readonly view = signal<ViewMode>('grid');
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
-  protected readonly dragIndex = signal<number | null>(null);
+  protected readonly treeExpanded = signal<ReadonlySet<string>>(new Set());
+  protected readonly treeCollapsed = signal(false);
 
   /**
    * Item order held locally while a manual reorder is being saved, so a drag
@@ -114,13 +90,46 @@ export class CollectionPage {
    */
   private readonly pendingOrder = signal<{ id: string; items: Item[] } | null>(null);
   private orderTimer: ReturnType<typeof setTimeout> | undefined;
+  private restoredFor: string | null = null;
 
   constructor() {
     // Each group carries its own default; a pick made in one group shouldn't
-    // leak into the next.
+    // leak into the next. The view mode deliberately does NOT reset — it is a
+    // preference of the user's, not of the group's.
     effect(() => {
       this.g();
       this.sortOverride.set(null);
+    });
+
+    // Restore the tree once per collection, seeding it with the path to the
+    // group in the URL so it opens showing where you are.
+    effect(() => {
+      const collection = this.collection();
+      if (!collection || this.restoredFor === collection.id) return;
+      this.restoredFor = collection.id;
+
+      const known = new Set(collection.groups.map(group => group.id));
+      const path = pathOf(collection.groups, this.g() ?? null).map(node => node.id);
+      this.treeExpanded.set(initialExpanded(readExpanded(collection.id), path, known));
+      this.treeCollapsed.set(readCollapsed() ?? !matchMedia(WIDE_ENOUGH).matches);
+    });
+
+    // Opening a group unfolds it in the tree. With the panel on screen the
+    // breadcrumb stops carrying the sub-groups, so a node that stayed folded
+    // would leave no way down at all. The early return is what stops this
+    // effect from re-triggering on the write it makes.
+    effect(() => {
+      const collection = this.collection();
+      const id = this.g();
+      if (!collection || !id || id === UNGROUPED_ID) return;
+
+      const ids = pathOf(collection.groups, id).map(group => group.id);
+      const current = this.treeExpanded();
+      if (!ids.length || ids.every(each => current.has(each))) return;
+
+      const next = new Set(current);
+      for (const each of ids) next.add(each);
+      this.setTreeExpanded(next);
     });
   }
 
@@ -131,29 +140,6 @@ export class CollectionPage {
     this.g() ? pathOf(this.groups(), this.g()!) : [],
   );
 
-  protected readonly title = computed(() => {
-    const collection = this.collection();
-    if (!collection) return '';
-    const names = this.selectedPath().map(g => g.name);
-    const shown = names.length > 2 ? ['…', ...names.slice(-2)] : names;
-    return shown.length ? `${collection.name} / ${shown.join(' / ')}` : collection.name;
-  });
-
-  protected readonly ownedCount = computed(
-    () => this.collection()?.items.filter(isOwned).length ?? 0,
-  );
-  protected readonly ownedPct = computed(() => {
-    const total = this.collection()?.items.length ?? 0;
-    return total ? Math.round((this.ownedCount() / total) * 100) : 0;
-  });
-  protected readonly totalCopies = computed(
-    () => this.collection()?.items.reduce((acc, i) => acc + i.copies.length, 0) ?? 0,
-  );
-  /** Estimated value of the copies actually held — wanted items count for nothing. */
-  protected readonly totalValue = computed(
-    () => this.collection()?.items.reduce((acc, i) => acc + ownedValue(i), 0) ?? 0,
-  );
-
   protected readonly headerMembers = computed(() => {
     const collection = this.collection();
     if (!collection) return [];
@@ -161,37 +147,61 @@ export class CollectionPage {
     return owner ? [owner, ...collection.members] : collection.members;
   });
 
-  protected readonly chips = computed<GroupChip[]>(() => {
+  /** The collection's items, preferring an unsaved manual reorder. */
+  private readonly sourceItems = computed(() => {
     const collection = this.collection();
     if (!collection) return [];
-    const groups = this.groups();
-    const current = this.selectedGroup();
-    const path = this.selectedPath();
+    const pending = this.pendingOrder();
+    return pending?.id === collection.id ? pending.items : collection.items;
+  });
 
-    const chipFor = (node: GroupNode): GroupChip => {
-      const selected = current?.id === node.id;
-      const ids = new Set(subtreeIds(groups, node.id));
+  /**
+   * Every group's aggregates, computed once and passed down. The tree and the
+   * dashboard both want per-node numbers; resolving a subtree per node instead
+   * would make the whole page O(groups × items).
+   */
+  protected readonly stats = computed(() => statsIndex(this.groups(), this.sourceItems()));
+
+  /** What the header describes: the open group, or the whole collection. */
+  protected readonly scope = computed(() => scopeStats(this.stats(), this.g() ?? null));
+  protected readonly total = computed(() => scopeStats(this.stats(), null));
+
+  protected readonly scopeName = computed(() => {
+    if (this.g() === UNGROUPED_ID) return 'No group';
+    return this.selectedGroup()?.name ?? '';
+  });
+
+  /**
+   * The path the breadcrumb shows. The unfiled bucket is not a real group, so
+   * `pathOf` knows nothing about it — without this the breadcrumb would sit on
+   * the collection root while the page showed something else.
+   */
+  protected readonly crumbPath = computed<GroupNode[]>(() => {
+    if (this.g() !== UNGROUPED_ID) return this.selectedPath();
+    return [{ id: UNGROUPED_ID, name: 'No group', parentId: null, fields: [], sort: null, target: null }];
+  });
+
+  protected readonly groupNames = computed(
+    () => new Map(this.groups().map(group => [group.id, group.name])),
+  );
+
+  /**
+   * The groups one level below whatever is open. The tree is the full map, but
+   * it is a panel the user can hide — and below 1200px it starts hidden — so
+   * the one hop that matters most stays on the breadcrumb strip itself, where
+   * the old chip row used to be.
+   */
+  protected readonly childChips = computed<ChildChip[]>(() => {
+    const stats = this.stats();
+    const parentId = this.g() === UNGROUPED_ID ? null : this.g() ?? null;
+    return childrenOf(this.groups(), parentId).map(node => {
+      const nodeStats = stats.get(node.id);
       return {
         id: node.id,
-        label: node.name + (childrenOf(groups, node.id).length ? ' ▸' : ''),
-        count: String(collection.items.filter(i => ids.has(i.groupId)).length),
-        selected,
-        onPath: !selected && path.some(p => p.id === node.id),
+        name: node.name,
+        count: nodeStats ? `${nodeStats.owned}/${nodeStats.denominator}` : '0/0',
       };
-    };
-
-    if (!current) {
-      return [
-        { id: null, label: 'All items', count: String(collection.items.length), selected: true, onPath: false },
-        ...childrenOf(groups, null).map(chipFor),
-      ];
-    }
-    const parent = current.parentId ? groupById(groups, current.parentId) : undefined;
-    return [
-      { id: parent?.id ?? null, label: `‹ ${parent?.name ?? 'All items'}`, count: null, selected: false, onPath: false },
-      chipFor(current),
-      ...childrenOf(groups, current.id).map(chipFor),
-    ];
+    });
   });
 
   /** Custom fields available in the current group, own plus inherited. */
@@ -204,21 +214,52 @@ export class CollectionPage {
   /** Set only while ordering by a custom field — drives the card chip. */
   protected readonly sortFieldName = computed(() => customFieldName(this.effectiveSort().by));
 
-  /** The collection's items, preferring an unsaved manual reorder. */
-  private readonly sourceItems = computed(() => {
-    const collection = this.collection();
-    if (!collection) return [];
-    const pending = this.pendingOrder();
-    return pending?.id === collection.id ? pending.items : collection.items;
+  protected readonly hasChildren = computed(() => {
+    const id = this.g() ?? null;
+    if (id === UNGROUPED_ID) return false;
+    return this.groups().some(group => group.parentId === id);
+  });
+
+  protected readonly searching = computed(() => this.store.query().trim().length > 0);
+
+  /**
+   * A search is about items, so it forces the grid — but only in what is
+   * rendered, never in the URL, so clearing the box restores the chosen view.
+   */
+  protected readonly view = computed<ViewMode>(() => {
+    const resolved = resolveView(this.v(), this.hasChildren());
+    return this.searching() && resolved === 'dashboard' ? 'grid' : resolved;
+  });
+
+  /** Items in the open scope, before the item-level filters narrow them. */
+  private readonly scopedItems = computed(() => {
+    const id = this.g();
+    if (!id) return this.sourceItems();
+    if (id === UNGROUPED_ID) {
+      const known = new Set(this.groups().map(group => group.id));
+      return this.sourceItems().filter(item => !known.has(item.groupId));
+    }
+    const subtree = new Set(subtreeIds(this.groups(), id));
+    return this.sourceItems().filter(item => subtree.has(item.groupId));
+  });
+
+  /**
+   * Items filed on the open group itself rather than in one of its children,
+   * so the dashboard can offer a way to see them. Empty at the collection
+   * root: nothing is filed "on" the root, and items with a blank group already
+   * have their own card, which this would otherwise double-count.
+   */
+  protected readonly directItems = computed(() => {
+    const id = this.g();
+    if (!id || id === UNGROUPED_ID) return [];
+    return this.sourceItems().filter(item => item.groupId === id);
   });
 
   protected readonly items = computed(() => {
-    const groupFilter = this.g() ? new Set(subtreeIds(this.groups(), this.g()!)) : null;
     const query = this.store.query().toLowerCase();
 
-    const filtered = this.sourceItems().filter(
+    const filtered = this.scopedItems().filter(
       item =>
-        (!groupFilter || groupFilter.has(item.groupId)) &&
         // An item matches a condition when any of its copies is in it.
         (!this.condition() || item.copies.some(c => c.condition === this.condition())) &&
         (!this.own() || (this.own() === 'owned' ? isOwned(item) : !isOwned(item))) &&
@@ -228,62 +269,7 @@ export class CollectionPage {
     return sortItems(filtered, this.effectiveSort(), this.groupFields());
   });
 
-  protected readonly sortOptions = computed<SortMenuOption[]>(() => {
-    const groupSort = this.groupSort();
-    const choices = sortChoices(this.groupFields()).map(choice => ({
-      id: sortId(choice),
-      label: choice.label,
-      sort: { by: choice.by, direction: choice.direction },
-    }));
-    return groupSort
-      ? [
-          {
-            id: GROUP_DEFAULT_ID,
-            label: `Group default — ${sortLabel(groupSort)}`,
-            sort: null,
-          },
-          ...choices,
-        ]
-      : choices;
-  });
-
-  protected readonly activeSortId = computed(() => {
-    const override = this.sortOverride();
-    if (override) return sortId(override);
-    return this.groupSort() ? GROUP_DEFAULT_ID : sortId(this.effectiveSort());
-  });
-
-  protected readonly sortLabel = computed(() => sortLabel(this.effectiveSort()));
-
-  // --- template helpers ---
-
-  protected groupName(item: Item): string {
-    return groupById(this.groups(), item.groupId)?.name ?? item.groupId;
-  }
-
-  protected badgeTone(item: Item) {
-    return itemTone(item);
-  }
-
-  protected badgeLabel(item: Item): string {
-    return itemBadgeLabel(item);
-  }
-
-  protected isOwned(item: Item): boolean {
-    return isOwned(item);
-  }
-
-  /** The sort field's value for an item, or null when there is nothing to show. */
-  protected fieldChip(item: Item): string | null {
-    const name = this.sortFieldName();
-    return name ? fieldValue(item, name) || null : null;
-  }
-
   // --- ordering ---
-
-  protected pickSort(option: SortMenuOption): void {
-    this.sortOverride.set(option.sort);
-  }
 
   /** Moves a visible item, leaving anything the filters hid where it is. */
   protected moveItem(from: number, to: number): void {
@@ -318,77 +304,26 @@ export class CollectionPage {
     }
   }
 
-  protected onDragStart(event: DragEvent, index: number): void {
-    if (!this.manual()) return;
-    this.dragIndex.set(index);
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', String(index));
-    }
-  }
-
-  protected onDragOver(event: DragEvent): void {
-    if (!this.manual() || this.dragIndex() === null) return;
-    // Without preventDefault the browser never fires a drop.
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-  }
-
-  protected onDrop(event: DragEvent, index: number): void {
-    if (!this.manual()) return;
-    event.preventDefault();
-    const from = this.dragIndex();
-    this.dragIndex.set(null);
-    if (from !== null) this.moveItem(from, index);
-  }
-
-  protected onDragEnd(): void {
-    this.dragIndex.set(null);
-  }
-
   // --- actions ---
 
-  protected selectChip(chip: GroupChip): void {
-    const target = chip.selected ? this.selectedGroup()?.parentId ?? null : chip.id;
+  protected setView(next: ViewMode): void {
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { g: target },
+      queryParams: { v: viewParam(next, this.hasChildren()) },
       queryParamsHandling: 'merge',
     });
   }
 
-  protected toggleCondition(value: Condition): void {
-    this.condition.update(current => (current === value ? null : value));
-  }
-
-  protected toggleOwn(value: Exclude<OwnFilter, null>): void {
-    this.own.update(current => (current === value ? null : value));
-  }
-
-  protected async setCollectionImage(slot: 'banner' | 'icon', file: File): Promise<void> {
+  protected setTreeExpanded(expanded: ReadonlySet<string>): void {
+    this.treeExpanded.set(expanded);
     const collection = this.collection();
-    if (!collection) return;
-    try {
-      const imageId = await this.focus.uploadAndFrame(file, slot);
-      // Discarded in the editor: the picture that was there stays there.
-      if (!imageId) return;
-
-      await this.store.updateCollection({
-        ...collection,
-        bannerImageId: slot === 'banner' ? imageId : collection.bannerImageId,
-        iconImageId: slot === 'icon' ? imageId : collection.iconImageId,
-      });
-      this.toast.flash('Image updated ✓');
-    } catch (err) {
-      this.toast.flash(err instanceof Error ? err.message : 'Upload failed');
-    }
+    if (collection) writeExpanded(collection.id, expanded);
   }
 
-  /** Reopens the editor for an image that is already in place. */
-  protected reframeCollectionImage(slot: 'banner' | 'icon'): void {
-    const collection = this.collection();
-    const imageId = slot === 'banner' ? collection?.bannerImageId : collection?.iconImageId;
-    if (imageId) void this.focus.frame(imageId, slot);
+  protected toggleTree(): void {
+    const collapsed = !this.treeCollapsed();
+    this.treeCollapsed.set(collapsed);
+    writeCollapsed(collapsed);
   }
 
   protected newGroupKeydown(event: KeyboardEvent): void {
@@ -398,6 +333,13 @@ export class CollectionPage {
       input.value = '';
       this.pendingGroupParent.set(null);
     }
+  }
+
+  protected startNewGroup(): void {
+    // A group created from inside the unfiled bucket belongs at the root:
+    // "no group" is not a parent anything can nest under.
+    const parentId = this.g() === UNGROUPED_ID ? null : this.selectedGroup()?.id ?? null;
+    this.pendingGroupParent.set({ parentId });
   }
 
   protected commitNewGroup(name: string): void {
@@ -412,6 +354,7 @@ export class CollectionPage {
       parentId: pending.parentId,
       fields: [],
       sort: null,
+      target: null,
     };
     void this.store
       .updateCollection({ ...collection, groups: [...collection.groups, node] })

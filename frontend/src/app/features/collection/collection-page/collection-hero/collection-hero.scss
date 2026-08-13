@@ -1,0 +1,151 @@
+@use '../../../../../styles/mixins' as *;
+
+:host {
+  display: block;
+}
+
+.banner {
+  height: 150px;
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+
+  /* No radius of its own: the banner is already a rounded clipping box. */
+  &__fade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0) 30%,
+      color-mix(in srgb, var(--bg) 72%, transparent) 74%,
+      var(--bg) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: -68px;
+  position: relative;
+  z-index: 2;
+  padding: 0 16px;
+
+  &__icon {
+    width: 80px;
+    height: 80px;
+    flex: none;
+    border-radius: var(--radius);
+    overflow: hidden;
+    outline: 3px solid var(--bg);
+    background: var(--panel2);
+    box-shadow: var(--shadow);
+  }
+
+  &__text {
+    flex: 1;
+    min-width: 240px;
+
+    h1 {
+      @include display-heading;
+      margin: 0;
+      text-shadow: 0 1px 3px var(--bg), 0 0 12px var(--bg), 0 0 24px var(--bg);
+    }
+
+    p {
+      font-size: 13px;
+      color: var(--text2);
+      margin: 6px 0 0;
+      text-shadow: 0 1px 3px var(--bg), 0 0 10px var(--bg);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+
+    > a:hover {
+      text-decoration: none;
+    }
+  }
+}
+
+.progress-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+  min-width: 210px;
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  background: var(--bg);
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+
+    .pct {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .copies-note {
+      color: var(--text2);
+    }
+
+    /* Says out loud that the denominator is only what has been catalogued, so
+       a 100% bar cannot be mistaken for a finished set. */
+    .soft-note {
+      color: var(--muted);
+    }
+  }
+
+  &__foot {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+
+    .missing {
+      color: var(--warn);
+    }
+
+    .complete {
+      color: var(--good);
+    }
+  }
+}
+
+.value-box {
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--text2);
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg);
+
+  .value {
+    color: var(--accent2);
+    font-weight: 700;
+  }
+}

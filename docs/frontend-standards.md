@@ -17,7 +17,9 @@ either the change is wrong or this document must be updated in the same PR.
 frontend/src/
 ├─ styles/
 │  ├─ _themes.scss          ← ALL design tokens (7 themes, CSS custom properties)
-│  └─ _mixins.scss          ← shared SCSS building blocks (panel, mono-label, stripes…)
+│  └─ _mixins.scss          ← shared SCSS building blocks (panel, mono-label, stripes,
+│                             wanted-photo — the grayscale+fade pair every unowned
+│                             photograph uses, on the card, the item page and the cover)
 ├─ app/
 │  ├─ core/                 ← framework-level, no UI
 │  │  ├─ models/            ← typed domain model (one file per entity + barrel)
@@ -104,14 +106,16 @@ All are exported from `shared/ui/index.ts`.
 | Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`; outputs `keydown`, `blurred` |
 | Textarea | `ui-textarea` | `value` (model), `rows`, `placeholder` |
 | Select | `ui-select` | `value` (model), `options: SelectOption[]`, `disabled`; add class `compact` for dense rows |
-| Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count` — content-projected label; attach `(click)` at usage site |
+| Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count`, `link` (router commands), `queryParams` — content-projected label. Renders a `<button>` by default (attach `(click)` at the usage site); with `link` it renders a real `<a>` instead, because a chip that navigates must survive middle-click and a button nested in an anchor is invalid |
 | Card | `ui-card` | `interactive` (hover affordance), `dashed` — the panel surface |
 | Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone(condition)` for one copy, `itemTone(item)` / `itemBadgeLabel(item)` for an item ("WANTED", "MINT", "MINT ×3") |
 | Toggle | `ui-toggle` | `on` (model) — rendered as `role="switch"` |
 | Tabs | `ui-tabs` | `tabs: TabDef[]`, `active` (model, required) |
 | Avatar | `ui-avatar` | `initials` (required), `size: 'sm' \| 'md' \| 'lg'` |
 | Avatar stack | `ui-avatar-stack` | `members: Member[]` (shows first 4, overlapped) |
-| Progress | `ui-progress` | `pct` (required, 0–100) |
+| Progress | `ui-progress` | `pct` (required, 0–100, clamped), `secondaryPct` (a dimmer hatched band drawn behind the fill — owned vs catalogued against one denominator), `size: 'sm' \| 'md'`, `label` (→ `aria-label`), `valueText` (→ `aria-valuetext`, e.g. "12 of 120 owned"). Two shades of one hue is a colour-only distinction, so always print the numbers beside the bar |
+| Mosaic | `ui-mosaic` | `tiles: MosaicTile[]` (`{ src, position }`, up to 4), `placeholder`, `dim` — a cover built from several photos, `aria-hidden` because the name belongs to the link wrapping it. Presentational: the page resolves ids through `ImagesApi`/`ImageFocusService`, as with `ui-image-slot` |
+| Icon | `ui-icon` | `name: 'home' \| 'grid' \| 'gear' \| 'diamond'` (required), `size`, `strokeWidth` — inline Feather-style SVG |
 | Reorder | `ui-reorder` | `label` (names the item for screen readers), `first`, `last`; output `moved(-1 | 1)` — the keyboard half of a drag-to-reorder list, absolutely positioned over a `position: relative` parent |
 | Section label | `ui-section-label` | content-projected mono uppercase micro-heading |
 | Dropdown | `ui-dropdown` | `width`; project trigger via `[ddTrigger]`, panel via `[ddPanel]`; call `close()` from panel handlers |
@@ -191,9 +195,19 @@ style the same raw element the same way, that's the signal to promote it here.
   `copyValue`, `ownedValue`, `paidTotal`, `sortValue`, `newCopy`,
   `syncWantedTag`). A copy's `value` is `null` when it inherits the item's —
   keep the null, it distinguishes "inherited" from "overridden".
-- **Groups declare typed fields and their own ordering.** A `GroupNode` carries
-  `fields: GroupField[]` (`{ name, type: 'text' | 'number' | 'date' }`) and
-  `sort: GroupSort | null` (`{ by, direction }`). `by` is a built-in key
+- **Groups declare typed fields, their own ordering, and optionally the size of
+  the set.** A `GroupNode` carries `fields: GroupField[]`
+  (`{ name, type: 'text' | 'number' | 'date' }`),
+  `sort: GroupSort | null` (`{ by, direction }`) and `target: number | null`.
+  `target` is how many items the complete set has — a 120-issue run, a 24-card
+  set — so a group's progress can be measured against the series and not merely
+  against what has been catalogued. **Null means "not declared"**, and the
+  denominator falls back to the catalogued count; keep the null, and note that
+  the field is required-nullable rather than optional precisely because the
+  collection is saved as a full-document PUT, where an `undefined` would
+  round-trip as a deletion. Every owned/missing/percentage figure comes from
+  `core/utils/group-stats.util.ts` — never count items inline, the same way
+  `sort.util.ts` owns comparison. `by` is a built-in key
   (`manual`, `added`, `name`, `value`, `year`) or `field:<field name>`; `null`
   means "inherit". Values still live on the item as `custom: CustomFieldValue[]`
   strings — the type belongs to the declaration, not the value, so retyping a

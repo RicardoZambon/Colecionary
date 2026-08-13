@@ -1,0 +1,114 @@
+@use '../../../../../styles/mixins' as *;
+
+.items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 15px;
+}
+
+.item-card {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+
+  &--wanted {
+    border-style: dashed;
+    border-color: var(--accent);
+  }
+
+  &__img {
+    height: 116px;
+    @include stripes;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    border-bottom: var(--bw) solid var(--border);
+    position: relative;
+
+    /** Not owned yet: faded, and the photograph drained of colour so a wantlist
+        entry reads as one at a glance, across a grid, without counting badges.
+        Same values as the `wanted-photo` mixin, deliberately split across two
+        selectors rather than using it: only the photograph is greyed, because
+        the field chip sitting on top of it still needs its accent to read as a
+        value rather than as something disabled. */
+    &.dim {
+      opacity: 0.55;
+
+      .cover {
+        filter: grayscale(1);
+      }
+    }
+
+    /** Framing comes in as an inline background-position, always set (centred
+        when the image was never framed), so declaring one here would be dead. */
+    .cover {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+    }
+  }
+
+  /** The value the list is ordered by, so it needn't be repeated in the name. */
+  &__img ui-badge {
+    position: absolute;
+    top: 7px;
+    left: 7px;
+    z-index: 1;
+    background: var(--panel);
+    text-transform: none;
+    font-size: 10px;
+  }
+
+  &__body {
+    padding: 11px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  &__name {
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+
+  &__meta {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  &__copies {
+    color: var(--accent2);
+    font-weight: 600;
+  }
+
+  &__foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2px;
+  }
+
+  &__value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+}
+
+.add-tile {
+  border: var(--bw) dashed var(--border);
+  border-radius: var(--radius);
+  display: grid;
+  place-items: center;
+  font-size: 12.5px;
+  color: var(--muted);
+  min-height: 180px;
+
+  &:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    text-decoration: none;
+  }
+}

@@ -72,3 +72,35 @@ export function flattenTree(groups: GroupNode[]): { node: GroupNode; depth: numb
   walk(null, 0);
   return out;
 }
+
+export interface TreeRow {
+  node: GroupNode;
+  depth: number;
+  hasChildren: boolean;
+}
+
+/**
+ * The rows a collapsible tree actually shows: depth-first, descending only into
+ * expanded nodes. Rendering these as one flat list with `aria-level` is the
+ * legal ARIA tree pattern and avoids recursive components, which are painful
+ * under OnPush with signal inputs.
+ *
+ * Unlike `flattenTree` this guards against a cycle: `parentId` carries no
+ * foreign key, so a node pointing at its own descendant is representable, and
+ * an unguarded walk would hang the render rather than fail.
+ */
+export function visibleTree(groups: GroupNode[], expanded: ReadonlySet<string>): TreeRow[] {
+  const out: TreeRow[] = [];
+  const seen = new Set<string>();
+  const walk = (parentId: string | null, depth: number) => {
+    for (const node of childrenOf(groups, parentId)) {
+      if (seen.has(node.id)) continue;
+      seen.add(node.id);
+      const hasChildren = childrenOf(groups, node.id).length > 0;
+      out.push({ node, depth, hasChildren });
+      if (hasChildren && expanded.has(node.id)) walk(node.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}

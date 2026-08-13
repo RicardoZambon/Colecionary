@@ -45,6 +45,20 @@ public sealed class GroupNodeDtoValidator : AbstractValidator<GroupNodeDto>
                 .WithMessage("Field type must be text, number or date.");
         });
 
+        // Null is "no declared target". Zero is not a series, and null is
+        // already the single way to say "unset". The upper bound is not a
+        // domain truth, it is a plausibility guard: a mistyped paste must not
+        // turn progress into a 0.000001% bar. A target BELOW the items already
+        // catalogued is allowed on purpose — groups and items arrive in the
+        // same document PUT, so cross-checking them would make declaring a
+        // target before cataloguing (the main use case) unsaveable, and would
+        // block the whole collection until the user deleted items. The overrun
+        // is a display concern, not a 400.
+        RuleFor(g => g.Target)
+            .InclusiveBetween(1, 100_000)
+            .When(g => g.Target.HasValue)
+            .WithMessage("Target must be between 1 and 100000, or null for no target.");
+
         When(g => g.Sort is not null, () =>
         {
             RuleFor(g => g.Sort!.Direction).Must(d => d is "asc" or "desc")

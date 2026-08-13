@@ -11,7 +11,7 @@ import {
   MemberRole,
   SortDirection,
 } from '../../../core/models';
-import { fieldsFor, flattenTree, sortFor, subtreeIds } from '../../../core/utils/groups.util';
+import { fieldsFor, flattenTree, pathOf, sortFor, subtreeIds } from '../../../core/utils/groups.util';
 import { fieldSortKey, sortByOptions, sortLabel } from '../../../core/utils/sort.util';
 import {
   SelectOption,
@@ -74,6 +74,12 @@ export class CollectionSettingsPage {
 
   readonly collectionId = input.required<string>();
   readonly tab = input<string>('general');
+  /**
+   * Narrows the groups tab to one branch. A collection with forty groups is
+   * unreadable as one flat indented list, and you almost always arrive here
+   * wanting to fix the part you were just looking at.
+   */
+  readonly g = input<string | undefined>(undefined);
 
   protected readonly tabs = TABS;
   protected readonly roleOptions = ROLE_OPTIONS;
@@ -103,31 +109,50 @@ export class CollectionSettingsPage {
     effect(() => this.activeTab.set(this.tab() || 'general'));
   }
 
+  /** The branch the groups tab is scoped to, when `?g=` names a real group. */
+  protected readonly scopeGroup = computed(() => {
+    const draft = this.draft();
+    const id = this.g();
+    if (!draft || !id) return null;
+    return draft.groups.find(group => group.id === id) ?? null;
+  });
+
   protected readonly groupRows = computed(() => {
     const draft = this.draft();
     if (!draft) return [];
-    return flattenTree(draft.groups).map(({ node, depth }) => {
-      // The picker offers inherited fields too — ordering by a field the
-      // parent declared is exactly what a sub-group usually wants.
-      const fields = fieldsFor(draft.groups, node.id);
-      const parentSort = node.parentId ? sortFor(draft.groups, node.parentId) : null;
-      return {
-        node,
-        depth,
-        count: draft.items.filter(i => new Set(subtreeIds(draft.groups, node.id)).has(i.groupId))
-          .length,
-        sortBy: node.sort?.by ?? INHERIT,
-        sortDirection: node.sort?.direction ?? 'asc',
-        showDirection: !!node.sort && node.sort.by !== 'manual',
-        sortByOptions: [
-          {
-            value: INHERIT,
-            label: parentSort ? `Inherited — ${sortLabel(parentSort)}` : 'Not set',
-          },
-          ...sortByOptions(fields),
-        ] satisfies SelectOption[],
-      };
-    });
+    const scope = this.scopeGroup();
+    const scoped = scope ? new Set(subtreeIds(draft.groups, scope.id)) : null;
+    // Indentation is relative to the branch, so a deeply nested group opens
+    // flush left instead of pushed halfway across the card for no reason.
+    const offset = scope ? pathOf(draft.groups, scope.id).length - 1 : 0;
+
+    return flattenTree(draft.groups)
+      .filter(({ node }) => !scoped || scoped.has(node.id))
+      .map(({ node, depth }) => {
+        // The picker offers inherited fields too — ordering by a field the
+        // parent declared is exactly what a sub-group usually wants.
+        const fields = fieldsFor(draft.groups, node.id);
+        const parentSort = node.parentId ? sortFor(draft.groups, node.parentId) : null;
+        return {
+          node,
+          depth: depth - offset,
+          count: draft.items.filter(i => new Set(subtreeIds(draft.groups, node.id)).has(i.groupId))
+            .length,
+          sortBy: node.sort?.by ?? INHERIT,
+          sortDirection: node.sort?.direction ?? 'asc',
+          // Empty string, not '0': the input must read as blank when no target
+          // is declared, and blank is what writes the null back.
+          target: node.target === null ? '' : String(node.target),
+          showDirection: !!node.sort && node.sort.by !== 'manual',
+          sortByOptions: [
+            {
+              value: INHERIT,
+              label: parentSort ? `Inherited — ${sortLabel(parentSort)}` : 'Not set',
+            },
+            ...sortByOptions(fields),
+          ] satisfies SelectOption[],
+        };
+      });
   });
 
   protected readonly memberRows = computed(() => {
@@ -230,6 +255,7 @@ export class CollectionSettingsPage {
       parentId: pending.parentId,
       fields: [],
       sort: null,
+      target: null,
     };
     this.mutate(d => ({ ...d, groups: [...d.groups, node] }));
     this.toast.flash(`Group "${trimmed}" added`);
@@ -296,6 +322,19 @@ export class CollectionSettingsPage {
     );
   }
 
+  // --- group target ---
+
+  /**
+   * Empty, non-numeric and non-positive all mean "no target". Keeping one
+   * representation of unset is what lets every surface treat a null denominator
+   * as "measure against what's catalogued" without a second special case.
+   */
+  protected setGroupTarget(groupId: string, raw: string): void {
+    const parsed = Number.parseInt(raw.trim(), 10);
+    const target = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    this.mutateGroup(groupId, g => ({ ...g, target }));
+  }
+
   // --- sharing ---
 
   protected invite(): void {
@@ -348,6 +387,10 @@ export class CollectionSettingsPage {
   protected async done(): Promise<void> {
     await this.persist();
     this.toast.flash('Collection updated ✓');
-    void this.router.navigate(['/c', this.collectionId()]);
+    // Back to the group you came from, not to the collection root — arriving
+    // here scoped and leaving unscoped loses your place.
+    void this.router.navigate(['/c', this.collectionId()], {
+      queryParams: this.g() ? { g: this.g() } : {},
+    });
   }
 }

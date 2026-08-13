@@ -53,12 +53,11 @@
 
 /**
  * Not owned yet: drained of colour and faded, the same pair of cues the grid
- * card uses and at the same strength, so an item looks identical wherever you
- * meet it.
+ * card and the group cover use and at the same strength, so an item looks
+ * identical wherever you meet it. The values live in the mixin.
  */
 .wanted {
-  filter: grayscale(1);
-  opacity: 0.55;
+  @include wanted-photo;
 }
 
 .thumb {

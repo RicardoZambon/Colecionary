@@ -1,0 +1,141 @@
+@use '../../../../../styles/mixins' as *;
+
+:host {
+  display: block;
+  @include panel;
+  padding: 12px 10px;
+  /* The scroll container is the shell's .main, so this holds position on a
+     long board without any change to the shell. */
+  position: sticky;
+  top: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 8px;
+
+  ui-section-label {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__collapse {
+    flex: none;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1;
+    padding: 2px 4px;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--accent);
+    }
+  }
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  border-radius: var(--radius);
+
+  /* The disclosure column is narrow and, on a leaf, empty. Highlighting the
+     whole row would paint that emptiness too, which at 240px reads as the
+     selected group being oddly indented. So selection lives on the link,
+     which starts exactly at the name. */
+  &__twisty {
+    width: 14px;
+    flex: none;
+    margin-top: 6px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--accent);
+    }
+
+    &--leaf {
+      cursor: default;
+    }
+  }
+
+  &__link {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 7px 6px;
+    border-radius: var(--radius);
+    color: inherit;
+
+    &:hover {
+      text-decoration: none;
+      background: var(--panel2);
+    }
+  }
+
+  &--selected .row__link {
+    background: var(--panel2);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+
+  &__top {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  &__name {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The bar says roughly; these say exactly. Both, because a 3px bar cannot
+     tell 1 of 2 from 8 of 16. */
+  &__count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    flex: none;
+  }
+
+  &__copies {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--accent2);
+    flex: none;
+  }
+
+  &--selected .row__name {
+    color: var(--accent);
+  }
+}
+
+.empty {
+  padding: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}

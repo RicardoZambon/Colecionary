@@ -27,7 +27,8 @@ public static class DtoMapper
         group.ParentId,
         [.. group.Fields.Select(f => new GroupFieldDto(f.Name, f.Type.ToString().ToLowerInvariant()))],
         // Both columns travel together; half a configuration is no configuration.
-        group.SortBy is null ? null : new GroupSortDto(group.SortBy, group.SortDirection ?? "asc"));
+        group.SortBy is null ? null : new GroupSortDto(group.SortBy, group.SortDirection ?? "asc"),
+        group.Target);
 
     public static ItemDto ToDto(this Item item) => new(
         item.Id,
@@ -81,6 +82,7 @@ public static class DtoMapper
         Fields = [.. dto.Fields.Select(f => new GroupField { Name = f.Name, Type = ParseGroupFieldType(f.Type) })],
         SortBy = dto.Sort?.By,
         SortDirection = dto.Sort?.Direction,
+        Target = dto.Target,
         SortOrder = sortOrder,
     };
 

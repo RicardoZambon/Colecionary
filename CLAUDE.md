@@ -96,14 +96,19 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    means owned, none means wantlist. Always go through the pure helpers in
    `core/utils/copies.util.ts` (backend mirror: `ItemCopy` in a `copies` JSON
    column).
-4. **Groups declare typed fields and their default order.** A `GroupNode`
-   carries `fields: GroupField[]` (`{ name, type: text|number|date }`) and
-   `sort: GroupSort | null`; field *values* stay on the item as `custom`
+4. **Groups declare typed fields, their default order, and optionally how big
+   the set is.** A `GroupNode` carries `fields: GroupField[]`
+   (`{ name, type: text|number|date }`), `sort: GroupSort | null` and
+   `target: number | null`; field *values* stay on the item as `custom`
    strings, so retyping a field never rewrites data. Fields merge down the
    whole ancestor path, `sort` takes only the nearest ancestor that sets one,
    and all comparison lives in `core/utils/sort.util.ts` — never sort items
-   inline. Manual order is the array order of `collection.items`, persisted by
-   index; the item DTO has no `sortOrder`.
+   inline. `target` is the declared size of the complete set, so progress can
+   be measured against the series rather than against what is catalogued;
+   **null means "not declared"** and must survive round-trips, and all the
+   owned/missing arithmetic lives in `core/utils/group-stats.util.ts` — never
+   count items inline. Manual order is the array order of `collection.items`,
+   persisted by index; the item DTO has no `sortOrder`.
 5. **Image framing is a focal point, never a crop.** Every surface renders with
    `background-size: cover`, so which part shows is one property:
    `background-position`. An image carries `focal: {x, y}` (0–1) on its own row,

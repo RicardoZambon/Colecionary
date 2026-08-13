@@ -124,6 +124,9 @@ namespace Vault.Infrastructure.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
+                    b.Property<int?>("Target")
+                        .HasColumnType("int");
+
                     b.HasKey("TenantId", "CollectionId", "Id");
 
                     b.ToTable("Groups", "Catalog");

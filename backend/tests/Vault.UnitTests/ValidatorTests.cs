@@ -146,6 +146,60 @@ public class ValidatorTests
         }).IsValid);
     }
 
+    private static GroupNodeDto ValidGroup() =>
+        new("Marvel", "Marvel", null, [new GroupFieldDto("Issue", "number")]);
+
+    [Fact]
+    public void GroupValidator_AcceptsANullTarget()
+    {
+        // No declared series size: progress falls back to what is catalogued.
+        Assert.True(new GroupNodeDtoValidator().Validate(ValidGroup()).IsValid);
+    }
+
+    [Fact]
+    public void GroupValidator_AcceptsAPositiveTarget()
+    {
+        var group = ValidGroup() with { Target = 120 };
+        Assert.True(new GroupNodeDtoValidator().Validate(group).IsValid);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(100_001)]
+    public void GroupValidator_RejectsImplausibleTargets(int target)
+    {
+        // Zero is not a series — null is the one way to say "unset" — and the
+        // ceiling stops a mistyped paste from producing nonsense progress.
+        var group = ValidGroup() with { Target = target };
+        Assert.False(new GroupNodeDtoValidator().Validate(group).IsValid);
+    }
+
+    [Fact]
+    public void GroupValidator_AcceptsATargetBelowTheItemsAlreadyCatalogued()
+    {
+        // This test exists to pin a DECISION, not just a behaviour. Groups and
+        // items arrive in the same full-document PUT, so cross-checking the
+        // target against the item count would make declaring a target before
+        // cataloguing impossible and would block the entire collection from
+        // saving. The overrun is shown in the UI, never rejected here.
+        var collection = new CollectionDto(
+            "comics", "Comics", "",
+            [ValidGroup() with { Target = 2 }],
+            [
+                ValidItem() with { Id = "i1", GroupId = "Marvel" },
+                ValidItem() with { Id = "i2", GroupId = "Marvel" },
+                ValidItem() with { Id = "i3", GroupId = "Marvel" },
+            ],
+            [],
+            true);
+
+        var validator = new CollectionDtoValidator(
+            new GroupNodeDtoValidator(), new ItemDtoValidator(), new MemberDtoValidator());
+
+        Assert.True(validator.Validate(collection).IsValid);
+    }
+
     [Fact]
     public void MemberValidator_ConstrainsRoleAndEmail()
     {

@@ -185,6 +185,28 @@ public class DtoMapperTests
     }
 
     [Fact]
+    public void GroupTarget_RoundTripsBothWays()
+    {
+        var dto = new Group { Id = "g", Name = "G", Target = 120 }.ToDto();
+        Assert.Equal(120, dto.Target);
+
+        var entity = dto.ToEntity("c1", Guid.NewGuid(), 0);
+        Assert.Equal(120, entity.Target);
+    }
+
+    [Fact]
+    public void GroupWithNoTarget_TravelsAsNull_AndComesBackUnset()
+    {
+        // Null is "no series size declared". A zero would claim the group is a
+        // set of nothing, which is a different — and wrong — statement.
+        var dto = new Group { Id = "g", Name = "G" }.ToDto();
+        Assert.Null(dto.Target);
+
+        var entity = dto.ToEntity("c1", Guid.NewGuid(), 0);
+        Assert.Null(entity.Target);
+    }
+
+    [Fact]
     public void SortByWithoutADirection_DefaultsToAscending()
     {
         // Half a configuration would otherwise reach the client as a sort with

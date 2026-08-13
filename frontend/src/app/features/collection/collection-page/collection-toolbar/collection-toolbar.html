@@ -1,0 +1,37 @@
+<span class="spacer"></span>
+
+@if (searching()) {
+  <span class="row-label">SEARCH RESULTS</span>
+}
+
+@if (showSort()) {
+  <ui-dropdown #sortMenu [width]="230">
+    <button ddTrigger type="button" class="sort-trigger">Sort: {{ sortLabel() }} ▾</button>
+    <ng-container ddPanel>
+      @for (option of sortOptions(); track option.id) {
+        <button
+          type="button"
+          class="sort-option"
+          [class.active]="activeSortId() === option.id"
+          (click)="pickSort(option); sortMenu.close()"
+        >
+          <span>{{ option.label }}</span>
+          <span class="check">@if (activeSortId() === option.id) { ✓ }</span>
+        </button>
+      }
+    </ng-container>
+  </ui-dropdown>
+}
+
+<div class="view-toggle" role="group" aria-label="View mode">
+  @for (option of views; track option.id) {
+    <button
+      type="button"
+      [class.active]="view() === option.id"
+      [attr.aria-pressed]="view() === option.id"
+      [attr.aria-label]="option.label"
+      [title]="option.label"
+      (click)="view.set(option.id)"
+    >{{ option.glyph }}</button>
+  }
+</div>
