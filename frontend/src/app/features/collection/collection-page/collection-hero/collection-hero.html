@@ -1,0 +1,80 @@
+<div class="banner">
+  <ui-image-slot
+    [src]="images.url(collection().bannerImageId)"
+    [focal]="focus.position(collection().bannerImageId)"
+    [reframable]="!!collection().bannerImageId"
+    placeholder="Drop a banner image for this collection"
+    (fileSelected)="setImage('banner', $event)"
+    (reframeRequested)="reframe('banner')"
+  />
+  <div class="banner__fade"></div>
+</div>
+
+<div class="header">
+  <div class="header__icon">
+    <ui-image-slot
+      [src]="images.url(collection().iconImageId)"
+      [focal]="focus.position(collection().iconImageId)"
+      [reframable]="!!collection().iconImageId"
+      placeholder="Icon"
+      (fileSelected)="setImage('icon', $event)"
+      (reframeRequested)="reframe('icon')"
+    />
+  </div>
+  <div class="header__text">
+    <h1>{{ heading() }}</h1>
+    <p>
+      @if (narrowed()) {
+        in {{ collection().name }}
+      } @else {
+        {{ collection().description }}
+      }
+    </p>
+  </div>
+  <div class="header__actions">
+    <div class="progress-box">
+      <div class="progress-box__row">
+        <span>
+          {{ ratio() }} OWNED
+          @if (scope().copies > scope().catalogued) {
+            <span class="copies-note">· {{ scope().copies }} COPIES</span>
+          }
+          @if (!scope().hasTarget) {
+            <span class="soft-note">OF CATALOGUED</span>
+          }
+        </span>
+        <span class="pct">{{ scope().pct }}%</span>
+      </div>
+      <ui-progress
+        [pct]="scope().pct"
+        [secondaryPct]="scope().hasTarget ? scope().cataloguedPct : null"
+        [label]="heading() + ' progress'"
+        [valueText]="progressText()"
+      />
+      <div class="progress-box__foot">
+        @if (scope().missing) {
+          <span class="missing">{{ scope().missing }} missing</span>
+          @if (scope().uncatalogued) {
+            <span class="split">· {{ scope().wanted }} listed</span>
+          }
+        } @else if (scope().hasTarget) {
+          <span class="complete">Complete</span>
+        }
+        @if (scope().over) {
+          <span class="split">· +{{ scope().over }} over target</span>
+        }
+        @if (narrowed()) {
+          <span class="of-total">· {{ total().owned }} / {{ total().denominator }} in all</span>
+        }
+      </div>
+    </div>
+    <div class="value-box">
+      est <span class="value">{{ scope().value | money }}</span>
+    </div>
+    <a [routerLink]="['/c', collection().id, 'settings']" [queryParams]="{ tab: 'sharing' }" title="Manage sharing">
+      <ui-avatar-stack [members]="members()" />
+    </a>
+    <ui-button variant="ghost" size="sm" [routerLink]="['/c', collection().id, 'settings']" title="Collection settings — general, groups & sharing">⚙ Manage</ui-button>
+    <ui-button size="sm" [routerLink]="['/c', collection().id, 'items', 'new']" queryParamsHandling="preserve">+ Add item</ui-button>
+  </div>
+</div>

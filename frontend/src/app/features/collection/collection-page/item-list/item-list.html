@@ -1,0 +1,41 @@
+<ui-card>
+  <div class="list-head" [class.list--manual]="manual()">
+    <span>NAME</span><span>GROUP</span><span>YEAR</span><span class="right">COPIES</span><span>COND</span><span class="right">VALUE</span>
+  </div>
+  @for (item of items(); track item.id; let i = $index) {
+    <div
+      class="list-line"
+      [class.dragging]="drag.index() === i"
+      [attr.draggable]="manual() ? true : null"
+      (dragstart)="drag.start($event, i)"
+      (dragover)="drag.over($event)"
+      (drop)="onDrop($event, i)"
+      (dragend)="drag.end()"
+    >
+      <a
+        class="list-row"
+        [class.list--manual]="manual()"
+        [routerLink]="['/c', collectionId(), 'items', item.id]"
+        queryParamsHandling="preserve"
+      >
+        <span class="name">
+          @if (fieldChip(item); as chip) { <span class="field">{{ chip }}</span> }
+          {{ item.name }}
+        </span>
+        <span class="group">{{ groupName(item) }}</span>
+        <span class="year">{{ item.year }}</span>
+        <span class="right copies" [class.copies--many]="item.copies.length > 1">{{ item.copies.length }}</span>
+        <span class="cond" [class]="'tone-' + badgeTone(item)">{{ badgeLabel(item) }}</span>
+        <span class="right value">{{ item.value | money }}</span>
+      </a>
+      @if (manual()) {
+        <ui-reorder
+          [label]="item.name"
+          [first]="i === 0"
+          [last]="i === items().length - 1"
+          (moved)="moved.emit({ from: i, to: i + $event })"
+        />
+      }
+    </div>
+  }
+</ui-card>

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, signal } f
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
+import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CopyStatus } from '../../../core/models';
@@ -28,6 +29,7 @@ const STATUS_LABELS: Record<CopyStatus, string> = {
 export class ItemPage {
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
+  protected readonly focus = inject(ImageFocusService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
@@ -36,14 +38,15 @@ export class ItemPage {
 
   protected readonly selectedPhoto = signal(0);
 
-  protected readonly photoUrls = computed(
-    () => this.item()?.photoIds.map(id => this.images.url(id)!) ?? [],
+  /** Id alongside url: the id is what resolves the photo's framing. */
+  protected readonly photos = computed(
+    () => this.item()?.photoIds.map(id => ({ id, url: this.images.url(id)! })) ?? [],
   );
 
-  protected readonly mainPhotoUrl = computed(() => {
-    const urls = this.photoUrls();
-    if (!urls.length) return null;
-    return urls[Math.min(this.selectedPhoto(), urls.length - 1)];
+  protected readonly mainPhoto = computed(() => {
+    const photos = this.photos();
+    if (!photos.length) return null;
+    return photos[Math.min(this.selectedPhoto(), photos.length - 1)];
   });
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
@@ -128,7 +131,10 @@ export class ItemPage {
       const file = picker.files?.[0];
       if (!file) return;
       try {
-        const imageId = await this.images.upload(file);
+        const imageId = await this.focus.uploadAndFrame(file, 'item');
+        // Discarded in the editor: nothing is added to the item.
+        if (!imageId) return;
+
         await this.store.upsertItem(this.collectionId(), {
           ...item,
           photoIds: [...item.photoIds, imageId],
@@ -140,6 +146,11 @@ export class ItemPage {
       }
     };
     picker.click();
+  }
+
+  /** Reopens the editor for an existing photo — framing is never final. */
+  protected reframe(imageId: string): void {
+    void this.focus.frame(imageId, 'item');
   }
 
   protected async markOwned(): Promise<void> {

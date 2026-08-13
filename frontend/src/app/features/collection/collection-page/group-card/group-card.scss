@@ -1,0 +1,116 @@
+@use '../../../../../styles/mixins' as *;
+
+:host {
+  display: block;
+}
+
+.link {
+  display: block;
+  color: inherit;
+
+  &:hover {
+    text-decoration: none;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
+  &__cover {
+    height: 116px;
+    border-bottom: var(--bw) solid var(--border);
+  }
+
+  &__body {
+    padding: 11px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__name {
+    font-size: 13.5px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A caption, not a chip: a chip would suggest it is separately clickable. */
+  &__subs {
+    @include mono-label(9.5px, 0.08em);
+  }
+
+  &__meta {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  &__numbers {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  &__ratio {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* Says the denominator is only what has been catalogued, so a full bar
+     cannot be mistaken for a finished set. */
+  &__soft {
+    text-transform: uppercase;
+  }
+
+  &__pct {
+    margin-left: auto;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  &__foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 2px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+
+    .warn {
+      color: var(--warn);
+    }
+
+    .good {
+      color: var(--good);
+    }
+
+    .soft {
+      color: var(--muted);
+    }
+  }
+
+  &__value {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent2);
+    flex: none;
+  }
+}

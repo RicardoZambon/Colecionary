@@ -1,9 +1,18 @@
 import { GroupField, GroupNode, GroupSort } from '../models';
+import { compareNames } from './sort.util';
 
 /** Pure helpers for navigating a collection's group tree. */
 
+/**
+ * A parent's children, always alphabetical. Groups have no manual order —
+ * unlike items, nothing persists a position for one — so the array order is
+ * merely the order they happened to be created in, which tells the reader
+ * nothing. Sorting here instead of at each call site is what keeps the sidebar
+ * tree, the dashboard cards, the item form's picker and the settings list
+ * agreeing on where a group sits. Ties keep array order (`sort` is stable).
+ */
 export function childrenOf(groups: GroupNode[], parentId: string | null): GroupNode[] {
-  return groups.filter(g => g.parentId === parentId);
+  return groups.filter(g => g.parentId === parentId).sort((a, b) => compareNames(a.name, b.name));
 }
 
 export function groupById(groups: GroupNode[], id: string | null): GroupNode | undefined {
@@ -67,6 +76,38 @@ export function flattenTree(groups: GroupNode[]): { node: GroupNode; depth: numb
     for (const node of childrenOf(groups, parentId)) {
       out.push({ node, depth });
       walk(node.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+export interface TreeRow {
+  node: GroupNode;
+  depth: number;
+  hasChildren: boolean;
+}
+
+/**
+ * The rows a collapsible tree actually shows: depth-first, descending only into
+ * expanded nodes. Rendering these as one flat list with `aria-level` is the
+ * legal ARIA tree pattern and avoids recursive components, which are painful
+ * under OnPush with signal inputs.
+ *
+ * Unlike `flattenTree` this guards against a cycle: `parentId` carries no
+ * foreign key, so a node pointing at its own descendant is representable, and
+ * an unguarded walk would hang the render rather than fail.
+ */
+export function visibleTree(groups: GroupNode[], expanded: ReadonlySet<string>): TreeRow[] {
+  const out: TreeRow[] = [];
+  const seen = new Set<string>();
+  const walk = (parentId: string | null, depth: number) => {
+    for (const node of childrenOf(groups, parentId)) {
+      if (seen.has(node.id)) continue;
+      seen.add(node.id);
+      const hasChildren = childrenOf(groups, node.id).length > 0;
+      out.push({ node, depth, hasChildren });
+      if (hasChildren && expanded.has(node.id)) walk(node.id, depth + 1);
     }
   };
   walk(null, 0);

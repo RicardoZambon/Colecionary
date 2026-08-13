@@ -124,6 +124,9 @@ namespace Vault.Infrastructure.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
+                    b.Property<int?>("Target")
+                        .HasColumnType("int");
+
                     b.HasKey("TenantId", "CollectionId", "Id");
 
                     b.ToTable("Groups", "Catalog");
@@ -231,6 +234,12 @@ namespace Vault.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<double?>("FocalX")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("FocalY")
+                        .HasColumnType("float");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");

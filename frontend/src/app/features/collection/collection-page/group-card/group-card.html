@@ -1,0 +1,73 @@
+<a
+  class="link"
+  [routerLink]="['/c', collectionId()]"
+  [queryParams]="{ g: groupId() }"
+  queryParamsHandling="merge"
+  [attr.aria-label]="ariaLabel()"
+>
+  <ui-card [interactive]="true" [dashed]="empty()" class="card">
+    <ui-mosaic
+      class="card__cover"
+      [tiles]="tiles()"
+      [dim]="stats().owned === 0"
+      [placeholder]="name()"
+    />
+
+    <div class="card__body">
+      <div class="card__head">
+        <span class="card__name">{{ name() }}</span>
+        @if (badge(); as b) {
+          <ui-badge [tone]="b.tone">{{ b.label }}</ui-badge>
+        }
+      </div>
+
+      @if (stats().childCount) {
+        <div class="card__subs">↳ {{ stats().childCount }} sub-groups</div>
+      }
+
+      @if (empty()) {
+        <div class="card__meta">
+          @if (stats().hasTarget) { 0 / {{ stats().target }} · nothing here yet }
+          @else { No items yet }
+        </div>
+      } @else {
+        <div class="card__numbers">
+          <span class="card__ratio">{{ ratio() }}</span>
+          @if (!stats().hasTarget) {
+            <span class="card__soft">of catalogued</span>
+          }
+          <span class="card__pct">{{ stats().pct }}%</span>
+        </div>
+
+        <ui-progress
+          [pct]="stats().pct"
+          [secondaryPct]="stats().hasTarget ? stats().cataloguedPct : null"
+          [label]="name() + ' progress'"
+          [valueText]="progressText()"
+        />
+
+        <div class="card__foot">
+          <span class="card__missing">
+            @if (stats().missing) {
+              <span class="warn">{{ stats().missing }} missing</span>
+              @if (stats().uncatalogued) {
+                <span class="soft">· {{ stats().wanted }} listed</span>
+              }
+            } @else if (stats().hasTarget) {
+              <span class="good">Complete</span>
+            } @else {
+              <span class="good">All owned</span>
+            }
+            @if (stats().over) {
+              <span class="soft">· +{{ stats().over }} over</span>
+            }
+            @if (stats().copies > stats().catalogued) {
+              <span class="soft">· {{ stats().copies }} copies</span>
+            }
+          </span>
+          <span class="card__value">{{ stats().value | money }}</span>
+        </div>
+      }
+    </div>
+  </ui-card>
+</a>

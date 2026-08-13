@@ -1,0 +1,62 @@
+<div class="head">
+  <ui-section-label>Groups</ui-section-label>
+  <button
+    type="button"
+    class="head__collapse"
+    aria-label="Hide the group panel"
+    title="Hide the group panel"
+    (click)="collapse.emit()"
+  >⟨</button>
+</div>
+
+<ul role="tree" aria-label="Collection groups">
+  @for (row of rows(); track row.node.id; let i = $index) {
+    <li
+      role="treeitem"
+      [attr.aria-level]="row.depth + 1"
+      [attr.aria-expanded]="row.hasChildren ? row.expanded : null"
+      [attr.aria-selected]="row.selected"
+      class="row"
+      [class.row--selected]="row.selected"
+      [style.padding-left.px]="row.depth * 14"
+    >
+      @if (row.hasChildren) {
+        <button
+          type="button"
+          class="row__twisty"
+          tabindex="-1"
+          [attr.aria-label]="(row.expanded ? 'Collapse ' : 'Expand ') + row.node.name"
+          (click)="toggle($event, row.node.id)"
+        >{{ row.expanded ? '▾' : '▸' }}</button>
+      } @else {
+        <span class="row__twisty row__twisty--leaf" aria-hidden="true"></span>
+      }
+
+      <a
+        class="row__link"
+        [routerLink]="['/c', collectionId()]"
+        [queryParams]="{ g: row.node.id }"
+        queryParamsHandling="merge"
+        [tabindex]="focusedId() === row.node.id ? 0 : -1"
+        (keydown)="onKeydown($event, i)"
+      >
+        <span class="row__top">
+          <span class="row__name">{{ row.node.name }}</span>
+          <span class="row__count">{{ row.count }}</span>
+          @if (row.copiesNote) {
+            <span class="row__copies" [title]="row.copiesNote">{{ row.copiesNote }}</span>
+          }
+        </span>
+        <ui-progress
+          size="sm"
+          [pct]="row.pct"
+          [secondaryPct]="row.secondaryPct"
+          [label]="row.node.name + ' progress'"
+          [valueText]="row.valueText"
+        />
+      </a>
+    </li>
+  } @empty {
+    <li class="empty">No groups yet.</li>
+  }
+</ul>

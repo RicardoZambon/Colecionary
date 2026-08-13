@@ -21,10 +21,23 @@
       @if (photoIds().length) {
         <div class="photo-grid">
           @for (id of photoIds(); track id) {
-            <div class="photo" [style.background-image]="'url(' + images.url(id) + ')'">
+            <div
+              class="photo"
+              [style.background-image]="'url(' + images.url(id) + ')'"
+              [style.background-position]="focus.position(id)"
+            >
               @if ($index === 0) {
                 <span class="cover-tag">COVER</span>
               }
+              <button
+                type="button"
+                class="photo__frame"
+                title="Adjust framing"
+                aria-label="Adjust framing"
+                (click)="reframe(id)"
+              >
+                ⌖
+              </button>
               <button type="button" class="photo__remove" title="Remove photo" (click)="removePhoto($index)">✕</button>
             </div>
           }

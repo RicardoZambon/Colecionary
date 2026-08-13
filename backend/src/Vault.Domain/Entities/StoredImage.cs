@@ -26,4 +26,25 @@ public class StoredImage : ITenantOwned
     public string ContentType { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAtUtc { get; set; }
+
+    /// <summary>
+    /// Horizontal focal point, 0–1 across the image. Null means never framed.
+    /// </summary>
+    /// <remarks>
+    /// Null is meaningful and must survive round-trips: it distinguishes "the
+    /// user never chose" (render centred, and a future subject-detection pass
+    /// may fill it in) from "the user deliberately chose the centre". Same
+    /// discipline as a copy's null <c>Value</c> meaning "inherit".
+    /// <para>
+    /// Framing is deliberately stored here rather than beside each reference to
+    /// the image: where the subject sits is a property of the photograph, true
+    /// wherever it is shown, so one adjustment fixes the card, the gallery and
+    /// the banner at once. The bytes are never touched, which is what keeps the
+    /// read endpoint's <c>immutable</c> caching honest.
+    /// </para>
+    /// </remarks>
+    public double? FocalX { get; set; }
+
+    /// <summary>Vertical focal point, 0–1 down the image. See <see cref="FocalX"/>.</summary>
+    public double? FocalY { get; set; }
 }

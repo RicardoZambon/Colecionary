@@ -108,6 +108,28 @@ file with no row is unreachable garbage, while a row with no file is a broken
 image in the UI. (Orphans are the same known gap as replaced images; collecting
 them is a documented follow-up.)
 
+### Framing (focal point)
+
+`Storage.Images` also carries `FocalX`/`FocalY` — nullable fractions (0–1) naming
+which part of the picture matters. The client renders them as a CSS
+`background-position`, so one point serves every aspect ratio the UI crops to
+(1:1 icon through ~9:1 banner) without generating a single derived file. **Null
+is meaningful:** it means "never framed", which renders centred, and stays
+tellable from a deliberate centre so a future subject-detection pass can fill it
+in without overwriting a human choice. Both axes must be present for the pair to
+mean anything; a half-written row degrades to unframed.
+
+Framing never touches the bytes, which is what keeps the read endpoint's
+`immutable` cache header honest — the id and its URL stay valid.
+
+The write is **tenant-filtered**, deliberately unlike the read: `ImageService`
+resolves it through `GetForCurrentTenantAsync`, never `GetUnfilteredAsync`.
+Ignoring the filter is only defensible for the anonymous byte read, where the
+unguessable id is the capability. A write has no such excuse — routed through
+the unfiltered read, one tenant could reframe another's image. Going through the
+global filter means a foreign id simply doesn't exist, so the caller gets a 404
+and learns nothing. `ImageFocalTests` pins that.
+
 ### Migrating an existing database
 
 `MoveImageBytesToFileStorage` drops the old `varbinary(max)` column, and a
@@ -126,8 +148,13 @@ drops the bytes. Start the API instead; it does both, in the right order.
 
 ```
 collections.json          # same shape as GET /api/collections
+images.json               # id, content type and focal point for each image
 images/{imageId}.{ext}    # every image that tenant owns
 ```
+
+`images.json` exists because framing lives on the image row, not in the
+collection graph: without it an archive would restore every photo centred, and
+the user's framing would be lost silently.
 
 This used to be a browser-side JSON blob of whatever the tab had in memory. It
 moved server-side so it can include image bytes (unreachable from the client as
@@ -164,6 +191,8 @@ documented follow-ups.
 | GET | `/api/store/listings` | global catalog |
 | POST | `/api/images` | multipart upload (≤5 MB, image/* only) → `{ id }` |
 | GET | `/api/images/{id}` | anonymous by design — the GUID is the capability (`<img>` can't send auth headers) |
+| GET | `/api/images/meta` | the caller's own image metadata (id, content type, focal) |
+| PUT | `/api/images/{id}/focal` | sets/clears the focal point; tenant-filtered, so a foreign id 404s |
 | GET / PUT | `/api/tenant/members` | PUT is Owner-only |
 | GET / PUT | `/api/profile` | email immutable in v1 |
 | GET | `/api/export` | zip: `collections.json` + `images/…` for the caller's tenant |
@@ -213,16 +242,33 @@ carry, plus the order those items default to:
   `SortDirection` is `asc`/`desc`. They travel as one nullable `sort` object on
   the wire (`GroupSortDto`), because half a configuration is not a
   configuration — `ToDto` defaults a missing direction to `asc`.
+- `Target : int?` — the declared size of the complete set the group stands for
+  (a 120-issue run, a 24-card set), so the client can show progress against the
+  series rather than only against what has been catalogued. Also a scalar
+  column, for the same no-pinned-names reason. **`null` means "no target
+  declared"** and is deliberately distinct from any number: a non-nullable
+  `int` would default to `0` and silently declare every existing group an empty
+  series. `GroupNodeDtoValidator` accepts null or `1..100_000` — zero is not a
+  series, and the ceiling is a plausibility guard against a mistyped paste.
+  A target **below** the items already catalogued is accepted **on purpose**:
+  groups and items arrive in the same document, so cross-checking them would
+  make declaring a target before cataloguing impossible and would block the
+  whole collection from saving until the user deleted items. The overrun is a
+  display concern. `ImportStoreListingAsync` derives a target from the
+  listing's per-group item count, because a curated checklist *is* the declared
+  set.
 
 Values still live on the item as `Custom` strings: the type belongs to the
-declaration, so retyping a field never rewrites item data. Sorting itself stays
-client-side; the server only stores the preference. There are **no group
-endpoints** — groups change only through the full-document collection PUT,
-which means `CollectionRepository.ReplaceGraph` must copy `SortBy` and
-`SortDirection` in its group lambda. Miss one and the setting saves on create
-and then silently never changes again; `ContractTests` PUTs the same collection
-three times specifically to catch that, and the third PUT clears the sort back
-to null.
+declaration, so retyping a field never rewrites item data. Sorting and the
+owned/missing arithmetic both stay client-side; the server only stores the
+declarations. There are **no group endpoints** — groups change only through the
+full-document collection PUT, which means `CollectionRepository.ReplaceGraph`
+must copy `SortBy`, `SortDirection` **and `Target`** in its group lambda, by
+plain assignment and never a coalesce. Miss one and the setting saves on create
+and then silently never changes again; coalesce it and clearing it back to null
+becomes impossible. `ContractTests` PUTs the same collection three times
+specifically to catch both, and the third PUT clears the sort and the target
+back to null.
 
 `AddGroupFieldTypesAndSort` converts `["Número"]` to
 `[{"Name":"Número","Type":"Text"}]` with `OPENJSON` + `FOR JSON PATH` (which

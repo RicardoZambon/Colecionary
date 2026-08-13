@@ -17,12 +17,14 @@ either the change is wrong or this document must be updated in the same PR.
 frontend/src/
 ├─ styles/
 │  ├─ _themes.scss          ← ALL design tokens (7 themes, CSS custom properties)
-│  └─ _mixins.scss          ← shared SCSS building blocks (panel, mono-label, stripes…)
+│  └─ _mixins.scss          ← shared SCSS building blocks (panel, mono-label, stripes,
+│                             wanted-photo — the grayscale+fade pair every unowned
+│                             photograph uses, on the card, the item page and the cover)
 ├─ app/
 │  ├─ core/                 ← framework-level, no UI
 │  │  ├─ models/            ← typed domain model (one file per entity + barrel)
 │  │  ├─ api/               ← backend contract + mock implementation + seed data
-│  │  ├─ state/             ← signal stores/services (Vault, Theme, Toast, ImageSlot)
+│  │  ├─ state/             ← signal stores/services (Vault, Theme, Toast, ImageFocus)
 │  │  └─ utils/             ← pure functions (unit-tested)
 │  ├─ shared/
 │  │  ├─ ui/                ← THE component library (see §4)
@@ -35,7 +37,7 @@ frontend/src/
 
 **Dependency direction:** `features → shared → core`. `core` imports nothing
 from `shared` or `features`. `shared/ui` components never talk to the API or
-stores directly (exception: `ui-image-slot`/`ui-toast`, which exist to render
+stores directly (exception: `ui-image-focus`/`ui-toast`, which exist to render
 a core service's state).
 
 ## 2. Non-negotiable rules
@@ -104,18 +106,21 @@ All are exported from `shared/ui/index.ts`.
 | Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`; outputs `keydown`, `blurred` |
 | Textarea | `ui-textarea` | `value` (model), `rows`, `placeholder` |
 | Select | `ui-select` | `value` (model), `options: SelectOption[]`, `disabled`; add class `compact` for dense rows |
-| Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count` — content-projected label; attach `(click)` at usage site |
+| Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count`, `link` (router commands), `queryParams` — content-projected label. Renders a `<button>` by default (attach `(click)` at the usage site); with `link` it renders a real `<a>` instead, because a chip that navigates must survive middle-click and a button nested in an anchor is invalid |
 | Card | `ui-card` | `interactive` (hover affordance), `dashed` — the panel surface |
 | Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone(condition)` for one copy, `itemTone(item)` / `itemBadgeLabel(item)` for an item ("WANTED", "MINT", "MINT ×3") |
 | Toggle | `ui-toggle` | `on` (model) — rendered as `role="switch"` |
 | Tabs | `ui-tabs` | `tabs: TabDef[]`, `active` (model, required) |
 | Avatar | `ui-avatar` | `initials` (required), `size: 'sm' \| 'md' \| 'lg'` |
 | Avatar stack | `ui-avatar-stack` | `members: Member[]` (shows first 4, overlapped) |
-| Progress | `ui-progress` | `pct` (required, 0–100) |
+| Progress | `ui-progress` | `pct` (required, 0–100, clamped), `secondaryPct` (a dimmer hatched band drawn behind the fill — owned vs catalogued against one denominator), `size: 'sm' \| 'md'`, `label` (→ `aria-label`), `valueText` (→ `aria-valuetext`, e.g. "12 of 120 owned"). Two shades of one hue is a colour-only distinction, so always print the numbers beside the bar |
+| Mosaic | `ui-mosaic` | `tiles: MosaicTile[]` (`{ src, position }`, up to 4), `placeholder`, `dim` — a cover built from several photos, `aria-hidden` because the name belongs to the link wrapping it. Presentational: the page resolves ids through `ImagesApi`/`ImageFocusService`, as with `ui-image-slot` |
+| Icon | `ui-icon` | `name: 'home' \| 'grid' \| 'gear' \| 'diamond'` (required), `size`, `strokeWidth` — inline Feather-style SVG |
 | Reorder | `ui-reorder` | `label` (names the item for screen readers), `first`, `last`; output `moved(-1 | 1)` — the keyboard half of a drag-to-reorder list, absolutely positioned over a `position: relative` parent |
 | Section label | `ui-section-label` | content-projected mono uppercase micro-heading |
 | Dropdown | `ui-dropdown` | `width`; project trigger via `[ddTrigger]`, panel via `[ddPanel]`; call `close()` from panel handlers |
-| Image slot | `ui-image-slot` | `src`, `placeholder`; output `fileSelected(File)` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
+| Image slot | `ui-image-slot` | `src`, `focal` (CSS `background-position`), `placeholder`, `reframable`; outputs `fileSelected(File)`, `reframeRequested()` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
+| Image focus | `ui-image-focus` | none — global outlet in the shell, driven by `ImageFocusService`; the focal-point editor (drag or arrow keys, live previews of the surfaces that match the image's `usage`) |
 | Toast | `ui-toast` | none — global outlet in the shell, driven by `ToastService.flash()` |
 | Money pipe | `\| money` | formats numbers as `$1,234` |
 
@@ -138,6 +143,33 @@ style the same raw element the same way, that's the signal to promote it here.
   (`/api/images/{id}`). `ui-image-slot` is presentational — it renders `src`
   and emits the picked file; pages own upload + persistence (photo ids travel
   on the item/collection DTOs).
+- **Framing is a focal point, never a crop.** Every surface renders images with
+  `background-size: cover`, so *which* part shows is decided by one property:
+  `background-position`. An image carries `focal: {x, y}` (0–1, on the image row
+  — framing is a property of the photograph, so one adjustment fixes the card,
+  the gallery and the banner at once). `ImageFocusService`
+  (`core/state/image-focus.service.ts`) loads every focal point once at startup
+  and exposes `position(id)`; pages bind that, and never compute a percentage
+  inline — `core/utils/focal.util.ts` owns the conversion (`focalToPosition`,
+  `clampFocal`, `focalFromPoint`), the same way `sort.util.ts` owns comparison.
+  **Null means "never framed"** and renders centred; keep the null, it is what
+  distinguishes an untouched image from one deliberately centred. The bytes are
+  never modified, so an image id — and its `immutable`-cached URL — stays valid
+  after reframing, and the edit is reversible. Uploads go through
+  `ImageFocusService.uploadAndFrame(file, usage)`, which frames a **local object
+  url and only uploads once the user commits** — there is no delete endpoint, so
+  uploading first would strand a file every time someone changed their mind. It
+  returns the new id, or **`null` if the user discarded**; every call site must
+  treat null as "do nothing", or cancelling still replaces the picture.
+  `frame(id, usage)` reopens the editor for an image that already exists.
+  Discarding and choosing "centred" are deliberately distinct outcomes
+  (`FramingResult`): collapsing them is what made a cancelled upload apply
+  anyway. **`usage`
+  (`'item' | 'banner' | 'icon'`) is required** because it decides which surfaces
+  the editor previews: an item photo never appears in a collection banner, so
+  previewing that frame would invent a constraint the user doesn't have. A new
+  surface adds its ratio to the `SURFACES` map in `ui-image-focus` under the
+  usage that renders it.
 - **Export** goes through `ExportApi` (`core/api/export-api.ts`), which fetches
   `/api/export` as a `Blob` and hands it to a download anchor. Like `ImagesApi`
   it sits beside `VaultApi` rather than on it, because it deals in a binary
@@ -163,9 +195,19 @@ style the same raw element the same way, that's the signal to promote it here.
   `copyValue`, `ownedValue`, `paidTotal`, `sortValue`, `newCopy`,
   `syncWantedTag`). A copy's `value` is `null` when it inherits the item's —
   keep the null, it distinguishes "inherited" from "overridden".
-- **Groups declare typed fields and their own ordering.** A `GroupNode` carries
-  `fields: GroupField[]` (`{ name, type: 'text' | 'number' | 'date' }`) and
-  `sort: GroupSort | null` (`{ by, direction }`). `by` is a built-in key
+- **Groups declare typed fields, their own ordering, and optionally the size of
+  the set.** A `GroupNode` carries `fields: GroupField[]`
+  (`{ name, type: 'text' | 'number' | 'date' }`),
+  `sort: GroupSort | null` (`{ by, direction }`) and `target: number | null`.
+  `target` is how many items the complete set has — a 120-issue run, a 24-card
+  set — so a group's progress can be measured against the series and not merely
+  against what has been catalogued. **Null means "not declared"**, and the
+  denominator falls back to the catalogued count; keep the null, and note that
+  the field is required-nullable rather than optional precisely because the
+  collection is saved as a full-document PUT, where an `undefined` would
+  round-trip as a deletion. Every owned/missing/percentage figure comes from
+  `core/utils/group-stats.util.ts` — never count items inline, the same way
+  `sort.util.ts` owns comparison. `by` is a built-in key
   (`manual`, `added`, `name`, `value`, `year`) or `field:<field name>`; `null`
   means "inherit". Values still live on the item as `custom: CustomFieldValue[]`
   strings — the type belongs to the declaration, not the value, so retyping a
@@ -179,6 +221,19 @@ style the same raw element the same way, that's the signal to promote it here.
   free text, and items with no value always sink to the bottom in either
   direction. `manual` ordering is simply the array order of `collection.items`,
   which the API persists by index — there is no `sortOrder` on the item DTO.
+  All of that governs a group's *items*. **The groups themselves always list
+  alphabetically**, because nothing persists a position for a group the way
+  `manual` does for items — the array order is only the order they happened to
+  be created in, which tells the reader nothing. `childrenOf()` in
+  `core/utils/groups.util.ts` sorts by name through the same numeric- and
+  accent-aware collator (exported as `compareNames`), and `flattenTree()` /
+  `visibleTree()` build on it, so the sidebar tree, the dashboard cards, the
+  item form's group picker and the settings list can never disagree about
+  where a group sits. Never sort or list groups inline. The one wrinkle is the
+  settings page's inline rename: an alphabetical list would re-sort on every
+  keystroke, and moving the focused input in the DOM blurs it, so the page
+  freezes the row order for the duration of a rename and releases it on
+  `(blurred)`.
 
 ## 6. Testing & verification
 

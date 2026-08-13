@@ -56,6 +56,11 @@ public class ContractTests(VaultApiFactory factory)
         // Group fields are typed objects and the group's sort round-trips.
         Assert.Contains("\"fields\":[{\"name\":\"Issue\",\"type\":\"number\"}", raw);
         Assert.Contains("\"sort\":{\"by\":\"field:Issue\",\"direction\":\"asc\"}", raw);
+        // A declared series size travels as a number; an undeclared one travels
+        // as an explicit null rather than being omitted, so the client can tell
+        // "no target" from "field missing" and round-trip it unchanged.
+        Assert.Contains("\"target\":24", raw);
+        Assert.Contains("\"target\":null", raw);
         Assert.DoesNotContain("\"TenantId\"", raw);
     }
 
@@ -81,7 +86,8 @@ public class ContractTests(VaultApiFactory factory)
                     "Shonen",
                     null,
                     [new GroupFieldDto("Volumes", "number")],
-                    new GroupSortDto("field:Volumes", "asc")),
+                    new GroupSortDto("field:Volumes", "asc"),
+                    Target: 120),
                 new GroupNodeDto("g2", "Jump", "g1", []),
             ],
             Items =
@@ -109,6 +115,8 @@ public class ContractTests(VaultApiFactory factory)
         Assert.Equal("number", Assert.Single(fetched.Groups[0].Fields).Type);
         Assert.Equal(new GroupSortDto("field:Volumes", "asc"), fetched.Groups[0].Sort);
         Assert.Null(fetched.Groups[1].Sort);
+        Assert.Equal(120, fetched.Groups[0].Target);
+        Assert.Null(fetched.Groups[1].Target);   // undeclared stays undeclared
         Assert.False(fetched.LinkShare);
         Assert.Single(fetched.Members);
         Assert.Equal("One Piece Vol. 1", Assert.Single(fetched.Items).Name);
@@ -136,6 +144,7 @@ public class ContractTests(VaultApiFactory factory)
                 {
                     Fields = [new GroupFieldDto("Volumes", "text")],
                     Sort = new GroupSortDto("name", "desc"),
+                    Target = 121,
                 },
                 updated.Groups[1],
             ],
@@ -152,6 +161,9 @@ public class ContractTests(VaultApiFactory factory)
         var reFetchedGroup = all!.Single(c => c.Id == created.Id).Groups[0];
         Assert.Equal(new GroupSortDto("name", "desc"), reFetchedGroup.Sort);
         Assert.Equal("text", Assert.Single(reFetchedGroup.Fields).Type);
+        // Fails if ReplaceGraph's group update lambda omits `current.Target`:
+        // the target would save on create and then never change again.
+        Assert.Equal(121, reFetchedGroup.Target);
 
         var reFetched = all!.Single(c => c.Id == created.Id).Items.Single();
         var only = Assert.Single(reFetched.Copies);   // i1_c1 removed
@@ -162,17 +174,18 @@ public class ContractTests(VaultApiFactory factory)
         Assert.Equal(new DateOnly(2020, 1, 2), only.AcquiredOn);
 
         // Third PUT dropping the item — wholesale replace must remove it. It
-        // also clears g1's sort back to null, which only works if the update
-        // lambda overwrites rather than coalesces.
+        // also clears g1's sort and target back to null, which only works if
+        // the update lambda overwrites rather than coalesces.
         var emptied = updated with
         {
-            Groups = [updated.Groups[0] with { Sort = null }, updated.Groups[1]],
+            Groups = [updated.Groups[0] with { Sort = null, Target = null }, updated.Groups[1]],
             Items = [],
         };
         (await client.PutAsJsonAsync($"/api/collections/{created.Id}", emptied)).EnsureSuccessStatusCode();
         all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
         Assert.Empty(all!.Single(c => c.Id == created.Id).Items);
         Assert.Null(all!.Single(c => c.Id == created.Id).Groups[0].Sort);
+        Assert.Null(all!.Single(c => c.Id == created.Id).Groups[0].Target);
 
         (await client.DeleteAsync($"/api/collections/{created.Id}")).EnsureSuccessStatusCode();
     }

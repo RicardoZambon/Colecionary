@@ -1,5 +1,5 @@
 @if (draft(); as d) {
-  <a class="back" [routerLink]="['/c', d.id]">← {{ d.name }}</a>
+  <a class="back" [routerLink]="['/c', d.id]" [queryParams]="g() ? { g: g() } : {}">← {{ d.name }}</a>
   <h1>Collection settings</h1>
 
   <ui-tabs [tabs]="tabs" [active]="activeTab()" (activeChange)="onTabChange($event)" />
@@ -8,8 +8,17 @@
     @case ('groups') {
       <ui-card class="groups-card">
         <div class="groups-card__head">
-          <span class="heading">GROUPS &amp; SUB-GROUPS</span>
-          <button type="button" class="link" (click)="pendingGroupParent.set({ parentId: null })">+ Add group</button>
+          @if (scopeGroup(); as scope) {
+            <span class="heading">{{ scope.name.toUpperCase() }} &amp; SUB-GROUPS</span>
+            <a class="link" [routerLink]="[]" [queryParams]="{ tab: 'groups', g: null }">Show all groups</a>
+          } @else {
+            <span class="heading">GROUPS &amp; SUB-GROUPS</span>
+          }
+          <button
+            type="button"
+            class="link"
+            (click)="pendingGroupParent.set({ parentId: scopeGroup()?.id ?? null })"
+          >+ Add group</button>
         </div>
 
         @for (row of groupRows(); track row.node.id) {
@@ -21,6 +30,7 @@
                 variant="subtle"
                 [value]="row.node.name"
                 (valueChange)="renameGroup(row.node.id, $event)"
+                (blurred)="endRename()"
               />
               <span class="count">{{ row.count }} items</span>
               <button type="button" class="link" (click)="pendingGroupParent.set({ parentId: row.node.id })">+ Sub</button>
@@ -82,6 +92,17 @@
                   (valueChange)="setGroupSortDirection(row.node.id, $event)"
                 />
               }
+
+              <span class="fields-label spaced">TARGET</span>
+              <ui-text-input
+                class="target"
+                type="number"
+                variant="subtle"
+                placeholder="—"
+                [attr.aria-label]="'Target for ' + row.node.name"
+                [value]="row.target"
+                (valueChange)="setGroupTarget(row.node.id, $event)"
+              />
             </div>
           </div>
         }
@@ -103,7 +124,10 @@
           Renames apply as you type. Custom fields apply to every item in the group and its
           sub-groups, and the field type decides how it sorts. <strong>Order by</strong> is the
           default the collection uses when that group is open — sub-groups inherit it unless they
-          set their own. Groups that still contain items can't be deleted — move the items first.
+          set their own. <strong>Target</strong> is how many items the complete set has, when you
+          know it — a 120-issue run, a 24-card set — so progress is measured against the series
+          instead of against what you've catalogued so far. Leave it blank and it falls back.
+          Groups that still contain items can't be deleted — move the items first.
         </div>
       </ui-card>
     }

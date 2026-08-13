@@ -1,0 +1,98 @@
+@use '../../../../../styles/mixins' as *;
+
+.list-line {
+  position: relative;
+}
+
+.list-head,
+.list-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 70px 56px 90px 90px;
+  gap: 10px;
+  padding: 9px 16px;
+  align-items: center;
+
+  // Manual mode keeps the columns and just clears room for the floating
+  // move buttons on the right.
+  &.list--manual {
+    padding-right: 78px;
+  }
+}
+
+.list-head {
+  @include mono-label(10px, 0.1em);
+  border-bottom: var(--bw) solid var(--border);
+}
+
+.list-row {
+  padding: 11px 16px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+
+  &:hover {
+    background: var(--panel2);
+    text-decoration: none;
+  }
+
+  .name {
+    font-weight: 600;
+  }
+
+  .group {
+    color: var(--text2);
+  }
+
+  .year {
+    color: var(--muted);
+  }
+
+  .copies {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+
+    /* Holding more than one is the exception, so it is what gets the ink. */
+    &--many {
+      color: var(--accent2);
+      font-weight: 700;
+    }
+  }
+
+  .cond,
+  .field {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 700;
+
+    &.field {
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    &.tone-good {
+      color: var(--good);
+    }
+
+    &.tone-warn {
+      color: var(--warn);
+    }
+
+    &.tone-accent {
+      color: var(--accent);
+    }
+
+    &.tone-neutral {
+      color: var(--text2);
+    }
+  }
+
+  .value {
+    font-weight: 700;
+    color: var(--accent2);
+  }
+}
+
+.right {
+  text-align: right;
+}

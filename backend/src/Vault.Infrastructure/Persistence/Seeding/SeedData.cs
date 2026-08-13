@@ -68,9 +68,13 @@ public static class SeedData
                 [
                     Group("pokemon", "pk_cards", "Cards", null, ["Set no.", "Language"], 0),
                     Group("pokemon", "pk_cards_reg", "Regular cards", "pk_cards", [], 1),
-                    Group("pokemon", "pk_cards_rare", "Rare & holo", "pk_cards", ["Grade"], 2),
+                    // Two cards listed of a four-card chase: one owned, one on
+                    // the wantlist, two not even catalogued — the three ways a
+                    // group can be short of its target, all in one node.
+                    Group("pokemon", "pk_cards_rare", "Rare & holo", "pk_cards", [Field("Grade")], 2, target: 4),
                     Group("pokemon", "pk_games", "Games", null, ["Completeness"], 3),
-                    Group("pokemon", "pk_games_n64", "N64", "pk_games", [], 4),
+                    // Both owned against a target of two: the completed state.
+                    Group("pokemon", "pk_games_n64", "N64", "pk_games", [], 4, target: 2),
                     Group("pokemon", "pk_games_gb", "Game Boy", "pk_games", ["Battery"], 5),
                     Group("pokemon", "pk_toys", "Toys", null, [], 6),
                     Group("pokemon", "pk_dvds", "DVDs", null, [], 7),
@@ -152,12 +156,16 @@ public static class SeedData
                 // needn't be repeated in every item's name.
                 Groups =
                 [
+                    // Targets are what turns "3 items" into "3 of 24": the run
+                    // has a known length, and the gap is the point of the
+                    // collection. Indie declares none on purpose, so the
+                    // no-target fallback is always on screen next to them.
                     Group("comics", "Marvel", "Marvel", null,
                         [Field("Issue", GroupFieldType.Number), Field("Grade"), Field("Key")],
-                        0, sortBy: "field:Issue", sortDirection: "asc"),
+                        0, sortBy: "field:Issue", sortDirection: "asc", target: 24),
                     Group("comics", "DC", "DC", null,
                         [Field("Issue", GroupFieldType.Number), Field("Print")],
-                        1, sortBy: "field:Issue", sortDirection: "asc"),
+                        1, sortBy: "field:Issue", sortDirection: "asc", target: 12),
                     Group("comics", "Indie", "Indie", null,
                         [Field("Issue", GroupFieldType.Number), Field("Print")],
                         2, sortBy: "field:Issue", sortDirection: "asc"),
@@ -301,6 +309,9 @@ public static class SeedData
         string id,
         string name,
         string? parentId,
+        // No `target` here on purpose: an optional parameter in both overloads
+        // makes an empty `[]` field list ambiguous between them. Groups that
+        // declare a target pass an explicit GroupField list instead.
         List<string> fields,
         int sortOrder) =>
         Group(collectionId, id, name, parentId, [.. fields.Select(f => Field(f))], sortOrder);
@@ -313,7 +324,8 @@ public static class SeedData
         List<GroupField> fields,
         int sortOrder,
         string? sortBy = null,
-        string? sortDirection = null) => new()
+        string? sortDirection = null,
+        int? target = null) => new()
         {
             CollectionId = collectionId,
             Id = id,
@@ -322,6 +334,7 @@ public static class SeedData
             Fields = fields,
             SortBy = sortBy,
             SortDirection = sortDirection,
+            Target = target,
             SortOrder = sortOrder,
         };
 

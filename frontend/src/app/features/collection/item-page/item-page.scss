@@ -38,9 +38,10 @@
     font-size: 11px;
     color: var(--muted);
 
+    /** Framing always arrives as an inline background-position, so declaring
+        one here would be dead. */
     &--photo {
       background-size: cover;
-      background-position: center;
     }
   }
 
@@ -48,6 +49,15 @@
     display: flex;
     gap: 10px;
   }
+}
+
+/**
+ * Not owned yet: drained of colour and faded, the same pair of cues the grid
+ * card and the group cover use and at the same strength, so an item looks
+ * identical wherever you meet it. The values live in the mixin.
+ */
+.wanted {
+  @include wanted-photo;
 }
 
 .thumb {
@@ -60,12 +70,16 @@
 
   &--photo {
     background-size: cover;
-    background-position: center;
     cursor: pointer;
   }
 
+  /** Thicker as well as accented: a filter applies to the whole element, border
+      included, so on a wantlist item's greyed thumbnails colour alone would no
+      longer say which one is selected. Width survives any filter, and
+      border-box keeps it from shifting the picture. */
   &--active {
     border-color: var(--accent);
+    border-width: 2px;
   }
 
   &--add {

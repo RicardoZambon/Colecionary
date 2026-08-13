@@ -17,7 +17,22 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
   },
   template: `
     @if (src(); as url) {
-      <div class="image" [style.background-image]="'url(' + url + ')'"></div>
+      <div
+        class="image"
+        [style.background-image]="'url(' + url + ')'"
+        [style.background-position]="focal()"
+      ></div>
+      @if (reframable()) {
+        <button
+          type="button"
+          class="reframe"
+          title="Adjust framing"
+          aria-label="Adjust framing"
+          (click)="requestReframe($event)"
+        >
+          ⌖
+        </button>
+      }
     } @else {
       <div class="placeholder">
         <span>{{ placeholder() }}</span>
@@ -27,10 +42,32 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
   styles: `
     :host {
       display: block;
+      position: relative;
       width: 100%;
       height: 100%;
       overflow: hidden;
       cursor: pointer;
+    }
+
+    .reframe {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border: var(--bw) solid var(--border);
+      border-radius: var(--pill);
+      background: var(--panel);
+      color: var(--text2);
+      font-size: 11px;
+      cursor: pointer;
+
+      &:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
     }
 
     .image {
@@ -59,8 +96,24 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 })
 export class UiImageSlot {
   readonly src = input<string | null>(null);
+  /**
+   * CSS `background-position` for the crop — the page resolves it from
+   * `ImageFocusService`, keeping this component free of any state dependency.
+   */
+  readonly focal = input('50% 50%');
+  /** Shows the "adjust framing" affordance. Off by default: read-only usages
+   * (the dashboard card) must stay inert. */
+  readonly reframable = input(false);
   readonly placeholder = input('');
   readonly fileSelected = output<File>();
+  readonly reframeRequested = output<void>();
+
+  protected requestReframe(event: MouseEvent): void {
+    // The host opens the file picker on click; framing must not also replace
+    // the image the user is trying to reframe.
+    event.stopPropagation();
+    this.reframeRequested.emit();
+  }
 
   protected browse(): void {
     const input = document.createElement('input');

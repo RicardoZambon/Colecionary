@@ -4,18 +4,25 @@
   @if (item(); as it) {
     <div class="layout">
       <div class="gallery">
-        @if (mainPhotoUrl(); as url) {
-          <div class="gallery__main gallery__main--photo" [style.background-image]="'url(' + url + ')'"></div>
+        @if (mainPhoto(); as photo) {
+          <div
+            class="gallery__main gallery__main--photo"
+            [class.wanted]="!owned()"
+            [style.background-image]="'url(' + photo.url + ')'"
+            [style.background-position]="focus.position(photo.id)"
+          ></div>
         } @else {
           <div class="gallery__main">img: {{ it.img }}</div>
         }
         <div class="gallery__thumbs">
-          @for (url of photoUrls(); track $index) {
+          @for (photo of photos(); track photo.id) {
             <button
               type="button"
               class="thumb thumb--photo"
               [class.thumb--active]="$index === selectedPhoto()"
-              [style.background-image]="'url(' + url + ')'"
+              [class.wanted]="!owned()"
+              [style.background-image]="'url(' + photo.url + ')'"
+              [style.background-position]="focus.position(photo.id)"
               (click)="selectedPhoto.set($index)"
             ></button>
           }
@@ -23,6 +30,9 @@
             <button type="button" class="thumb thumb--add" (click)="addPhoto()" title="Add photo">+</button>
           }
         </div>
+        @if (mainPhoto(); as photo) {
+          <ui-button variant="ghost" size="sm" (click)="reframe(photo.id)">Adjust framing</ui-button>
+        }
       </div>
 
       <div class="details">

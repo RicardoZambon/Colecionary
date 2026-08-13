@@ -14,13 +14,18 @@ public sealed record GroupFieldDto(string Name, string Type);
 /// </summary>
 public sealed record GroupSortDto(string By, string Direction);
 
-/// <summary>A null Sort means the nearest ancestor that sets one decides.</summary>
+/// <summary>
+/// A null Sort means the nearest ancestor that sets one decides. A null Target
+/// means no series size was declared, so progress is measured against what is
+/// catalogued; keep the null, it is what tells "undeclared" from any number.
+/// </summary>
 public sealed record GroupNodeDto(
     string Id,
     string Name,
     string? ParentId,
     IReadOnlyList<GroupFieldDto> Fields,
-    GroupSortDto? Sort = null);
+    GroupSortDto? Sort = null,
+    int? Target = null);
 
 /// <summary>One physical copy. A null Value means "use the item's Value".</summary>
 public sealed record ItemCopyDto(

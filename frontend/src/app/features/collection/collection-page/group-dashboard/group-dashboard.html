@@ -1,0 +1,32 @@
+<div class="board">
+  @for (card of cards(); track card.id) {
+    <app-group-card
+      [collectionId]="collectionId()"
+      [groupId]="card.id"
+      [name]="card.name"
+      [stats]="card.stats"
+      [tiles]="card.tiles"
+    />
+  }
+
+  @if (directCount()) {
+    <a
+      class="tile"
+      [routerLink]="['/c', collectionId()]"
+      [queryParams]="{ v: 'grid' }"
+      queryParamsHandling="merge"
+    >
+      <span class="tile__glyph" aria-hidden="true">▦</span>
+      {{ directCount() }} item{{ directCount() === 1 ? '' : 's' }} filed here
+    </a>
+  }
+
+  <button type="button" class="tile tile--new" (click)="newGroup.emit()">+ New group</button>
+</div>
+
+@if (!cards().length && !directCount()) {
+  <div class="empty">
+    No sub-groups here yet. Create one to break this part of the collection down,
+    or switch to the item views above.
+  </div>
+}

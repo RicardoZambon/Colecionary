@@ -1,0 +1,76 @@
+@use '../../../../../styles/mixins' as *;
+
+:host {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.row-label {
+  @include mono-label(10px, 0.1em);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.sort-trigger {
+  background: none;
+  border: none;
+  font-size: 11.5px;
+  font-family: var(--font-body);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    color: var(--accent);
+  }
+}
+
+.sort-option {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  color: var(--text2);
+  background: transparent;
+  text-align: left;
+
+  &:hover,
+  &.active {
+    background: var(--panel2);
+  }
+
+  .check {
+    color: var(--accent);
+  }
+}
+
+.view-toggle {
+  display: flex;
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+
+  button {
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+
+    &.active {
+      background: var(--panel2);
+      color: var(--text);
+    }
+  }
+}

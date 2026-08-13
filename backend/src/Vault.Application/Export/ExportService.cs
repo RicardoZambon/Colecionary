@@ -55,7 +55,18 @@ public sealed class ExportService(
             await JsonSerializer.SerializeAsync(jsonStream, dtos, JsonOptions, ct);
         }
 
-        foreach (var image in await images.ListForCurrentTenantAsync(ct))
+        var rows = await images.ListForCurrentTenantAsync(ct);
+
+        // Framing lives on the image row, not in the collection graph, so
+        // collections.json alone would silently drop it — the archive would
+        // restore every photo centred again.
+        var metaEntry = archive.CreateEntry("images.json", CompressionLevel.Optimal);
+        await using (var metaStream = metaEntry.Open())
+        {
+            await JsonSerializer.SerializeAsync(metaStream, rows.Select(ImageMapper.ToMeta), JsonOptions, ct);
+        }
+
+        foreach (var image in rows)
         {
             var bytes = await store.OpenReadAsync(image.TenantId, image.Id, image.ContentType, ct);
             if (bytes is null)

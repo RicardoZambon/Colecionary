@@ -1,200 +1,106 @@
 @if (collection(); as coll) {
-  <div class="banner">
-    <ui-image-slot
-      [src]="images.url(coll.bannerImageId)"
-      placeholder="Drop a banner image for this collection"
-      (fileSelected)="setCollectionImage('banner', $event)"
-    />
-    <div class="banner__fade"></div>
-  </div>
+  <app-collection-hero
+    [collection]="coll"
+    [scope]="scope()"
+    [total]="total()"
+    [scopeName]="scopeName()"
+    [members]="headerMembers()"
+  />
 
-  <div class="header">
-    <div class="header__icon">
-      <ui-image-slot
-        [src]="images.url(coll.iconImageId)"
-        placeholder="Icon"
-        (fileSelected)="setCollectionImage('icon', $event)"
+  <!-- Full width, above the split: it describes the whole page, not the pane
+       to the right of the tree. One bar — where you are on the left, what you
+       are looking at on the right — with the item filters as its second line. -->
+  <div class="controls">
+    <div class="bar">
+      <app-group-breadcrumb
+        [collectionId]="coll.id"
+        [collectionName]="coll.name"
+        [path]="crumbPath()"
+        [children]="childChips()"
+        [collapsed]="treeCollapsed()"
+        [pending]="!!pendingGroupParent()"
+        (expandTree)="toggleTree()"
+        (newGroup)="startNewGroup()"
+        (nameKeydown)="newGroupKeydown($event)"
+        (nameCommit)="commitNewGroup($event)"
+      />
+
+      <app-collection-toolbar
+        class="bar__controls"
+        [fields]="groupFields()"
+        [groupSort]="groupSort()"
+        [searching]="searching()"
+        [sortOverride]="sortOverride()"
+        (sortOverrideChange)="sortOverride.set($event)"
+        [view]="view()"
+        (viewChange)="setView($event)"
       />
     </div>
-    <div class="header__text">
-      <h1>{{ title() }}</h1>
-      <p>{{ coll.description }}</p>
-    </div>
-    <div class="header__actions">
-      <div class="progress-box">
-        <div class="progress-box__row">
-          <span>
-            {{ ownedCount() }} / {{ coll.items.length }} OWNED
-            @if (totalCopies() > coll.items.length) {
-              <span class="copies-note">· {{ totalCopies() }} COPIES</span>
-            }
-          </span>
-          <span class="pct">{{ ownedPct() }}%</span>
-        </div>
-        <ui-progress [pct]="ownedPct()" />
-      </div>
-      <div class="value-box">
-        est <span class="value">{{ totalValue() | money }}</span>
-      </div>
-      <a [routerLink]="['/c', coll.id, 'settings']" [queryParams]="{ tab: 'sharing' }" title="Manage sharing">
-        <ui-avatar-stack [members]="headerMembers()" />
-      </a>
-      <ui-button variant="ghost" size="sm" [routerLink]="['/c', coll.id, 'settings']" title="Collection settings — general, groups & sharing">⚙ Manage</ui-button>
-      <ui-button size="sm" [routerLink]="['/c', coll.id, 'items', 'new']" queryParamsHandling="preserve">+ Add item</ui-button>
-    </div>
-  </div>
 
-  <div class="groups-row">
-    <span class="row-label">GROUPS</span>
-    @for (chip of chips(); track chip.id ?? '__root') {
-      <ui-chip
-        [selected]="chip.selected"
-        [onPath]="chip.onPath"
-        [count]="chip.count"
-        (click)="selectChip(chip)"
-      >{{ chip.label }}</ui-chip>
-    }
-    @if (pendingGroupParent()) {
-      <input
-        class="chip-input"
-        placeholder="New group name… (Enter)"
-        autofocus
-        (keydown)="newGroupKeydown($event)"
-        (blur)="commitNewGroup($any($event.target).value)"
+    @if (view() !== 'dashboard') {
+      <app-collection-filters
+        [condition]="condition()"
+        (conditionChange)="condition.set($event)"
+        [own]="own()"
+        (ownChange)="own.set($event)"
       />
-    } @else {
-      <ui-chip [dashed]="true" (click)="pendingGroupParent.set({ parentId: selectedGroup()?.id ?? null })">+ New</ui-chip>
     }
   </div>
 
-  <div class="filters-row">
-    <span class="row-label">CONDITION</span>
-    @for (value of conditions; track value) {
-      <ui-chip [small]="true" [selected]="condition() === value" (click)="toggleCondition(value)">{{ value }}</ui-chip>
+  <div class="layout" [class.layout--wide]="!treeCollapsed()">
+    @if (!treeCollapsed()) {
+      <app-group-tree
+        class="layout__tree"
+        [collectionId]="coll.id"
+        [groups]="groups()"
+        [stats]="stats()"
+        [selectedId]="g() ?? null"
+        [expanded]="treeExpanded()"
+        (expandedChange)="setTreeExpanded($event)"
+        (collapse)="toggleTree()"
+      />
     }
-    <span class="row-label spaced">STATUS</span>
-    <ui-chip [small]="true" [selected]="own() === 'owned'" (click)="toggleOwn('owned')">Owned</ui-chip>
-    <ui-chip [small]="true" [selected]="own() === 'wanted'" (click)="toggleOwn('wanted')">Wanted</ui-chip>
 
-    <span class="spacer"></span>
+    <div class="layout__main">
 
-    <ui-dropdown #sortMenu [width]="230">
-      <button ddTrigger type="button" class="sort-trigger">Sort: {{ sortLabel() }} ▾</button>
-      <ng-container ddPanel>
-        @for (option of sortOptions(); track option.id) {
-          <button
-            type="button"
-            class="sort-option"
-            [class.active]="activeSortId() === option.id"
-            (click)="pickSort(option); sortMenu.close()"
-          >
-            <span>{{ option.label }}</span>
-            <span class="check">@if (activeSortId() === option.id) { ✓ }</span>
-          </button>
+      @switch (view()) {
+        @case ('dashboard') {
+          <app-group-dashboard
+            [collectionId]="coll.id"
+            [groups]="groups()"
+            [stats]="stats()"
+            [parentId]="g() ?? null"
+            [directItems]="directItems()"
+            (newGroup)="startNewGroup()"
+          />
         }
-      </ng-container>
-    </ui-dropdown>
+        @case ('list') {
+          <app-item-list
+            [items]="items()"
+            [collectionId]="coll.id"
+            [manual]="manual()"
+            [sortFieldName]="sortFieldName()"
+            [groupNames]="groupNames()"
+            (moved)="moveItem($event.from, $event.to)"
+          />
+        }
+        @default {
+          <app-item-grid
+            [items]="items()"
+            [collectionId]="coll.id"
+            [manual]="manual()"
+            [sortFieldName]="sortFieldName()"
+            [groupNames]="groupNames()"
+            (moved)="moveItem($event.from, $event.to)"
+          />
+        }
+      }
 
-    <div class="view-toggle">
-      <button type="button" [class.active]="view() === 'grid'" (click)="view.set('grid')">▦</button>
-      <button type="button" [class.active]="view() === 'list'" (click)="view.set('list')">☰</button>
+      @if (view() !== 'dashboard' && items().length === 0) {
+        <div class="empty">No items match — clear search or filters.</div>
+      }
     </div>
   </div>
-
-  @if (view() === 'grid') {
-    <div class="items-grid">
-      @for (item of items(); track item.id; let i = $index) {
-        <ui-card
-          [interactive]="true"
-          class="item-card"
-          [class.item-card--wanted]="!isOwned(item)"
-          [class.dragging]="dragIndex() === i"
-          [attr.draggable]="manual() ? true : null"
-          (dragstart)="onDragStart($event, i)"
-          (dragover)="onDragOver($event)"
-          (drop)="onDrop($event, i)"
-          (dragend)="onDragEnd()"
-          [routerLink]="['/c', coll.id, 'items', item.id]"
-          queryParamsHandling="preserve"
-        >
-          <div class="item-card__img" [class.dim]="!isOwned(item)">
-            @if (fieldChip(item); as chip) {
-              <span class="item-card__chip">
-                <ui-badge tone="accent" [attr.title]="sortFieldName() + ': ' + chip">{{ chip }}</ui-badge>
-              </span>
-            }
-            @if (item.photoIds.length) {
-              <div class="cover" [style.background-image]="'url(' + images.url(item.photoIds[0]) + ')'"></div>
-            } @else {
-              img: {{ item.img }}
-            }
-          </div>
-          <div class="item-card__body">
-            <div class="item-card__name">{{ item.name }}</div>
-            <div class="item-card__meta">{{ item.year }} · {{ groupName(item) }}</div>
-            <div class="item-card__foot">
-              <span class="item-card__value">{{ item.value | money }}</span>
-              <ui-badge [tone]="badgeTone(item)">{{ badgeLabel(item) }}</ui-badge>
-            </div>
-          </div>
-          @if (manual()) {
-            <ui-reorder
-              [label]="item.name"
-              [first]="i === 0"
-              [last]="i === items().length - 1"
-              (moved)="moveItem(i, i + $event)"
-            />
-          }
-        </ui-card>
-      }
-      <a class="add-tile" [routerLink]="['/c', coll.id, 'items', 'new']" queryParamsHandling="preserve">+ Add item</a>
-    </div>
-  } @else {
-    <ui-card>
-      <div class="list-head" [class.list--manual]="manual()">
-        <span>NAME</span><span>GROUP</span><span>YEAR</span><span>COND</span><span class="right">VALUE</span>
-      </div>
-      @for (item of items(); track item.id; let i = $index) {
-        <div
-          class="list-line"
-          [class.dragging]="dragIndex() === i"
-          [attr.draggable]="manual() ? true : null"
-          (dragstart)="onDragStart($event, i)"
-          (dragover)="onDragOver($event)"
-          (drop)="onDrop($event, i)"
-          (dragend)="onDragEnd()"
-        >
-          <a
-            class="list-row"
-            [class.list--manual]="manual()"
-            [routerLink]="['/c', coll.id, 'items', item.id]"
-            queryParamsHandling="preserve"
-          >
-            <span class="name">
-              @if (fieldChip(item); as chip) { <span class="field">{{ chip }}</span> }
-              {{ item.name }}
-            </span>
-            <span class="group">{{ groupName(item) }}</span>
-            <span class="year">{{ item.year }}</span>
-            <span class="cond" [class]="'tone-' + badgeTone(item)">{{ badgeLabel(item) }}</span>
-            <span class="right value">{{ item.value | money }}</span>
-          </a>
-          @if (manual()) {
-            <ui-reorder
-              [label]="item.name"
-              [first]="i === 0"
-              [last]="i === items().length - 1"
-              (moved)="moveItem(i, i + $event)"
-            />
-          }
-        </div>
-      }
-    </ui-card>
-  }
-
-  @if (items().length === 0) {
-    <div class="empty">No items match — clear search or filters.</div>
-  }
 } @else {
   <div class="missing">
     Collection not found — <a routerLink="/dashboard">back to Dashboard</a>.

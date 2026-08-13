@@ -39,6 +39,10 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
                 current.Fields = incoming.Fields;
                 current.SortBy = incoming.SortBy;
                 current.SortDirection = incoming.SortDirection;
+                // Plain assignment, never a coalesce: clearing a target back to
+                // null is a legitimate edit, and omitting the line entirely
+                // would let a target save on create and then never change.
+                current.Target = incoming.Target;
                 current.SortOrder = incoming.SortOrder;
             });
 

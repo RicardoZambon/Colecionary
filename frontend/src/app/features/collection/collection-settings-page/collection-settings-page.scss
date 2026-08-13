@@ -144,6 +144,16 @@ h1 {
     .direction {
       min-width: 86px;
     }
+
+    /* Wide enough for a five-digit run, narrow enough to read as a number
+       rather than as another dropdown. */
+    .target {
+      width: 78px;
+    }
+
+    .fields-label.spaced {
+      margin-left: 10px;
+    }
   }
 }
 

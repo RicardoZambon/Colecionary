@@ -108,6 +108,12 @@ public class CollectionService(
                 Name = name,
                 ParentId = null,
                 Fields = [],
+                // A curated checklist IS the declared set, so its item count
+                // per group is the target — an imported list then reads
+                // "0 / 5" instead of a bare "0 items". A group the listing
+                // leaves empty declares nothing: 0 is not a series, and the
+                // validator would reject it on the very next PUT.
+                Target = listing.Items.Count(it => it.Group == name) is var count && count > 0 ? count : null,
                 SortOrder = i,
             })],
             Items = [.. listing.Items.Select((it, i) => new Item

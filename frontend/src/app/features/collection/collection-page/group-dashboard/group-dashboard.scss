@@ -1,0 +1,45 @@
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 15px;
+  align-items: stretch;
+}
+
+.tile {
+  border: var(--bw) dashed var(--border);
+  border-radius: var(--radius);
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 180px;
+  padding: 16px;
+  text-align: center;
+  font-size: 12.5px;
+  font-family: var(--font-body);
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+
+  &__glyph {
+    font-size: 18px;
+  }
+
+  &:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    text-decoration: none;
+  }
+
+  &--new {
+    color: var(--accent);
+  }
+}
+
+.empty {
+  border: var(--bw) dashed var(--border);
+  border-radius: var(--radius);
+  padding: 40px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
