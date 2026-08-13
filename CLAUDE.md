@@ -70,7 +70,12 @@ Full detail in [`backend/README.md`](backend/README.md).
    tenant**, so a tenant's images are a unit you can copy, quota or delete, and
    no lookup can cross tenants. Always pass the tenant id read from the image's
    own row, not the ambient request tenant; that is what keeps the anonymous
-   GUID read endpoint safe.
+   GUID read endpoint safe. **Framing (`FocalX`/`FocalY`) is metadata on that
+   same row and never rewrites the bytes**, so an id and its `immutable`-cached
+   URL stay valid. Its write resolves the row through
+   `GetForCurrentTenantAsync`, never `GetUnfilteredAsync`: ignoring the filter
+   is only defensible for the anonymous byte read, and using it for a write
+   would let one tenant reframe another's image.
 
 ## Non-negotiable frontend rules
 
@@ -99,20 +104,27 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    and all comparison lives in `core/utils/sort.util.ts` — never sort items
    inline. Manual order is the array order of `collection.items`, persisted by
    index; the item DTO has no `sortOrder`.
-5. **All data flows through the abstract `VaultApi`**
+5. **Image framing is a focal point, never a crop.** Every surface renders with
+   `background-size: cover`, so which part shows is one property:
+   `background-position`. An image carries `focal: {x, y}` (0–1) on its own row,
+   so one adjustment fixes the card, the gallery and the banner at once. Bind
+   `ImageFocusService.position(id)`; never compute a percentage inline — the
+   conversion lives in `core/utils/focal.util.ts`. Null means "never framed"
+   (renders centred) and must survive round-trips.
+6. **All data flows through the abstract `VaultApi`**
    (`frontend/src/app/core/api/vault-api.ts`), fulfilled by `HttpVaultApi`
    against the .NET backend. There is no mocked data in the frontend — demo
    data lives in the backend seeder. Feature code only ever sees the abstract
    contract.
-6. **Signals + zoneless + OnPush.** State lives in signal stores
+7. **Signals + zoneless + OnPush.** State lives in signal stores
    (`core/state`); no Zone.js patterns.
-7. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
+8. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
    the path. In-collection navigation preserves `?g=`
    (`queryParamsHandling: 'preserve'`).
-8. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
+9. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
    `:focus-visible`, status never communicated by color alone. Anything
-   draggable also needs a keyboard path (`ui-reorder`).
-9. **Verify before merging:** `npm run build` clean (warnings included — the
+   draggable also needs a keyboard path (`ui-reorder`, `ui-image-focus`).
+10. **Verify before merging:** `npm run build` clean (warnings included — the
    6 kB per-component style budget is real), unit tests green, and the
    affected flows exercised in the browser in at least one dark theme.
 

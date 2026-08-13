@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
+import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, GroupNode, GroupSort, Item } from '../../../core/models';
@@ -87,6 +88,7 @@ const ORDER_DEBOUNCE_MS = 400;
 export class CollectionPage {
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
+  protected readonly focus = inject(ImageFocusService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -367,7 +369,7 @@ export class CollectionPage {
     const collection = this.collection();
     if (!collection) return;
     try {
-      const imageId = await this.images.upload(file);
+      const imageId = await this.focus.uploadAndFrame(file);
       await this.store.updateCollection({
         ...collection,
         bannerImageId: slot === 'banner' ? imageId : collection.bannerImageId,
@@ -377,6 +379,13 @@ export class CollectionPage {
     } catch (err) {
       this.toast.flash(err instanceof Error ? err.message : 'Upload failed');
     }
+  }
+
+  /** Reopens the editor for an image that is already in place. */
+  protected reframeCollectionImage(slot: 'banner' | 'icon'): void {
+    const collection = this.collection();
+    const imageId = slot === 'banner' ? collection?.bannerImageId : collection?.iconImageId;
+    if (imageId) void this.focus.frame(imageId);
   }
 
   protected newGroupKeydown(event: KeyboardEvent): void {

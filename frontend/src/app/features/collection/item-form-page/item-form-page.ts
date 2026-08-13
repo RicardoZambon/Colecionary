@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
+import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
@@ -70,6 +71,7 @@ function fromDraft(draft: CopyDraft): ItemCopy {
 export class ItemFormPage {
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
+  protected readonly focus = inject(ImageFocusService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
@@ -140,12 +142,16 @@ export class ItemFormPage {
     if (!imageFiles.length) return;
     this.uploading.set(true);
     try {
-      for (const file of imageFiles) {
+      for (const [index, file] of imageFiles.entries()) {
         if (this.photoIds().length >= MAX_PHOTOS) {
           this.toast.flash('Up to 8 photos per item');
           break;
         }
-        const imageId = await this.images.upload(file);
+        // Only the first of a batch opens the editor: five modals in a row for
+        // one drop would be hostile. The rest land centred and can be adjusted
+        // from the grid whenever the user wants.
+        const imageId =
+          index === 0 ? await this.focus.uploadAndFrame(file) : await this.images.upload(file);
         this.photoIds.update(ids => [...ids, imageId]);
       }
     } catch (err) {
@@ -157,6 +163,11 @@ export class ItemFormPage {
 
   protected removePhoto(index: number): void {
     this.photoIds.update(ids => ids.filter((_, i) => i !== index));
+  }
+
+  /** Reopens the editor for a photo already on the item. */
+  protected reframe(imageId: string): void {
+    void this.focus.frame(imageId);
   }
 
   // --- copies ---

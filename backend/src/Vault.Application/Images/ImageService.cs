@@ -1,5 +1,7 @@
+using FluentValidation;
 using Vault.Application.Abstractions;
 using Vault.Application.Common;
+using Vault.Application.Images.Dtos;
 using Vault.Domain.Entities;
 
 namespace Vault.Application.Images;
@@ -13,7 +15,8 @@ public class ImageService(
     IImageRepository images,
     IImageStore store,
     ICurrentTenant currentTenant,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IValidator<FocalPointDto> focalValidator)
 {
     public const int MaxBytes = 5 * 1024 * 1024;
 
@@ -66,5 +69,35 @@ public class ImageService(
             ?? throw new NotFoundException($"Image '{id}' has no stored bytes.");
 
         return new ImageContent(image.ContentType, bytes);
+    }
+
+    /// <summary>
+    /// Metadata for every image the current tenant owns, so the client can frame
+    /// each one without a round-trip per photo.
+    /// </summary>
+    public async Task<IReadOnlyList<ImageMetaDto>> ListMetadataAsync(CancellationToken ct)
+    {
+        var rows = await images.ListForCurrentTenantAsync(ct);
+        return [.. rows.Select(ImageMapper.ToMeta)];
+    }
+
+    /// <summary>
+    /// Sets (or clears, when <paramref name="focal"/> is null) an image's focal
+    /// point. Tenant-filtered: an id belonging to someone else reads as missing.
+    /// </summary>
+    public async Task<ImageMetaDto> SetFocalAsync(Guid id, FocalPointDto? focal, CancellationToken ct)
+    {
+        if (focal is not null)
+        {
+            await focalValidator.ValidateAndThrowAsync(focal, ct);
+        }
+
+        var image = await images.GetForCurrentTenantAsync(id, ct)
+            ?? throw new NotFoundException($"Image '{id}' not found.");
+
+        image.FocalX = focal?.X;
+        image.FocalY = focal?.Y;
+        await images.SaveChangesAsync(ct);
+        return image.ToMeta();
     }
 }

@@ -80,10 +80,10 @@ h1 {
     padding: 1px 6px;
   }
 
-  &__remove {
+  &__remove,
+  &__frame {
     position: absolute;
     top: 3px;
-    right: 3px;
     width: 18px;
     height: 18px;
     border: none;
@@ -94,9 +94,21 @@ h1 {
     cursor: pointer;
     display: grid;
     place-items: center;
+  }
+
+  &__remove {
+    right: 3px;
 
     &:hover {
       color: var(--warn);
+    }
+  }
+
+  &__frame {
+    right: 24px;
+
+    &:hover {
+      color: var(--accent);
     }
   }
 }

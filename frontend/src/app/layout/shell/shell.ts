@@ -1,15 +1,16 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
+import { ImageFocusService } from '../../core/state/image-focus.service';
 import { VaultStore } from '../../core/state/vault.store';
-import { UiToast } from '../../shared/ui';
+import { UiImageFocus, UiToast } from '../../shared/ui';
 import { Sidebar } from '../sidebar/sidebar';
 import { Topbar } from '../topbar/topbar';
 
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, Topbar, Sidebar, UiToast],
+  imports: [RouterOutlet, Topbar, Sidebar, UiToast, UiImageFocus],
   template: `
     <app-topbar />
     <div class="body">
@@ -23,6 +24,7 @@ import { Topbar } from '../topbar/topbar';
       </main>
     </div>
     <ui-toast />
+    <ui-image-focus />
   `,
   styles: `
     :host {
@@ -52,10 +54,14 @@ import { Topbar } from '../topbar/topbar';
 })
 export class Shell {
   protected readonly store = inject(VaultStore);
+  private readonly focus = inject(ImageFocusService);
 
   constructor() {
     // A failed load mid-session (e.g. expired token) is handled by the auth
     // interceptor, which logs out and redirects — nothing to do here.
     this.store.load().catch(() => undefined);
+    // Framing is cosmetic: if it fails to load, every image just renders
+    // centred, which is exactly the pre-framing behaviour. Never block the app.
+    this.focus.load().catch(() => undefined);
   }
 }

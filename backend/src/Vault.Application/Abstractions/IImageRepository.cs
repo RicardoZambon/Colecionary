@@ -13,6 +13,20 @@ public interface IImageRepository
     Task<StoredImage?> GetUnfilteredAsync(Guid id, CancellationToken ct);
 
     /// <summary>
+    /// Tracked, tenant-filtered read for writes (framing).
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT <see cref="GetUnfilteredAsync"/>. Ignoring the filter is
+    /// only defensible for the anonymous byte read, where the unguessable id is
+    /// the capability and the worst case is serving bytes to whoever already
+    /// holds the id. A write has no such excuse: routed through the unfiltered
+    /// read, one tenant could reframe another tenant's image. Going through the
+    /// global filter means a foreign id simply doesn't exist, so the caller gets
+    /// a 404 and learns nothing.
+    /// </remarks>
+    Task<StoredImage?> GetForCurrentTenantAsync(Guid id, CancellationToken ct);
+
+    /// <summary>
     /// Every image belonging to the current tenant, for the export archive.
     /// Tenant-filtered by the context's global query filter — deliberately NOT
     /// unfiltered, unlike <see cref="GetUnfilteredAsync"/>.

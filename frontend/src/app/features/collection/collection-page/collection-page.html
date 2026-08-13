@@ -2,8 +2,11 @@
   <div class="banner">
     <ui-image-slot
       [src]="images.url(coll.bannerImageId)"
+      [focal]="focus.position(coll.bannerImageId)"
+      [reframable]="!!coll.bannerImageId"
       placeholder="Drop a banner image for this collection"
       (fileSelected)="setCollectionImage('banner', $event)"
+      (reframeRequested)="reframeCollectionImage('banner')"
     />
     <div class="banner__fade"></div>
   </div>
@@ -12,8 +15,11 @@
     <div class="header__icon">
       <ui-image-slot
         [src]="images.url(coll.iconImageId)"
+        [focal]="focus.position(coll.iconImageId)"
+        [reframable]="!!coll.iconImageId"
         placeholder="Icon"
         (fileSelected)="setCollectionImage('icon', $event)"
+        (reframeRequested)="reframeCollectionImage('icon')"
       />
     </div>
     <div class="header__text">
@@ -124,7 +130,11 @@
               </span>
             }
             @if (item.photoIds.length) {
-              <div class="cover" [style.background-image]="'url(' + images.url(item.photoIds[0]) + ')'"></div>
+              <div
+                class="cover"
+                [style.background-image]="'url(' + images.url(item.photoIds[0]) + ')'"
+                [style.background-position]="focus.position(item.photoIds[0])"
+              ></div>
             } @else {
               img: {{ item.img }}
             }

@@ -22,7 +22,7 @@ frontend/src/
 │  ├─ core/                 ← framework-level, no UI
 │  │  ├─ models/            ← typed domain model (one file per entity + barrel)
 │  │  ├─ api/               ← backend contract + mock implementation + seed data
-│  │  ├─ state/             ← signal stores/services (Vault, Theme, Toast, ImageSlot)
+│  │  ├─ state/             ← signal stores/services (Vault, Theme, Toast, ImageFocus)
 │  │  └─ utils/             ← pure functions (unit-tested)
 │  ├─ shared/
 │  │  ├─ ui/                ← THE component library (see §4)
@@ -35,7 +35,7 @@ frontend/src/
 
 **Dependency direction:** `features → shared → core`. `core` imports nothing
 from `shared` or `features`. `shared/ui` components never talk to the API or
-stores directly (exception: `ui-image-slot`/`ui-toast`, which exist to render
+stores directly (exception: `ui-image-focus`/`ui-toast`, which exist to render
 a core service's state).
 
 ## 2. Non-negotiable rules
@@ -115,7 +115,8 @@ All are exported from `shared/ui/index.ts`.
 | Reorder | `ui-reorder` | `label` (names the item for screen readers), `first`, `last`; output `moved(-1 | 1)` — the keyboard half of a drag-to-reorder list, absolutely positioned over a `position: relative` parent |
 | Section label | `ui-section-label` | content-projected mono uppercase micro-heading |
 | Dropdown | `ui-dropdown` | `width`; project trigger via `[ddTrigger]`, panel via `[ddPanel]`; call `close()` from panel handlers |
-| Image slot | `ui-image-slot` | `src`, `placeholder`; output `fileSelected(File)` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
+| Image slot | `ui-image-slot` | `src`, `focal` (CSS `background-position`), `placeholder`, `reframable`; outputs `fileSelected(File)`, `reframeRequested()` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
+| Image focus | `ui-image-focus` | none — global outlet in the shell, driven by `ImageFocusService`; the focal-point editor (drag or arrow keys, live previews of every surface) |
 | Toast | `ui-toast` | none — global outlet in the shell, driven by `ToastService.flash()` |
 | Money pipe | `\| money` | formats numbers as `$1,234` |
 
@@ -138,6 +139,21 @@ style the same raw element the same way, that's the signal to promote it here.
   (`/api/images/{id}`). `ui-image-slot` is presentational — it renders `src`
   and emits the picked file; pages own upload + persistence (photo ids travel
   on the item/collection DTOs).
+- **Framing is a focal point, never a crop.** Every surface renders images with
+  `background-size: cover`, so *which* part shows is decided by one property:
+  `background-position`. An image carries `focal: {x, y}` (0–1, on the image row
+  — framing is a property of the photograph, so one adjustment fixes the card,
+  the gallery and the banner at once). `ImageFocusService`
+  (`core/state/image-focus.service.ts`) loads every focal point once at startup
+  and exposes `position(id)`; pages bind that, and never compute a percentage
+  inline — `core/utils/focal.util.ts` owns the conversion (`focalToPosition`,
+  `clampFocal`, `focalFromPoint`), the same way `sort.util.ts` owns comparison.
+  **Null means "never framed"** and renders centred; keep the null, it is what
+  distinguishes an untouched image from one deliberately centred. The bytes are
+  never modified, so an image id — and its `immutable`-cached URL — stays valid
+  after reframing, and the edit is reversible. Uploads go through
+  `ImageFocusService.uploadAndFrame(file)`, which offers the editor once and is
+  skippable; `frame(id)` reopens it later.
 - **Export** goes through `ExportApi` (`core/api/export-api.ts`), which fetches
   `/api/export` as a `Blob` and hands it to a download anchor. Like `ImagesApi`
   it sits beside `VaultApi` rather than on it, because it deals in a binary

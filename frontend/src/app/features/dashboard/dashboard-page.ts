@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../core/api/images-api';
+import { ImageFocusService } from '../../core/state/image-focus.service';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { isOwned, ownedValue, paidTotal, sortValue } from '../../core/utils/copies.util';
@@ -29,6 +30,7 @@ const RECENT_COUNT = 4;
 export class DashboardPage {
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
+  protected readonly focus = inject(ImageFocusService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
