@@ -38,9 +38,10 @@
     font-size: 11px;
     color: var(--muted);
 
+    /** Framing always arrives as an inline background-position, so declaring
+        one here would be dead. */
     &--photo {
       background-size: cover;
-      background-position: center;
     }
   }
 
@@ -48,6 +49,20 @@
     display: flex;
     gap: 10px;
   }
+}
+
+/**
+ * Not owned yet: the photographs lose their colour, the same cue the grid card
+ * uses, so an item reads the same way wherever you meet it.
+ *
+ * Deliberately no fade to go with it, unlike the card. There, the picture is a
+ * thumbnail among many and dimming helps it recede; here it is the subject of
+ * the page, and dimming a close-up reads as "unavailable" rather than "wanted"
+ * — which would be wrong, since a wantlist entry is precisely what the user is
+ * still after.
+ */
+.wanted {
+  filter: grayscale(1);
 }
 
 .thumb {
@@ -60,7 +75,6 @@
 
   &--photo {
     background-size: cover;
-    background-position: center;
     cursor: pointer;
   }
 

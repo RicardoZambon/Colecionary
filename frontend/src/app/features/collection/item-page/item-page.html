@@ -7,6 +7,7 @@
         @if (mainPhoto(); as photo) {
           <div
             class="gallery__main gallery__main--photo"
+            [class.wanted]="!owned()"
             [style.background-image]="'url(' + photo.url + ')'"
             [style.background-position]="focus.position(photo.id)"
           ></div>
@@ -19,6 +20,7 @@
               type="button"
               class="thumb thumb--photo"
               [class.thumb--active]="$index === selectedPhoto()"
+              [class.wanted]="!owned()"
               [style.background-image]="'url(' + photo.url + ')'"
               [style.background-position]="focus.position(photo.id)"
               (click)="selectedPhoto.set($index)"
