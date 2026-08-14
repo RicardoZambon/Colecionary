@@ -9,6 +9,7 @@ import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
 import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
 import { fieldsFor, flattenTree, groupById, resolveGroupId } from '../../../core/utils/groups.util';
+import { groupLinkParams } from '../browse-params';
 import { TPipe } from '../../../shared/pipes/t.pipe';
 import { SelectOption, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea } from '../../../shared/ui';
 import { conditionLabelKey } from '../../../shared/ui/badge/badge';
@@ -300,7 +301,7 @@ export class ItemFormPage {
     // changed the group while filling the form that is the one view the new item
     // is not in. Null drops the param: an unfiled item shows at the root.
     void this.router.navigate(['/c', collection.id], {
-      queryParams: { g: item.groupId || null },
+      queryParams: groupLinkParams(item.groupId || null),
       queryParamsHandling: 'merge',
     });
   }

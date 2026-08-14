@@ -64,16 +64,41 @@ a core service's state).
    No `Zone.js`-dependent patterns, no manual `detectChanges`.
 5. **URL is state.** Anything the user would want restored on refresh,
    back-navigation, or a shared link lives in the route: selected group is
-   `?g=<groupId>`, settings tabs are `?tab=<id>`, entity ids are path params
-   (`/c/:collectionId/items/:itemId`). Route/query params bind to component
-   inputs via `withComponentInputBinding()`. Navigations within a collection
-   preserve `?g=` (`queryParamsHandling: 'preserve'`).
+   `?g=<groupId>`, the chosen view is `?v=`, the item filters and order are
+   `?cond=` / `?own=` / `?sort=` + `?dir=`, settings tabs are `?tab=<id>`,
+   entity ids are path params (`/c/:collectionId/items/:itemId`). Route/query
+   params bind to component inputs via `withComponentInputBinding()`.
+   Navigations within a collection preserve the query string
+   (`queryParamsHandling: 'preserve'`).
+   **Which items are on screen, and in what order, is URL state** — that is
+   what lets an open item rebuild the very list the grid showed and offer its
+   neighbours, and what makes coming back from an item restore the filters
+   instead of clearing them. Two rules keep it honest. A query string is
+   untrusted input, so it is parsed in
+   `features/collection/browse-params.ts`, where an unknown condition or a
+   sort key nobody declared reads as "no filter" rather than filtering
+   everything out. And the list itself is derived only by
+   `core/utils/browse.util.ts` (`visibleItems`, `neighbours`) — the grid and
+   the item page consuming one function is what stops them from disagreeing
+   about who comes next; filtering inline in each would drift the first time a
+   filter changed. Links that open a group build their params with
+   `groupLinkParams`: merging keeps the filters and the view across a group
+   change, and the ad-hoc order is deliberately dropped, because every group
+   declares its own and a one-off pick has no business outliving the group it
+   was made in. Filters and order navigate with `replaceUrl`, so back means
+   "where I came from" rather than undoing six chip toggles.
 6. **Lazy routes.** Every routed page is `loadComponent`. Keep the initial
    bundle lean.
 7. **Accessibility.** Real `<a>`/`<button>` elements for anything clickable,
    `role`/`aria-*` where semantics need it (`switch`, `tablist`, `progressbar`),
    and a visible `:focus-visible` outline (defined globally). Status is never
-   color-only — badges pair color with text.
+   color-only — badges pair color with text. An arrow-key shortcut is an
+   addition to a real control, never a replacement: the item page's `←`/`→`
+   step between items, but each step is also an anchor with an `href`, and the
+   shortcut stands down inside a field that needs the caret and inside the
+   photo strip, where the arrows move photos instead. A dead end of a sequence
+   renders as a `<span>`, not as a link that takes focus and refuses to go
+   anywhere.
 8. **Copy and formatting.** No user-facing string is written in a component.
    Every one is a key in `core/i18n/messages/` rendered through the `t` pipe
    or `I18nService.t` (see §6). USD values render through the `money` pipe

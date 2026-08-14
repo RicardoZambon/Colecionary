@@ -31,7 +31,7 @@
         [groupSort]="groupSort()"
         [searching]="searching()"
         [sortOverride]="sortOverride()"
-        (sortOverrideChange)="sortOverride.set($event)"
+        (sortOverrideChange)="setSortOverride($event)"
         [view]="view()"
         (viewChange)="setView($event)"
       />
@@ -40,9 +40,9 @@
     @if (view() !== 'dashboard') {
       <app-collection-filters
         [condition]="condition()"
-        (conditionChange)="condition.set($event)"
-        [own]="own()"
-        (ownChange)="own.set($event)"
+        (conditionChange)="setCondition($event)"
+        [own]="ownFilter()"
+        (ownChange)="setOwn($event)"
       />
     }
   </div>

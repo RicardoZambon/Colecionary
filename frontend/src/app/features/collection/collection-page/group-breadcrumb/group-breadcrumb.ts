@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { RouterLink } from '@angular/router';
 
 import { GroupNode } from '../../../../core/models';
+import { groupLinkParams } from '../../browse-params';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiChip } from '../../../../shared/ui';
 
@@ -39,7 +40,7 @@ export interface ChildChip {
       @for (crumb of crumbs(); track crumb.id; let last = $last) {
         <ui-chip
           [link]="['/c', collectionId()]"
-          [queryParams]="{ g: crumb.id }"
+          [queryParams]="linkParams(crumb.id)"
           [onPath]="!crumb.current"
           [selected]="crumb.current"
           [attr.aria-current]="crumb.current ? 'page' : null"
@@ -67,7 +68,7 @@ export interface ChildChip {
             <ui-chip
               [small]="true"
               [link]="['/c', collectionId()]"
-              [queryParams]="{ g: child.id }"
+              [queryParams]="linkParams(child.id)"
               [count]="child.count"
             >{{ child.name }}</ui-chip>
           }
@@ -168,6 +169,9 @@ export interface ChildChip {
   `,
 })
 export class GroupBreadcrumb {
+  /** Opening a group keeps the filters and drops the ad-hoc order. */
+  protected readonly linkParams = groupLinkParams;
+
   readonly collectionId = input.required<string>();
   readonly collectionName = input.required<string>();
   /** Root → … → selected group, from `pathOf`. Empty at the collection root. */

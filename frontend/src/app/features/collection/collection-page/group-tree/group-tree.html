@@ -38,7 +38,7 @@
       <a
         class="row__link"
         [routerLink]="['/c', collectionId()]"
-        [queryParams]="{ g: row.node.id }"
+        [queryParams]="linkParams(row.node.id)"
         queryParamsHandling="merge"
         [tabindex]="focusedId() === row.node.id ? 0 : -1"
         (keydown)="onKeydown($event, i)"

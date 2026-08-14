@@ -14,6 +14,7 @@ import { I18nService } from '../../../../core/i18n';
 import { GroupNode } from '../../../../core/models';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
 import { visibleTree } from '../../../../core/utils/groups.util';
+import { groupLinkParams } from '../../browse-params';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiProgress, UiSectionLabel } from '../../../../shared/ui';
 
@@ -52,6 +53,9 @@ interface TreeRowView {
 export class GroupTree {
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
   private readonly i18n = inject(I18nService);
+
+  /** Opening a group keeps the filters and drops the ad-hoc order. */
+  protected readonly linkParams = groupLinkParams;
 
   readonly collectionId = input.required<string>();
   readonly groups = input.required<GroupNode[]>();

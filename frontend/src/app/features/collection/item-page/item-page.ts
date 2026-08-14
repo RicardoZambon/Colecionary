@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
@@ -6,10 +6,12 @@ import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
-import { CopyStatus } from '../../../core/models';
+import { CopyStatus, Item } from '../../../core/models';
+import { NO_FILTERS, Neighbours, neighbours, visibleItems } from '../../../core/utils/browse.util';
 import { copyValue, isOwned, newCopy, ownedValue, paidTotal, syncWantedTag } from '../../../core/utils/copies.util';
 import { formatDate } from '../../../core/utils/date.util';
 import { fieldsFor, groupById, pathOf } from '../../../core/utils/groups.util';
+import { readCriteria } from '../browse-params';
 import { formatMoney } from '../../../core/utils/money.util';
 import { conditionLabelKey, conditionTone, itemBadgeLabel, itemTone } from '../../../shared/ui/badge/badge';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
@@ -29,6 +31,7 @@ const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
   imports: [RouterLink, MoneyPipe, TPipe, UiBadge, UiButton, UiCard, UiSectionLabel],
   templateUrl: './item-page.html',
   styleUrl: './item-page.scss',
+  host: { '(document:keydown)': 'onKeydown($event)' },
 })
 export class ItemPage {
   protected readonly store = inject(VaultStore);
@@ -40,6 +43,17 @@ export class ItemPage {
 
   readonly collectionId = input.required<string>();
   readonly itemId = input.required<string>();
+  /**
+   * The list this item was opened from, as the grid had it: group, filters and
+   * order, all off the URL because every item link preserves the query string.
+   * Rebuilding it here is what lets the arrows step to the next item of *that*
+   * list rather than to whatever happens to come next in the collection.
+   */
+  readonly g = input<string | undefined>(undefined);
+  readonly cond = input<string | undefined>(undefined);
+  readonly own = input<string | undefined>(undefined);
+  readonly sort = input<string | undefined>(undefined);
+  readonly dir = input<string | undefined>(undefined);
 
   protected readonly selectedPhoto = signal(0);
 
@@ -58,6 +72,93 @@ export class ItemPage {
   protected readonly item = computed(() =>
     this.collection()?.items.find(i => i.id === this.itemId()),
   );
+
+  constructor() {
+    // Stepping to a sibling item is the same route with a different param, so
+    // Angular reuses this component — the gallery has to be told to go back to
+    // the first photo or it would keep the previous item's selection.
+    effect(() => {
+      this.itemId();
+      this.selectedPhoto.set(0);
+    });
+  }
+
+  // --- browsing the group ---
+
+  /** The list the grid was showing, rebuilt from the URL. */
+  private readonly ordered = computed(() => {
+    const collection = this.collection();
+    if (!collection) return [];
+    return visibleItems(
+      collection.items,
+      collection.groups,
+      readCriteria(
+        { cond: this.cond(), own: this.own(), sort: this.sort(), dir: this.dir() },
+        this.g() ?? null,
+        this.store.query(),
+      ),
+    );
+  });
+
+  /**
+   * Where this item sits in that list and what it can step to.
+   *
+   * When the filters exclude the very item you have open — a deep link, or a
+   * filter that moved on — stepping still works off the group's own order, but
+   * no position is shown: a confident wrong number is worse than none.
+   */
+  protected readonly browse = computed<Neighbours>(() => {
+    const inList = neighbours(this.ordered(), this.itemId());
+    if (inList.position) return inList;
+
+    const collection = this.collection();
+    if (!collection) return inList;
+    const canonical = visibleItems(collection.items, collection.groups, {
+      groupId: this.g() ?? null,
+      ...NO_FILTERS,
+    });
+    return { ...neighbours(canonical, this.itemId()), position: 0 };
+  });
+
+  /** Hidden entirely when there is no sequence to walk, not shown as dead. */
+  protected readonly canBrowse = computed(() => {
+    const browse = this.browse();
+    return !!(browse.previous || browse.next || browse.position);
+  });
+
+  protected browseLink(item: Item): unknown[] {
+    return ['/c', this.collectionId(), 'items', item.id];
+  }
+
+  /**
+   * ← and → walk the group. They belong to the items, except while the focus is
+   * inside the thumbnail strip, where the user has already said they mean
+   * photos — and they never fire in a field that uses them to move a caret.
+   */
+  protected onKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+
+    const back = event.key === 'ArrowLeft';
+
+    if (target?.closest('.gallery__thumbs')) {
+      const total = this.photos().length;
+      if (!total) return;
+      const next = Math.min(Math.max(this.selectedPhoto() + (back ? -1 : 1), 0), total - 1);
+      if (next === this.selectedPhoto()) return;
+      event.preventDefault();
+      this.selectedPhoto.set(next);
+      return;
+    }
+
+    const step = back ? this.browse().previous : this.browse().next;
+    if (!step) return;
+    event.preventDefault();
+    void this.router.navigate(this.browseLink(step), { queryParamsHandling: 'preserve' });
+  }
 
   protected readonly tone = computed(() => {
     const item = this.item();

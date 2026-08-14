@@ -156,9 +156,17 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    contract.
 8. **Signals + zoneless + OnPush.** State lives in signal stores
    (`core/state`); no Zone.js patterns.
-9. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
-   the path. In-collection navigation preserves `?g=`
-   (`queryParamsHandling: 'preserve'`).
+9. **URL is state.** Selected group = `?g=`, view = `?v=`, item filters and
+   order = `?cond=` / `?own=` / `?sort=` + `?dir=`, settings tabs = `?tab=`, ids
+   in the path. In-collection navigation preserves the query string
+   (`queryParamsHandling: 'preserve'`), which is what lets an open item rebuild
+   the exact list the grid showed and step to its neighbours. Query strings are
+   untrusted input: parse them through `features/collection/browse-params.ts`,
+   and derive the visible list and an item's neighbours only through
+   `core/utils/browse.util.ts` — two screens filtering inline would disagree the
+   first time a filter changed. Links that open a group go through
+   `groupLinkParams`, which keeps the filters and drops the ad-hoc order, since
+   every group declares its own.
 10. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
    `:focus-visible`, status never communicated by color alone. Anything
    draggable also needs a keyboard path (`ui-reorder`, `ui-image-focus`).

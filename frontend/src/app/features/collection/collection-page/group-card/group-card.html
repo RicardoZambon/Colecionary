@@ -1,7 +1,7 @@
 <a
   class="link"
   [routerLink]="['/c', collectionId()]"
-  [queryParams]="{ g: groupId() }"
+  [queryParams]="linkParams(groupId())"
   queryParamsHandling="merge"
   [attr.aria-label]="ariaLabel()"
 >

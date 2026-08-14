@@ -1,5 +1,56 @@
 @if (collection(); as coll) {
-  <a class="back" [routerLink]="['/c', coll.id]" queryParamsHandling="preserve">← {{ coll.name }}</a>
+  <div class="topline">
+    <a class="back" [routerLink]="['/c', coll.id]" queryParamsHandling="preserve">← {{ coll.name }}</a>
+
+    @if (canBrowse()) {
+      <nav
+        class="browse"
+        [attr.aria-label]="'item.browse.aria' | t"
+        [title]="'item.browse.keyboardHint' | t"
+      >
+        @if (browse().previous; as prev) {
+          <a
+            class="browse__step"
+            [routerLink]="browseLink(prev)"
+            queryParamsHandling="preserve"
+            [attr.aria-label]="'item.browse.previous' | t: { name: prev.name }"
+          >
+            <span class="browse__chev" aria-hidden="true">‹</span>
+            <span class="browse__name">{{ prev.name }}</span>
+          </a>
+        } @else {
+          <span class="browse__step browse__step--off" aria-disabled="true">
+            <span class="browse__chev" aria-hidden="true">‹</span>
+            <span class="browse__name">{{ 'item.browse.start' | t }}</span>
+          </span>
+        }
+
+        @if (browse().position) {
+          <span
+            class="browse__pos"
+            [attr.aria-label]="'item.browse.positionAria' | t: { i: browse().position, n: browse().total }"
+          >{{ 'item.browse.position' | t: { i: browse().position, n: browse().total } }}</span>
+        }
+
+        @if (browse().next; as next) {
+          <a
+            class="browse__step"
+            [routerLink]="browseLink(next)"
+            queryParamsHandling="preserve"
+            [attr.aria-label]="'item.browse.next' | t: { name: next.name }"
+          >
+            <span class="browse__name">{{ next.name }}</span>
+            <span class="browse__chev" aria-hidden="true">›</span>
+          </a>
+        } @else {
+          <span class="browse__step browse__step--off" aria-disabled="true">
+            <span class="browse__name">{{ 'item.browse.end' | t }}</span>
+            <span class="browse__chev" aria-hidden="true">›</span>
+          </span>
+        }
+      </nav>
+    }
+  </div>
 
   @if (item(); as it) {
     <div class="layout">

@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 
 import { I18nService } from '../../../../core/i18n';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
+import { groupLinkParams } from '../../browse-params';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { MosaicTile, UiBadge, UiCard, UiMosaic, UiProgress } from '../../../../shared/ui';
@@ -26,6 +27,9 @@ import { BadgeTone } from '../../../../shared/ui/badge/badge';
 })
 export class GroupCard {
   private readonly i18n = inject(I18nService);
+
+  /** Opening a group keeps the filters and drops the ad-hoc order. */
+  protected readonly linkParams = groupLinkParams;
 
   readonly collectionId = input.required<string>();
   readonly groupId = input.required<string>();

@@ -1,11 +1,10 @@
 import { ChangeDetectionStrategy, Component, model } from '@angular/core';
 
 import { CONDITIONS, Condition } from '../../../../core/models';
+import { OwnFilter } from '../../../../core/utils/browse.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiChip } from '../../../../shared/ui';
 import { conditionLabelKey } from '../../../../shared/ui/badge/badge';
-
-export type OwnFilter = 'owned' | 'wanted' | null;
 
 /**
  * Condition and status, on their own line below the bar.
