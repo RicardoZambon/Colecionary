@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using Vault.Application.Resources;
 using Vault.Application.Setup;
 
 namespace Vault.Api.Setup;
@@ -52,7 +53,7 @@ public static class SetupEndpoints
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["fields"] = ["Organization name, owner name and owner email are required."],
+                    ["fields"] = [Messages.SetupFieldsRequired],
                 });
             }
 
@@ -60,7 +61,7 @@ public static class SetupEndpoints
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["ownerPassword"] = ["Password must be at least 8 characters."],
+                    ["ownerPassword"] = [Messages.SetupPasswordTooShort],
                 });
             }
 
@@ -70,7 +71,7 @@ public static class SetupEndpoints
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["database"] = [$"Database not usable: {probe}."],
+                    ["database"] = [Messages.SetupDatabaseNotUsableFor(probe)],
                 });
             }
 

@@ -1,9 +1,11 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { I18nService } from '../../../../core/i18n';
 import { Item } from '../../../../core/models';
 import { fieldValue } from '../../../../core/utils/sort.util';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
+import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiCard, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
@@ -12,11 +14,13 @@ import { DragOrder } from '../drag-order';
 @Component({
   selector: 'app-item-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, UiCard, UiReorder],
+  imports: [RouterLink, MoneyPipe, TPipe, UiCard, UiReorder],
   templateUrl: './item-list.html',
   styleUrl: './item-list.scss',
 })
 export class ItemList {
+  private readonly i18n = inject(I18nService);
+
   readonly items = input.required<Item[]>();
   readonly collectionId = input.required<string>();
   readonly manual = input(false);
@@ -32,7 +36,7 @@ export class ItemList {
   }
 
   protected badgeLabel(item: Item): string {
-    return itemBadgeLabel(item);
+    return itemBadgeLabel(item, this.i18n.t);
   }
 
   protected groupName(item: Item): string {

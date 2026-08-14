@@ -1,8 +1,15 @@
 <header>
-  <h1>Dashboard</h1>
+  <h1>{{ 'dashboard.title' | t }}</h1>
   <p class="sub">
-    {{ store.totalItems() }} items across {{ store.collections().length }} collections · welcome
-    back, {{ store.profile()?.name?.split(' ')?.[0] }}
+    {{
+      'dashboard.sub'
+        | t
+          : {
+              items: store.totalItems(),
+              collections: store.collections().length,
+              name: store.profile()?.name?.split(' ')?.[0] ?? ''
+            }
+    }}
   </p>
 </header>
 
@@ -17,7 +24,7 @@
 </div>
 
 <section class="collections">
-  <ui-section-label>Collections</ui-section-label>
+  <ui-section-label>{{ 'dashboard.collections' | t }}</ui-section-label>
   <div class="grid">
     @for (collection of store.collections(); track collection.id) {
       <ui-card [interactive]="true" [routerLink]="['/c', collection.id]">
@@ -31,19 +38,26 @@
         <div class="card-body">
           <div class="name">{{ collection.name }}</div>
           <div class="meta">
-            {{ ownedCount(collection.id) }}/{{ collection.items.length }} owned ·
-            {{ collection.groups.length }} groups
+            {{
+              'dashboard.collectionMeta'
+                | t
+                  : {
+                      owned: ownedCount(collection.id),
+                      total: collection.items.length,
+                      groups: collection.groups.length
+                    }
+            }}
           </div>
           <div class="value">{{ ownedValue(collection.id) | money }}</div>
         </div>
       </ui-card>
     }
-    <button type="button" class="new-tile" (click)="newCollection()">+ New collection</button>
+    <button type="button" class="new-tile" (click)="newCollection()">{{ 'dashboard.newCollection' | t }}</button>
   </div>
 </section>
 
 <ui-card class="recent">
-  <ui-section-label class="recent__heading">Recent additions</ui-section-label>
+  <ui-section-label class="recent__heading">{{ 'dashboard.recent' | t }}</ui-section-label>
   @for (entry of recent(); track entry.itemId) {
     <a class="recent__row" [routerLink]="['/c', entry.collectionId, 'items', entry.itemId]">
       <span>

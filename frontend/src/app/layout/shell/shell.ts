@@ -3,6 +3,7 @@ import { RouterOutlet } from '@angular/router';
 
 import { ImageFocusService } from '../../core/state/image-focus.service';
 import { VaultStore } from '../../core/state/vault.store';
+import { TPipe } from '../../shared/pipes/t.pipe';
 import { UiImageFocus, UiToast } from '../../shared/ui';
 import { Sidebar } from '../sidebar/sidebar';
 import { Topbar } from '../topbar/topbar';
@@ -10,7 +11,7 @@ import { Topbar } from '../topbar/topbar';
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, Topbar, Sidebar, UiToast, UiImageFocus],
+  imports: [RouterOutlet, TPipe, Topbar, Sidebar, UiToast, UiImageFocus],
   template: `
     <app-topbar />
     <div class="body">
@@ -19,7 +20,7 @@ import { Topbar } from '../topbar/topbar';
         @if (store.loaded()) {
           <router-outlet />
         } @else {
-          <div class="loading">Loading your vault…</div>
+          <div class="loading">{{ 'shell.loading' | t }}</div>
         }
       </main>
     </div>

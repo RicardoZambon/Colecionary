@@ -82,6 +82,8 @@ h1 {
 
     .heading {
       @include mono-label;
+      // Uppercase is presentation — the dictionary keeps sentence case.
+      text-transform: uppercase;
     }
   }
 }
@@ -133,6 +135,7 @@ h1 {
 
     .fields-label {
       @include mono-label(9px, 0.1em);
+      text-transform: uppercase;
     }
   }
 
@@ -209,6 +212,7 @@ h1 {
   .context {
     font-family: var(--font-mono);
     font-size: 10px;
+    text-transform: uppercase;
     color: var(--muted);
     flex: none;
   }

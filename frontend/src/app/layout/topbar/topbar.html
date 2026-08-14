@@ -9,13 +9,32 @@
 <ui-text-input
   class="search"
   variant="subtle"
-  placeholder="Search items…"
+  [placeholder]="'topbar.search' | t"
   [value]="store.query()"
   (valueChange)="store.query.set($event)"
 />
 
+<ui-dropdown #langMenu [width]="180">
+  <button ddTrigger type="button" class="theme-trigger" [title]="'topbar.language' | t">
+    {{ i18n.currentDef.id }} ▾
+  </button>
+  <ng-container ddPanel>
+    @for (lang of i18n.langs; track lang.id) {
+      <button
+        type="button"
+        class="theme-row"
+        [class.active]="lang.id === i18n.current()"
+        (click)="i18n.apply(lang.id); langMenu.close()"
+      >
+        <span class="theme-row__name">{{ lang.name }}</span>
+        <span class="theme-row__check">@if (lang.id === i18n.current()) { ✓ }</span>
+      </button>
+    }
+  </ng-container>
+</ui-dropdown>
+
 <ui-dropdown #themeMenu [width]="236">
-  <button ddTrigger type="button" class="theme-trigger" title="Theme">
+  <button ddTrigger type="button" class="theme-trigger" [title]="'topbar.theme' | t">
     ◐ {{ theme.currentDef.name }} ▾
   </button>
   <ng-container ddPanel>
@@ -36,17 +55,17 @@
       </button>
     }
     <a class="theme-more" routerLink="/settings" [queryParams]="{ tab: 'appearance' }" (click)="themeMenu.close()">
-      Browse details in Settings →
+      {{ 'topbar.themeMore' | t }}
     </a>
   </ng-container>
 </ui-dropdown>
 
-<a class="gear" routerLink="/settings" title="Settings" aria-label="Settings">
+<a class="gear" routerLink="/settings" [title]="'topbar.settings' | t" [attr.aria-label]="'topbar.settings' | t">
   <ui-icon name="gear" [size]="16" />
 </a>
 
 <ui-dropdown #profileMenu [width]="200">
-  <button ddTrigger type="button" class="avatar-trigger" title="Account">
+  <button ddTrigger type="button" class="avatar-trigger" [title]="'topbar.account' | t">
     <ui-avatar [initials]="store.profile()?.initials ?? '··'" />
   </button>
   <ng-container ddPanel>
@@ -54,6 +73,6 @@
       <span class="profile-info__name">{{ store.profile()?.name }}</span>
       <span class="profile-info__email">{{ store.profile()?.email }}</span>
     </div>
-    <button type="button" class="signout" (click)="profileMenu.close(); auth.logout()">Sign out</button>
+    <button type="button" class="signout" (click)="profileMenu.close(); auth.logout()">{{ 'topbar.signOut' | t }}</button>
   </ng-container>
 </ui-dropdown>

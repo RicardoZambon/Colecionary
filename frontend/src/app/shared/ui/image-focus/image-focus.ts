@@ -9,9 +9,11 @@ import {
   viewChild,
 } from '@angular/core';
 
+import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { FocalPoint, ImageUsage } from '../../../core/models';
 import { clampFocal, focalFromPoint, focalToPosition } from '../../../core/utils/focal.util';
+import { TPipe } from '../../pipes/t.pipe';
 import { UiButton } from '../button/button';
 
 /** How far an arrow key nudges the point, and how far with Shift held. */
@@ -19,7 +21,7 @@ const STEP = 0.01;
 const COARSE_STEP = 0.1;
 
 interface Surface {
-  label: string;
+  label: MessageKey;
   ratio: number;
   /** Reproduces the page header that covers the collection banner's bottom. */
   banner?: boolean;
@@ -37,14 +39,14 @@ interface Surface {
  */
 const SURFACES: Record<ImageUsage, readonly Surface[]> = {
   item: [
-    { label: 'Item card', ratio: 215 / 116 },
-    { label: 'Item gallery', ratio: 380 / 300 },
+    { label: 'ui.focus.preset.itemCard', ratio: 215 / 116 },
+    { label: 'ui.focus.preset.itemGallery', ratio: 380 / 300 },
   ],
   banner: [
-    { label: 'Collection banner', ratio: 1000 / 150, banner: true },
-    { label: 'Dashboard card', ratio: 330 / 70 },
+    { label: 'ui.focus.preset.collectionBanner', ratio: 1000 / 150, banner: true },
+    { label: 'ui.focus.preset.dashboardCard', ratio: 330 / 70 },
   ],
-  icon: [{ label: 'Collection icon', ratio: 1 }],
+  icon: [{ label: 'ui.focus.preset.collectionIcon', ratio: 1 }],
 };
 
 /**
@@ -62,18 +64,18 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
 @Component({
   selector: 'ui-image-focus',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiButton],
+  imports: [TPipe, UiButton],
   host: { '(document:keydown.escape)': 'cancel()' },
   template: `
     @if (focus.pending(); as request) {
       <div class="scrim" (click)="cancel()"></div>
-      <div class="panel" role="dialog" aria-modal="true" aria-label="Choose what to show">
+      <div class="panel" role="dialog" aria-modal="true" [attr.aria-label]="'ui.focus.chooseView' | t">
         <header>
-          <h2>Choose what to show</h2>
+          <h2>{{ 'ui.focus.chooseView' | t }}</h2>
           <p>
-            Drag the target onto what matters. Every size crops around it.
+            {{ 'ui.focus.hint' | t }}
             @if (focus.isNew()) {
-              Discarding leaves the picture unchanged.
+              {{ 'ui.focus.hintNew' | t }}
             }
           </p>
         </header>
@@ -101,7 +103,7 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
           <div class="previews">
             @for (surface of surfaces(); track surface.label) {
               <div class="preview">
-                <span class="preview__label">{{ surface.label }}</span>
+                <span class="preview__label">{{ surface.label | t }}</span>
                 <div
                   class="preview__frame"
                   [style.aspect-ratio]="surface.ratio"
@@ -114,7 +116,7 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
                          really seen. Framing something down there would put the
                          subject behind the chrome. -->
                     <div class="preview__fade"></div>
-                    <div class="preview__covered">covered by header</div>
+                    <div class="preview__covered">{{ 'ui.focus.coveredByHeader' | t }}</div>
                   }
                 </div>
               </div>
@@ -126,12 +128,12 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
           <span class="coords">{{ targetLabel() }}</span>
           <div class="actions">
             <ui-button variant="ghost" (click)="reset()">
-              {{ focus.isNew() ? 'Use centred' : 'Reset' }}
+              {{ (focus.isNew() ? 'ui.focus.useCentred' : 'ui.focus.reset') | t }}
             </ui-button>
             <ui-button variant="ghost" (click)="cancel()">
-              {{ focus.isNew() ? 'Discard upload' : 'Cancel' }}
+              {{ (focus.isNew() ? 'ui.focus.discard' : 'ui.focus.cancel') | t }}
             </ui-button>
-            <ui-button variant="primary" (click)="save()">Save framing</ui-button>
+            <ui-button variant="primary" (click)="save()">{{ 'ui.focus.save' | t }}</ui-button>
           </div>
         </footer>
       </div>
@@ -290,6 +292,7 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
 })
 export class UiImageFocus {
   protected readonly focus = inject(ImageFocusService);
+  private readonly i18n = inject(I18nService);
 
   /** Only the surfaces that will actually show the image being framed. */
   protected readonly surfaces = computed(() => {
@@ -307,7 +310,10 @@ export class UiImageFocus {
   protected readonly position = computed(() => focalToPosition(this.point()));
   protected readonly targetLabel = computed(() => {
     const { x, y } = this.point();
-    return `Focal point ${Math.round(x * 100)}% across, ${Math.round(y * 100)}% down`;
+    return this.i18n.t('ui.focus.targetLabel', {
+      x: Math.round(x * 100),
+      y: Math.round(y * 100),
+    });
   });
 
   constructor() {

@@ -23,12 +23,13 @@ frontend/src/
 ├─ app/
 │  ├─ core/                 ← framework-level, no UI
 │  │  ├─ models/            ← typed domain model (one file per entity + barrel)
-│  │  ├─ api/               ← backend contract + mock implementation + seed data
+│  │  ├─ api/               ← the VaultApi contract + its HTTP implementation
+│  │  ├─ i18n/              ← language service, catalog, dictionaries (see §6)
 │  │  ├─ state/             ← signal stores/services (Vault, Theme, Toast, ImageFocus)
 │  │  └─ utils/             ← pure functions (unit-tested)
 │  ├─ shared/
 │  │  ├─ ui/                ← THE component library (see §4)
-│  │  └─ pipes/             ← presentation pipes (money)
+│  │  └─ pipes/             ← presentation pipes (money, t)
 │  ├─ layout/               ← shell, topbar, sidebar
 │  ├─ features/             ← routed pages, lazy-loaded, one folder per feature
 │  ├─ app.routes.ts
@@ -73,9 +74,12 @@ a core service's state).
    `role`/`aria-*` where semantics need it (`switch`, `tablist`, `progressbar`),
    and a visible `:focus-visible` outline (defined globally). Status is never
    color-only — badges pair color with text.
-8. **Copy and formatting.** USD values render through the `money` pipe
-   (`$4,200`). Micro-headings use `ui-section-label` / the `mono-label` mixin
-   (uppercase is applied by CSS, not typed in copy).
+8. **Copy and formatting.** No user-facing string is written in a component.
+   Every one is a key in `core/i18n/messages/` rendered through the `t` pipe
+   or `I18nService.t` (see §6). USD values render through the `money` pipe
+   (`$4,200` / `$4.200`), dates through `core/utils/date.util.ts`.
+   Micro-headings use `ui-section-label` / the `mono-label` mixin — uppercase
+   is applied by CSS, never typed in copy, so translators get sentence case.
 
 ## 3. Theming
 
@@ -85,9 +89,12 @@ a core service's state).
 - `ThemeService` (`core/state/theme.service.ts`) owns the active theme:
   applies `data-theme` on `<html>`, persists to `localStorage`, and exposes
   the theme catalog (`ThemeDef` in `core/models/theme.model.ts` — id, name,
-  description, swatches) that drives the Settings cards and topbar menu.
+  `descriptionKey`, swatches) that drives the Settings cards and topbar menu.
+  A theme's *name* is a proper noun and stays untranslated; its description is
+  a message key.
 - **Adding a theme:** add one block to `_themes.scss` + one `ThemeDef` entry
-  in `core/api/seed-data.ts` + the id to `ThemeId`. Nothing else.
+  in `core/state/themes.ts` + the id to `ThemeId` + a
+  `theme.<id>.description` key in both dictionaries. Nothing else.
 
 Current themes: `devlight` (Paperwhite, default), `devdark` (Graphite),
 `terminal` (Phosphor), `arcade` (Arcade), `hud` (Starship), `paper` (Zine),
@@ -108,7 +115,7 @@ All are exported from `shared/ui/index.ts`.
 | Select | `ui-select` | `value` (model), `options: SelectOption[]`, `disabled`; add class `compact` for dense rows |
 | Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count`, `link` (router commands), `queryParams` — content-projected label. Renders a `<button>` by default (attach `(click)` at the usage site); with `link` it renders a real `<a>` instead, because a chip that navigates must survive middle-click and a button nested in an anchor is invalid |
 | Card | `ui-card` | `interactive` (hover affordance), `dashed` — the panel surface |
-| Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone(condition)` for one copy, `itemTone(item)` / `itemBadgeLabel(item)` for an item ("WANTED", "MINT", "MINT ×3") |
+| Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone(condition)` for one copy, `itemTone(item)` for an item, `conditionLabelKey(condition)` for its message key, and `itemBadgeLabel(item, t)` for the rendered label ("Wanted", "Mint", "Mint ×3" — uppercased by CSS). The `t` argument is `I18nService.t`: the helper is pure and has no injector |
 | Toggle | `ui-toggle` | `on` (model) — rendered as `role="switch"` |
 | Tabs | `ui-tabs` | `tabs: TabDef[]`, `active` (model, required) |
 | Avatar | `ui-avatar` | `initials` (required), `size: 'sm' \| 'md' \| 'lg'` |
@@ -122,7 +129,8 @@ All are exported from `shared/ui/index.ts`.
 | Image slot | `ui-image-slot` | `src`, `focal` (CSS `background-position`), `placeholder`, `reframable`; outputs `fileSelected(File)`, `reframeRequested()` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
 | Image focus | `ui-image-focus` | none — global outlet in the shell, driven by `ImageFocusService`; the focal-point editor (drag or arrow keys, live previews of the surfaces that match the image's `usage`) |
 | Toast | `ui-toast` | none — global outlet in the shell, driven by `ToastService.flash()` |
-| Money pipe | `\| money` | formats numbers as `$1,234` |
+| Money pipe | `\| money` | formats numbers as `$1,234` (`$1.234` in pt-BR). Impure — see §6 |
+| Translate pipe | `\| t` | `{{ 'settings.title' \| t }}`, or with placeholders `{{ 'key' \| t: { name } }}`. Impure — see §6 |
 
 **Adding a component:** put it in `shared/ui/<name>/<name>.ts`, consume tokens
 only, export it from the barrel, and document it in this table. If two pages
@@ -235,17 +243,104 @@ style the same raw element the same way, that's the signal to promote it here.
   freezes the row order for the duration of a rename and releases it on
   `(blurred)`.
 
-## 6. Testing & verification
+## 6. Language (i18n)
+
+The app ships **Portuguese (`pt-BR`) and English (`en`)**, switchable at
+runtime. Portuguese is the brand's source language — see
+[`voice-and-tone.md`](voice-and-tone.md), whose approved product strings are the
+pt-BR copy, not a suggestion for it.
+
+**The parts**
+
+| File | What it is |
+| --- | --- |
+| `core/i18n/messages/en.ts` | The source dictionary. Every key is declared here first |
+| `core/i18n/messages/keys.ts` | `MessageKey` = `keyof typeof en`, plus `MessageParams` and `Translate` |
+| `core/i18n/messages/pt-BR.ts` | `Record<MessageKey, string>` — a missing or extra key is a **compile error** |
+| `core/i18n/langs.ts` | The `LangDef` catalog (id, self-name, `Intl` locale, `Accept-Language` value) |
+| `core/i18n/i18n.service.ts` | The signal store — shaped exactly like `ThemeService` |
+| `core/i18n/language.interceptor.ts` | Sends `Accept-Language`, so the API answers in the same language |
+| `shared/pipes/t.pipe.ts` | `{{ 'key' \| t }}` / `{{ 'key' \| t: { name } }}` |
+
+**Rules**
+
+1. **No user-facing string in a component.** Templates use the `t` pipe; `.ts`
+   (toasts, option tables, error maps) uses `I18nService.t`. Both accept only a
+   `MessageKey`, so an invented key fails the build.
+2. **Label tables are `computed`, never module constants.** A `const TABS = […]`
+   captures one language forever. Build them from keys inside a `computed()` so
+   they follow a switch.
+3. **Never concatenate a translated string.** Word order differs between
+   languages: `'Collapse ' + name` becomes
+   `'groupTree.collapseGroup' | t: { name }`.
+4. **Pure helpers take the translator as an argument.** `core/utils/sort.util.ts`
+   and `shared/ui/badge/badge.ts` build labels but have no injector, so they take
+   `t: Translate`. Their specs pass a fake `t` that echoes the key back, which
+   means the assertions pin *which message* is chosen rather than its English
+   wording.
+5. **Both translation pipes are `pure: false`, deliberately.** A pure pipe is
+   memoized by its arguments — when the language changes, `transform` is handed
+   the same key and Angular returns the cached string, freezing every label on
+   screen in the old language. The impure version costs one dictionary lookup in
+   views that were already being checked. **Do not "optimize" this.**
+6. **Plurals are two keys** (`.one` / `.other`) via `I18nService.plural`.
+   Portuguese and English agree on one-vs-rest, so ICU machinery would buy
+   nothing.
+7. **Uppercase is CSS.** Dictionary copy is sentence case; `text-transform`
+   does the rest (rule §2.8).
+
+**What is *not* translated** — these are data, not labels:
+
+- Enum wire values (`Mint`/`Good`/`Fair`, `Keep`/`ForTrade`/`ForSale`,
+  `Owner`/`Editor`/`Viewer`, `text`/`number`/`date`, `free`/`pro`). They are the
+  SQL representation *and* the server-side validator whitelist. Translate them
+  at the display layer with a label map.
+- The `'wanted'` tag `copies.util.ts` syncs into `item.tags`.
+- Proper nouns: the product name "Vault", theme names, plan names.
+- Anything a user typed: collection, group, item and custom-field names are
+  interpolated, never looked up.
+
+**Preference and formatting**
+
+The language lives in `localStorage['vault.lang']`, exactly like the theme; the
+first visit reads `navigator.language` (any `pt-*` → `pt-BR`, everything else →
+`en`). Nothing is persisted server-side, so there is no contract change.
+`I18nService.locale()` feeds `Intl`: dates through `core/utils/date.util.ts`
+(which parses date-only ISO strings as *local* midnight — `new Date('2026-08-13')`
+is UTC and would show the previous day in Brazil), amounts through
+`core/utils/money.util.ts`. **The `$` never changes**: the figures are USD, and
+relabelling them `R$` would restate the same number as a different amount.
+`sort.util.ts`'s collator stays locale-agnostic on purpose — `sensitivity: 'base'`
+already folds accents, and pt/en share the Latin order.
+
+**Adding a language:** one `LangDef` in `langs.ts`, one `Lang` union member, one
+`messages/<id>.ts` typed `Record<MessageKey, string>`, one culture in
+`LocalizationOptions()` in the backend's `Program.cs`, and a
+`Messages.<culture>.resx` beside it.
+
+**The backend is localized too.** `Accept-Language` drives
+`UseRequestLocalization`, and validation failures and ProblemDetails come back
+translated from `Vault.Application/Resources/Messages.resx`. That middleware is
+registered **before** `UseExceptionHandler` — the handler builds its title while
+an exception unwinds, so the culture has to still be in scope. `LocalizationTests`
+fails if anyone reorders it.
+
+## 7. Testing & verification
 
 - Pure logic (e.g. `core/utils/groups.util.ts`) gets Vitest specs next to the
   source (`*.spec.ts`). Run with `npm test`.
+- A spec that asserts on user-facing text must pin the language
+  (`TestBed.inject(I18nService).apply('en')`) rather than relying on whatever
+  the runner's `navigator.language` happens to be.
 - Before merging UI work: `npm run build` must pass with zero errors and the
   affected flows must be exercised in the browser (`npm start`), including at
-  least one dark theme — token regressions usually only show up there.
+  least one dark theme — token regressions usually only show up there, and
+  **in Portuguese**, which runs ~20% longer than English and is where text
+  overflow shows up first.
 - Bundle budgets are enforced in `angular.json` (initial ≤ 500 kB warning,
   component styles ≤ 6 kB warning).
 
-## 7. Known deliberate deviations from the design file
+## 8. Known deliberate deviations from the design file
 
 | Where | Design file | Implementation | Why |
 | --- | --- | --- | --- |
@@ -254,7 +349,7 @@ style the same raw element the same way, that's the signal to promote it here.
 | Item delete / Export JSON | Decorative in the design | Fully wired | The app is functional, not a mockup |
 | Backup count | Hardcoded "25 items" | Computed live | Same |
 
-## 8. Brand governance (unresolved)
+## 9. Brand governance (unresolved)
 
 The app currently ships the *Collection Control* design's own "Vault" visual
 language (indigo accent `#5453C4`, 7 themes). The Colecionary brand manual

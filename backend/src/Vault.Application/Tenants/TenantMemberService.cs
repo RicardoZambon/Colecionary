@@ -2,6 +2,7 @@ using FluentValidation;
 using Vault.Application.Abstractions;
 using Vault.Application.Collections.Dtos;
 using Vault.Application.Common;
+using Vault.Application.Resources;
 using Vault.Domain.Entities;
 using Vault.Domain.Enums;
 
@@ -32,7 +33,7 @@ public class TenantMemberService(
 
         if (!desired.Any(m => DtoMapper.ParseRole(m.Role) == MemberRole.Owner))
         {
-            throw new DomainRuleException("The tenant must keep at least one Owner.");
+            throw new DomainRuleException(Messages.TenantNeedsAnOwner);
         }
 
         var existing = await users.ListTenantMembersAsync(ct);
@@ -50,12 +51,12 @@ public class TenantMemberService(
             {
                 if (user.Role == MemberRole.Owner)
                 {
-                    throw new DomainRuleException("The owner can't be removed.");
+                    throw new DomainRuleException(Messages.OwnerCannotBeRemoved);
                 }
 
                 if (user.Id == currentTenant.UserId)
                 {
-                    throw new DomainRuleException("You can't remove yourself.");
+                    throw new DomainRuleException(Messages.CannotRemoveYourself);
                 }
 
                 users.Remove(user);

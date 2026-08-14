@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
+import { I18nService, MessageKey } from '../../../core/i18n';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import {
@@ -13,6 +14,7 @@ import {
 } from '../../../core/models';
 import { fieldsFor, flattenTree, pathOf, sortFor, subtreeIds } from '../../../core/utils/groups.util';
 import { fieldSortKey, sortByOptions, sortLabel } from '../../../core/utils/sort.util';
+import { TPipe } from '../../../shared/pipes/t.pipe';
 import {
   SelectOption,
   TabDef,
@@ -27,28 +29,32 @@ import {
   UiToggle,
 } from '../../../shared/ui';
 
-const TABS: TabDef[] = [
-  { id: 'general', label: 'General' },
-  { id: 'groups', label: 'Groups & fields' },
-  { id: 'sharing', label: 'Sharing' },
+const TAB_KEYS: { id: string; label: MessageKey }[] = [
+  { id: 'general', label: 'collSettings.tab.general' },
+  { id: 'groups', label: 'collSettings.tab.groups' },
+  { id: 'sharing', label: 'collSettings.tab.sharing' },
 ];
 
-const ROLE_OPTIONS: SelectOption[] = [
-  { value: 'Owner', label: 'Owner' },
-  { value: 'Editor', label: 'Can edit' },
-  { value: 'Viewer', label: 'Can view' },
+const ROLE_KEYS: { value: MemberRole; label: MessageKey }[] = [
+  { value: 'Owner', label: 'role.owner' },
+  { value: 'Editor', label: 'role.editor' },
+  { value: 'Viewer', label: 'role.viewer' },
 ];
 
-const INVITE_ROLE_OPTIONS: SelectOption[] = [
-  { value: 'Viewer', label: 'Can view' },
-  { value: 'Editor', label: 'Can edit' },
+const INVITE_ROLE_KEYS: { value: MemberRole; label: MessageKey }[] = [
+  { value: 'Viewer', label: 'role.viewer' },
+  { value: 'Editor', label: 'role.editor' },
 ];
 
-const FIELD_TYPE_OPTIONS: SelectOption[] = GROUP_FIELD_TYPES.map(t => ({ value: t, label: t }));
+const FIELD_TYPE_KEYS: Record<GroupFieldType, MessageKey> = {
+  text: 'fieldType.text',
+  number: 'fieldType.number',
+  date: 'fieldType.date',
+};
 
-const DIRECTION_OPTIONS: SelectOption[] = [
-  { value: 'asc', label: '↑ Asc' },
-  { value: 'desc', label: '↓ Desc' },
+const DIRECTION_KEYS: { value: SortDirection; label: MessageKey }[] = [
+  { value: 'asc', label: 'direction.asc' },
+  { value: 'desc', label: 'direction.desc' },
 ];
 
 /** Sentinel for "this group defines no ordering of its own". */
@@ -63,12 +69,13 @@ const PERSIST_DEBOUNCE_MS = 400;
 @Component({
   selector: 'app-collection-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, UiAvatar, UiButton, UiCard, UiField, UiSelect, UiTabs, UiTextInput, UiTextarea, UiToggle],
+  imports: [RouterLink, TPipe, UiAvatar, UiButton, UiCard, UiField, UiSelect, UiTabs, UiTextInput, UiTextarea, UiToggle],
   templateUrl: './collection-settings-page.html',
   styleUrl: './collection-settings-page.scss',
 })
 export class CollectionSettingsPage {
   protected readonly store = inject(VaultStore);
+  private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
@@ -81,11 +88,23 @@ export class CollectionSettingsPage {
    */
   readonly g = input<string | undefined>(undefined);
 
-  protected readonly tabs = TABS;
-  protected readonly roleOptions = ROLE_OPTIONS;
-  protected readonly inviteRoleOptions = INVITE_ROLE_OPTIONS;
-  protected readonly fieldTypeOptions = FIELD_TYPE_OPTIONS;
-  protected readonly directionOptions = DIRECTION_OPTIONS;
+  // Computed, not module constants: the language can change while this page is
+  // open and every label here has to follow it.
+  protected readonly tabs = computed<TabDef[]>(() =>
+    TAB_KEYS.map(t => ({ id: t.id, label: this.i18n.t(t.label) })),
+  );
+  protected readonly roleOptions = computed<SelectOption[]>(() =>
+    ROLE_KEYS.map(r => ({ value: r.value, label: this.i18n.t(r.label) })),
+  );
+  protected readonly inviteRoleOptions = computed<SelectOption[]>(() =>
+    INVITE_ROLE_KEYS.map(r => ({ value: r.value, label: this.i18n.t(r.label) })),
+  );
+  protected readonly fieldTypeOptions = computed<SelectOption[]>(() =>
+    GROUP_FIELD_TYPES.map(t => ({ value: t, label: this.i18n.t(FIELD_TYPE_KEYS[t]) })),
+  );
+  protected readonly directionOptions = computed<SelectOption[]>(() =>
+    DIRECTION_KEYS.map(d => ({ value: d.value, label: this.i18n.t(d.label) })),
+  );
 
   protected readonly activeTab = signal('general');
   protected readonly draft = signal<Collection | null>(null);
@@ -166,9 +185,13 @@ export class CollectionSettingsPage {
           sortByOptions: [
             {
               value: INHERIT,
-              label: parentSort ? `Inherited — ${sortLabel(parentSort)}` : 'Not set',
+              label: parentSort
+                ? this.i18n.t('collSettings.groups.inherited', {
+                    label: sortLabel(parentSort, this.i18n.t),
+                  })
+                : this.i18n.t('collSettings.groups.notSet'),
             },
-            ...sortByOptions(fields),
+            ...sortByOptions(fields, this.i18n.t),
           ] satisfies SelectOption[],
         };
       });
@@ -186,9 +209,9 @@ export class CollectionSettingsPage {
     const pending = this.pendingGroupParent();
     const draft = this.draft();
     if (!pending || !draft) return '';
-    if (!pending.parentId) return '● ROOT GROUP';
+    if (!pending.parentId) return this.i18n.t('collSettings.groups.atRoot');
     const parent = draft.groups.find(g => g.id === pending.parentId);
-    return `↳ IN ${(parent?.name ?? '').toUpperCase()}`;
+    return this.i18n.t('collSettings.groups.inParent', { name: parent?.name ?? '' });
   });
 
   // --- tab handling ---
@@ -229,7 +252,7 @@ export class CollectionSettingsPage {
     const draft = this.draft();
     if (!draft) return;
     await this.store.deleteCollection(draft.id);
-    this.toast.flash('Collection deleted');
+    this.toast.flash(this.i18n.t('toast.collection.deleted'));
     void this.router.navigate(['/dashboard']);
   }
 
@@ -256,11 +279,11 @@ export class CollectionSettingsPage {
     if (!draft) return;
     const ids = subtreeIds(draft.groups, id);
     if (draft.items.some(i => ids.includes(i.groupId))) {
-      this.toast.flash('Group has items — move them first');
+      this.toast.flash(this.i18n.t('toast.group.hasItems'));
       return;
     }
     this.mutate(d => ({ ...d, groups: d.groups.filter(g => !ids.includes(g.id)) }));
-    this.toast.flash('Group removed');
+    this.toast.flash(this.i18n.t('toast.group.removed'));
   }
 
   protected newGroupKeydown(event: KeyboardEvent): void {
@@ -286,7 +309,7 @@ export class CollectionSettingsPage {
       target: null,
     };
     this.mutate(d => ({ ...d, groups: [...d.groups, node] }));
-    this.toast.flash(`Group "${trimmed}" added`);
+    this.toast.flash(this.i18n.t('toast.group.added', { name: trimmed }));
   }
 
   private mutateGroup(groupId: string, fn: (group: GroupNode) => GroupNode): void {
@@ -301,7 +324,7 @@ export class CollectionSettingsPage {
       // back to "everything missing" — drop it with the field.
       sort: g.sort?.by === fieldSortKey(name) ? null : g.sort,
     }));
-    this.toast.flash('Field removed');
+    this.toast.flash(this.i18n.t('toast.field.removed'));
   }
 
   protected setFieldType(groupId: string, name: string, type: string): void {
@@ -328,11 +351,11 @@ export class CollectionSettingsPage {
     const trimmed = name.trim();
     if (!trimmed) return;
     if (this.draft()?.groups.find(g => g.id === groupId)?.fields.some(f => f.name === trimmed)) {
-      this.toast.flash(`"${trimmed}" is already a field here`);
+      this.toast.flash(this.i18n.t('toast.field.duplicate', { name: trimmed }));
       return;
     }
     this.mutateGroup(groupId, g => ({ ...g, fields: [...g.fields, { name: trimmed, type }] }));
-    this.toast.flash(`Field "${trimmed}" added`);
+    this.toast.flash(this.i18n.t('toast.field.added', { name: trimmed }));
   }
 
   // --- group ordering ---
@@ -368,7 +391,7 @@ export class CollectionSettingsPage {
   protected invite(): void {
     const email = this.inviteEmail().trim();
     if (!email || !email.includes('@')) {
-      this.toast.flash('Enter a valid email');
+      this.toast.flash(this.i18n.t('toast.invite.invalidEmail'));
       return;
     }
     const name = email
@@ -386,7 +409,7 @@ export class CollectionSettingsPage {
       members: [...d.members, { name, email, initials, role: this.inviteRole() as MemberRole }],
     }));
     this.inviteEmail.set('');
-    this.toast.flash('Invite sent ✓');
+    this.toast.flash(this.i18n.t('toast.invite.sent'));
   }
 
   protected setMemberRole(email: string, role: string): void {
@@ -394,16 +417,16 @@ export class CollectionSettingsPage {
       ...d,
       members: d.members.map(m => (m.email === email ? { ...m, role: role as MemberRole } : m)),
     }));
-    this.toast.flash('Role updated');
+    this.toast.flash(this.i18n.t('toast.member.roleUpdated'));
   }
 
   protected removeMember(email: string, fixed: boolean): void {
     if (fixed) {
-      this.toast.flash("The owner can't be removed");
+      this.toast.flash(this.i18n.t('toast.member.ownerImmutable'));
       return;
     }
     this.mutate(d => ({ ...d, members: d.members.filter(m => m.email !== email) }));
-    this.toast.flash('Access removed');
+    this.toast.flash(this.i18n.t('toast.member.removed'));
   }
 
   protected setLinkShare(on: boolean): void {
@@ -414,7 +437,7 @@ export class CollectionSettingsPage {
 
   protected async done(): Promise<void> {
     await this.persist();
-    this.toast.flash('Collection updated ✓');
+    this.toast.flash(this.i18n.t('toast.collection.updated'));
     // Back to the group you came from, not to the collection root — arriving
     // here scoped and leaving unscoped loses your place.
     void this.router.navigate(['/c', this.collectionId()], {

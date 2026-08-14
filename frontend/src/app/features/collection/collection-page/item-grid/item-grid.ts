@@ -2,11 +2,13 @@ import { ChangeDetectionStrategy, Component, inject, input, output } from '@angu
 import { RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../../core/api/images-api';
+import { I18nService } from '../../../../core/i18n';
 import { Item } from '../../../../core/models';
 import { ImageFocusService } from '../../../../core/state/image-focus.service';
 import { isOwned } from '../../../../core/utils/copies.util';
 import { fieldValue } from '../../../../core/utils/sort.util';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
+import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiBadge, UiCard, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
@@ -19,13 +21,14 @@ import { DragOrder } from '../drag-order';
 @Component({
   selector: 'app-item-grid',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, UiBadge, UiCard, UiReorder],
+  imports: [RouterLink, MoneyPipe, TPipe, UiBadge, UiCard, UiReorder],
   templateUrl: './item-grid.html',
   styleUrl: './item-grid.scss',
 })
 export class ItemGrid {
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
+  private readonly i18n = inject(I18nService);
 
   readonly items = input.required<Item[]>();
   readonly collectionId = input.required<string>();
@@ -49,7 +52,7 @@ export class ItemGrid {
   }
 
   protected badgeLabel(item: Item): string {
-    return itemBadgeLabel(item);
+    return itemBadgeLabel(item, this.i18n.t);
   }
 
   protected groupName(item: Item): string {

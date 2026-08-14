@@ -2,17 +2,20 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { I18nService, MessageKey } from '../../core/i18n';
+import { TPipe } from '../../shared/pipes/t.pipe';
 import { UiButton, UiCard, UiField, UiIcon, UiTextInput } from '../../shared/ui';
 
 @Component({
   selector: 'app-login-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiButton, UiCard, UiField, UiIcon, UiTextInput],
+  imports: [TPipe, UiButton, UiCard, UiField, UiIcon, UiTextInput],
   templateUrl: './login-page.html',
   styleUrl: './login-page.scss',
 })
 export class LoginPage {
   private readonly auth = inject(AuthService);
+  private readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -30,7 +33,8 @@ export class LoginPage {
       const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') ?? '/dashboard';
       await this.router.navigateByUrl(returnUrl);
     } catch (err) {
-      this.error.set(messageFor(err));
+      const status = (err as { status?: number })?.status;
+      this.error.set(this.i18n.t(errorKeyFor(status), { status: status ?? 0 }));
     } finally {
       this.busy.set(false);
     }
@@ -42,20 +46,16 @@ export class LoginPage {
  * API being down, a crash, rate limiting — used to be reported as "Invalid
  * email or password", which sends people off retyping a correct password.
  */
-function messageFor(err: unknown): string {
-  const status = (err as { status?: number })?.status;
+function errorKeyFor(status: number | undefined): MessageKey {
   if (status === 401) {
-    return 'Invalid email or password.';
+    return 'login.error.credentials';
   }
   if (status === 429) {
-    return 'Too many sign-in attempts. Wait a few minutes, then try again.';
+    return 'login.error.rateLimited';
   }
   // Angular reports an unreachable server (offline, DNS, refused, CORS) as 0.
   if (!status) {
-    return 'Can’t reach the Vault server. Check that it’s running, then try again.';
+    return 'login.error.unreachable';
   }
-  if (status >= 500) {
-    return 'The Vault server hit an error while signing you in. Try again in a moment.';
-  }
-  return `Sign-in failed (HTTP ${status}). Try again, or check the server logs.`;
+  return status >= 500 ? 'login.error.server' : 'login.error.other';
 }

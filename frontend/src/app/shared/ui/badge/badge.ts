@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
+import { MessageKey, Translate } from '../../../core/i18n';
 import { Condition, Item } from '../../../core/models';
 import { bestCondition } from '../../../core/utils/copies.util';
 
@@ -47,9 +48,26 @@ export function itemTone(item: Item): BadgeTone {
   return best ? conditionTone(best) : 'accent';
 }
 
-/** "WANTED", "MINT", or "MINT ×3" once there is more than one copy. */
-export function itemBadgeLabel(item: Item): string {
+/** Message key for a condition's display label — never the wire value itself. */
+export function conditionLabelKey(condition: Condition): MessageKey {
+  return CONDITION_KEYS[condition];
+}
+
+const CONDITION_KEYS: Record<Condition, MessageKey> = {
+  Mint: 'condition.mint',
+  Good: 'condition.good',
+  Fair: 'condition.fair',
+};
+
+/**
+ * "Wanted", "Mint", or "Mint ×3" once there is more than one copy. Rendered
+ * uppercase by `:host`, so the copy itself stays sentence case.
+ */
+export function itemBadgeLabel(item: Item, t: Translate): string {
   const best = bestCondition(item);
-  if (!best) return 'WANTED';
-  return item.copies.length > 1 ? `${best.toUpperCase()} ×${item.copies.length}` : best.toUpperCase();
+  if (!best) return t('badge.wanted');
+  const condition = t(conditionLabelKey(best));
+  return item.copies.length > 1
+    ? t('badge.conditionCount', { condition, count: item.copies.length })
+    : condition;
 }

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
+import { I18nService } from '../../../core/i18n';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { Condition, GroupNode, GroupSort, Item } from '../../../core/models';
@@ -30,6 +31,7 @@ import { GroupDashboard } from './group-dashboard/group-dashboard';
 import { GroupTree } from './group-tree/group-tree';
 import { ItemGrid } from './item-grid/item-grid';
 import { ItemList } from './item-list/item-list';
+import { TPipe } from '../../../shared/pipes/t.pipe';
 import { ViewMode, resolveView, viewParam } from './view-mode';
 import {
   initialExpanded,
@@ -50,6 +52,7 @@ const WIDE_ENOUGH = '(min-width: 1200px)';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
+    TPipe,
     CollectionHero,
     CollectionFilters,
     CollectionToolbar,
@@ -64,6 +67,7 @@ const WIDE_ENOUGH = '(min-width: 1200px)';
 })
 export class CollectionPage {
   protected readonly store = inject(VaultStore);
+  private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -167,7 +171,7 @@ export class CollectionPage {
   protected readonly total = computed(() => scopeStats(this.stats(), null));
 
   protected readonly scopeName = computed(() => {
-    if (this.g() === UNGROUPED_ID) return 'No group';
+    if (this.g() === UNGROUPED_ID) return this.i18n.t('group.none');
     return this.selectedGroup()?.name ?? '';
   });
 
@@ -178,7 +182,7 @@ export class CollectionPage {
    */
   protected readonly crumbPath = computed<GroupNode[]>(() => {
     if (this.g() !== UNGROUPED_ID) return this.selectedPath();
-    return [{ id: UNGROUPED_ID, name: 'No group', parentId: null, fields: [], sort: null, target: null }];
+    return [{ id: UNGROUPED_ID, name: this.i18n.t('group.none'), parentId: null, fields: [], sort: null, target: null }];
   });
 
   protected readonly groupNames = computed(
@@ -295,9 +299,11 @@ export class CollectionPage {
     if (!pending || !collection || pending.id !== collection.id) return;
     try {
       await this.store.updateCollection({ ...collection, items: pending.items });
-      this.toast.flash('Order saved ✓');
+      this.toast.flash(this.i18n.t('toast.order.saved'));
     } catch (err) {
-      this.toast.flash(err instanceof Error ? err.message : 'Could not save the order');
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.order.failed'),
+      );
     } finally {
       // Either way the store is now the authority again.
       this.pendingOrder.set(null);
@@ -358,6 +364,6 @@ export class CollectionPage {
     };
     void this.store
       .updateCollection({ ...collection, groups: [...collection.groups, node] })
-      .then(() => this.toast.flash(`Group "${trimmed}" added`));
+      .then(() => this.toast.flash(this.i18n.t('toast.group.added', { name: trimmed })));
   }
 }

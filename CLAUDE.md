@@ -57,14 +57,25 @@ Full detail in [`backend/README.md`](backend/README.md).
    update both sides plus the integration tests.
 4. **Tests:** integration tests run against real SQL Server (Testcontainers);
    tenant isolation has dedicated coverage that must stay green.
-5. **Tables are PascalCase and explicitly schema-qualified.** Schemas are
+5. **User-facing API text is localized, and the middleware order is load-bearing.**
+   Validation messages, ProblemDetails titles and service exceptions come from
+   `Vault.Application/Resources/Messages.resx` (+ `.pt-BR.resx`), resolved
+   against `CurrentUICulture`, which `UseRequestLocalization` sets from the
+   frontend's `Accept-Language`. That middleware is registered **before**
+   `UseExceptionHandler` in both hosts: the handler builds its title while an
+   exception unwinds, so the culture must still be in scope. Never assert a
+   literal user-facing message in a test — go through `Messages.In(name,
+   culture)`, or the test becomes a second copy of the English translation that
+   drifts silently. `MessageResourceTests` pins name parity and placeholders
+   across both files; `LocalizationTests` pins the pipeline order.
+6. **Tables are PascalCase and explicitly schema-qualified.** Schemas are
    declared only in `VaultSchemas` (`Identity`, `Catalog`, `Store`, `Storage`);
    every configuration calls `ToTable("Name", VaultSchemas.X)` and columns —
    JSON container columns included — are PascalCase.
    `TableNamingConventionTests` fails the build otherwise. Migrations predating
    `UseSchemaQualifiedPascalCaseNames` keep their old lowercase names; never
    retro-edit an applied migration.
-6. **Image bytes live in `IImageStore`, never in the database.** The `Images`
+7. **Image bytes live in `IImageStore`, never in the database.** The `Images`
    row is metadata only (id → tenant, content type). `FileSystemImageStore`
    writes `{ImageStorage:Root}/{tenantId}/{imageId}.{ext}` — **one directory per
    tenant**, so a tenant's images are a unit you can copy, quota or delete, and
@@ -120,22 +131,37 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    `ImageFocusService.position(id)`; never compute a percentage inline — the
    conversion lives in `core/utils/focal.util.ts`. Null means "never framed"
    (renders centred) and must survive round-trips.
-6. **All data flows through the abstract `VaultApi`**
+6. **No user-facing string lives in a component.** The app ships pt-BR and en,
+   switchable at runtime. Every string is a key in `core/i18n/messages/`,
+   rendered through the `t` pipe in templates or `I18nService.t` in code;
+   `en.ts` declares the keys and `pt-BR.ts` is `Record<MessageKey, string>`, so
+   a missing translation is a compile error. `I18nService` mirrors
+   `ThemeService` (signal + `localStorage['vault.lang']`, first visit from
+   `navigator.language`). **Enum wire values, user-typed names and proper nouns
+   are never translated** — they are data, and the enums are simultaneously the
+   SQL representation and the server's validator whitelist. Both the `t` and
+   `money` pipes are `pure: false` on purpose: a pure pipe memoizes by argument
+   and would freeze every label in the old language. Dates go through
+   `core/utils/date.util.ts`, amounts through `core/utils/money.util.ts`, and
+   the `$` never changes with the language.
+7. **All data flows through the abstract `VaultApi`**
    (`frontend/src/app/core/api/vault-api.ts`), fulfilled by `HttpVaultApi`
    against the .NET backend. There is no mocked data in the frontend — demo
    data lives in the backend seeder. Feature code only ever sees the abstract
    contract.
-7. **Signals + zoneless + OnPush.** State lives in signal stores
+8. **Signals + zoneless + OnPush.** State lives in signal stores
    (`core/state`); no Zone.js patterns.
-8. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
+9. **URL is state.** Selected group = `?g=`, settings tabs = `?tab=`, ids in
    the path. In-collection navigation preserves `?g=`
    (`queryParamsHandling: 'preserve'`).
-9. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
+10. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
    `:focus-visible`, status never communicated by color alone. Anything
    draggable also needs a keyboard path (`ui-reorder`, `ui-image-focus`).
-10. **Verify before merging:** `npm run build` clean (warnings included — the
+11. **Verify before merging:** `npm run build` clean (warnings included — the
    6 kB per-component style budget is real), unit tests green, and the
-   affected flows exercised in the browser in at least one dark theme.
+   affected flows exercised in the browser in at least one dark theme **and in
+   Portuguese** — it runs ~20% longer than English, so that is where text
+   overflow shows up first.
 
 ## ⚠️ Brand governance (pending)
 

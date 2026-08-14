@@ -3,54 +3,51 @@
     <div class="brand">
       <span class="brand__mark">◆</span>
       <span class="brand__name">Vault</span>
-      <span class="brand__sub">First-run setup</span>
+      <span class="brand__sub">{{ 'setup.brandSub' | t }}</span>
     </div>
 
-    <ol class="steps" aria-label="Setup steps">
-      @for (label of steps; track label; let i = $index) {
+    <ol class="steps" [attr.aria-label]="'setup.stepsAria' | t">
+      @for (key of stepKeys; track key; let i = $index) {
         <li class="steps__item" [class.active]="i === step()" [class.done]="i < step()">
-          <span class="steps__num">{{ i + 1 }}</span>{{ label }}
+          <span class="steps__num">{{ i + 1 }}</span>{{ key | t }}
         </li>
       }
     </ol>
 
     <!-- 0 — Token -->
     @if (step() === 0) {
-      <p class="hint">
-        A one-time setup token was printed to the container log at startup
-        (<span class="mono">SETUP MODE — … token …</span>). Paste it here to continue.
-      </p>
-      <ui-field label="Setup token">
-        <ui-text-input placeholder="paste the token" [value]="token()" (valueChange)="token.set($event)" />
+      <p class="hint">{{ 'setup.token.hint' | t: { marker: 'SETUP MODE — … token …' } }}</p>
+      <ui-field [label]="'setup.token.label' | t">
+        <ui-text-input [placeholder]="'setup.token.placeholder' | t" [value]="token()" (valueChange)="token.set($event)" />
       </ui-field>
     }
 
     <!-- 1 — Database -->
     @if (step() === 1) {
-      <p class="hint">Where should Vault store its data? The login needs rights to create the database if it doesn't exist.</p>
+      <p class="hint">{{ 'setup.db.hint' | t }}</p>
       <div class="grid">
-        <ui-field label="Server">
-          <ui-text-input placeholder="db-host" [value]="server()" (valueChange)="server.set($event)" />
+        <ui-field [label]="'setup.db.server' | t">
+          <ui-text-input [placeholder]="'setup.db.serverPlaceholder' | t" [value]="server()" (valueChange)="server.set($event)" />
         </ui-field>
-        <ui-field label="Port">
+        <ui-field [label]="'setup.db.port' | t">
           <ui-text-input type="number" [value]="port()" (valueChange)="port.set($event)" />
         </ui-field>
-        <ui-field label="Database">
+        <ui-field [label]="'setup.db.database' | t">
           <ui-text-input [value]="database()" (valueChange)="database.set($event)" />
         </ui-field>
-        <ui-field label="Username">
+        <ui-field [label]="'setup.db.username' | t">
           <ui-text-input [value]="username()" (valueChange)="username.set($event)" />
         </ui-field>
-        <ui-field label="Password">
+        <ui-field [label]="'setup.db.password' | t">
           <ui-text-input type="password" [value]="password()" (valueChange)="password.set($event)" />
         </ui-field>
-        <ui-field label="Trust server certificate">
+        <ui-field [label]="'setup.db.trustCert' | t">
           <ui-toggle [on]="trustCert()" (onChange)="trustCert.set($event)" />
         </ui-field>
       </div>
       <div class="test-row">
         <ui-button variant="ghost" size="sm" [disabled]="testing() || !dbValid() || !tokenValid()" (click)="test()">
-          {{ testing() ? 'Testing…' : 'Test connection' }}
+          {{ (testing() ? 'setup.db.testing' : 'setup.db.test') | t }}
         </ui-button>
       </div>
       @if (testNote(); as note) {
@@ -63,53 +60,53 @@
 
     <!-- 2 — Administrator -->
     @if (step() === 2) {
-      <p class="hint">Name your collection space and create the owner account you'll sign in with.</p>
-      <ui-field label="Organization name">
-        <ui-text-input placeholder="My Collection" [value]="organizationName()" (valueChange)="organizationName.set($event)" />
+      <p class="hint">{{ 'setup.admin.hint' | t }}</p>
+      <ui-field [label]="'setup.admin.org' | t">
+        <ui-text-input [placeholder]="'setup.admin.orgPlaceholder' | t" [value]="organizationName()" (valueChange)="organizationName.set($event)" />
       </ui-field>
       <div class="grid">
-        <ui-field label="Owner name">
+        <ui-field [label]="'setup.admin.ownerName' | t">
           <ui-text-input [value]="ownerName()" (valueChange)="ownerName.set($event)" />
         </ui-field>
-        <ui-field label="Owner email">
+        <ui-field [label]="'setup.admin.ownerEmail' | t">
           <ui-text-input type="email" [value]="ownerEmail()" (valueChange)="ownerEmail.set($event)" />
         </ui-field>
-        <ui-field label="Password (min 8)">
+        <ui-field [label]="'setup.admin.password' | t">
           <ui-text-input type="password" [value]="ownerPassword()" (valueChange)="ownerPassword.set($event)" />
         </ui-field>
-        <ui-field label="Confirm password">
+        <ui-field [label]="'setup.admin.confirm' | t">
           <ui-text-input type="password" [value]="ownerPasswordConfirm()" (valueChange)="ownerPasswordConfirm.set($event)" />
         </ui-field>
       </div>
       @if (ownerPassword() && ownerPassword().length < 8) {
         <p class="note" role="status">
           <span class="note__icon" aria-hidden="true">!</span>
-          <span>The password needs at least 8 characters.</span>
+          <span>{{ 'setup.admin.passwordTooShort' | t }}</span>
         </p>
       } @else if (ownerPasswordConfirm() && ownerPassword() !== ownerPasswordConfirm()) {
         <p class="note" role="status">
           <span class="note__icon" aria-hidden="true">!</span>
-          <span>The two passwords don't match.</span>
+          <span>{{ 'setup.admin.passwordMismatch' | t }}</span>
         </p>
       }
     }
 
     <!-- 3 — Preferences -->
     @if (step() === 3) {
-      <p class="hint">Pick a default theme. You can change it any time in settings.</p>
-      <ui-field label="Default theme">
+      <p class="hint">{{ 'setup.prefs.hint' | t }}</p>
+      <ui-field [label]="'setup.prefs.theme' | t">
         <ui-select [options]="themeOptions" [value]="defaultTheme()" (valueChange)="pickTheme($event)" />
       </ui-field>
     }
 
     <!-- 4 — Review -->
     @if (step() === 4) {
-      <p class="hint">Review, then apply. The app will restart and take you to the sign-in screen.</p>
+      <p class="hint">{{ 'setup.review.hint' | t }}</p>
       <dl class="review">
-        <dt>Database</dt><dd>{{ server() }},{{ port() }} / {{ database() }}</dd>
-        <dt>Organization</dt><dd>{{ organizationName() }}</dd>
-        <dt>Owner</dt><dd>{{ ownerName() }} &lt;{{ ownerEmail() }}&gt;</dd>
-        <dt>Theme</dt><dd>{{ themeLabel() }}</dd>
+        <dt>{{ 'setup.review.database' | t }}</dt><dd>{{ server() }},{{ port() }} / {{ database() }}</dd>
+        <dt>{{ 'setup.review.organization' | t }}</dt><dd>{{ organizationName() }}</dd>
+        <dt>{{ 'setup.review.owner' | t }}</dt><dd>{{ ownerName() }} &lt;{{ ownerEmail() }}&gt;</dd>
+        <dt>{{ 'setup.review.theme' | t }}</dt><dd>{{ themeLabel() }}</dd>
       </dl>
     }
 
@@ -121,17 +118,17 @@
     }
 
     <div class="nav">
-      <ui-button variant="ghost" size="sm" [disabled]="step() === 0 || busy()" (click)="back()">Back</ui-button>
-      @if (step() < steps.length - 1) {
+      <ui-button variant="ghost" size="sm" [disabled]="step() === 0 || busy()" (click)="back()">{{ 'setup.back' | t }}</ui-button>
+      @if (step() < stepKeys.length - 1) {
         <ui-button
           variant="primary"
           size="sm"
           [disabled]="(step() === 0 && !tokenValid()) || (step() === 1 && !dbValid()) || (step() === 2 && !adminValid())"
           (click)="next()"
-        >Next</ui-button>
+        >{{ 'setup.next' | t }}</ui-button>
       } @else {
         <ui-button variant="primary" size="sm" [disabled]="busy() || !adminValid()" (click)="finish()">
-          {{ busy() ? 'Applying…' : 'Apply & finish' }}
+          {{ (busy() ? 'setup.applying' : 'setup.finish') | t }}
         </ui-button>
       }
     </div>

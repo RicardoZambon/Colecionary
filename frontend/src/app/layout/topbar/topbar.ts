@@ -4,21 +4,24 @@ import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, map } from 'rxjs/operators';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { I18nService } from '../../core/i18n';
 import { ThemeService } from '../../core/state/theme.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { pathOf } from '../../core/utils/groups.util';
 import { UiAvatar, UiDropdown, UiIcon, UiTextInput } from '../../shared/ui';
+import { TPipe } from '../../shared/pipes/t.pipe';
 
 @Component({
   selector: 'app-topbar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, UiAvatar, UiDropdown, UiIcon, UiTextInput],
+  imports: [RouterLink, TPipe, UiAvatar, UiDropdown, UiIcon, UiTextInput],
   templateUrl: './topbar.html',
   styleUrl: './topbar.scss',
 })
 export class Topbar {
   protected readonly store = inject(VaultStore);
   protected readonly theme = inject(ThemeService);
+  protected readonly i18n = inject(I18nService);
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 

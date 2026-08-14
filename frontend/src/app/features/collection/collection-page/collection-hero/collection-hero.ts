@@ -2,12 +2,14 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../../core/api/images-api';
+import { I18nService } from '../../../../core/i18n';
 import { Collection, Member } from '../../../../core/models';
 import { ImageFocusService } from '../../../../core/state/image-focus.service';
 import { ToastService } from '../../../../core/state/toast.service';
 import { VaultStore } from '../../../../core/state/vault.store';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
+import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiAvatarStack, UiButton, UiImageSlot, UiProgress } from '../../../../shared/ui';
 
 /**
@@ -18,13 +20,14 @@ import { UiAvatarStack, UiButton, UiImageSlot, UiProgress } from '../../../../sh
 @Component({
   selector: 'app-collection-hero',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, UiAvatarStack, UiButton, UiImageSlot, UiProgress],
+  imports: [RouterLink, MoneyPipe, TPipe, UiAvatarStack, UiButton, UiImageSlot, UiProgress],
   templateUrl: './collection-hero.html',
   styleUrl: './collection-hero.scss',
 })
 export class CollectionHero {
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
+  private readonly i18n = inject(I18nService);
   private readonly store = inject(VaultStore);
   private readonly toast = inject(ToastService);
 
@@ -54,8 +57,16 @@ export class CollectionHero {
    */
   protected readonly progressText = computed(() => {
     const scope = this.scope();
-    if (!scope.hasTarget) return `${scope.owned} owned of ${scope.catalogued} catalogued`;
-    return `${scope.owned} owned, ${scope.catalogued} catalogued, of ${scope.target} in the set`;
+    return scope.hasTarget
+      ? this.i18n.t('progress.textTarget', {
+          owned: scope.owned,
+          catalogued: scope.catalogued,
+          target: scope.target!,
+        })
+      : this.i18n.t('progress.textNoTarget', {
+          owned: scope.owned,
+          catalogued: scope.catalogued,
+        });
   });
 
   protected async setImage(slot: 'banner' | 'icon', file: File): Promise<void> {
@@ -70,9 +81,11 @@ export class CollectionHero {
         bannerImageId: slot === 'banner' ? imageId : collection.bannerImageId,
         iconImageId: slot === 'icon' ? imageId : collection.iconImageId,
       });
-      this.toast.flash('Image updated ✓');
+      this.toast.flash(this.i18n.t('toast.image.updated'));
     } catch (err) {
-      this.toast.flash(err instanceof Error ? err.message : 'Upload failed');
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),
+      );
     }
   }
 

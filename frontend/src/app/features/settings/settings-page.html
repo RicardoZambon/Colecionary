@@ -1,12 +1,12 @@
-<h1>Settings</h1>
+<h1>{{ 'settings.title' | t }}</h1>
 
-<ui-tabs [tabs]="tabs" [active]="activeTab()" (activeChange)="onTabChange($event)" />
+<ui-tabs [tabs]="tabs()" [active]="activeTab()" (activeChange)="onTabChange($event)" />
 
 @switch (activeTab()) {
   @case ('plan') {
     <section class="section">
       <div>
-        <div class="heading">PLAN</div>
+        <div class="heading">{{ 'settings.plan.heading' | t }}</div>
         <p class="sub">{{ planSub() }}</p>
       </div>
       <div class="plans">
@@ -14,19 +14,19 @@
           <ui-card class="plan" [class.plan--active]="store.profile()?.plan === plan.id">
             <div class="plan__head">
               <span class="plan__name">{{ plan.name }}</span>
-              <span class="plan__price">{{ plan.price }}</span>
+              <span class="plan__price">{{ plan.priceKey | t }}</span>
             </div>
             <div class="plan__features">
-              @for (feature of plan.features; track feature) {
-                <div class="feature"><span class="tick">›</span>{{ feature }}</div>
+              @for (feature of plan.featureKeys; track feature) {
+                <div class="feature"><span class="tick">›</span>{{ feature | t }}</div>
               }
             </div>
             @if (store.profile()?.plan === plan.id) {
-              <ui-button variant="ghost" [block]="true" [disabled]="true">● Current plan</ui-button>
+              <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.current' | t }}</ui-button>
             } @else if (plan.id === 'pro') {
-              <ui-button [block]="true" (click)="choosePlan('pro')">Upgrade to Pro</ui-button>
+              <ui-button [block]="true" (click)="choosePlan('pro')">{{ 'settings.plan.upgrade' | t }}</ui-button>
             } @else {
-              <ui-button variant="ghost" [block]="true" (click)="choosePlan('free')">Switch to Free</ui-button>
+              <ui-button variant="ghost" [block]="true" (click)="choosePlan('free')">{{ 'settings.plan.downgrade' | t }}</ui-button>
             }
           </ui-card>
         }
@@ -36,10 +36,9 @@
   @case ('access') {
     <section class="section access">
       <div>
-        <div class="heading">TENANT MEMBERS</div>
+        <div class="heading">{{ 'settings.access.heading' | t }}</div>
         <p class="sub">
-          Everyone with access to the <span class="mono">acme-vault</span> tenant. Individual
-          collections can also be shared from their own page.
+          {{ 'settings.access.subBefore' | t }} <span class="mono">acme-vault</span>{{ 'settings.access.subAfter' | t }}
         </p>
       </div>
       <ui-card class="members">
@@ -52,7 +51,7 @@
             </span>
             <ui-select
               class="compact"
-              [options]="roleOptions"
+              [options]="roleOptions()"
               [value]="member.role"
               [disabled]="member.role === 'Owner'"
               (valueChange)="setMemberRole(member.email, $event)"
@@ -61,19 +60,20 @@
               type="button"
               class="remove"
               [class.disabled]="member.role === 'Owner'"
+              [attr.aria-label]="'settings.access.removeMember' | t: { name: member.name }"
               (click)="removeMember(member.email)"
             >✕</button>
           </div>
         }
       </ui-card>
 
-      <div class="heading">SHARING POLICY</div>
+      <div class="heading">{{ 'settings.access.policyHeading' | t }}</div>
       <ui-card class="policies">
         @for (policy of policyDefs; track policy.key) {
           <div class="policy-row">
             <span class="who">
-              <span class="name">{{ policy.label }}</span>
-              <span class="email">{{ policy.description }}</span>
+              <span class="name">{{ policy.label | t }}</span>
+              <span class="email">{{ policy.description | t }}</span>
             </span>
             <ui-toggle [on]="policies()[policy.key]" (onChange)="togglePolicy(policy.key)" />
           </div>
@@ -93,11 +93,14 @@
       </ui-card>
       <ui-card class="account-card">
         <span class="who">
-          <span class="name">Data</span>
-          <span class="email">{{ store.totalItems() }} items across {{ store.collections().length }} collections</span>
+          <span class="name">{{ 'settings.account.data' | t }}</span>
+          <span class="email">{{
+            'settings.account.dataSub'
+              | t: { items: store.totalItems(), collections: store.collections().length }
+          }}</span>
         </span>
         <ui-button variant="ghost" size="sm" [disabled]="exporting()" (click)="exportArchive()">
-          {{ exporting() ? 'Preparing…' : 'Export ZIP' }}
+          {{ (exporting() ? 'settings.account.exporting' : 'settings.account.export') | t }}
         </ui-button>
       </ui-card>
     </section>
@@ -105,8 +108,8 @@
   @default {
     <section class="section">
       <div>
-        <div class="heading">THEME</div>
-        <p class="sub">Pick a style — applies instantly and is saved to your profile.</p>
+        <div class="heading">{{ 'settings.theme.heading' | t }}</div>
+        <p class="sub">{{ 'settings.theme.sub' | t }}</p>
       </div>
       <div class="themes">
         @for (t of theme.themes; track t.id) {
@@ -122,9 +125,30 @@
               }
             </div>
             <div class="name">{{ t.name }}</div>
-            <div class="desc">{{ t.description }}</div>
+            <div class="desc">{{ t.descriptionKey | t }}</div>
             <div class="state" [class.active]="t.id === theme.current()">
-              {{ t.id === theme.current() ? '● ACTIVE' : 'CLICK TO APPLY' }}
+              {{ (t.id === theme.current() ? 'common.active' : 'common.clickToApply') | t }}
+            </div>
+          </ui-card>
+        }
+      </div>
+
+      <div>
+        <div class="heading">{{ 'settings.language.heading' | t }}</div>
+        <p class="sub">{{ 'settings.language.sub' | t }}</p>
+      </div>
+      <div class="themes">
+        @for (lang of i18n.langs; track lang.id) {
+          <ui-card
+            class="theme-card lang-card"
+            [interactive]="true"
+            [class.theme-card--active]="lang.id === i18n.current()"
+            (click)="i18n.apply(lang.id)"
+          >
+            <div class="name">{{ lang.name }}</div>
+            <div class="desc mono">{{ lang.locale }}</div>
+            <div class="state" [class.active]="lang.id === i18n.current()">
+              {{ (lang.id === i18n.current() ? 'common.active' : 'common.clickToApply') | t }}
             </div>
           </ui-card>
         }

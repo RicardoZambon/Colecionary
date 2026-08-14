@@ -9,10 +9,12 @@ import {
 import { RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../../core/api/images-api';
+import { I18nService } from '../../../../core/i18n';
 import { GroupNode, Item } from '../../../../core/models';
 import { ImageFocusService } from '../../../../core/state/image-focus.service';
 import { GroupStats, UNGROUPED_ID } from '../../../../core/utils/group-stats.util';
 import { childrenOf } from '../../../../core/utils/groups.util';
+import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { MosaicTile } from '../../../../shared/ui';
 import { GroupCard } from '../group-card/group-card';
 
@@ -30,13 +32,14 @@ interface CardView {
 @Component({
   selector: 'app-group-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, GroupCard],
+  imports: [RouterLink, TPipe, GroupCard],
   templateUrl: './group-dashboard.html',
   styleUrl: './group-dashboard.scss',
 })
 export class GroupDashboard {
   private readonly images = inject(ImagesApi);
   private readonly focus = inject(ImageFocusService);
+  private readonly i18n = inject(I18nService);
 
   readonly collectionId = input.required<string>();
   readonly groups = input.required<GroupNode[]>();
@@ -67,7 +70,7 @@ export class GroupDashboard {
     if (unfiled) {
       cards.push({
         id: UNGROUPED_ID,
-        name: 'No group',
+        name: this.i18n.t('group.none'),
         stats: unfiled,
         tiles: this.tilesFor(unfiled),
       });
@@ -78,6 +81,14 @@ export class GroupDashboard {
 
   /** How many items sit on the open group itself rather than below it. */
   protected readonly directCount = computed(() => this.directItems().length);
+
+  protected readonly filedHere = computed(() =>
+    this.i18n.plural(
+      this.directCount(),
+      'groupDashboard.filedHere.one',
+      'groupDashboard.filedHere.other',
+    ),
+  );
 
   private tilesFor(stats: GroupStats): MosaicTile[] {
     return stats.coverPhotoIds.map(id => ({

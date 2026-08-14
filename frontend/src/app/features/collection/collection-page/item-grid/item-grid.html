@@ -16,7 +16,10 @@
       <div class="item-card__img" [class.dim]="!isOwned(item)">
         @if (fieldChip(item); as chip) {
           <span class="item-card__chip">
-            <ui-badge tone="accent" [attr.title]="sortFieldName() + ': ' + chip">{{ chip }}</ui-badge>
+            <ui-badge
+              tone="accent"
+              [attr.title]="'itemGrid.chipTitle' | t: { field: sortFieldName() ?? '', value: chip }"
+            >{{ chip }}</ui-badge>
           </span>
         }
         @if (item.photoIds.length) {
@@ -36,7 +39,7 @@
           @if (item.copies.length > 1) {
             <!-- Spelled out, not only folded into the condition badge: how many
                  you hold is the thing you came to check. -->
-            <span class="item-card__copies">· {{ item.copies.length }} copies</span>
+            <span class="item-card__copies">{{ 'itemGrid.copies' | t: { n: item.copies.length } }}</span>
           }
         </div>
         <div class="item-card__foot">
@@ -54,5 +57,5 @@
       }
     </ui-card>
   }
-  <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">+ Add item</a>
+  <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">{{ 'itemGrid.addItem' | t }}</a>
 </div>

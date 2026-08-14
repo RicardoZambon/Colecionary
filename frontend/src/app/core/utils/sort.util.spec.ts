@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { Translate } from '../i18n/messages/keys';
 import { GroupField, GroupSort, Item } from '../models';
 import {
   applyManualOrder,
@@ -10,6 +11,18 @@ import {
   sortItems,
   sortLabel,
 } from './sort.util';
+
+/**
+ * Stands in for `I18nService.t`. Echoing the key (and its params) back means
+ * these assertions pin down *which message* a sort resolves to, not how that
+ * message happens to be worded in English — so retranslating never breaks them.
+ */
+const t: Translate = (key, params) =>
+  params
+    ? `${key}(${Object.entries(params)
+        .map(([name, value]) => `${name}=${value}`)
+        .join(',')})`
+    : key;
 
 function item(id: string, overrides: Partial<Item> = {}): Item {
   return {
@@ -107,14 +120,19 @@ describe('sort.util', () => {
   });
 
   it('labels sorts for the menu', () => {
-    expect(sortLabel(byNumero('asc'))).toBe('Número ↑');
-    expect(sortLabel(byNumero('desc'))).toBe('Número ↓');
-    expect(sortLabel({ by: 'manual', direction: 'asc' })).toBe('Manual order');
-    expect(sortLabel({ by: 'added', direction: 'desc' })).toBe('Recently added');
+    // A custom field's name is user data, so it is interpolated, not looked up.
+    expect(sortLabel(byNumero('asc'), t)).toBe('sort.field(name=Número,arrow=↑)');
+    expect(sortLabel(byNumero('desc'), t)).toBe('sort.field(name=Número,arrow=↓)');
+    expect(sortLabel({ by: 'manual', direction: 'asc' }, t)).toBe('sort.manual');
+    expect(sortLabel({ by: 'added', direction: 'desc' }, t)).toBe('sort.added.desc');
+  });
+
+  it('falls back to the default sort label for a key it does not know', () => {
+    expect(sortLabel({ by: 'nonsense', direction: 'asc' }, t)).toBe('sort.added.desc');
   });
 
   it('offers both directions for every custom field', () => {
-    const choices = sortChoices(NUMERO_TEXT);
+    const choices = sortChoices(NUMERO_TEXT, t);
     expect(choices.filter(c => c.by === 'field:Número').map(c => c.direction)).toEqual([
       'asc',
       'desc',

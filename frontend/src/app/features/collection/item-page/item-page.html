@@ -27,11 +27,11 @@
             ></button>
           }
           @if (it.photoIds.length < 8) {
-            <button type="button" class="thumb thumb--add" (click)="addPhoto()" title="Add photo">+</button>
+            <button type="button" class="thumb thumb--add" (click)="addPhoto()" [title]="'item.addPhoto' | t">+</button>
           }
         </div>
         @if (mainPhoto(); as photo) {
-          <ui-button variant="ghost" size="sm" (click)="reframe(photo.id)">Adjust framing</ui-button>
+          <ui-button variant="ghost" size="sm" (click)="reframe(photo.id)">{{ 'item.adjustFraming' | t }}</ui-button>
         }
       </div>
 
@@ -44,54 +44,53 @@
         <div class="price-row">
           <ui-badge [tone]="tone()">{{ badge() }}</ui-badge>
           <span class="value">{{ owned() ? (ownedValue() | money) : (it.value | money) }}</span>
-          <span class="note">{{ owned() ? 'paid ' + (paidTotal() | money) : 'market estimate' }}</span>
+          <span class="note">{{
+            owned() ? ('item.paid' | t: { value: paidTotal() | money }) : ('item.marketEstimate' | t)
+          }}</span>
         </div>
 
         @if (!owned()) {
           <div class="wantlist">
-            <span>On your wantlist — not in your vault yet.</span>
-            <ui-button size="sm" (click)="markOwned()">✓ I own one — add a copy</ui-button>
+            <span>{{ 'item.onWantlist' | t }}</span>
+            <ui-button size="sm" (click)="markOwned()">{{ 'item.markOwned' | t }}</ui-button>
           </div>
         }
 
         <p class="description">{{ it.description }}</p>
 
         <ui-card class="fields">
-          <ui-section-label class="fields__heading">Details</ui-section-label>
-          <div class="field-row"><span class="key">YEAR</span><span>{{ it.year }}</span></div>
-          <div class="field-row"><span class="key">GROUP</span><span>{{ groupPath() }}</span></div>
-          <div class="field-row"><span class="key">EST. VALUE / COPY</span><span>{{ it.value | money }}</span></div>
+          <ui-section-label class="fields__heading">{{ 'item.details' | t }}</ui-section-label>
+          <div class="field-row"><span class="key">{{ 'item.year' | t }}</span><span>{{ it.year }}</span></div>
+          <div class="field-row"><span class="key">{{ 'item.group' | t }}</span><span>{{ groupPath() }}</span></div>
+          <div class="field-row"><span class="key">{{ 'item.valuePerCopy' | t }}</span><span>{{ it.value | money }}</span></div>
         </ui-card>
 
         @if (owned()) {
           <ui-card class="fields copies">
-            <ui-section-label class="fields__heading">Copies · {{ it.copies.length }}</ui-section-label>
+            <ui-section-label class="fields__heading">{{ 'item.copiesHeading' | t: { n: it.copies.length } }}</ui-section-label>
             @for (copy of copyRows(); track copy.id) {
               <div class="copy-row">
-                <ui-badge [tone]="copy.tone">{{ copy.condition.toUpperCase() }}</ui-badge>
-                <span class="copy-row__paid">paid {{ copy.price | money }}</span>
+                <ui-badge [tone]="copy.tone">{{ copy.conditionKey | t }}</ui-badge>
+                <span class="copy-row__paid">{{ 'item.copyPaid' | t: { value: copy.price | money } }}</span>
                 <span class="copy-row__est">{{ copy.value | money }}</span>
-                @if (copy.acquiredOn) {
-                  <span class="copy-row__date">{{ copy.acquiredOn }}</span>
+                @if (copy.acquiredOnLabel) {
+                  <span class="copy-row__date">{{ copy.acquiredOnLabel }}</span>
                 }
-                @if (copy.statusLabel) {
-                  <span class="copy-row__status">{{ copy.statusLabel }}</span>
+                @if (copy.statusKey) {
+                  <span class="copy-row__status">{{ copy.statusKey | t }}</span>
                 }
                 @if (copy.notes) {
                   <span class="copy-row__notes">{{ copy.notes }}</span>
                 }
               </div>
             }
-            <div class="copies__total">
-              {{ it.copies.length }} {{ it.copies.length === 1 ? 'copy' : 'copies' }}
-              · paid {{ paidTotal() | money }} · est. {{ ownedValue() | money }}
-            </div>
+            <div class="copies__total">{{ copiesTotal() }}</div>
           </ui-card>
         }
 
         @if (groupFieldRows().length) {
           <ui-card class="fields">
-            <ui-section-label class="fields__heading">Group fields · {{ groupName() }}</ui-section-label>
+            <ui-section-label class="fields__heading">{{ 'item.groupFields' | t: { name: groupName() } }}</ui-section-label>
             @for (row of groupFieldRows(); track row.key) {
               <div class="field-row"><span class="key">{{ row.key }}</span><span>{{ row.value }}</span></div>
             }
@@ -99,14 +98,17 @@
         }
 
         <div class="actions">
-          <ui-button [routerLink]="['/c', coll.id, 'items', it.id, 'edit']" queryParamsHandling="preserve">Edit item</ui-button>
-          <ui-button variant="danger" (click)="deleteItem()">Delete</ui-button>
+          <ui-button [routerLink]="['/c', coll.id, 'items', it.id, 'edit']" queryParamsHandling="preserve">{{ 'item.edit' | t }}</ui-button>
+          <ui-button variant="danger" (click)="deleteItem()">{{ 'item.delete' | t }}</ui-button>
         </div>
       </div>
     </div>
   } @else {
-    <div class="missing">Item not found in this collection.</div>
+    <div class="missing">{{ 'item.notFound' | t }}</div>
   }
 } @else {
-  <div class="missing">Collection not found — <a routerLink="/dashboard">back to Dashboard</a>.</div>
+  <div class="missing">
+    {{ 'common.collectionNotFound' | t }}
+    <a routerLink="/dashboard">{{ 'common.backToDashboard' | t }}</a>.
+  </div>
 }

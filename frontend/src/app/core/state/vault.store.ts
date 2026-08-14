@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { VaultApi } from '../api/vault-api';
+import { I18nService } from '../i18n/i18n.service';
 import { ToastService } from './toast.service';
 import { Collection, Item, Member, StoreListing, UserProfile } from '../models';
 import { ownedValue } from '../utils/copies.util';
@@ -15,6 +16,7 @@ import { ownedValue } from '../utils/copies.util';
 @Injectable({ providedIn: 'root' })
 export class VaultStore {
   private readonly api = inject(VaultApi);
+  private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
 
   private readonly collectionsState = signal<Collection[]>([]);
@@ -96,7 +98,11 @@ export class VaultStore {
       this.collectionsState.update(all => [...all, created]);
       return created;
     } catch (err) {
-      this.toast.flash(err instanceof Error ? err.message : 'Could not add checklist');
+      // A server-side message arrives already translated (Accept-Language);
+      // only the generic fallback is ours to localize.
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.collection.addFailed'),
+      );
       return null;
     }
   }

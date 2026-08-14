@@ -2,6 +2,7 @@ using FluentValidation;
 using Vault.Application.Abstractions;
 using Vault.Application.Collections.Dtos;
 using Vault.Application.Common;
+using Vault.Application.Resources;
 using Vault.Domain.Entities;
 
 namespace Vault.Application.Collections;
@@ -43,7 +44,7 @@ public class CollectionService(
     {
         await collectionValidator.ValidateAndThrowAsync(dto, ct);
         var tracked = await collections.GetAsync(id, ct)
-            ?? throw new NotFoundException($"Collection '{id}' not found.");
+            ?? throw new NotFoundException(Messages.CollectionNotFoundFor(id));
 
         var tenantId = currentTenant.TenantId;
         var now = timeProvider.GetUtcNow();
@@ -65,14 +66,14 @@ public class CollectionService(
         await collections.SaveChangesAsync(ct);
 
         var saved = await collections.GetAsync(id, ct)
-            ?? throw new NotFoundException($"Collection '{id}' not found.");
+            ?? throw new NotFoundException(Messages.CollectionNotFoundFor(id));
         return saved.ToDto();
     }
 
     public async Task DeleteAsync(string id, CancellationToken ct)
     {
         var collection = await collections.GetAsync(id, ct)
-            ?? throw new NotFoundException($"Collection '{id}' not found.");
+            ?? throw new NotFoundException(Messages.CollectionNotFoundFor(id));
         collections.Remove(collection);
         await collections.SaveChangesAsync(ct);
     }
@@ -84,10 +85,10 @@ public class CollectionService(
     public async Task<CollectionDto> ImportStoreListingAsync(string listingId, CancellationToken ct)
     {
         var listing = await storeListings.GetAsync(listingId, ct)
-            ?? throw new NotFoundException($"Store listing '{listingId}' not found.");
+            ?? throw new NotFoundException(Messages.StoreListingNotFoundFor(listingId));
         if (await collections.ExistsAsync(listing.Id, ct))
         {
-            throw new ConflictException("Already in your vault");
+            throw new ConflictException(Messages.AlreadyInYourVault);
         }
 
         var tenantId = currentTenant.TenantId;

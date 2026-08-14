@@ -1,6 +1,10 @@
 @if (collection(); as coll) {
   <a class="back" [routerLink]="['/c', coll.id]" queryParamsHandling="preserve">← {{ coll.name }}</a>
-  <h1>{{ editing() ? 'Edit item — ' + editing()!.name : 'Add item to ' + coll.name }}</h1>
+  <h1>{{
+    editing()
+      ? ('itemForm.editTitle' | t: { name: editing()!.name })
+      : ('itemForm.newTitle' | t: { collection: coll.name })
+  }}</h1>
 
   <div class="layout">
     <div class="photos">
@@ -13,9 +17,9 @@
         (drop)="onPhotoDrop($event)"
       >
         @if (uploading()) {
-          uploading…
+          {{ 'itemForm.uploading' | t }}
         } @else {
-          ⇪ drop photos here<br />or click to browse
+          {{ 'itemForm.dropzone' | t }}<br />{{ 'itemForm.dropzoneBrowse' | t }}
         }
       </button>
       @if (photoIds().length) {
@@ -27,68 +31,80 @@
               [style.background-position]="focus.position(id)"
             >
               @if ($index === 0) {
-                <span class="cover-tag">COVER</span>
+                <span class="cover-tag">{{ 'itemForm.cover' | t }}</span>
               }
               <button
                 type="button"
                 class="photo__frame"
-                title="Adjust framing"
-                aria-label="Adjust framing"
+                [title]="'itemForm.adjustFraming' | t"
+                [attr.aria-label]="'itemForm.adjustFraming' | t"
                 (click)="reframe(id)"
               >
                 ⌖
               </button>
-              <button type="button" class="photo__remove" title="Remove photo" (click)="removePhoto($index)">✕</button>
+              <button
+                type="button"
+                class="photo__remove"
+                [title]="'itemForm.removePhoto' | t"
+                [attr.aria-label]="'itemForm.removePhoto' | t"
+                (click)="removePhoto($index)"
+              >✕</button>
             </div>
           }
         </div>
       }
-      <div class="hint">Up to 8 photos · first becomes the cover</div>
+      <div class="hint">{{ 'itemForm.photoHint' | t }}</div>
     </div>
 
     <form class="form" (submit)="$event.preventDefault(); save()">
-      <ui-field label="Name">
+      <ui-field [label]="'itemForm.name' | t">
         <ui-text-input [value]="name()" (valueChange)="name.set($event)" />
       </ui-field>
 
-      <ui-field label="Description">
+      <ui-field [label]="'itemForm.description' | t">
         <ui-textarea [rows]="3" [value]="description()" (valueChange)="description.set($event)" />
       </ui-field>
 
       <div class="pair">
-        <ui-field label="Group">
+        <ui-field [label]="'itemForm.group' | t">
           <ui-select [options]="groupOptions()" [value]="groupId()" (valueChange)="groupId.set($event)" />
         </ui-field>
-        <ui-field label="Year">
+        <ui-field [label]="'itemForm.year' | t">
           <ui-text-input [value]="year()" (valueChange)="year.set($event)" />
         </ui-field>
-        <ui-field label="Est. value (per copy)">
+        <ui-field [label]="'itemForm.value' | t">
           <ui-text-input [value]="value()" (valueChange)="value.set($event)" />
         </ui-field>
       </div>
 
       <ui-card class="copies">
-        <div class="copies__heading">COPIES · {{ copies().length }}</div>
+        <div class="copies__heading">{{ 'itemForm.copiesHeading' | t: { n: copies().length } }}</div>
         @for (copy of copies(); track copy.id) {
           <div class="copies__row">
             <div class="copies__row-head">
-              <span class="tag">COPY #{{ $index + 1 }}</span>
+              <span class="tag">{{ 'itemForm.copyTag' | t: { n: $index + 1 } }}</span>
               <ui-select
                 class="compact"
-                [options]="conditionOptions"
+                [options]="conditionOptions()"
                 [value]="copy.condition"
                 (valueChange)="patchCopy($index, { condition: $any($event) })"
               />
               <ui-select
                 class="compact"
-                [options]="copyStatusOptions"
+                [options]="copyStatusOptions()"
                 [value]="copy.status"
                 (valueChange)="patchCopy($index, { status: $any($event) })"
               />
-              <button type="button" class="copies__remove" title="Remove copy" (click)="removeCopy($index)">✕</button>
+              <button
+                type="button"
+                class="copies__remove"
+                [title]="'itemForm.removeCopy' | t"
+                [attr.aria-label]="'itemForm.removeCopy' | t"
+                (click)="removeCopy($index)"
+              >✕</button>
             </div>
             <div class="copies__fields">
-              <ui-field label="Paid">
+              <ui-field [label]="'itemForm.paid' | t">
                 <ui-text-input
                   variant="subtle"
                   placeholder="0"
@@ -96,15 +112,15 @@
                   (valueChange)="patchCopy($index, { price: $event })"
                 />
               </ui-field>
-              <ui-field label="Est. value">
+              <ui-field [label]="'itemForm.copyValue' | t">
                 <ui-text-input
                   variant="subtle"
-                  placeholder="— uses item value"
+                  [placeholder]="'itemForm.copyValuePlaceholder' | t"
                   [value]="copy.value"
                   (valueChange)="patchCopy($index, { value: $event })"
                 />
               </ui-field>
-              <ui-field label="Acquired">
+              <ui-field [label]="'itemForm.acquired' | t">
                 <ui-text-input
                   variant="subtle"
                   type="date"
@@ -113,25 +129,25 @@
                 />
               </ui-field>
             </div>
-            <ui-field label="Notes">
+            <ui-field [label]="'itemForm.notes' | t">
               <ui-text-input
                 variant="subtle"
-                placeholder="sealed · box A shelf 2 · missing manual…"
+                [placeholder]="'itemForm.notesPlaceholder' | t"
                 [value]="copy.notes"
                 (valueChange)="patchCopy($index, { notes: $event })"
               />
             </ui-field>
           </div>
         } @empty {
-          <div class="copies__empty">No copies yet — this item stays on your wantlist.</div>
+          <div class="copies__empty">{{ 'itemForm.noCopies' | t }}</div>
         }
         <div class="copies__actions">
-          <ui-button variant="ghost" size="sm" (click)="addCopy()">+ Add copy</ui-button>
+          <ui-button variant="ghost" size="sm" (click)="addCopy()">{{ 'itemForm.addCopy' | t }}</ui-button>
         </div>
       </ui-card>
 
       <ui-card class="group-fields">
-        <div class="group-fields__heading">GROUP FIELDS · {{ groupLabel() }}</div>
+        <div class="group-fields__heading">{{ 'itemForm.groupFieldsHeading' | t: { name: groupLabel() } }}</div>
         @for (field of groupFields(); track field.name) {
           <div class="group-fields__row">
             <span class="key">{{ field.name }}</span>
@@ -144,20 +160,23 @@
             />
           </div>
         } @empty {
-          <div class="group-fields__empty">This group has no custom fields yet.</div>
+          <div class="group-fields__empty">{{ 'itemForm.noGroupFields' | t }}</div>
         }
         <div class="group-fields__hint">
-          Fields come from the item's group — manage them in
-          <a [routerLink]="['/c', coll.id, 'settings']" [queryParams]="{ tab: 'groups' }">Collection settings ▸ Groups &amp; fields</a>.
+          {{ 'itemForm.groupFieldsHint' | t }}
+          <a [routerLink]="['/c', coll.id, 'settings']" [queryParams]="{ tab: 'groups' }">{{ 'itemForm.groupFieldsLink' | t }}</a>.
         </div>
       </ui-card>
 
       <div class="actions">
-        <ui-button variant="ghost" (click)="cancel()">Cancel</ui-button>
-        <ui-button type="submit">Save item</ui-button>
+        <ui-button variant="ghost" (click)="cancel()">{{ 'itemForm.cancel' | t }}</ui-button>
+        <ui-button type="submit">{{ 'itemForm.save' | t }}</ui-button>
       </div>
     </form>
   </div>
 } @else {
-  <div class="missing">Collection not found — <a routerLink="/dashboard">back to Dashboard</a>.</div>
+  <div class="missing">
+    {{ 'common.collectionNotFound' | t }}
+    <a routerLink="/dashboard">{{ 'common.backToDashboard' | t }}</a>.
+  </div>
 }

@@ -1,6 +1,7 @@
 using FluentValidation;
 using Vault.Application.Abstractions;
 using Vault.Application.Common;
+using Vault.Application.Resources;
 
 namespace Vault.Application.Profile;
 
@@ -12,7 +13,7 @@ public class ProfileService(
     public async Task<UserProfileDto> GetAsync(CancellationToken ct)
     {
         var user = await users.GetByIdAsync(currentTenant.UserId, ct)
-            ?? throw new NotFoundException("Current user not found.");
+            ?? throw new NotFoundException(Messages.CurrentUserNotFound);
         return user.ToProfileDto();
     }
 
@@ -20,11 +21,11 @@ public class ProfileService(
     {
         await profileValidator.ValidateAndThrowAsync(dto, ct);
         var user = await users.GetByIdAsync(currentTenant.UserId, ct)
-            ?? throw new NotFoundException("Current user not found.");
+            ?? throw new NotFoundException(Messages.CurrentUserNotFound);
 
         if (!string.Equals(dto.Email, user.Email, StringComparison.OrdinalIgnoreCase))
         {
-            throw new DomainRuleException("Email is the login identity and can't be changed yet.");
+            throw new DomainRuleException(Messages.EmailCannotBeChanged);
         }
 
         user.Name = dto.Name;

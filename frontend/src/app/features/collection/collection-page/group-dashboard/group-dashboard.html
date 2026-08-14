@@ -17,16 +17,13 @@
       queryParamsHandling="merge"
     >
       <span class="tile__glyph" aria-hidden="true">▦</span>
-      {{ directCount() }} item{{ directCount() === 1 ? '' : 's' }} filed here
+      {{ filedHere() }}
     </a>
   }
 
-  <button type="button" class="tile tile--new" (click)="newGroup.emit()">+ New group</button>
+  <button type="button" class="tile tile--new" (click)="newGroup.emit()">{{ 'groupDashboard.newGroup' | t }}</button>
 </div>
 
 @if (!cards().length && !directCount()) {
-  <div class="empty">
-    No sub-groups here yet. Create one to break this part of the collection down,
-    or switch to the item views above.
-  </div>
+  <div class="empty">{{ 'groupDashboard.empty' | t }}</div>
 }

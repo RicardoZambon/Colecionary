@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+
+import { I18nService } from '../../../core/i18n';
+import { TPipe } from '../../pipes/t.pipe';
 
 /**
  * User-fillable image placeholder (collection banners and icons).
@@ -9,11 +12,14 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 @Component({
   selector: 'ui-image-slot',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TPipe],
   host: {
     '(click)': 'browse()',
     '(dragover)': 'onDragOver($event)',
     '(drop)': 'onDrop($event)',
-    title: 'Click or drop an image',
+    // Bound, not literal: a host attribute is written once at creation, so the
+    // title has to be an expression to follow a language change.
+    '[title]': "i18n.t('ui.imageSlot.hint')",
   },
   template: `
     @if (src(); as url) {
@@ -26,8 +32,8 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
         <button
           type="button"
           class="reframe"
-          title="Adjust framing"
-          aria-label="Adjust framing"
+          [title]="'ui.imageSlot.reframe' | t"
+          [attr.aria-label]="'ui.imageSlot.reframe' | t"
           (click)="requestReframe($event)"
         >
           ⌖
@@ -95,6 +101,8 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
   `,
 })
 export class UiImageSlot {
+  protected readonly i18n = inject(I18nService);
+
   readonly src = input<string | null>(null);
   /**
    * CSS `background-position` for the crop — the page resolves it from

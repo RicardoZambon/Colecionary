@@ -2,6 +2,7 @@ using FluentValidation;
 using Vault.Application.Abstractions;
 using Vault.Application.Common;
 using Vault.Application.Images.Dtos;
+using Vault.Application.Resources;
 using Vault.Domain.Entities;
 
 namespace Vault.Application.Images;
@@ -24,17 +25,17 @@ public class ImageService(
     {
         if (data.Length == 0)
         {
-            throw new DomainRuleException("The uploaded file is empty.");
+            throw new DomainRuleException(Messages.ImageFileEmpty);
         }
 
         if (data.Length > MaxBytes)
         {
-            throw new DomainRuleException("Images are limited to 5 MB.");
+            throw new DomainRuleException(Messages.ImageTooLarge);
         }
 
         if (!ImageContentTypes.IsAllowed(contentType))
         {
-            throw new DomainRuleException("Only JPEG, PNG, WebP, GIF or AVIF images are accepted.");
+            throw new DomainRuleException(Messages.ImageTypeUnsupported);
         }
 
         var image = new StoredImage
@@ -63,10 +64,10 @@ public class ImageService(
     public async Task<ImageContent> OpenAsync(Guid id, CancellationToken ct)
     {
         var image = await images.GetUnfilteredAsync(id, ct)
-            ?? throw new NotFoundException($"Image '{id}' not found.");
+            ?? throw new NotFoundException(Messages.ImageNotFoundFor(id));
 
         var bytes = await store.OpenReadAsync(image.TenantId, image.Id, image.ContentType, ct)
-            ?? throw new NotFoundException($"Image '{id}' has no stored bytes.");
+            ?? throw new NotFoundException(Messages.ImageHasNoBytesFor(id));
 
         return new ImageContent(image.ContentType, bytes);
     }
@@ -93,7 +94,7 @@ public class ImageService(
         }
 
         var image = await images.GetForCurrentTenantAsync(id, ct)
-            ?? throw new NotFoundException($"Image '{id}' not found.");
+            ?? throw new NotFoundException(Messages.ImageNotFoundFor(id));
 
         image.FocalX = focal?.X;
         image.FocalY = focal?.Y;

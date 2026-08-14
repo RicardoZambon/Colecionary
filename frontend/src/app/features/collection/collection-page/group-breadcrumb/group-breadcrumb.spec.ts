@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { I18nService } from '../../../../core/i18n';
 import { GroupNode } from '../../../../core/models';
 import { ChildChip, GroupBreadcrumb } from './group-breadcrumb';
 
@@ -31,6 +32,8 @@ class HostComponent {
 }
 
 function mount(patch: Partial<HostComponent> = {}) {
+  // The nav is selected by its translated aria-label, so pin the language.
+  TestBed.inject(I18nService).apply('en');
   const fixture = TestBed.createComponent(HostComponent);
   Object.assign(fixture.componentInstance, patch);
   fixture.detectChanges();

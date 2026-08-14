@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, model } from '@angular/core';
 
 import { CONDITIONS, Condition } from '../../../../core/models';
+import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiChip } from '../../../../shared/ui';
+import { conditionLabelKey } from '../../../../shared/ui/badge/badge';
 
 export type OwnFilter = 'owned' | 'wanted' | null;
 
@@ -15,18 +17,18 @@ export type OwnFilter = 'owned' | 'wanted' | null;
 @Component({
   selector: 'app-collection-filters',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiChip],
+  imports: [TPipe, UiChip],
   template: `
-    <span class="row-label">CONDITION</span>
+    <span class="row-label">{{ 'filters.condition' | t }}</span>
     @for (value of conditions; track value) {
       <ui-chip [small]="true" [selected]="condition() === value" (click)="toggleCondition(value)">
-        {{ value }}
+        {{ conditionKey(value) | t }}
       </ui-chip>
     }
 
-    <span class="row-label spaced">STATUS</span>
-    <ui-chip [small]="true" [selected]="own() === 'owned'" (click)="toggleOwn('owned')">Owned</ui-chip>
-    <ui-chip [small]="true" [selected]="own() === 'wanted'" (click)="toggleOwn('wanted')">Wanted</ui-chip>
+    <span class="row-label spaced">{{ 'filters.status' | t }}</span>
+    <ui-chip [small]="true" [selected]="own() === 'owned'" (click)="toggleOwn('owned')">{{ 'filters.owned' | t }}</ui-chip>
+    <ui-chip [small]="true" [selected]="own() === 'wanted'" (click)="toggleOwn('wanted')">{{ 'filters.wanted' | t }}</ui-chip>
   `,
   styles: `
     @use '../../../../../styles/mixins' as *;
@@ -40,6 +42,7 @@ export type OwnFilter = 'owned' | 'wanted' | null;
 
     .row-label {
       @include mono-label(10px, 0.1em);
+      text-transform: uppercase;
 
       &.spaced {
         margin-left: 10px;
@@ -52,6 +55,9 @@ export class CollectionFilters {
   readonly own = model<OwnFilter>(null);
 
   protected readonly conditions = CONDITIONS;
+
+  /** The chip shows a label; the filter still matches on the wire value. */
+  protected readonly conditionKey = conditionLabelKey;
 
   protected toggleCondition(value: Condition): void {
     this.condition.update(current => (current === value ? null : value));

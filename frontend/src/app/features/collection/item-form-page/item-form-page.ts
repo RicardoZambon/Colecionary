@@ -2,20 +2,21 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
+import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
 import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
 import { fieldsFor, flattenTree, groupById } from '../../../core/utils/groups.util';
+import { TPipe } from '../../../shared/pipes/t.pipe';
 import { SelectOption, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea } from '../../../shared/ui';
+import { conditionLabelKey } from '../../../shared/ui/badge/badge';
 
-const CONDITION_OPTIONS: SelectOption[] = CONDITIONS.map(c => ({ value: c, label: c }));
-
-const COPY_STATUS_OPTIONS: SelectOption[] = [
-  { value: 'Keep', label: 'Keeping' },
-  { value: 'ForTrade', label: 'For trade' },
-  { value: 'ForSale', label: 'For sale' },
+const COPY_STATUS_KEYS: { value: CopyStatus; label: MessageKey }[] = [
+  { value: 'Keep', label: 'copyStatus.keep' },
+  { value: 'ForTrade', label: 'copyStatus.forTrade' },
+  { value: 'ForSale', label: 'copyStatus.forSale' },
 ];
 
 const MAX_PHOTOS = 8;
@@ -64,7 +65,7 @@ function fromDraft(draft: CopyDraft): ItemCopy {
 @Component({
   selector: 'app-item-form-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea],
+  imports: [RouterLink, TPipe, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea],
   templateUrl: './item-form-page.html',
   styleUrl: './item-form-page.scss',
 })
@@ -72,6 +73,7 @@ export class ItemFormPage {
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
+  private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
@@ -79,8 +81,14 @@ export class ItemFormPage {
   /** Present when editing, absent on the "new item" route. */
   readonly itemId = input<string | undefined>(undefined);
 
-  protected readonly conditionOptions = CONDITION_OPTIONS;
-  protected readonly copyStatusOptions = COPY_STATUS_OPTIONS;
+  // Options carry the *wire* value and a translated label — the enum itself is
+  // both the SQL representation and the validator whitelist, so it never moves.
+  protected readonly conditionOptions = computed<SelectOption[]>(() =>
+    CONDITIONS.map(c => ({ value: c, label: this.i18n.t(conditionLabelKey(c)) })),
+  );
+  protected readonly copyStatusOptions = computed<SelectOption[]>(() =>
+    COPY_STATUS_KEYS.map(s => ({ value: s.value, label: this.i18n.t(s.label) })),
+  );
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
   protected readonly editing = computed(() =>
@@ -144,7 +152,7 @@ export class ItemFormPage {
     try {
       for (const [index, file] of imageFiles.entries()) {
         if (this.photoIds().length >= MAX_PHOTOS) {
-          this.toast.flash('Up to 8 photos per item');
+          this.toast.flash(this.i18n.t('toast.photo.limit'));
           break;
         }
         // Only the first of a batch opens the editor: five modals in a row for
@@ -161,7 +169,9 @@ export class ItemFormPage {
         this.photoIds.update(ids => [...ids, imageId]);
       }
     } catch (err) {
-      this.toast.flash(err instanceof Error ? err.message : 'Upload failed');
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),
+      );
     } finally {
       this.uploading.set(false);
     }
@@ -180,7 +190,7 @@ export class ItemFormPage {
 
   protected addCopy(): void {
     if (this.copies().length >= MAX_COPIES) {
-      this.toast.flash(`Up to ${MAX_COPIES} copies per item`);
+      this.toast.flash(this.i18n.t('toast.copy.limit', { n: MAX_COPIES }));
       return;
     }
     this.copies.update(copies => [...copies, toDraft(newCopy())]);
@@ -229,7 +239,7 @@ export class ItemFormPage {
     if (!collection) return;
     const name = this.name().trim();
     if (!name) {
-      this.toast.flash('Give the item a name');
+      this.toast.flash(this.i18n.t('toast.item.needsName'));
       return;
     }
 
@@ -253,7 +263,7 @@ export class ItemFormPage {
     };
 
     await this.store.upsertItem(collection.id, syncWantedTag(item));
-    this.toast.flash('Saved ✓');
+    this.toast.flash(this.i18n.t('toast.item.saved'));
     void this.router.navigate(
       existing ? ['/c', collection.id, 'items', existing.id] : ['/c', collection.id],
       { queryParamsHandling: 'preserve' },
