@@ -1,4 +1,5 @@
 import { GroupField, GroupNode, GroupSort } from '../models';
+import { UNGROUPED_ID } from './group-stats.util';
 import { compareNames } from './sort.util';
 
 /** Pure helpers for navigating a collection's group tree. */
@@ -17,6 +18,20 @@ export function childrenOf(groups: GroupNode[], parentId: string | null): GroupN
 
 export function groupById(groups: GroupNode[], id: string | null): GroupNode | undefined {
   return groups.find(g => g.id === id);
+}
+
+/**
+ * A remembered group id narrowed to one that exists, or `''` for "no group".
+ * A blank, the unfiled bucket's sentinel and an id no group answers to (one
+ * deleted since something recorded it) all mean the same thing, and `''` is how
+ * an item spells it — {@link UNGROUPED_ID} is a bucket key for reading, never a
+ * value to store. Anything turning a remembered id into an editable selection —
+ * the `?g=` an "add item" link carries over, an item's own `groupId` — goes
+ * through this, so what a form shows and what it saves can't drift apart.
+ */
+export function resolveGroupId(groups: GroupNode[], id: string | null | undefined): string {
+  if (!id || id === UNGROUPED_ID) return '';
+  return groupById(groups, id)?.id ?? '';
 }
 
 /** The given group id plus every descendant id. */

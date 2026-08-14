@@ -8,7 +8,7 @@ import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
 import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
-import { fieldsFor, flattenTree, groupById } from '../../../core/utils/groups.util';
+import { fieldsFor, flattenTree, groupById, resolveGroupId } from '../../../core/utils/groups.util';
 import { TPipe } from '../../../shared/pipes/t.pipe';
 import { SelectOption, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea } from '../../../shared/ui';
 import { conditionLabelKey } from '../../../shared/ui/badge/badge';
@@ -80,6 +80,13 @@ export class ItemFormPage {
   readonly collectionId = input.required<string>();
   /** Present when editing, absent on the "new item" route. */
   readonly itemId = input<string | undefined>(undefined);
+  /**
+   * The group open in the collection behind this form, preserved from `?g=` by
+   * every "add item" link. A new item lands in the group you were looking at —
+   * without this the form would pick an arbitrary group and the item would
+   * vanish from the view you created it in.
+   */
+  readonly g = input<string | undefined>(undefined);
 
   // Options carry the *wire* value and a translated label — the enum itself is
   // both the SQL representation and the validator whitelist, so it never moves.
@@ -119,7 +126,7 @@ export class ItemFormPage {
       const item = this.editing();
       this.name.set(item?.name ?? '');
       this.description.set(item?.description ?? '');
-      this.groupId.set(item?.groupId ?? collection.groups[0]?.id ?? '');
+      this.groupId.set(this.initialGroupId(item));
       this.year.set(item ? String(item.year) : '');
       this.value.set(item ? String(item.value) : '');
       // A new item starts with one copy — adding something you own is the
@@ -129,6 +136,16 @@ export class ItemFormPage {
       this.custom.set(Object.fromEntries((item?.custom ?? []).map(c => [c.key, c.value])));
       this.photoIds.set([...(item?.photoIds ?? [])]);
     });
+  }
+
+  /**
+   * Which group the form opens on: the item's own when editing, the one open
+   * behind the form when adding. Both go through `resolveGroupId`, so a group
+   * deleted since either was recorded opens as "no group" rather than as a
+   * selection the picker can't show.
+   */
+  private initialGroupId(item: Item | undefined): string {
+    return resolveGroupId(this.collection()?.groups ?? [], item ? item.groupId : this.g());
   }
 
   protected browsePhotos(): void {
@@ -204,12 +221,16 @@ export class ItemFormPage {
     this.copies.update(copies => copies.map((c, i) => (i === index ? { ...c, ...patch } : c)));
   }
 
-  protected readonly groupOptions = computed<SelectOption[]>(() =>
-    flattenTree(this.collection()?.groups ?? []).map(({ node, depth }) => ({
+  // Leaving an item unfiled is a real choice, not the absence of one, so it is
+  // an option like any other — and it is the one the form starts on when you
+  // add from the collection root or from the unfiled bucket.
+  protected readonly groupOptions = computed<SelectOption[]>(() => [
+    { value: '', label: this.i18n.t('group.none') },
+    ...flattenTree(this.collection()?.groups ?? []).map(({ node, depth }) => ({
       value: node.id,
       label: (depth ? '   '.repeat(depth) + '↳ ' : '') + node.name,
     })),
-  );
+  ]);
 
   protected readonly groupFields = computed(() =>
     fieldsFor(this.collection()?.groups ?? [], this.groupId() || null),
@@ -220,10 +241,12 @@ export class ItemFormPage {
     return field.type === 'text' ? 'text' : field.type;
   }
 
+  /** Names the group-fields section — "no group" is a name too, not a blank. */
   protected readonly groupLabel = computed(() => {
     const collection = this.collection();
     if (!collection) return '';
-    return groupById(collection.groups, this.groupId())?.name?.toUpperCase() ?? '';
+    const name = groupById(collection.groups, this.groupId())?.name;
+    return (name ?? this.i18n.t('group.none')).toUpperCase();
   });
 
   protected customValue(field: string): string {
@@ -264,10 +287,22 @@ export class ItemFormPage {
 
     await this.store.upsertItem(collection.id, syncWantedTag(item));
     this.toast.flash(this.i18n.t('toast.item.saved'));
-    void this.router.navigate(
-      existing ? ['/c', collection.id, 'items', existing.id] : ['/c', collection.id],
-      { queryParamsHandling: 'preserve' },
-    );
+
+    if (existing) {
+      void this.router.navigate(['/c', collection.id, 'items', existing.id], {
+        queryParamsHandling: 'preserve',
+      });
+      return;
+    }
+
+    // Back to the collection open on the group the item actually went into.
+    // Preserving `?g=` would return you to the view you started from, and if you
+    // changed the group while filling the form that is the one view the new item
+    // is not in. Null drops the param: an unfiled item shows at the root.
+    void this.router.navigate(['/c', collection.id], {
+      queryParams: { g: item.groupId || null },
+      queryParamsHandling: 'merge',
+    });
   }
 
   protected cancel(): void {

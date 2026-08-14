@@ -123,7 +123,12 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    group's *items*: **the groups themselves always list alphabetically**, since
    nothing persists a position for a group. `childrenOf` in
    `core/utils/groups.util.ts` sorts by name (and `flattenTree`/`visibleTree`
-   build on it) — never list or sort groups inline.
+   build on it) — never list or sort groups inline. **An item's group is
+   inherited from context and "no group" is `''`:** `?g=` rides every "add item"
+   link into `ItemFormPage`, so a new item lands in the open group, and any
+   remembered group id passes through `resolveGroupId` first — blank, the
+   `UNGROUPED_ID` bucket sentinel and a since-deleted group all collapse to `''`.
+   `UNGROUPED_ID` is a key to read by, never a value to store.
 5. **Image framing is a focal point, never a crop.** Every surface renders with
    `background-size: cover`, so which part shows is one property:
    `background-position`. An image carries `focal: {x, y}` (0–1) on its own row,

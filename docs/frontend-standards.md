@@ -242,6 +242,18 @@ style the same raw element the same way, that's the signal to promote it here.
   keystroke, and moving the focused input in the DOM blurs it, so the page
   freezes the row order for the duration of a rename and releases it on
   `(blurred)`.
+- **Which group an item is filed in is inherited from context, and "no group" is
+  `''`.** Every "add item" link preserves `?g=`, so `ItemFormPage` takes it as a
+  `g` input and a new item lands in the group you were looking at — never in
+  whichever group happens to sit first in the array. A group id remembered
+  anywhere (that `?g=`, an item's own `groupId`) is narrowed through
+  `resolveGroupId()` before it becomes a selection: a blank, the `UNGROUPED_ID`
+  bucket sentinel and a group deleted since it was recorded all resolve to `''`,
+  so a picker can never show one thing and save another. `UNGROUPED_ID` is a key
+  to *read* by — `statsIndex` files unfiled items under it — and never a value to
+  store. Being unfiled is a deliberate choice, so it is an option in the picker
+  like any other, and saving a new item lands on the group it actually went into
+  rather than on the `?g=` you started from.
 
 ## 6. Language (i18n)
 

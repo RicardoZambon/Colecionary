@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { GroupField, GroupNode } from '../models';
+import { UNGROUPED_ID } from './group-stats.util';
 import {
   childrenOf,
   fieldsFor,
   flattenTree,
   pathOf,
+  resolveGroupId,
   sortFor,
   subtreeIds,
   visibleTree,
@@ -98,6 +100,24 @@ describe('groups.util', () => {
       expect(
         visibleTree(scrambled, new Set(['Revistas'])).map(r => `${r.depth}:${r.node.name}`),
       ).toEqual(rows);
+    });
+  });
+
+  describe('resolveGroupId', () => {
+    it('keeps a group that exists — this is what carries the open group onto a new item', () => {
+      expect(resolveGroupId(TREE, 'rare')).toBe('rare');
+    });
+
+    it('reads nothing, the unfiled bucket and a deleted group all as no group', () => {
+      expect(resolveGroupId(TREE, null)).toBe('');
+      expect(resolveGroupId(TREE, undefined)).toBe('');
+      expect(resolveGroupId(TREE, '')).toBe('');
+      expect(resolveGroupId(TREE, UNGROUPED_ID)).toBe('');
+      expect(resolveGroupId(TREE, 'deleted')).toBe('');
+    });
+
+    it('never returns the bucket sentinel, which is a key to read by and not a value to store', () => {
+      expect(resolveGroupId([], UNGROUPED_ID)).not.toBe(UNGROUPED_ID);
     });
   });
 
