@@ -31,7 +31,7 @@
         [groupSort]="groupSort()"
         [searching]="searching()"
         [sortOverride]="sortOverride()"
-        (sortOverrideChange)="sortOverride.set($event)"
+        (sortOverrideChange)="setSortOverride($event)"
         [view]="view()"
         (viewChange)="setView($event)"
       />
@@ -40,9 +40,9 @@
     @if (view() !== 'dashboard') {
       <app-collection-filters
         [condition]="condition()"
-        (conditionChange)="condition.set($event)"
-        [own]="own()"
-        (ownChange)="own.set($event)"
+        (conditionChange)="setCondition($event)"
+        [own]="ownFilter()"
+        (ownChange)="setOwn($event)"
       />
     }
   </div>
@@ -97,12 +97,13 @@
       }
 
       @if (view() !== 'dashboard' && items().length === 0) {
-        <div class="empty">No items match — clear search or filters.</div>
+        <div class="empty">{{ 'collection.noMatches' | t }}</div>
       }
     </div>
   </div>
 } @else {
   <div class="missing">
-    Collection not found — <a routerLink="/dashboard">back to Dashboard</a>.
+    {{ 'common.collectionNotFound' | t }}
+    <a routerLink="/dashboard">{{ 'common.backToDashboard' | t }}</a>.
   </div>
 }

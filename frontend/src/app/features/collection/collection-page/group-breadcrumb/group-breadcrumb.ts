@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { RouterLink } from '@angular/router';
 
 import { GroupNode } from '../../../../core/models';
+import { groupLinkParams } from '../../browse-params';
+import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiChip } from '../../../../shared/ui';
 
 interface Crumb {
@@ -32,13 +34,13 @@ export interface ChildChip {
 @Component({
   selector: 'app-group-breadcrumb',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, UiChip],
+  imports: [RouterLink, TPipe, UiChip],
   template: `
-    <nav aria-label="Group path">
+    <nav [attr.aria-label]="'breadcrumb.pathAria' | t">
       @for (crumb of crumbs(); track crumb.id; let last = $last) {
         <ui-chip
           [link]="['/c', collectionId()]"
-          [queryParams]="{ g: crumb.id }"
+          [queryParams]="linkParams(crumb.id)"
           [onPath]="!crumb.current"
           [selected]="crumb.current"
           [attr.aria-current]="crumb.current ? 'page' : null"
@@ -57,16 +59,16 @@ export interface ChildChip {
         type="button"
         class="panel-toggle"
         aria-expanded="false"
-        title="Show the group panel"
+        [title]="'breadcrumb.showPanel' | t"
         (click)="expandTree.emit()"
-      >⟩ Group panel</button>
+      >{{ 'breadcrumb.groupPanel' | t }}</button>
       @if (children().length) {
-        <nav class="children" aria-label="Sub-groups">
+        <nav class="children" [attr.aria-label]="'breadcrumb.subGroupsAria' | t">
           @for (child of children(); track child.id) {
             <ui-chip
               [small]="true"
               [link]="['/c', collectionId()]"
-              [queryParams]="{ g: child.id }"
+              [queryParams]="linkParams(child.id)"
               [count]="child.count"
             >{{ child.name }}</ui-chip>
           }
@@ -77,22 +79,22 @@ export interface ChildChip {
     @if (pending()) {
       <input
         class="chip-input"
-        placeholder="New group name… (Enter)"
-        aria-label="New group name"
+        [placeholder]="'breadcrumb.newGroupPlaceholder' | t"
+        [attr.aria-label]="'breadcrumb.newGroupAria' | t"
         autofocus
         (keydown)="nameKeydown.emit($event)"
         (blur)="nameCommit.emit($any($event.target).value)"
       />
     } @else {
-      <ui-chip [small]="true" [dashed]="true" (click)="newGroup.emit()">+ New</ui-chip>
+      <ui-chip [small]="true" [dashed]="true" (click)="newGroup.emit()">{{ 'breadcrumb.new' | t }}</ui-chip>
     }
 
     <a
       class="manage"
       [routerLink]="['/c', collectionId(), 'settings']"
       [queryParams]="{ tab: 'groups', g: currentId() }"
-      title="Rename, nest, add fields and set targets for these groups"
-    >⚙ Edit groups</a>
+      [title]="'breadcrumb.editGroupsTitle' | t"
+    >{{ 'breadcrumb.editGroups' | t }}</a>
   `,
   styles: `
     /* No border of its own: it shares one bar with the item controls, and the
@@ -167,6 +169,9 @@ export interface ChildChip {
   `,
 })
 export class GroupBreadcrumb {
+  /** Opening a group keeps the filters and drops the ad-hoc order. */
+  protected readonly linkParams = groupLinkParams;
+
   readonly collectionId = input.required<string>();
   readonly collectionName = input.required<string>();
   /** Root → … → selected group, from `pathOf`. Empty at the collection root. */

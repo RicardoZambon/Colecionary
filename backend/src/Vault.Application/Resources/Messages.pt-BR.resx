@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    Brazilian Portuguese satellite of Messages.resx. Every name here must also
+    exist in the neutral file; a missing one silently falls back to English.
+    Wording follows docs/voice-and-tone.md.
+  -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="ProblemNotFound" xml:space="preserve">
+    <value>Não encontrado</value>
+  </data>
+  <data name="ProblemConflict" xml:space="preserve">
+    <value>Conflito</value>
+  </data>
+  <data name="ProblemInvalidOperation" xml:space="preserve">
+    <value>Operação inválida</value>
+  </data>
+  <data name="ProblemValidationFailed" xml:space="preserve">
+    <value>Falha na validação</value>
+  </data>
+  <data name="ProblemUnexpected" xml:space="preserve">
+    <value>Algo deu errado</value>
+  </data>
+  <data name="FieldNamesMustBeUnique" xml:space="preserve">
+    <value>Os nomes dos campos precisam ser únicos dentro de um grupo.</value>
+  </data>
+  <data name="FieldTypeInvalid" xml:space="preserve">
+    <value>O tipo do campo precisa ser text, number ou date.</value>
+  </data>
+  <data name="TargetOutOfRange" xml:space="preserve">
+    <value>A meta precisa estar entre 1 e 100000, ou ser nula para não ter meta.</value>
+  </data>
+  <data name="SortDirectionInvalid" xml:space="preserve">
+    <value>A direção da ordenação precisa ser asc ou desc.</value>
+  </data>
+  <data name="SortKeyInvalid" xml:space="preserve">
+    <value>A chave de ordenação precisa ser uma chave nativa ou 'field:&lt;nome do campo&gt;'.</value>
+  </data>
+  <data name="TooManyPhotos" xml:space="preserve">
+    <value>Um item pode ter no máximo 8 fotos.</value>
+  </data>
+  <data name="TooManyCopies" xml:space="preserve">
+    <value>Um item pode ter no máximo 50 exemplares.</value>
+  </data>
+  <data name="CopyIdsMustBeUnique" xml:space="preserve">
+    <value>Os ids dos exemplares precisam ser únicos dentro de um item.</value>
+  </data>
+  <data name="ConditionInvalid" xml:space="preserve">
+    <value>O estado precisa ser Mint, Good ou Fair.</value>
+  </data>
+  <data name="CopyStatusInvalid" xml:space="preserve">
+    <value>A situação precisa ser Keep, ForTrade ou ForSale.</value>
+  </data>
+  <data name="AcquiredOnImplausible" xml:space="preserve">
+    <value>A data de aquisição precisa ser plausível.</value>
+  </data>
+  <data name="RoleInvalid" xml:space="preserve">
+    <value>O papel precisa ser Owner, Editor ou Viewer.</value>
+  </data>
+  <data name="PlanInvalid" xml:space="preserve">
+    <value>O plano precisa ser free ou pro.</value>
+  </data>
+  <data name="CollectionNotFound" xml:space="preserve">
+    <value>Coleção '{0}' não encontrada.</value>
+  </data>
+  <data name="StoreListingNotFound" xml:space="preserve">
+    <value>Item de loja '{0}' não encontrado.</value>
+  </data>
+  <data name="AlreadyInYourVault" xml:space="preserve">
+    <value>Já está no seu acervo</value>
+  </data>
+  <data name="ImageFileEmpty" xml:space="preserve">
+    <value>O arquivo enviado está vazio.</value>
+  </data>
+  <data name="ImageTooLarge" xml:space="preserve">
+    <value>As imagens são limitadas a 5 MB.</value>
+  </data>
+  <data name="ImageTypeUnsupported" xml:space="preserve">
+    <value>Só são aceitas imagens JPEG, PNG, WebP, GIF ou AVIF.</value>
+  </data>
+  <data name="ImageNotFound" xml:space="preserve">
+    <value>Imagem '{0}' não encontrada.</value>
+  </data>
+  <data name="ImageHasNoBytes" xml:space="preserve">
+    <value>A imagem '{0}' não tem bytes armazenados.</value>
+  </data>
+  <data name="NoFileUploaded" xml:space="preserve">
+    <value>Nenhum arquivo enviado</value>
+  </data>
+  <data name="TenantNeedsAnOwner" xml:space="preserve">
+    <value>O tenant precisa manter pelo menos um Owner.</value>
+  </data>
+  <data name="OwnerCannotBeRemoved" xml:space="preserve">
+    <value>O dono não pode ser removido.</value>
+  </data>
+  <data name="CannotRemoveYourself" xml:space="preserve">
+    <value>Você não pode remover a si mesmo.</value>
+  </data>
+  <data name="CurrentUserNotFound" xml:space="preserve">
+    <value>Usuário atual não encontrado.</value>
+  </data>
+  <data name="EmailCannotBeChanged" xml:space="preserve">
+    <value>O e-mail é a identidade de login e ainda não pode ser alterado.</value>
+  </data>
+  <data name="InvalidCredentials" xml:space="preserve">
+    <value>E-mail ou senha inválidos</value>
+  </data>
+  <data name="UnknownGroupFieldType" xml:space="preserve">
+    <value>Tipo de campo de grupo desconhecido: '{0}'.</value>
+  </data>
+  <data name="UnknownCondition" xml:space="preserve">
+    <value>Estado desconhecido: '{0}'.</value>
+  </data>
+  <data name="UnknownCopyStatus" xml:space="preserve">
+    <value>Situação de exemplar desconhecida: '{0}'.</value>
+  </data>
+  <data name="UnknownRole" xml:space="preserve">
+    <value>Papel desconhecido: '{0}'.</value>
+  </data>
+  <data name="UnknownPlan" xml:space="preserve">
+    <value>Plano desconhecido: '{0}'.</value>
+  </data>
+  <data name="SetupFieldsRequired" xml:space="preserve">
+    <value>Nome da organização, nome do dono e e-mail do dono são obrigatórios.</value>
+  </data>
+  <data name="SetupPasswordTooShort" xml:space="preserve">
+    <value>A senha precisa ter pelo menos 8 caracteres.</value>
+  </data>
+  <data name="SetupDatabaseNotUsable" xml:space="preserve">
+    <value>Banco de dados inutilizável: {0}.</value>
+  </data>
+</root>

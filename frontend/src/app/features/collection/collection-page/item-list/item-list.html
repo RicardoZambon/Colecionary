@@ -1,6 +1,6 @@
 <ui-card>
   <div class="list-head" [class.list--manual]="manual()">
-    <span>NAME</span><span>GROUP</span><span>YEAR</span><span class="right">COPIES</span><span>COND</span><span class="right">VALUE</span>
+    <span>{{ 'itemList.name' | t }}</span><span>{{ 'itemList.group' | t }}</span><span>{{ 'itemList.year' | t }}</span><span class="right">{{ 'itemList.copies' | t }}</span><span>{{ 'itemList.condition' | t }}</span><span class="right">{{ 'itemList.value' | t }}</span>
   </div>
   @for (item of items(); track item.id; let i = $index) {
     <div
@@ -26,7 +26,7 @@
         <span class="year">{{ item.year }}</span>
         <span class="right copies" [class.copies--many]="item.copies.length > 1">{{ item.copies.length }}</span>
         <span class="cond" [class]="'tone-' + badgeTone(item)">{{ badgeLabel(item) }}</span>
-        <span class="right value">{{ item.value | money }}</span>
+        <span class="right value" [attr.title]="valueHint(item)">{{ item | itemValue }}</span>
       </a>
       @if (manual()) {
         <ui-reorder

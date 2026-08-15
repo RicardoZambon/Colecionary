@@ -22,7 +22,7 @@ public class ImageStorageAndExportTests(VaultApiFactory factory)
     [Fact]
     public async Task UploadedBytes_LeaveTheDatabaseAndLandUnderTheirTenantsDirectory()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var upload = await client.PostAsync("/api/images", BuildForm());
         var image = (await upload.Content.ReadFromJsonAsync<ImageUploadResponse>())!;
 
@@ -46,7 +46,7 @@ public class ImageStorageAndExportTests(VaultApiFactory factory)
     {
         await factory.EnsureSecondTenantAsync();
 
-        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var acmeImage = (await (await marcus.PostAsync("/api/images", BuildForm()))
             .Content.ReadFromJsonAsync<ImageUploadResponse>())!;
 
@@ -75,7 +75,7 @@ public class ImageStorageAndExportTests(VaultApiFactory factory)
     [Fact]
     public async Task Export_IsAZipCarryingCollectionsAndTheirImages()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var image = (await (await client.PostAsync("/api/images", BuildForm()))
             .Content.ReadFromJsonAsync<ImageUploadResponse>())!;
 
@@ -115,7 +115,7 @@ public class ImageStorageAndExportTests(VaultApiFactory factory)
     {
         await factory.EnsureSecondTenantAsync();
 
-        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var acmeImage = (await (await marcus.PostAsync("/api/images", BuildForm()))
             .Content.ReadFromJsonAsync<ImageUploadResponse>())!;
 

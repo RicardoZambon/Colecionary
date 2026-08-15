@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Vault.Application.Collections.Dtos;
+using Vault.Application.Resources;
 using Vault.Domain.Entities;
 using Vault.Infrastructure.Persistence;
 using Vault.Infrastructure.Persistence.Interceptors;
@@ -16,7 +18,7 @@ public class TenantIsolationTests(VaultApiFactory factory)
     {
         await factory.EnsureSecondTenantAsync();
 
-        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var acme = await marcus.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
         Assert.NotNull(acme);
         Assert.Contains(acme, c => c.Id == "retro");
@@ -54,7 +56,7 @@ public class TenantIsolationTests(VaultApiFactory factory)
     public async Task BothTenantsCanImportTheSameStoreListing()
     {
         await factory.EnsureSecondTenantAsync();
-        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var gary = await factory.CreateAuthenticatedClientAsync(VaultApiFactory.GlobexOwnerEmail);
 
         var first = await marcus.PostAsync("/api/collections/import/store_gb", null);
@@ -64,9 +66,15 @@ public class TenantIsolationTests(VaultApiFactory factory)
         Assert.Equal(HttpStatusCode.Created, second.StatusCode);
 
         // Re-import must surface the exact toast message the frontend shows.
+        // Asked for in English explicitly, and asserted against the resource
+        // rather than a literal: the message is localized now, so a literal here
+        // would be a second, silently-drifting copy of the English translation.
+        marcus.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en");
         var conflict = await marcus.PostAsync("/api/collections/import/store_gb", null);
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
-        Assert.Contains("Already in your vault", await conflict.Content.ReadAsStringAsync());
+        Assert.Contains(
+            Messages.In(nameof(Messages.AlreadyInYourVault), CultureInfo.GetCultureInfo("en"))!,
+            await conflict.Content.ReadAsStringAsync());
 
         var rows = await factory.QueryDbAsync(db => db.Collections
             .IgnoreQueryFilters()

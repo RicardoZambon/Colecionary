@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Vault.Application.Images;
 using Vault.Application.Images.Dtos;
+using Vault.Application.Resources;
 
 namespace Vault.Api.Controllers;
 
@@ -15,7 +16,7 @@ public class ImagesController(ImageService images) : ControllerBase
     {
         if (file is null || file.Length == 0)
         {
-            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "No file uploaded");
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: Messages.NoFileUploaded);
         }
 
         using var stream = new MemoryStream();

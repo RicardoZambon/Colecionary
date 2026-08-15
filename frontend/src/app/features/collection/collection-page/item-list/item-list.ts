@@ -1,9 +1,12 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { I18nService } from '../../../../core/i18n';
 import { Item } from '../../../../core/models';
+import { valueIsPaid } from '../../../../core/utils/copies.util';
 import { fieldValue } from '../../../../core/utils/sort.util';
-import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
+import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
+import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiCard, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
@@ -12,11 +15,13 @@ import { DragOrder } from '../drag-order';
 @Component({
   selector: 'app-item-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, UiCard, UiReorder],
+  imports: [RouterLink, ItemValuePipe, TPipe, UiCard, UiReorder],
   templateUrl: './item-list.html',
   styleUrl: './item-list.scss',
 })
 export class ItemList {
+  private readonly i18n = inject(I18nService);
+
   readonly items = input.required<Item[]>();
   readonly collectionId = input.required<string>();
   readonly manual = input(false);
@@ -31,8 +36,13 @@ export class ItemList {
     return itemTone(item);
   }
 
+  /** Explains the `≈` on a row whose value is a price paid, not an estimate. */
+  protected valueHint(item: Item): string | null {
+    return valueIsPaid(item) ? this.i18n.t('value.fromPaidHint') : null;
+  }
+
   protected badgeLabel(item: Item): string {
-    return itemBadgeLabel(item);
+    return itemBadgeLabel(item, this.i18n.t);
   }
 
   protected groupName(item: Item): string {

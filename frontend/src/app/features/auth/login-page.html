@@ -3,18 +3,18 @@
     <span class="brand__mark"><ui-icon name="diamond" [size]="15" /></span>
     <span class="brand__name">Vault</span>
   </div>
-  <p class="tagline">Sign in to your collection vault.</p>
+  <p class="tagline">{{ 'login.tagline' | t }}</p>
 
   <form (submit)="$event.preventDefault(); submit()">
-    <ui-field label="Email">
+    <ui-field [label]="'login.email' | t">
       <ui-text-input
         type="email"
-        placeholder="you@company.com"
+        [placeholder]="'login.emailPlaceholder' | t"
         [value]="email()"
         (valueChange)="email.set($event)"
       />
     </ui-field>
-    <ui-field label="Password">
+    <ui-field [label]="'login.password' | t">
       <ui-text-input
         type="password"
         placeholder="••••••••"
@@ -28,11 +28,11 @@
     }
 
     <ui-button type="submit" [block]="true" [disabled]="busy()">
-      {{ busy() ? 'Signing in…' : 'Sign in' }}
+      {{ (busy() ? 'login.submitting' : 'login.submit') | t }}
     </ui-button>
   </form>
 
   <div class="demo-hint">
-    demo: <span class="mono">marcus@airia.com</span> · <span class="mono">vault-demo</span>
+    {{ 'login.demoHint' | t }} <span class="mono">marcus@example.com</span> · <span class="mono">vault-demo</span>
   </div>
 </ui-card>

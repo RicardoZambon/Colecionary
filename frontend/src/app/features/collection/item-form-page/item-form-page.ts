@@ -2,20 +2,22 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
+import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
 import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
-import { fieldsFor, flattenTree, groupById } from '../../../core/utils/groups.util';
+import { fieldsFor, flattenTree, groupById, resolveGroupId } from '../../../core/utils/groups.util';
+import { groupLinkParams } from '../browse-params';
+import { TPipe } from '../../../shared/pipes/t.pipe';
 import { SelectOption, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea } from '../../../shared/ui';
+import { conditionLabelKey } from '../../../shared/ui/badge/badge';
 
-const CONDITION_OPTIONS: SelectOption[] = CONDITIONS.map(c => ({ value: c, label: c }));
-
-const COPY_STATUS_OPTIONS: SelectOption[] = [
-  { value: 'Keep', label: 'Keeping' },
-  { value: 'ForTrade', label: 'For trade' },
-  { value: 'ForSale', label: 'For sale' },
+const COPY_STATUS_KEYS: { value: CopyStatus; label: MessageKey }[] = [
+  { value: 'Keep', label: 'copyStatus.keep' },
+  { value: 'ForTrade', label: 'copyStatus.forTrade' },
+  { value: 'ForSale', label: 'copyStatus.forSale' },
 ];
 
 const MAX_PHOTOS = 8;
@@ -64,7 +66,7 @@ function fromDraft(draft: CopyDraft): ItemCopy {
 @Component({
   selector: 'app-item-form-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea],
+  imports: [RouterLink, TPipe, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea],
   templateUrl: './item-form-page.html',
   styleUrl: './item-form-page.scss',
 })
@@ -72,15 +74,29 @@ export class ItemFormPage {
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
+  private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
   readonly collectionId = input.required<string>();
   /** Present when editing, absent on the "new item" route. */
   readonly itemId = input<string | undefined>(undefined);
+  /**
+   * The group open in the collection behind this form, preserved from `?g=` by
+   * every "add item" link. A new item lands in the group you were looking at —
+   * without this the form would pick an arbitrary group and the item would
+   * vanish from the view you created it in.
+   */
+  readonly g = input<string | undefined>(undefined);
 
-  protected readonly conditionOptions = CONDITION_OPTIONS;
-  protected readonly copyStatusOptions = COPY_STATUS_OPTIONS;
+  // Options carry the *wire* value and a translated label — the enum itself is
+  // both the SQL representation and the validator whitelist, so it never moves.
+  protected readonly conditionOptions = computed<SelectOption[]>(() =>
+    CONDITIONS.map(c => ({ value: c, label: this.i18n.t(conditionLabelKey(c)) })),
+  );
+  protected readonly copyStatusOptions = computed<SelectOption[]>(() =>
+    COPY_STATUS_KEYS.map(s => ({ value: s.value, label: this.i18n.t(s.label) })),
+  );
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
   protected readonly editing = computed(() =>
@@ -111,9 +127,11 @@ export class ItemFormPage {
       const item = this.editing();
       this.name.set(item?.name ?? '');
       this.description.set(item?.description ?? '');
-      this.groupId.set(item?.groupId ?? collection.groups[0]?.id ?? '');
+      this.groupId.set(this.initialGroupId(item));
       this.year.set(item ? String(item.year) : '');
-      this.value.set(item ? String(item.value) : '');
+      // Blank, not "0": zero *is* "not estimated", and showing it as a figure
+      // invites the user to keep a number they never entered.
+      this.value.set(item?.value ? String(item.value) : '');
       // A new item starts with one copy — adding something you own is the
       // common case, and the old form defaulted to "Owned". Remove it to put
       // the item on the wantlist instead.
@@ -121,6 +139,16 @@ export class ItemFormPage {
       this.custom.set(Object.fromEntries((item?.custom ?? []).map(c => [c.key, c.value])));
       this.photoIds.set([...(item?.photoIds ?? [])]);
     });
+  }
+
+  /**
+   * Which group the form opens on: the item's own when editing, the one open
+   * behind the form when adding. Both go through `resolveGroupId`, so a group
+   * deleted since either was recorded opens as "no group" rather than as a
+   * selection the picker can't show.
+   */
+  private initialGroupId(item: Item | undefined): string {
+    return resolveGroupId(this.collection()?.groups ?? [], item ? item.groupId : this.g());
   }
 
   protected browsePhotos(): void {
@@ -144,7 +172,7 @@ export class ItemFormPage {
     try {
       for (const [index, file] of imageFiles.entries()) {
         if (this.photoIds().length >= MAX_PHOTOS) {
-          this.toast.flash('Up to 8 photos per item');
+          this.toast.flash(this.i18n.t('toast.photo.limit'));
           break;
         }
         // Only the first of a batch opens the editor: five modals in a row for
@@ -161,7 +189,9 @@ export class ItemFormPage {
         this.photoIds.update(ids => [...ids, imageId]);
       }
     } catch (err) {
-      this.toast.flash(err instanceof Error ? err.message : 'Upload failed');
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),
+      );
     } finally {
       this.uploading.set(false);
     }
@@ -180,7 +210,7 @@ export class ItemFormPage {
 
   protected addCopy(): void {
     if (this.copies().length >= MAX_COPIES) {
-      this.toast.flash(`Up to ${MAX_COPIES} copies per item`);
+      this.toast.flash(this.i18n.t('toast.copy.limit', { n: MAX_COPIES }));
       return;
     }
     this.copies.update(copies => [...copies, toDraft(newCopy())]);
@@ -194,12 +224,16 @@ export class ItemFormPage {
     this.copies.update(copies => copies.map((c, i) => (i === index ? { ...c, ...patch } : c)));
   }
 
-  protected readonly groupOptions = computed<SelectOption[]>(() =>
-    flattenTree(this.collection()?.groups ?? []).map(({ node, depth }) => ({
+  // Leaving an item unfiled is a real choice, not the absence of one, so it is
+  // an option like any other — and it is the one the form starts on when you
+  // add from the collection root or from the unfiled bucket.
+  protected readonly groupOptions = computed<SelectOption[]>(() => [
+    { value: '', label: this.i18n.t('group.none') },
+    ...flattenTree(this.collection()?.groups ?? []).map(({ node, depth }) => ({
       value: node.id,
       label: (depth ? '   '.repeat(depth) + '↳ ' : '') + node.name,
     })),
-  );
+  ]);
 
   protected readonly groupFields = computed(() =>
     fieldsFor(this.collection()?.groups ?? [], this.groupId() || null),
@@ -210,10 +244,12 @@ export class ItemFormPage {
     return field.type === 'text' ? 'text' : field.type;
   }
 
+  /** Names the group-fields section — "no group" is a name too, not a blank. */
   protected readonly groupLabel = computed(() => {
     const collection = this.collection();
     if (!collection) return '';
-    return groupById(collection.groups, this.groupId())?.name?.toUpperCase() ?? '';
+    const name = groupById(collection.groups, this.groupId())?.name;
+    return (name ?? this.i18n.t('group.none')).toUpperCase();
   });
 
   protected customValue(field: string): string {
@@ -229,7 +265,7 @@ export class ItemFormPage {
     if (!collection) return;
     const name = this.name().trim();
     if (!name) {
-      this.toast.flash('Give the item a name');
+      this.toast.flash(this.i18n.t('toast.item.needsName'));
       return;
     }
 
@@ -253,11 +289,23 @@ export class ItemFormPage {
     };
 
     await this.store.upsertItem(collection.id, syncWantedTag(item));
-    this.toast.flash('Saved ✓');
-    void this.router.navigate(
-      existing ? ['/c', collection.id, 'items', existing.id] : ['/c', collection.id],
-      { queryParamsHandling: 'preserve' },
-    );
+    this.toast.flash(this.i18n.t('toast.item.saved'));
+
+    if (existing) {
+      void this.router.navigate(['/c', collection.id, 'items', existing.id], {
+        queryParamsHandling: 'preserve',
+      });
+      return;
+    }
+
+    // Back to the collection open on the group the item actually went into.
+    // Preserving `?g=` would return you to the view you started from, and if you
+    // changed the group while filling the form that is the one view the new item
+    // is not in. Null drops the param: an unfiled item shows at the root.
+    void this.router.navigate(['/c', collection.id], {
+      queryParams: groupLinkParams(item.groupId || null),
+      queryParamsHandling: 'merge',
+    });
   }
 
   protected cancel(): void {

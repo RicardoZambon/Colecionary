@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    User-facing API text, in the neutral (English) culture. Resolved against
+    CultureInfo.CurrentUICulture, which Program.cs sets from Accept-Language,
+    so the Angular client's chosen language decides what a validation failure
+    or a ProblemDetails reads like.
+
+    System.Resources is BCL, so this does not make Vault.Application depend on
+    ASP.NET — the layering rule in backend/README.md still holds.
+
+    Only text a *user* reads belongs here. Internal invariants (tenant stamping,
+    ambient-tenant checks) stay in English: they never leave the server as
+    anything but a generic 500.
+  -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- ProblemDetails titles -->
+  <data name="ProblemNotFound" xml:space="preserve">
+    <value>Not found</value>
+  </data>
+  <data name="ProblemConflict" xml:space="preserve">
+    <value>Conflict</value>
+  </data>
+  <data name="ProblemInvalidOperation" xml:space="preserve">
+    <value>Invalid operation</value>
+  </data>
+  <data name="ProblemValidationFailed" xml:space="preserve">
+    <value>Validation failed</value>
+  </data>
+  <data name="ProblemUnexpected" xml:space="preserve">
+    <value>Something went wrong</value>
+  </data>
+
+  <!-- Validation -->
+  <data name="FieldNamesMustBeUnique" xml:space="preserve">
+    <value>Field names must be unique within a group.</value>
+  </data>
+  <data name="FieldTypeInvalid" xml:space="preserve">
+    <value>Field type must be text, number or date.</value>
+  </data>
+  <data name="TargetOutOfRange" xml:space="preserve">
+    <value>Target must be between 1 and 100000, or null for no target.</value>
+  </data>
+  <data name="SortDirectionInvalid" xml:space="preserve">
+    <value>Sort direction must be asc or desc.</value>
+  </data>
+  <data name="SortKeyInvalid" xml:space="preserve">
+    <value>Sort key must be a built-in key or 'field:&lt;field name&gt;'.</value>
+  </data>
+  <data name="TooManyPhotos" xml:space="preserve">
+    <value>An item can have at most 8 photos.</value>
+  </data>
+  <data name="TooManyCopies" xml:space="preserve">
+    <value>An item can have at most 50 copies.</value>
+  </data>
+  <data name="CopyIdsMustBeUnique" xml:space="preserve">
+    <value>Copy ids must be unique within an item.</value>
+  </data>
+  <data name="ConditionInvalid" xml:space="preserve">
+    <value>Condition must be Mint, Good or Fair.</value>
+  </data>
+  <data name="CopyStatusInvalid" xml:space="preserve">
+    <value>Status must be Keep, ForTrade or ForSale.</value>
+  </data>
+  <data name="AcquiredOnImplausible" xml:space="preserve">
+    <value>AcquiredOn must be a plausible date.</value>
+  </data>
+  <data name="RoleInvalid" xml:space="preserve">
+    <value>Role must be Owner, Editor or Viewer.</value>
+  </data>
+  <data name="PlanInvalid" xml:space="preserve">
+    <value>Plan must be free or pro.</value>
+  </data>
+
+  <!-- Collections -->
+  <data name="CollectionNotFound" xml:space="preserve">
+    <value>Collection '{0}' not found.</value>
+    <comment>{0} = collection id</comment>
+  </data>
+  <data name="StoreListingNotFound" xml:space="preserve">
+    <value>Store listing '{0}' not found.</value>
+    <comment>{0} = listing id</comment>
+  </data>
+  <data name="AlreadyInYourVault" xml:space="preserve">
+    <value>Already in your vault</value>
+  </data>
+
+  <!-- Images -->
+  <data name="ImageFileEmpty" xml:space="preserve">
+    <value>The uploaded file is empty.</value>
+  </data>
+  <data name="ImageTooLarge" xml:space="preserve">
+    <value>Images are limited to 5 MB.</value>
+  </data>
+  <data name="ImageTypeUnsupported" xml:space="preserve">
+    <value>Only JPEG, PNG, WebP, GIF or AVIF images are accepted.</value>
+  </data>
+  <data name="ImageNotFound" xml:space="preserve">
+    <value>Image '{0}' not found.</value>
+    <comment>{0} = image id</comment>
+  </data>
+  <data name="ImageHasNoBytes" xml:space="preserve">
+    <value>Image '{0}' has no stored bytes.</value>
+    <comment>{0} = image id</comment>
+  </data>
+  <data name="NoFileUploaded" xml:space="preserve">
+    <value>No file uploaded</value>
+  </data>
+
+  <!-- Tenant members -->
+  <data name="TenantNeedsAnOwner" xml:space="preserve">
+    <value>The tenant must keep at least one Owner.</value>
+  </data>
+  <data name="OwnerCannotBeRemoved" xml:space="preserve">
+    <value>The owner can't be removed.</value>
+  </data>
+  <data name="CannotRemoveYourself" xml:space="preserve">
+    <value>You can't remove yourself.</value>
+  </data>
+
+  <!-- Profile / auth -->
+  <data name="CurrentUserNotFound" xml:space="preserve">
+    <value>Current user not found.</value>
+  </data>
+  <data name="EmailCannotBeChanged" xml:space="preserve">
+    <value>Email is the login identity and can't be changed yet.</value>
+  </data>
+  <data name="InvalidCredentials" xml:space="preserve">
+    <value>Invalid email or password</value>
+  </data>
+
+  <!-- Mapping -->
+  <data name="UnknownGroupFieldType" xml:space="preserve">
+    <value>Unknown group field type '{0}'.</value>
+    <comment>{0} = the value received</comment>
+  </data>
+  <data name="UnknownCondition" xml:space="preserve">
+    <value>Unknown condition '{0}'.</value>
+    <comment>{0} = the value received</comment>
+  </data>
+  <data name="UnknownCopyStatus" xml:space="preserve">
+    <value>Unknown copy status '{0}'.</value>
+    <comment>{0} = the value received</comment>
+  </data>
+  <data name="UnknownRole" xml:space="preserve">
+    <value>Unknown role '{0}'.</value>
+    <comment>{0} = the value received</comment>
+  </data>
+  <data name="UnknownPlan" xml:space="preserve">
+    <value>Unknown plan '{0}'.</value>
+    <comment>{0} = the value received</comment>
+  </data>
+
+  <!-- First-run setup wizard -->
+  <data name="SetupFieldsRequired" xml:space="preserve">
+    <value>Organization name, owner name and owner email are required.</value>
+  </data>
+  <data name="SetupPasswordTooShort" xml:space="preserve">
+    <value>Password must be at least 8 characters.</value>
+  </data>
+  <data name="SetupDatabaseNotUsable" xml:space="preserve">
+    <value>Database not usable: {0}.</value>
+    <comment>{0} = DatabaseConnectionResult name</comment>
+  </data>
+</root>

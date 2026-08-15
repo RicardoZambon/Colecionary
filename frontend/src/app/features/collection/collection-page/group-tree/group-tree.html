@@ -1,15 +1,15 @@
 <div class="head">
-  <ui-section-label>Groups</ui-section-label>
+  <ui-section-label>{{ 'groupTree.heading' | t }}</ui-section-label>
   <button
     type="button"
     class="head__collapse"
-    aria-label="Hide the group panel"
-    title="Hide the group panel"
+    [attr.aria-label]="'groupTree.hidePanel' | t"
+    [title]="'groupTree.hidePanel' | t"
     (click)="collapse.emit()"
   >⟨</button>
 </div>
 
-<ul role="tree" aria-label="Collection groups">
+<ul role="tree" [attr.aria-label]="'groupTree.aria' | t">
   @for (row of rows(); track row.node.id; let i = $index) {
     <li
       role="treeitem"
@@ -25,7 +25,10 @@
           type="button"
           class="row__twisty"
           tabindex="-1"
-          [attr.aria-label]="(row.expanded ? 'Collapse ' : 'Expand ') + row.node.name"
+          [attr.aria-label]="
+            (row.expanded ? 'groupTree.collapseGroup' : 'groupTree.expandGroup')
+              | t: { name: row.node.name }
+          "
           (click)="toggle($event, row.node.id)"
         >{{ row.expanded ? '▾' : '▸' }}</button>
       } @else {
@@ -35,7 +38,7 @@
       <a
         class="row__link"
         [routerLink]="['/c', collectionId()]"
-        [queryParams]="{ g: row.node.id }"
+        [queryParams]="linkParams(row.node.id)"
         queryParamsHandling="merge"
         [tabindex]="focusedId() === row.node.id ? 0 : -1"
         (keydown)="onKeydown($event, i)"
@@ -51,12 +54,12 @@
           size="sm"
           [pct]="row.pct"
           [secondaryPct]="row.secondaryPct"
-          [label]="row.node.name + ' progress'"
+          [label]="'progress.label' | t: { name: row.node.name }"
           [valueText]="row.valueText"
         />
       </a>
     </li>
   } @empty {
-    <li class="empty">No groups yet.</li>
+    <li class="empty">{{ 'groupTree.empty' | t }}</li>
   }
 </ul>

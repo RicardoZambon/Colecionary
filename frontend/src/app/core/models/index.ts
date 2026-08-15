@@ -1,5 +1,6 @@
 export * from './collection.model';
 export * from './image.model';
+export * from './lang.model';
 export * from './item.model';
 export * from './group.model';
 export * from './member.model';

@@ -1,5 +1,6 @@
 using Vault.Application.Collections.Dtos;
 using Vault.Application.Profile;
+using Vault.Application.Resources;
 using Vault.Application.Store;
 using Vault.Domain.Entities;
 using Vault.Domain.Enums;
@@ -145,25 +146,25 @@ public static class DtoMapper
     public static GroupFieldType ParseGroupFieldType(string value) =>
         Enum.TryParse<GroupFieldType>(value, ignoreCase: true, out var parsed)
             ? parsed
-            : throw new DomainRuleException($"Unknown group field type '{value}'.");
+            : throw new DomainRuleException(Messages.UnknownGroupFieldTypeFor(value));
 
     public static Condition ParseCondition(string value) =>
         Enum.TryParse<Condition>(value, ignoreCase: true, out var parsed)
             ? parsed
-            : throw new DomainRuleException($"Unknown condition '{value}'.");
+            : throw new DomainRuleException(Messages.UnknownConditionFor(value));
 
     public static CopyStatus ParseCopyStatus(string value) =>
         Enum.TryParse<CopyStatus>(value, ignoreCase: true, out var parsed)
             ? parsed
-            : throw new DomainRuleException($"Unknown copy status '{value}'.");
+            : throw new DomainRuleException(Messages.UnknownCopyStatusFor(value));
 
     public static MemberRole ParseRole(string value) =>
         Enum.TryParse<MemberRole>(value, ignoreCase: true, out var parsed)
             ? parsed
-            : throw new DomainRuleException($"Unknown role '{value}'.");
+            : throw new DomainRuleException(Messages.UnknownRoleFor(value));
 
     public static PlanId ParsePlan(string value) =>
         Enum.TryParse<PlanId>(value, ignoreCase: true, out var parsed)
             ? parsed
-            : throw new DomainRuleException($"Unknown plan '{value}'.");
+            : throw new DomainRuleException(Messages.UnknownPlanFor(value));
 }

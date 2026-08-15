@@ -1,7 +1,7 @@
 <a
   class="link"
   [routerLink]="['/c', collectionId()]"
-  [queryParams]="{ g: groupId() }"
+  [queryParams]="linkParams(groupId())"
   queryParamsHandling="merge"
   [attr.aria-label]="ariaLabel()"
 >
@@ -22,19 +22,19 @@
       </div>
 
       @if (stats().childCount) {
-        <div class="card__subs">↳ {{ stats().childCount }} sub-groups</div>
+        <div class="card__subs">{{ 'groupCard.subGroups' | t: { n: stats().childCount } }}</div>
       }
 
       @if (empty()) {
         <div class="card__meta">
-          @if (stats().hasTarget) { 0 / {{ stats().target }} · nothing here yet }
-          @else { No items yet }
+          @if (stats().hasTarget) { {{ 'groupCard.emptyWithTarget' | t: { target: stats().target ?? 0 } }} }
+          @else { {{ 'groupCard.empty' | t }} }
         </div>
       } @else {
         <div class="card__numbers">
           <span class="card__ratio">{{ ratio() }}</span>
           @if (!stats().hasTarget) {
-            <span class="card__soft">of catalogued</span>
+            <span class="card__soft">{{ 'progress.ofCatalogued' | t }}</span>
           }
           <span class="card__pct">{{ stats().pct }}%</span>
         </div>
@@ -42,27 +42,27 @@
         <ui-progress
           [pct]="stats().pct"
           [secondaryPct]="stats().hasTarget ? stats().cataloguedPct : null"
-          [label]="name() + ' progress'"
+          [label]="'progress.label' | t: { name: name() }"
           [valueText]="progressText()"
         />
 
         <div class="card__foot">
           <span class="card__missing">
             @if (stats().missing) {
-              <span class="warn">{{ stats().missing }} missing</span>
+              <span class="warn">{{ 'progress.missing' | t: { n: stats().missing } }}</span>
               @if (stats().uncatalogued) {
-                <span class="soft">· {{ stats().wanted }} listed</span>
+                <span class="soft">{{ 'progress.listed' | t: { n: stats().wanted } }}</span>
               }
             } @else if (stats().hasTarget) {
-              <span class="good">Complete</span>
+              <span class="good">{{ 'progress.complete' | t }}</span>
             } @else {
-              <span class="good">All owned</span>
+              <span class="good">{{ 'progress.allOwned' | t }}</span>
             }
             @if (stats().over) {
-              <span class="soft">· +{{ stats().over }} over</span>
+              <span class="soft">{{ 'progress.over' | t: { n: stats().over } }}</span>
             }
             @if (stats().copies > stats().catalogued) {
-              <span class="soft">· {{ stats().copies }} copies</span>
+              <span class="soft">{{ 'progress.copies' | t: { n: stats().copies } }}</span>
             }
           </span>
           <span class="card__value">{{ stats().value | money }}</span>

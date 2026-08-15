@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 
+import { I18nService } from '../../../core/i18n';
 import { UiButton } from '../button/button';
 
 /**
@@ -22,14 +23,14 @@ import { UiButton } from '../button/button';
       variant="ghost"
       size="sm"
       [disabled]="first()"
-      [ariaLabel]="'Move ' + label() + ' earlier'"
+      [ariaLabel]="i18n.t('ui.reorder.earlier', { name: label() })"
       (click)="moved.emit(-1)"
     >↑</ui-button>
     <ui-button
       variant="ghost"
       size="sm"
       [disabled]="last()"
-      [ariaLabel]="'Move ' + label() + ' later'"
+      [ariaLabel]="i18n.t('ui.reorder.later', { name: label() })"
       (click)="moved.emit(1)"
     >↓</ui-button>
   `,
@@ -50,6 +51,8 @@ import { UiButton } from '../button/button';
   `,
 })
 export class UiReorder {
+  protected readonly i18n = inject(I18nService);
+
   /** Names the thing being moved, for the buttons' accessible labels. */
   readonly label = input('item');
   readonly first = input(false);

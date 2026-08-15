@@ -21,6 +21,9 @@ h1 {
 
 .heading {
   @include mono-label(10.5px);
+  // Uppercase is presentation, so it lives here and not in the dictionary —
+  // translators get sentence case (docs/frontend-standards.md §2.8).
+  text-transform: uppercase;
 }
 
 .sub {
@@ -80,11 +83,23 @@ h1 {
     font-family: var(--font-mono);
     font-size: 9.5px;
     letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--muted);
 
     &.active {
       color: var(--accent);
     }
+  }
+}
+
+// Same card with the flag standing in for the swatch row; the tighter gap and
+// the bottom alignment keep its state line level with the themes'.
+.lang-card {
+  justify-content: flex-end;
+  gap: 5px;
+
+  ui-flag {
+    margin-bottom: 4px;
   }
 }
 

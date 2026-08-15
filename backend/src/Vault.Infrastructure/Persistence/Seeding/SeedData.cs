@@ -21,9 +21,9 @@ public static class SeedData
 
     public static List<User> Users(Guid tenantId) =>
     [
-        new() { Id = Guid.NewGuid(), TenantId = tenantId, Email = "marcus@airia.com", Name = "Marcus Keller", Initials = "MK", Role = MemberRole.Owner, Plan = PlanId.Free },
-        new() { Id = Guid.NewGuid(), TenantId = tenantId, Email = "ana@airia.com", Name = "Ana Pereira", Initials = "AP", Role = MemberRole.Editor, Plan = PlanId.Free },
-        new() { Id = Guid.NewGuid(), TenantId = tenantId, Email = "dev@airia.com", Name = "Dev Lee", Initials = "DL", Role = MemberRole.Viewer, Plan = PlanId.Free },
+        new() { Id = Guid.NewGuid(), TenantId = tenantId, Email = "marcus@example.com", Name = "Marcus Keller", Initials = "MK", Role = MemberRole.Owner, Plan = PlanId.Free },
+        new() { Id = Guid.NewGuid(), TenantId = tenantId, Email = "ana@example.com", Name = "Ana Pereira", Initials = "AP", Role = MemberRole.Editor, Plan = PlanId.Free },
+        new() { Id = Guid.NewGuid(), TenantId = tenantId, Email = "dev@example.com", Name = "Dev Lee", Initials = "DL", Role = MemberRole.Viewer, Plan = PlanId.Free },
     ];
 
     public static List<Collection> Collections(Guid tenantId)
@@ -42,8 +42,8 @@ public static class SeedData
                     ("Atari", [])),
                 Members =
                 [
-                    Member("retro", "Ana Pereira", "ana@airia.com", "AP", MemberRole.Editor),
-                    Member("retro", "Dev Lee", "dev@airia.com", "DL", MemberRole.Viewer),
+                    Member("retro", "Ana Pereira", "ana@example.com", "AP", MemberRole.Editor),
+                    Member("retro", "Dev Lee", "dev@example.com", "DL", MemberRole.Viewer),
                 ],
                 Items =
                 [
@@ -102,7 +102,7 @@ public static class SeedData
                     ("Pokémon", new[] { "Grade", "Cert no." }),
                     ("Magic", new[] { "Set" }),
                     ("Sports", new[] { "Card no." })),
-                Members = [Member("cards", "Ana Pereira", "ana@airia.com", "AP", MemberRole.Viewer)],
+                Members = [Member("cards", "Ana Pereira", "ana@example.com", "AP", MemberRole.Viewer)],
                 Items =
                 [
                     Item("cards", "charizard", "Charizard Holo (Base Set)", 1999, Condition.Mint, 4200, 3100, "Pokémon", ["graded", "psa8"], "charizard_base.jpg", "Base Set Unlimited Charizard, PSA 8. Strong centering, minor whitening on the back only.", Custom(("Grade", "PSA 8"), ("Cert no.", "82736411"))),

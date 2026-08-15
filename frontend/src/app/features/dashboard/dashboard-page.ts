@@ -2,11 +2,14 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../core/api/images-api';
+import { I18nService } from '../../core/i18n';
 import { ImageFocusService } from '../../core/state/image-focus.service';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { isOwned, ownedValue, paidTotal, sortValue } from '../../core/utils/copies.util';
+import { formatRelative } from '../../core/utils/date.util';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
+import { TPipe } from '../../shared/pipes/t.pipe';
 import { UiCard, UiImageSlot, UiSectionLabel } from '../../shared/ui';
 
 interface RecentEntry {
@@ -23,7 +26,7 @@ const RECENT_COUNT = 4;
 @Component({
   selector: 'app-dashboard-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, UiCard, UiImageSlot, UiSectionLabel],
+  imports: [RouterLink, MoneyPipe, TPipe, UiCard, UiImageSlot, UiSectionLabel],
   templateUrl: './dashboard-page.html',
   styleUrl: './dashboard-page.scss',
 })
@@ -31,6 +34,7 @@ export class DashboardPage {
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
+  protected readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
@@ -51,18 +55,26 @@ export class DashboardPage {
   protected readonly appreciationLabel = computed(() => {
     const owned = this.allItems().map(x => x.item).filter(isOwned);
     const paid = owned.reduce((acc, i) => acc + paidTotal(i), 0);
-    if (!paid) return 'no purchase data yet';
+    if (!paid) return this.i18n.t('dashboard.noPurchaseData');
     const value = owned.reduce((acc, i) => acc + ownedValue(i), 0);
     const pct = ((value - paid) / paid) * 100;
-    return `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% vs purchase`;
+    // Through Intl so the decimal separator follows the language: 12,5% in pt-BR.
+    const magnitude = new Intl.NumberFormat(this.i18n.locale(), {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(Math.abs(pct));
+    return this.i18n.t('dashboard.appreciation', { arrow: pct >= 0 ? '▲' : '▼', pct: magnitude });
   });
 
-  protected readonly stats = computed(() => [
-    { label: 'ITEMS', value: String(this.store.totalItems()), sub: `across ${this.store.collections().length} collections`, money: false },
-    { label: 'EST. VALUE', value: this.store.totalOwnedValue(), sub: this.appreciationLabel(), money: true },
-    { label: 'GROUPS', value: String(this.store.totalGroups()), sub: `in ${this.store.collections().length} collections`, money: false },
-    { label: 'ADDED', value: String(this.addedThisWeek()), sub: 'this week', money: false },
-  ]);
+  protected readonly stats = computed(() => {
+    const collections = this.store.collections().length;
+    return [
+      { label: this.i18n.t('dashboard.stat.items'), value: String(this.store.totalItems()), sub: this.i18n.t('dashboard.stat.itemsSub', { collections }), money: false },
+      { label: this.i18n.t('dashboard.stat.value'), value: this.store.totalOwnedValue(), sub: this.appreciationLabel(), money: true },
+      { label: this.i18n.t('dashboard.stat.groups'), value: String(this.store.totalGroups()), sub: this.i18n.t('dashboard.stat.groupsSub', { collections }), money: false },
+      { label: this.i18n.t('dashboard.stat.added'), value: String(this.addedThisWeek()), sub: this.i18n.t('dashboard.stat.addedSub'), money: false },
+    ];
+  });
 
   protected readonly recent = computed<RecentEntry[]>(() =>
     this.allItems()
@@ -76,7 +88,10 @@ export class DashboardPage {
         collectionId: x.collection.id,
         itemId: x.item.id,
         name: x.item.name,
-        sub: `${x.collection.name} · added ${timeAgo(x.item.createdAt!)}`,
+        sub: this.i18n.t('dashboard.recentSub', {
+          collection: x.collection.name,
+          when: formatRelative(x.item.createdAt!, this.i18n.locale(), new Date()),
+        }),
         value: sortValue(x.item),
       })),
   );
@@ -92,17 +107,11 @@ export class DashboardPage {
   }
 
   protected async newCollection(): Promise<void> {
-    const created = await this.store.createCollection('New collection', '');
-    this.toast.flash('Collection created — name it here');
+    const created = await this.store.createCollection(
+      this.i18n.t('dashboard.newCollectionName'),
+      '',
+    );
+    this.toast.flash(this.i18n.t('toast.collection.created'));
     void this.router.navigate(['/c', created.id, 'settings'], { queryParams: { tab: 'general' } });
   }
-}
-
-function timeAgo(iso: string): string {
-  const elapsedMs = Date.now() - new Date(iso).getTime();
-  const minutes = Math.max(1, Math.floor(elapsedMs / 60_000));
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }

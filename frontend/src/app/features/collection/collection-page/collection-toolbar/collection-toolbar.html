@@ -1,12 +1,12 @@
 <span class="spacer"></span>
 
 @if (searching()) {
-  <span class="row-label">SEARCH RESULTS</span>
+  <span class="row-label">{{ 'toolbar.searchResults' | t }}</span>
 }
 
 @if (showSort()) {
   <ui-dropdown #sortMenu [width]="230">
-    <button ddTrigger type="button" class="sort-trigger">Sort: {{ sortLabel() }} ▾</button>
+    <button ddTrigger type="button" class="sort-trigger">{{ 'toolbar.sort' | t: { label: sortLabel() } }}</button>
     <ng-container ddPanel>
       @for (option of sortOptions(); track option.id) {
         <button
@@ -23,14 +23,14 @@
   </ui-dropdown>
 }
 
-<div class="view-toggle" role="group" aria-label="View mode">
+<div class="view-toggle" role="group" [attr.aria-label]="'toolbar.viewAria' | t">
   @for (option of views; track option.id) {
     <button
       type="button"
       [class.active]="view() === option.id"
       [attr.aria-pressed]="view() === option.id"
-      [attr.aria-label]="option.label"
-      [title]="option.label"
+      [attr.aria-label]="option.label | t"
+      [title]="option.label | t"
       (click)="view.set(option.id)"
     >{{ option.glyph }}</button>
   }

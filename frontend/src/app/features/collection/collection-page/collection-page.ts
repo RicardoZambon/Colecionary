@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 
+import { I18nService } from '../../../core/i18n';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { Condition, GroupNode, GroupSort, Item } from '../../../core/models';
-import { isOwned } from '../../../core/utils/copies.util';
+import { BrowseCriteria, OwnFilter, visibleItems } from '../../../core/utils/browse.util';
 import { UNGROUPED_ID, scopeStats, statsIndex } from '../../../core/utils/group-stats.util';
 import {
   childrenOf,
@@ -12,7 +13,6 @@ import {
   groupById,
   pathOf,
   sortFor,
-  subtreeIds,
 } from '../../../core/utils/groups.util';
 import { ChildChip } from './group-breadcrumb/group-breadcrumb';
 import {
@@ -20,16 +20,24 @@ import {
   applyManualOrder,
   customFieldName,
   moveInList,
-  sortItems,
 } from '../../../core/utils/sort.util';
+import {
+  conditionParams,
+  ownParams,
+  readCondition,
+  readOwn,
+  readSort,
+  sortParams,
+} from '../browse-params';
 import { CollectionHero } from './collection-hero/collection-hero';
-import { CollectionFilters, OwnFilter } from './collection-toolbar/collection-filters';
+import { CollectionFilters } from './collection-toolbar/collection-filters';
 import { CollectionToolbar } from './collection-toolbar/collection-toolbar';
 import { GroupBreadcrumb } from './group-breadcrumb/group-breadcrumb';
 import { GroupDashboard } from './group-dashboard/group-dashboard';
 import { GroupTree } from './group-tree/group-tree';
 import { ItemGrid } from './item-grid/item-grid';
 import { ItemList } from './item-list/item-list';
+import { TPipe } from '../../../shared/pipes/t.pipe';
 import { ViewMode, resolveView, viewParam } from './view-mode';
 import {
   initialExpanded,
@@ -50,6 +58,7 @@ const WIDE_ENOUGH = '(min-width: 1200px)';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
+    TPipe,
     CollectionHero,
     CollectionFilters,
     CollectionToolbar,
@@ -64,6 +73,7 @@ const WIDE_ENOUGH = '(min-width: 1200px)';
 })
 export class CollectionPage {
   protected readonly store = inject(VaultStore);
+  private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -74,11 +84,21 @@ export class CollectionPage {
   readonly g = input<string | undefined>(undefined);
   /** Chosen view. Absent means "derive it from whether this group has children". */
   readonly v = input<string | undefined>(undefined);
+  /**
+   * The item filters and the chosen order, straight off the URL — which is what
+   * lets an open item walk the same list the grid showed, and what makes coming
+   * back from one restore the filters instead of clearing them. Parsed in
+   * `browse-params.ts`, never trusted raw.
+   */
+  readonly cond = input<string | undefined>(undefined);
+  readonly own = input<string | undefined>(undefined);
+  readonly sort = input<string | undefined>(undefined);
+  readonly dir = input<string | undefined>(undefined);
 
-  protected readonly condition = signal<Condition | null>(null);
-  protected readonly own = signal<OwnFilter>(null);
+  protected readonly condition = computed(() => readCondition(this.cond()));
+  protected readonly ownFilter = computed<OwnFilter>(() => readOwn(this.own()));
   /** Null means "use the selected group's configured order". */
-  protected readonly sortOverride = signal<GroupSort | null>(null);
+  protected readonly sortOverride = computed(() => readSort(this.sort(), this.dir()));
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
   protected readonly treeExpanded = signal<ReadonlySet<string>>(new Set());
   protected readonly treeCollapsed = signal(false);
@@ -93,14 +113,6 @@ export class CollectionPage {
   private restoredFor: string | null = null;
 
   constructor() {
-    // Each group carries its own default; a pick made in one group shouldn't
-    // leak into the next. The view mode deliberately does NOT reset — it is a
-    // preference of the user's, not of the group's.
-    effect(() => {
-      this.g();
-      this.sortOverride.set(null);
-    });
-
     // Restore the tree once per collection, seeding it with the path to the
     // group in the URL so it opens showing where you are.
     effect(() => {
@@ -167,7 +179,7 @@ export class CollectionPage {
   protected readonly total = computed(() => scopeStats(this.stats(), null));
 
   protected readonly scopeName = computed(() => {
-    if (this.g() === UNGROUPED_ID) return 'No group';
+    if (this.g() === UNGROUPED_ID) return this.i18n.t('group.none');
     return this.selectedGroup()?.name ?? '';
   });
 
@@ -178,7 +190,7 @@ export class CollectionPage {
    */
   protected readonly crumbPath = computed<GroupNode[]>(() => {
     if (this.g() !== UNGROUPED_ID) return this.selectedPath();
-    return [{ id: UNGROUPED_ID, name: 'No group', parentId: null, fields: [], sort: null, target: null }];
+    return [{ id: UNGROUPED_ID, name: this.i18n.t('group.none'), parentId: null, fields: [], sort: null, target: null }];
   });
 
   protected readonly groupNames = computed(
@@ -231,18 +243,6 @@ export class CollectionPage {
     return this.searching() && resolved === 'dashboard' ? 'grid' : resolved;
   });
 
-  /** Items in the open scope, before the item-level filters narrow them. */
-  private readonly scopedItems = computed(() => {
-    const id = this.g();
-    if (!id) return this.sourceItems();
-    if (id === UNGROUPED_ID) {
-      const known = new Set(this.groups().map(group => group.id));
-      return this.sourceItems().filter(item => !known.has(item.groupId));
-    }
-    const subtree = new Set(subtreeIds(this.groups(), id));
-    return this.sourceItems().filter(item => subtree.has(item.groupId));
-  });
-
   /**
    * Items filed on the open group itself rather than in one of its children,
    * so the dashboard can offer a way to see them. Empty at the collection
@@ -255,19 +255,22 @@ export class CollectionPage {
     return this.sourceItems().filter(item => item.groupId === id);
   });
 
-  protected readonly items = computed(() => {
-    const query = this.store.query().toLowerCase();
+  /**
+   * Everything that decides the visible list, in one object. The item page
+   * reads the same four params off the URL and builds the same thing, so the
+   * arrows there can never step somewhere this grid wasn't showing.
+   */
+  protected readonly criteria = computed<BrowseCriteria>(() => ({
+    groupId: this.g() ?? null,
+    condition: this.condition(),
+    own: this.ownFilter(),
+    query: this.store.query(),
+    sort: this.sortOverride(),
+  }));
 
-    const filtered = this.scopedItems().filter(
-      item =>
-        // An item matches a condition when any of its copies is in it.
-        (!this.condition() || item.copies.some(c => c.condition === this.condition())) &&
-        (!this.own() || (this.own() === 'owned' ? isOwned(item) : !isOwned(item))) &&
-        (!query || item.name.toLowerCase().includes(query)),
-    );
-
-    return sortItems(filtered, this.effectiveSort(), this.groupFields());
-  });
+  protected readonly items = computed(() =>
+    visibleItems(this.sourceItems(), this.groups(), this.criteria()),
+  );
 
   // --- ordering ---
 
@@ -295,9 +298,11 @@ export class CollectionPage {
     if (!pending || !collection || pending.id !== collection.id) return;
     try {
       await this.store.updateCollection({ ...collection, items: pending.items });
-      this.toast.flash('Order saved ✓');
+      this.toast.flash(this.i18n.t('toast.order.saved'));
     } catch (err) {
-      this.toast.flash(err instanceof Error ? err.message : 'Could not save the order');
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.order.failed'),
+      );
     } finally {
       // Either way the store is now the authority again.
       this.pendingOrder.set(null);
@@ -311,6 +316,33 @@ export class CollectionPage {
       relativeTo: this.route,
       queryParams: { v: viewParam(next, this.hasChildren()) },
       queryParamsHandling: 'merge',
+    });
+  }
+
+  protected setCondition(next: Condition | null): void {
+    this.narrow(conditionParams(next));
+  }
+
+  protected setOwn(next: OwnFilter): void {
+    this.narrow(ownParams(next));
+  }
+
+  protected setSortOverride(next: GroupSort | null): void {
+    this.narrow(sortParams(next));
+  }
+
+  /**
+   * Filters and order replace the current history entry rather than stacking
+   * one per chip: back should return to where you came from, not undo six
+   * toggles. The URL still holds them, so leaving for an item and coming back
+   * lands on the same list.
+   */
+  private narrow(queryParams: Params): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams,
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
     });
   }
 
@@ -358,6 +390,6 @@ export class CollectionPage {
     };
     void this.store
       .updateCollection({ ...collection, groups: [...collection.groups, node] })
-      .then(() => this.toast.flash(`Group "${trimmed}" added`));
+      .then(() => this.toast.flash(this.i18n.t('toast.group.added', { name: trimmed })));
   }
 }

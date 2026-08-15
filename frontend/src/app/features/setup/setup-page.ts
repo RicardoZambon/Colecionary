@@ -1,9 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
+import { I18nService, MessageKey } from '../../core/i18n';
 import { SetupService } from '../../core/setup/setup.service';
 import { SetupTestResult } from '../../core/models/setup.model';
 import { ThemeId } from '../../core/models';
 import { ThemeService } from '../../core/state/theme.service';
+import { TPipe } from '../../shared/pipes/t.pipe';
 import { UiButton, UiCard, UiField, UiSelect, UiTextInput, UiToggle } from '../../shared/ui';
 import { SelectOption } from '../../shared/ui/select/select';
 
@@ -16,12 +18,13 @@ interface Note {
 @Component({
   selector: 'app-setup-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiButton, UiCard, UiField, UiSelect, UiTextInput, UiToggle],
+  imports: [TPipe, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiToggle],
   templateUrl: './setup-page.html',
   styleUrl: './setup-page.scss',
 })
 export class SetupPage {
   private readonly setup = inject(SetupService);
+  protected readonly i18n = inject(I18nService);
   /**
    * The wizard runs outside the app shell, so nothing else would apply a theme
    * here. Injecting the service restores `data-theme` on <html> and lets the
@@ -29,7 +32,13 @@ export class SetupPage {
    */
   private readonly theme = inject(ThemeService);
 
-  protected readonly steps = ['Token', 'Database', 'Administrator', 'Preferences', 'Review'];
+  protected readonly stepKeys: MessageKey[] = [
+    'setup.step.token',
+    'setup.step.database',
+    'setup.step.administrator',
+    'setup.step.preferences',
+    'setup.step.review',
+  ];
   protected readonly step = signal(0);
 
   // Token
@@ -54,6 +63,8 @@ export class SetupPage {
 
   // Preferences
   protected readonly defaultTheme = signal<ThemeId>(this.theme.current());
+  // Theme names are proper nouns, so this list needs no translation — but the
+  // review step below reads a label out of it, so it stays a SelectOption[].
   protected readonly themeOptions: SelectOption[] = this.theme.themes.map(t => ({ value: t.id, label: t.name }));
 
   protected readonly busy = signal(false);
@@ -88,32 +99,27 @@ export class SetupPage {
     if (!result) {
       return null;
     }
-    const target = `${this.server().trim()},${Number(this.port()) || 1433}`;
+    const params = {
+      target: `${this.server().trim()},${Number(this.port()) || 1433}`,
+      database: this.database().trim(),
+    };
+    const say = (tone: Note['tone'], key: MessageKey): Note => ({
+      tone,
+      text: this.i18n.t(key, params),
+    });
     switch (result) {
       case 'Success':
-        return { tone: 'ok', text: `Connected to ${target}. The database “${this.database().trim()}” is ready to use.` };
+        return say('ok', 'setup.test.success');
       case 'DatabaseMissingButCanBeCreated':
-        return {
-          tone: 'ok',
-          text: `Connected to ${target}. The database “${this.database().trim()}” doesn't exist yet — it will be created for you when you finish setup.`,
-        };
+        return say('ok', 'setup.test.willCreate');
       case 'DatabaseMissingAndCannotCreate':
-        return {
-          tone: 'bad',
-          text: `Connected to ${target}, but the database “${this.database().trim()}” doesn't exist and this login isn't allowed to create it. Create the database first, or use a login with the dbcreator role.`,
-        };
+        return say('bad', 'setup.test.cannotCreate');
       case 'LoginRejected':
-        return {
-          tone: 'bad',
-          text: `${target} refused this username and password. Check the credentials, and make sure the server allows SQL Server authentication (not Windows-only).`,
-        };
+        return say('bad', 'setup.test.loginRejected');
       case 'HostUnreachable':
-        return {
-          tone: 'bad',
-          text: `Couldn't reach a SQL Server at ${target}. Check the host name and port, that the server is running and accepting TCP connections, and that no firewall is in the way.`,
-        };
+        return say('bad', 'setup.test.unreachable');
       default:
-        return { tone: 'bad', text: `The connection to ${target} failed for an unrecognized reason. Double-check the details and try again.` };
+        return say('bad', 'setup.test.unknown');
     }
   });
 
@@ -125,7 +131,7 @@ export class SetupPage {
 
   protected next(): void {
     this.error.set(null);
-    this.step.update(s => Math.min(s + 1, this.steps.length - 1));
+    this.step.update(s => Math.min(s + 1, this.stepKeys.length - 1));
   }
 
   protected back(): void {
@@ -143,7 +149,7 @@ export class SetupPage {
     try {
       this.testResult.set(await this.setup.testConnection(this.token().trim(), this.connection()));
     } catch (err) {
-      this.error.set(this.messageFrom(err) ?? 'The connection test couldn’t run. Check the token and the fields above, then try again.');
+      this.error.set(this.messageFrom(err) ?? this.i18n.t('setup.error.testFailed'));
     } finally {
       this.testing.set(false);
     }
@@ -173,10 +179,10 @@ export class SetupPage {
       if (ready) {
         window.location.href = '/';
       } else {
-        this.error.set('Setup was applied, but the app hasn’t come back online yet. Give it a moment and reload the page.');
+        this.error.set(this.i18n.t('setup.error.notBackOnline'));
       }
     } catch (err) {
-      this.error.set(this.messageFrom(err) ?? 'Setup couldn’t be applied. Check the details on the previous steps and try again.');
+      this.error.set(this.messageFrom(err) ?? this.i18n.t('setup.error.applyFailed'));
     } finally {
       this.busy.set(false);
     }
@@ -202,14 +208,14 @@ export class SetupPage {
       return response.error.title;
     }
     if (response?.status === 401) {
-      return 'That setup token wasn’t accepted. Copy it again from the container log line that starts with “SETUP MODE”.';
+      return this.i18n.t('setup.error.badToken');
     }
     if (response?.status === 429) {
-      return 'Too many attempts. Wait a few minutes, then try again.';
+      return this.i18n.t('setup.error.rateLimited');
     }
     // Status 0 means the request never reached the server (offline / CORS / down).
     if (!response?.status) {
-      return 'Couldn’t reach the Vault server. Check that the container is still running, then try again.';
+      return this.i18n.t('setup.error.unreachable');
     }
     return null;
   }

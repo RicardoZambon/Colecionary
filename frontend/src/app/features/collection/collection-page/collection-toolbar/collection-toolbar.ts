@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, input, model } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, model } from '@angular/core';
 
+import { I18nService, MessageKey } from '../../../../core/i18n';
 import { GroupField, GroupSort } from '../../../../core/models';
 import { DEFAULT_SORT, sortChoices, sortLabel } from '../../../../core/utils/sort.util';
+import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiDropdown } from '../../../../shared/ui';
 import { ViewMode } from '../view-mode';
 
@@ -26,11 +28,13 @@ function sortId(sort: GroupSort): string {
 @Component({
   selector: 'app-collection-toolbar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiDropdown],
+  imports: [TPipe, UiDropdown],
   templateUrl: './collection-toolbar.html',
   styleUrl: './collection-toolbar.scss',
 })
 export class CollectionToolbar {
+  private readonly i18n = inject(I18nService);
+
   /** Custom fields available in the current group, own plus inherited. */
   readonly fields = input.required<GroupField[]>();
   /** The order the current group configures, if any. */
@@ -49,18 +53,24 @@ export class CollectionToolbar {
     () => this.sortOverride() ?? this.groupSort() ?? DEFAULT_SORT,
   );
 
-  protected readonly sortLabel = computed(() => sortLabel(this.effectiveSort()));
+  protected readonly sortLabel = computed(() => sortLabel(this.effectiveSort(), this.i18n.t));
 
   protected readonly sortOptions = computed<SortMenuOption[]>(() => {
     const groupSort = this.groupSort();
-    const choices = sortChoices(this.fields()).map(choice => ({
+    const choices = sortChoices(this.fields(), this.i18n.t).map(choice => ({
       id: sortId(choice),
       label: choice.label,
       sort: { by: choice.by, direction: choice.direction },
     }));
     return groupSort
       ? [
-          { id: GROUP_DEFAULT_ID, label: `Group default — ${sortLabel(groupSort)}`, sort: null },
+          {
+            id: GROUP_DEFAULT_ID,
+            label: this.i18n.t('toolbar.groupDefault', {
+              label: sortLabel(groupSort, this.i18n.t),
+            }),
+            sort: null,
+          },
           ...choices,
         ]
       : choices;
@@ -72,10 +82,10 @@ export class CollectionToolbar {
     return this.groupSort() ? GROUP_DEFAULT_ID : sortId(this.effectiveSort());
   });
 
-  protected readonly views: { id: ViewMode; glyph: string; label: string }[] = [
-    { id: 'dashboard', glyph: '▤', label: 'Group dashboard' },
-    { id: 'grid', glyph: '▦', label: 'Item grid' },
-    { id: 'list', glyph: '☰', label: 'Item list' },
+  protected readonly views: { id: ViewMode; glyph: string; label: MessageKey }[] = [
+    { id: 'dashboard', glyph: '▤', label: 'view.dashboard' },
+    { id: 'grid', glyph: '▦', label: 'view.grid' },
+    { id: 'list', glyph: '☰', label: 'view.list' },
   ];
 
   protected pickSort(option: SortMenuOption): void {

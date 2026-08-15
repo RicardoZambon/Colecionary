@@ -1,7 +1,8 @@
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
+import { I18nService } from '../../../core/i18n';
 import { UiReorder } from './reorder';
 
 /** Stands in for the item card: reorder controls overlay something clickable. */
@@ -26,6 +27,9 @@ class HostComponent {
 }
 
 function mount(patch: Partial<HostComponent> = {}) {
+  // The accessible labels below are translated, so pin the language rather than
+  // depending on whatever the test runner's navigator reports.
+  TestBed.inject(I18nService).apply('en');
   const fixture = TestBed.createComponent(HostComponent);
   Object.assign(fixture.componentInstance, patch);
   fixture.detectChanges();

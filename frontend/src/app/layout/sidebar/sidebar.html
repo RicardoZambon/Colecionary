@@ -1,14 +1,14 @@
 <nav class="group">
   <a class="nav-item" routerLink="/dashboard" routerLinkActive="active">
-    <ui-icon name="home" />Dashboard
+    <ui-icon name="home" />{{ 'nav.dashboard' | t }}
   </a>
   <a class="nav-item" routerLink="/store" routerLinkActive="active">
-    <ui-icon name="grid" />Store
+    <ui-icon name="grid" />{{ 'nav.store' | t }}
   </a>
 </nav>
 
 <nav class="group">
-  <div class="heading">COLLECTIONS</div>
+  <div class="heading">{{ 'nav.collections' | t }}</div>
   @for (collection of store.collections(); track collection.id) {
     <a class="nav-item nav-item--split" [routerLink]="['/c', collection.id]" routerLinkActive="active">
       <span class="name">{{ collection.name }}</span>
@@ -19,7 +19,7 @@
 
 <div class="footer">
   <a class="nav-item" routerLink="/settings" routerLinkActive="active">
-    <ui-icon name="gear" />Settings
+    <ui-icon name="gear" />{{ 'nav.settings' | t }}
   </a>
-  <div class="status">● synced · v0.1 mock API</div>
+  <div class="status">{{ 'nav.status' | t }}</div>
 </div>

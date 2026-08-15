@@ -107,6 +107,9 @@ static WebApplication BuildSetupApplication(WebApplicationBuilder builder, Setup
     app.Logger.LogWarning("SETUP MODE — open the app and enter this token to configure it:\n    {Token}", token);
 
     var spaFileOptions = SpaFileOptions();
+    // The wizard runs before there is a database or a user, so Accept-Language
+    // is the only thing that can tell us what language to answer in.
+    app.UseRequestLocalization(LocalizationOptions());
     app.UseSerilogRequestLogging();
     app.UseDefaultFiles();
     app.UseStaticFiles(spaFileOptions);
@@ -174,6 +177,11 @@ static WebApplication BuildConfiguredApplication(WebApplicationBuilder builder, 
 
     var app = builder.Build();
 
+    // Ahead of the exception handler on purpose. The handler runs as an
+    // exception unwinds back up the pipeline, and it builds the ProblemDetails
+    // title from Messages — so the culture this middleware sets has to still be
+    // in scope by then, which means it has to sit outside it, not inside.
+    app.UseRequestLocalization(LocalizationOptions());
     app.UseExceptionHandler();
     app.UseSerilogRequestLogging();
 
@@ -235,6 +243,19 @@ static void BootstrapDatabase(WebApplication app, SetupCoordinator setup)
     {
         sp.GetRequiredService<VaultDbContext>().Database.Migrate();
     }
+}
+
+// The languages the API answers in, resolved from Accept-Language. Mirrors the
+// LANGS catalog in the frontend — adding one here means adding a
+// Messages.<culture>.resx beside it. English is the neutral fallback, so an
+// unknown or absent header still gets a readable message.
+static RequestLocalizationOptions LocalizationOptions()
+{
+    string[] supported = ["en", "pt-BR"];
+    return new RequestLocalizationOptions()
+        .SetDefaultCulture(supported[0])
+        .AddSupportedCultures(supported)
+        .AddSupportedUICultures(supported);
 }
 
 static StaticFileOptions SpaFileOptions() => new()

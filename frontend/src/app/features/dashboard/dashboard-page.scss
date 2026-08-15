@@ -33,6 +33,7 @@ h1 {
 
   &__label {
     @include mono-label;
+    text-transform: uppercase;
   }
 
   &__value {

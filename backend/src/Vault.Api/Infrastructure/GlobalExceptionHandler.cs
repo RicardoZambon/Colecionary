@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Vault.Application.Common;
+using Vault.Application.Resources;
 
 namespace Vault.Api.Infrastructure;
 
@@ -15,14 +16,14 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problemDetails
     {
         var (status, title, detail) = exception switch
         {
-            NotFoundException e => (StatusCodes.Status404NotFound, "Not found", e.Message),
-            ConflictException e => (StatusCodes.Status409Conflict, "Conflict", e.Message),
-            DomainRuleException e => (StatusCodes.Status400BadRequest, "Invalid operation", e.Message),
+            NotFoundException e => (StatusCodes.Status404NotFound, Messages.ProblemNotFound, e.Message),
+            ConflictException e => (StatusCodes.Status409Conflict, Messages.ProblemConflict, e.Message),
+            DomainRuleException e => (StatusCodes.Status400BadRequest, Messages.ProblemInvalidOperation, e.Message),
             ValidationException e => (
                 StatusCodes.Status400BadRequest,
-                "Validation failed",
+                Messages.ProblemValidationFailed,
                 string.Join(" ", e.Errors.Select(f => f.ErrorMessage))),
-            _ => (StatusCodes.Status500InternalServerError, "Something went wrong", (string?)null),
+            _ => (StatusCodes.Status500InternalServerError, Messages.ProblemUnexpected, (string?)null),
         };
 
         httpContext.Response.StatusCode = status;

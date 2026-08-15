@@ -1,3 +1,4 @@
+import { MessageKey, Translate } from '../i18n/messages/keys';
 import { GroupField, GroupSort, Item, SortDirection } from '../models';
 import { sortValue } from './copies.util';
 
@@ -15,7 +16,16 @@ export const DEFAULT_SORT: GroupSort = { by: 'added', direction: 'desc' };
 
 const FIELD_PREFIX = 'field:';
 
-/** Numeric-aware so a free-text field still orders 1 · 2 · 10 · 12A. */
+/**
+ * Numeric-aware so a free-text field still orders 1 · 2 · 10 · 12A.
+ *
+ * The locale is left `undefined` deliberately, even though the app can now
+ * switch languages: `sensitivity: 'base'` already folds accents, and Portuguese
+ * and English share the plain Latin collation order, so pinning this to the UI
+ * language would change nothing except make every listing re-sort on a language
+ * switch. A language with its own alphabet order (Swedish, Czech, …) would be
+ * the reason to thread the locale through here.
+ */
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 /**
@@ -37,31 +47,43 @@ export function fieldSortKey(name: string): string {
   return FIELD_PREFIX + name;
 }
 
-const BUILTIN_LABELS: Record<string, { asc: string; desc: string }> = {
-  added: { asc: 'Oldest first', desc: 'Recently added' },
-  name: { asc: 'Name A–Z', desc: 'Name Z–A' },
-  value: { asc: 'Value low → high', desc: 'Value high → low' },
-  year: { asc: 'Year old → new', desc: 'Year new → old' },
+const BUILTIN_LABELS: Record<string, { asc: MessageKey; desc: MessageKey }> = {
+  added: { asc: 'sort.added.asc', desc: 'sort.added.desc' },
+  name: { asc: 'sort.name.asc', desc: 'sort.name.desc' },
+  value: { asc: 'sort.value.asc', desc: 'sort.value.desc' },
+  year: { asc: 'sort.year.asc', desc: 'sort.year.desc' },
 };
 
-export function sortLabel(sort: GroupSort): string {
-  if (sort.by === 'manual') return 'Manual order';
+/**
+ * The translator is a parameter, not an injected service: these helpers are
+ * pure and their specs must be able to exercise the label logic without an
+ * injector. A *custom field's* name is user data, so it is interpolated rather
+ * than looked up.
+ */
+export function sortLabel(sort: GroupSort, t: Translate): string {
+  if (sort.by === 'manual') return t('sort.manual');
   const field = customFieldName(sort.by);
-  if (field) return `${field} ${sort.direction === 'asc' ? '↑' : '↓'}`;
-  return BUILTIN_LABELS[sort.by]?.[sort.direction] ?? sortLabel(DEFAULT_SORT);
+  if (field) {
+    return t('sort.field', { name: field, arrow: sort.direction === 'asc' ? '↑' : '↓' });
+  }
+  const key = BUILTIN_LABELS[sort.by]?.[sort.direction];
+  return key ? t(key) : sortLabel(DEFAULT_SORT, t);
 }
 
-const SORT_BY_LABELS: Record<string, string> = {
-  manual: 'Manual — drag to arrange',
-  added: 'Date added',
-  name: 'Name',
-  value: 'Value',
-  year: 'Year',
+const SORT_BY_LABELS: Record<string, MessageKey> = {
+  manual: 'sortBy.manual',
+  added: 'sortBy.added',
+  name: 'sortBy.name',
+  value: 'sortBy.value',
+  year: 'sortBy.year',
 };
 
 /** What a bare `by` key is called, without a direction. */
-export function sortByLabel(by: string): string {
-  return customFieldName(by) ?? SORT_BY_LABELS[by] ?? by;
+export function sortByLabel(by: string, t: Translate): string {
+  const field = customFieldName(by);
+  if (field !== null) return field;
+  const key = SORT_BY_LABELS[by];
+  return key ? t(key) : by;
 }
 
 /**
@@ -69,9 +91,12 @@ export function sortByLabel(by: string): string {
  * field. Shaped like `SelectOption` without core having to know about
  * `shared/ui`.
  */
-export function sortByOptions(fields: GroupField[]): { value: string; label: string }[] {
+export function sortByOptions(
+  fields: GroupField[],
+  t: Translate,
+): { value: string; label: string }[] {
   return [
-    ...BUILTIN_SORTS.map(by => ({ value: by, label: sortByLabel(by) })),
+    ...BUILTIN_SORTS.map(by => ({ value: by, label: sortByLabel(by, t) })),
     ...fields.map(field => ({ value: fieldSortKey(field.name), label: field.name })),
   ];
 }
@@ -81,11 +106,11 @@ export interface SortChoice extends GroupSort {
 }
 
 /** Every ordering offered for a group: built-ins plus a pair per custom field. */
-export function sortChoices(fields: GroupField[]): SortChoice[] {
+export function sortChoices(fields: GroupField[], t: Translate): SortChoice[] {
   const choice = (by: string, direction: SortDirection): SortChoice => ({
     by,
     direction,
-    label: sortLabel({ by, direction }),
+    label: sortLabel({ by, direction }, t),
   });
   return [
     choice('manual', 'asc'),
@@ -164,10 +189,10 @@ export function sortItems(items: Item[], sort: GroupSort, fields: GroupField[]):
     if (keyA === null || keyB === null) {
       if (keyA !== null) return -1;
       if (keyB !== null) return 1;
-      return a.name.localeCompare(b.name);
+      return compareNames(a.name, b.name);
     }
     const result = compare(keyA, keyB);
-    return result !== 0 ? result * direction : a.name.localeCompare(b.name);
+    return result !== 0 ? result * direction : compareNames(a.name, b.name);
   });
 }
 

@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using FluentValidation;
 using Vault.Application.Collections.Dtos;
+using Vault.Application.Resources;
 
 namespace Vault.Application.Collections.Validators;
 
@@ -36,13 +37,13 @@ public sealed class GroupNodeDtoValidator : AbstractValidator<GroupNodeDto>
         // tail of a "field:<name>" sort key, so they have to stay unique.
         RuleFor(g => g.Fields)
             .Must(f => f.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() == f.Count)
-            .WithMessage("Field names must be unique within a group.");
+            .WithMessage(_ => Messages.FieldNamesMustBeUnique);
         // A JSON column carries no per-field constraints of its own.
         RuleForEach(g => g.Fields).ChildRules(field =>
         {
             field.RuleFor(f => f.Name).NotEmpty().MaximumLength(100);
             field.RuleFor(f => f.Type).Must(t => t is "text" or "number" or "date")
-                .WithMessage("Field type must be text, number or date.");
+                .WithMessage(_ => Messages.FieldTypeInvalid);
         });
 
         // Null is "no declared target". Zero is not a series, and null is
@@ -57,17 +58,17 @@ public sealed class GroupNodeDtoValidator : AbstractValidator<GroupNodeDto>
         RuleFor(g => g.Target)
             .InclusiveBetween(1, 100_000)
             .When(g => g.Target.HasValue)
-            .WithMessage("Target must be between 1 and 100000, or null for no target.");
+            .WithMessage(_ => Messages.TargetOutOfRange);
 
         When(g => g.Sort is not null, () =>
         {
             RuleFor(g => g.Sort!.Direction).Must(d => d is "asc" or "desc")
-                .WithMessage("Sort direction must be asc or desc.");
+                .WithMessage(_ => Messages.SortDirectionInvalid);
             RuleFor(g => g.Sort!.By).Must(by => BuiltInSorts.Contains(by, StringComparer.Ordinal)
                     || (by.StartsWith(FieldPrefix, StringComparison.Ordinal)
                         && by.Length > FieldPrefix.Length
                         && by.Length <= FieldPrefix.Length + 100))
-                .WithMessage("Sort key must be a built-in key or 'field:<field name>'.");
+                .WithMessage(_ => Messages.SortKeyInvalid);
         });
     }
 }
@@ -85,7 +86,7 @@ public sealed class ItemDtoValidator : AbstractValidator<ItemDto>
         RuleFor(i => i.Img).NotNull().MaximumLength(260);
         RuleForEach(i => i.Tags).NotEmpty().MaximumLength(50);
         RuleFor(i => i.PhotoIds).Must(p => p.Count <= 8)
-            .WithMessage("An item can have at most 8 photos.");
+            .WithMessage(_ => Messages.TooManyPhotos);
         RuleForEach(i => i.Custom).ChildRules(custom =>
         {
             custom.RuleFor(c => c.Key).NotEmpty().MaximumLength(100);
@@ -93,26 +94,26 @@ public sealed class ItemDtoValidator : AbstractValidator<ItemDto>
         });
         // No copies at all is valid — that is the wantlist.
         RuleFor(i => i.Copies).Must(c => c.Count <= 50)
-            .WithMessage("An item can have at most 50 copies.");
+            .WithMessage(_ => Messages.TooManyCopies);
         // EF keys the JSON collection by ordinal, not by Id, so duplicates would
         // persist happily and only break the UI that edits copies by id.
         RuleFor(i => i.Copies)
             .Must(c => c.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() == c.Count)
-            .WithMessage("Copy ids must be unique within an item.");
+            .WithMessage(_ => Messages.CopyIdsMustBeUnique);
         // Lengths and ranges are enforced here only: a JSON column carries no
         // per-field constraints of its own.
         RuleForEach(i => i.Copies).ChildRules(copy =>
         {
             copy.RuleFor(c => c.Id).NotEmpty().Matches(IdRules.PublicId());
             copy.RuleFor(c => c.Condition).Must(c => c is "Mint" or "Good" or "Fair")
-                .WithMessage("Condition must be Mint, Good or Fair.");
+                .WithMessage(_ => Messages.ConditionInvalid);
             copy.RuleFor(c => c.Status).Must(s => s is "Keep" or "ForTrade" or "ForSale")
-                .WithMessage("Status must be Keep, ForTrade or ForSale.");
+                .WithMessage(_ => Messages.CopyStatusInvalid);
             copy.RuleFor(c => c.Price).GreaterThanOrEqualTo(0);
             copy.RuleFor(c => c.Value).GreaterThanOrEqualTo(0).When(c => c.Value.HasValue);
             copy.RuleFor(c => c.AcquiredOn).Must(d => d!.Value.Year is >= 1 and <= 3000)
                 .When(c => c.AcquiredOn.HasValue)
-                .WithMessage("AcquiredOn must be a plausible date.");
+                .WithMessage(_ => Messages.AcquiredOnImplausible);
             copy.RuleFor(c => c.Notes).NotNull().MaximumLength(1000);
         });
     }
@@ -126,7 +127,7 @@ public sealed class MemberDtoValidator : AbstractValidator<MemberDto>
         RuleFor(m => m.Name).NotEmpty().MaximumLength(200);
         RuleFor(m => m.Initials).NotEmpty().MaximumLength(4);
         RuleFor(m => m.Role).Must(r => r is "Owner" or "Editor" or "Viewer")
-            .WithMessage("Role must be Owner, Editor or Viewer.");
+            .WithMessage(_ => Messages.RoleInvalid);
     }
 }
 

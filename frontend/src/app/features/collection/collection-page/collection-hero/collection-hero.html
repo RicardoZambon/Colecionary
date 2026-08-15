@@ -3,7 +3,7 @@
     [src]="images.url(collection().bannerImageId)"
     [focal]="focus.position(collection().bannerImageId)"
     [reframable]="!!collection().bannerImageId"
-    placeholder="Drop a banner image for this collection"
+    [placeholder]="'hero.bannerPlaceholder' | t"
     (fileSelected)="setImage('banner', $event)"
     (reframeRequested)="reframe('banner')"
   />
@@ -16,7 +16,7 @@
       [src]="images.url(collection().iconImageId)"
       [focal]="focus.position(collection().iconImageId)"
       [reframable]="!!collection().iconImageId"
-      placeholder="Icon"
+      [placeholder]="'hero.iconPlaceholder' | t"
       (fileSelected)="setImage('icon', $event)"
       (reframeRequested)="reframe('icon')"
     />
@@ -25,7 +25,7 @@
     <h1>{{ heading() }}</h1>
     <p>
       @if (narrowed()) {
-        in {{ collection().name }}
+        {{ 'hero.inCollection' | t: { name: collection().name } }}
       } @else {
         {{ collection().description }}
       }
@@ -35,12 +35,12 @@
     <div class="progress-box">
       <div class="progress-box__row">
         <span>
-          {{ ratio() }} OWNED
+          {{ 'progress.owned' | t: { ratio: ratio() } }}
           @if (scope().copies > scope().catalogued) {
-            <span class="copies-note">· {{ scope().copies }} COPIES</span>
+            <span class="copies-note">{{ 'progress.copies' | t: { n: scope().copies } }}</span>
           }
           @if (!scope().hasTarget) {
-            <span class="soft-note">OF CATALOGUED</span>
+            <span class="soft-note">{{ 'progress.ofCatalogued' | t }}</span>
           }
         </span>
         <span class="pct">{{ scope().pct }}%</span>
@@ -48,33 +48,35 @@
       <ui-progress
         [pct]="scope().pct"
         [secondaryPct]="scope().hasTarget ? scope().cataloguedPct : null"
-        [label]="heading() + ' progress'"
+        [label]="'progress.label' | t: { name: heading() }"
         [valueText]="progressText()"
       />
       <div class="progress-box__foot">
         @if (scope().missing) {
-          <span class="missing">{{ scope().missing }} missing</span>
+          <span class="missing">{{ 'progress.missing' | t: { n: scope().missing } }}</span>
           @if (scope().uncatalogued) {
-            <span class="split">· {{ scope().wanted }} listed</span>
+            <span class="split">{{ 'progress.listed' | t: { n: scope().wanted } }}</span>
           }
         } @else if (scope().hasTarget) {
-          <span class="complete">Complete</span>
+          <span class="complete">{{ 'progress.complete' | t }}</span>
         }
         @if (scope().over) {
-          <span class="split">· +{{ scope().over }} over target</span>
+          <span class="split">{{ 'progress.overTarget' | t: { n: scope().over } }}</span>
         }
         @if (narrowed()) {
-          <span class="of-total">· {{ total().owned }} / {{ total().denominator }} in all</span>
+          <span class="of-total">{{
+            'hero.ofTotal' | t: { owned: total().owned, total: total().denominator }
+          }}</span>
         }
       </div>
     </div>
     <div class="value-box">
-      est <span class="value">{{ scope().value | money }}</span>
+      {{ 'hero.estimate' | t }} <span class="value">{{ scope().value | money }}</span>
     </div>
-    <a [routerLink]="['/c', collection().id, 'settings']" [queryParams]="{ tab: 'sharing' }" title="Manage sharing">
+    <a [routerLink]="['/c', collection().id, 'settings']" [queryParams]="{ tab: 'sharing' }" [title]="'hero.manageSharing' | t">
       <ui-avatar-stack [members]="members()" />
     </a>
-    <ui-button variant="ghost" size="sm" [routerLink]="['/c', collection().id, 'settings']" title="Collection settings — general, groups & sharing">⚙ Manage</ui-button>
-    <ui-button size="sm" [routerLink]="['/c', collection().id, 'items', 'new']" queryParamsHandling="preserve">+ Add item</ui-button>
+    <ui-button variant="ghost" size="sm" [routerLink]="['/c', collection().id, 'settings']" [title]="'hero.manageTitle' | t">{{ 'hero.manage' | t }}</ui-button>
+    <ui-button size="sm" [routerLink]="['/c', collection().id, 'items', 'new']" queryParamsHandling="preserve">{{ 'hero.addItem' | t }}</ui-button>
   </div>
 </div>

@@ -6,6 +6,7 @@ export * from './card/card';
 export * from './chip/chip';
 export * from './dropdown/dropdown';
 export * from './field/field';
+export * from './flag/flag';
 export * from './icon/icon';
 export * from './image-focus/image-focus';
 export * from './image-slot/image-slot';

@@ -5,9 +5,9 @@ import { Collection, Item, Member, StoreListing, UserProfile } from '../models';
  * Backend contract for the Vault app.
  *
  * The app only ever talks to this abstract class (used as the DI token).
- * Today it is fulfilled by `MockVaultApi`; when the real backend exists,
- * implement an `HttpVaultApi` against the same contract and swap the
- * provider in `app.config.ts` — no other code changes.
+ * `HttpVaultApi` is its only implementation, wired in `app.config.ts`. Feature
+ * code sees nothing but this contract, so a second implementation would be a
+ * one-line provider swap.
  */
 export abstract class VaultApi {
   // --- collections ---

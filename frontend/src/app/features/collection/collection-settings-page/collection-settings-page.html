@@ -1,24 +1,24 @@
 @if (draft(); as d) {
   <a class="back" [routerLink]="['/c', d.id]" [queryParams]="g() ? { g: g() } : {}">← {{ d.name }}</a>
-  <h1>Collection settings</h1>
+  <h1>{{ 'collSettings.title' | t }}</h1>
 
-  <ui-tabs [tabs]="tabs" [active]="activeTab()" (activeChange)="onTabChange($event)" />
+  <ui-tabs [tabs]="tabs()" [active]="activeTab()" (activeChange)="onTabChange($event)" />
 
   @switch (activeTab()) {
     @case ('groups') {
       <ui-card class="groups-card">
         <div class="groups-card__head">
           @if (scopeGroup(); as scope) {
-            <span class="heading">{{ scope.name.toUpperCase() }} &amp; SUB-GROUPS</span>
-            <a class="link" [routerLink]="[]" [queryParams]="{ tab: 'groups', g: null }">Show all groups</a>
+            <span class="heading">{{ 'collSettings.groups.scopedHeading' | t: { name: scope.name } }}</span>
+            <a class="link" [routerLink]="[]" [queryParams]="{ tab: 'groups', g: null }">{{ 'collSettings.groups.showAll' | t }}</a>
           } @else {
-            <span class="heading">GROUPS &amp; SUB-GROUPS</span>
+            <span class="heading">{{ 'collSettings.groups.heading' | t }}</span>
           }
           <button
             type="button"
             class="link"
             (click)="pendingGroupParent.set({ parentId: scopeGroup()?.id ?? null })"
-          >+ Add group</button>
+          >{{ 'collSettings.groups.add' | t }}</button>
         </div>
 
         @for (row of groupRows(); track row.node.id) {
@@ -32,25 +32,30 @@
                 (valueChange)="renameGroup(row.node.id, $event)"
                 (blurred)="endRename()"
               />
-              <span class="count">{{ row.count }} items</span>
-              <button type="button" class="link" (click)="pendingGroupParent.set({ parentId: row.node.id })">+ Sub</button>
-              <button type="button" class="remove" (click)="removeGroup(row.node.id)">✕</button>
+              <span class="count">{{ 'collSettings.groups.itemCount' | t: { n: row.count } }}</span>
+              <button type="button" class="link" (click)="pendingGroupParent.set({ parentId: row.node.id })">{{ 'collSettings.groups.addSub' | t }}</button>
+              <button
+                type="button"
+                class="remove"
+                [attr.aria-label]="'collSettings.groups.remove' | t: { name: row.node.name }"
+                (click)="removeGroup(row.node.id)"
+              >✕</button>
             </div>
             <div class="group-row__fields">
-              <span class="fields-label">FIELDS</span>
+              <span class="fields-label">{{ 'collSettings.groups.fields' | t }}</span>
               @for (field of row.node.fields; track field.name) {
                 <span class="field-chip">
                   {{ field.name }}
                   <ui-select
                     class="compact type"
-                    [options]="fieldTypeOptions"
+                    [options]="fieldTypeOptions()"
                     [value]="field.type"
                     (valueChange)="setFieldType(row.node.id, field.name, $event)"
                   />
                   <button
                     type="button"
                     class="remove"
-                    [attr.aria-label]="'Remove field ' + field.name"
+                    [attr.aria-label]="'collSettings.groups.removeField' | t: { name: field.name }"
                     (click)="removeField(row.node.id, field.name)"
                   >✕</button>
                 </span>
@@ -59,25 +64,25 @@
                 <span class="field-chip field-chip--new">
                   <input
                     class="field-input"
-                    placeholder="Field name… (Enter)"
-                    aria-label="New field name"
+                    [placeholder]="'collSettings.groups.fieldPlaceholder' | t"
+                    [attr.aria-label]="'collSettings.groups.fieldAria' | t"
                     autofocus
                     (keydown)="newFieldKeydown($event, row.node.id)"
                     (blur)="commitNewField(row.node.id, $any($event.target).value)"
                   />
                   <ui-select
                     class="compact type"
-                    [options]="fieldTypeOptions"
+                    [options]="fieldTypeOptions()"
                     [value]="pendingFieldType()"
                     (valueChange)="pendingFieldType.set($any($event))"
                   />
                 </span>
               }
-              <button type="button" class="link small" (click)="pendingFieldGroupId.set(row.node.id)">+ Field</button>
+              <button type="button" class="link small" (click)="pendingFieldGroupId.set(row.node.id)">{{ 'collSettings.groups.addField' | t }}</button>
             </div>
 
             <div class="group-row__order">
-              <span class="fields-label">ORDER BY</span>
+              <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
               <ui-select
                 class="compact order-by"
                 [options]="row.sortByOptions"
@@ -87,19 +92,19 @@
               @if (row.showDirection) {
                 <ui-select
                   class="compact direction"
-                  [options]="directionOptions"
+                  [options]="directionOptions()"
                   [value]="row.sortDirection"
                   (valueChange)="setGroupSortDirection(row.node.id, $event)"
                 />
               }
 
-              <span class="fields-label spaced">TARGET</span>
+              <span class="fields-label spaced">{{ 'collSettings.groups.target' | t }}</span>
               <ui-text-input
                 class="target"
                 type="number"
                 variant="subtle"
                 placeholder="—"
-                [attr.aria-label]="'Target for ' + row.node.name"
+                [attr.aria-label]="'collSettings.groups.targetAria' | t: { name: row.node.name }"
                 [value]="row.target"
                 (valueChange)="setGroupTarget(row.node.id, $event)"
               />
@@ -112,7 +117,7 @@
             <span class="context">{{ newGroupContext() }}</span>
             <input
               class="new-group__input"
-              placeholder="Group name… (Enter to create, Esc to cancel)"
+              [placeholder]="'collSettings.groups.newPlaceholder' | t"
               autofocus
               (keydown)="newGroupKeydown($event)"
               (blur)="commitNewGroup($any($event.target).value)"
@@ -121,13 +126,11 @@
         }
 
         <div class="fine-print">
-          Renames apply as you type. Custom fields apply to every item in the group and its
-          sub-groups, and the field type decides how it sorts. <strong>Order by</strong> is the
-          default the collection uses when that group is open — sub-groups inherit it unless they
-          set their own. <strong>Target</strong> is how many items the complete set has, when you
-          know it — a 120-issue run, a 24-card set — so progress is measured against the series
-          instead of against what you've catalogued so far. Leave it blank and it falls back.
-          Groups that still contain items can't be deleted — move the items first.
+          {{ 'collSettings.groups.finePrint1' | t }}
+          <strong>{{ 'collSettings.groups.finePrintOrderBy' | t }}</strong>
+          {{ 'collSettings.groups.finePrint2' | t }}
+          <strong>{{ 'collSettings.groups.finePrintTarget' | t }}</strong>
+          {{ 'collSettings.groups.finePrint3' | t }}
         </div>
       </ui-card>
     }
@@ -137,12 +140,12 @@
           <ui-text-input
             class="invite-email"
             variant="subtle"
-            placeholder="email@company.com"
+            [placeholder]="'collSettings.sharing.emailPlaceholder' | t"
             [value]="inviteEmail()"
             (valueChange)="inviteEmail.set($event)"
           />
-          <ui-select [options]="inviteRoleOptions" [value]="inviteRole()" (valueChange)="inviteRole.set($event)" />
-          <ui-button size="sm" (click)="invite()">Invite</ui-button>
+          <ui-select [options]="inviteRoleOptions()" [value]="inviteRole()" (valueChange)="inviteRole.set($event)" />
+          <ui-button size="sm" (click)="invite()">{{ 'collSettings.sharing.invite' | t }}</ui-button>
         </div>
 
         <ui-card class="members">
@@ -155,46 +158,55 @@
               </span>
               <ui-select
                 class="compact"
-                [options]="roleOptions"
+                [options]="roleOptions()"
                 [value]="row.member.role"
                 [disabled]="row.fixed"
                 (valueChange)="setMemberRole(row.member.email, $event)"
               />
-              <button type="button" class="remove" [class.disabled]="row.fixed" (click)="removeMember(row.member.email, row.fixed)">✕</button>
+              <button
+                type="button"
+                class="remove"
+                [class.disabled]="row.fixed"
+                [attr.aria-label]="'collSettings.sharing.removeMember' | t: { name: row.member.name }"
+                (click)="removeMember(row.member.email, row.fixed)"
+              >✕</button>
             </div>
           }
         </ui-card>
 
         <ui-card class="link-share">
           <span class="who">
-            <span class="name">Link sharing</span>
-            <span class="email">Anyone with the link can view this collection</span>
+            <span class="name">{{ 'collSettings.sharing.linkShare' | t }}</span>
+            <span class="email">{{ 'collSettings.sharing.linkShareSub' | t }}</span>
           </span>
           <ui-toggle [on]="d.linkShare" (onChange)="setLinkShare($event)" />
         </ui-card>
 
         <div class="fine-print">
-          Tenant-wide access rules live in
-          <a routerLink="/settings" [queryParams]="{ tab: 'access' }">Settings ▸ Sharing &amp; access</a>.
+          {{ 'collSettings.sharing.finePrint' | t }}
+          <a routerLink="/settings" [queryParams]="{ tab: 'access' }">{{ 'collSettings.sharing.finePrintLink' | t }}</a>.
         </div>
       </div>
     }
     @default {
       <div class="general">
-        <ui-field label="Name">
+        <ui-field [label]="'collSettings.general.name' | t">
           <ui-text-input [value]="d.name" (valueChange)="setName($event)" />
         </ui-field>
-        <ui-field label="Description">
+        <ui-field [label]="'collSettings.general.description' | t">
           <ui-textarea [rows]="2" [value]="d.description" (valueChange)="setDescription($event)" />
         </ui-field>
-        <ui-button variant="danger" (click)="deleteCollection()">Delete collection</ui-button>
+        <ui-button variant="danger" (click)="deleteCollection()">{{ 'collSettings.general.delete' | t }}</ui-button>
       </div>
     }
   }
 
   <div class="done-row">
-    <ui-button (click)="done()">Done</ui-button>
+    <ui-button (click)="done()">{{ 'collSettings.done' | t }}</ui-button>
   </div>
 } @else {
-  <div class="missing">Collection not found — <a routerLink="/dashboard">back to Dashboard</a>.</div>
+  <div class="missing">
+    {{ 'common.collectionNotFound' | t }}
+    <a routerLink="/dashboard">{{ 'common.backToDashboard' | t }}</a>.
+  </div>
 }

@@ -9,6 +9,7 @@
 
 .row-label {
   @include mono-label(10px, 0.1em);
+  text-transform: uppercase;
 }
 
 .spacer {
