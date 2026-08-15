@@ -39,7 +39,7 @@ public class LocalizationTests(VaultApiFactory factory)
     [Fact]
     public async Task NotFoundDetail_FollowsAcceptLanguage()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
 
         client.DefaultRequestHeaders.AcceptLanguage.Clear();
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("pt-BR");
@@ -61,7 +61,7 @@ public class LocalizationTests(VaultApiFactory factory)
     [Fact]
     public async Task ProblemDetailsTitle_IsLocalized_WhichMeansTheMiddlewareRunsOutsideTheHandler()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("pt-BR");
 
         var response = await client.PostAsync(MissingListing, null);
@@ -80,7 +80,7 @@ public class LocalizationTests(VaultApiFactory factory)
 
         var response = await client.PostAsJsonAsync(
             "/api/auth/login",
-            new LoginRequest("marcus@airia.com", "wrong"));
+            new LoginRequest("marcus@example.com", "wrong"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Contains(
@@ -91,7 +91,7 @@ public class LocalizationTests(VaultApiFactory factory)
     [Fact]
     public async Task NoAcceptLanguage_FallsBackToEnglish()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         client.DefaultRequestHeaders.AcceptLanguage.Clear();
 
         var body = await (await client.PostAsync(MissingListing, null))
@@ -103,7 +103,7 @@ public class LocalizationTests(VaultApiFactory factory)
     [Fact]
     public async Task AnUnsupportedLanguage_FallsBackToEnglish()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("de-DE");
 
         var body = await (await client.PostAsync(MissingListing, null))

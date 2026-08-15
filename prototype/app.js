@@ -75,14 +75,14 @@ const app = {
   showValues: true,
 
   tenantDef: [
-    { name: 'Marcus Keller', email: 'marcus@airia.com', initials: 'MK', role: 'Owner' },
-    { name: 'Ana Pereira', email: 'ana@airia.com', initials: 'AP', role: 'Editor' },
-    { name: 'Dev Lee', email: 'dev@airia.com', initials: 'DL', role: 'Viewer' },
+    { name: 'Marcus Keller', email: 'marcus@example.com', initials: 'MK', role: 'Owner' },
+    { name: 'Ana Pereira', email: 'ana@example.com', initials: 'AP', role: 'Editor' },
+    { name: 'Dev Lee', email: 'dev@example.com', initials: 'DL', role: 'Viewer' },
   ],
 
   seedShares: {
-    retro: [{ name: 'Ana Pereira', email: 'ana@airia.com', initials: 'AP', role: 'Editor' }, { name: 'Dev Lee', email: 'dev@airia.com', initials: 'DL', role: 'Viewer' }],
-    cards: [{ name: 'Ana Pereira', email: 'ana@airia.com', initials: 'AP', role: 'Viewer' }],
+    retro: [{ name: 'Ana Pereira', email: 'ana@example.com', initials: 'AP', role: 'Editor' }, { name: 'Dev Lee', email: 'dev@example.com', initials: 'DL', role: 'Viewer' }],
+    cards: [{ name: 'Ana Pereira', email: 'ana@example.com', initials: 'AP', role: 'Viewer' }],
   },
 
   plansDef: [
@@ -364,7 +364,7 @@ const app = {
     /* --- sharing --- */
     if (coll && !coll.members) coll.members = (this.seedShares[coll.id] || []).map(x => ({ ...x }));
     if (coll && coll.linkShare === undefined) coll.linkShare = true;
-    const ownerRow = { name: 'Marcus Keller', email: 'marcus@airia.com', initials: 'MK', role: 'Owner' };
+    const ownerRow = { name: 'Marcus Keller', email: 'marcus@example.com', initials: 'MK', role: 'Owner' };
 
     /* --- item detail / form targets --- */
     let raw = null;
@@ -1012,7 +1012,7 @@ const app = {
             <div style="${CARD} padding: 4px 16px;">${[
               ['invites', 'Members can share collections', 'Editors may invite new people to collections they can edit'],
               ['link', 'Link sharing', 'Allow view-only links for collections in this tenant'],
-              ['external', 'External sharing', 'Allow sharing with people outside @airia.com'],
+              ['external', 'External sharing', 'Allow sharing with people outside your organisation'],
             ].map(policyRow).join('')}</div>
           </div>`;
       }
@@ -1022,7 +1022,7 @@ const app = {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 760px;">
             <div style="${CARD} padding: 16px 18px; display: flex; align-items: center; gap: 14px;">
               <div style="width: 44px; height: 44px; border-radius: var(--pill); background: var(--panel2); border: var(--bw) solid var(--border); color: var(--accent); display: grid; place-items: center; font-size: 15px; font-weight: 700;">MK</div>
-              <div style="flex: 1;"><div style="font-size: 14px; font-weight: 700;">Marcus Keller</div><div style="font-size: 12px; color: var(--muted); margin-top: 2px;">marcus@airia.com</div></div>
+              <div style="flex: 1;"><div style="font-size: 14px; font-weight: 700;">Marcus Keller</div><div style="font-size: 12px; color: var(--muted); margin-top: 2px;">marcus@example.com</div></div>
               <span style="font-family: var(--fm); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--accent); border: 1px solid var(--accent); border-radius: var(--pill); padding: 3px 10px;">${S.plan.toUpperCase()}</span>
             </div>
             <div style="${CARD} padding: 16px 18px; display: flex; align-items: center; gap: 14px;">

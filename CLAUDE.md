@@ -34,7 +34,7 @@ npm test         # vitest unit tests
 npm run build    # production build (must pass before merging)
 ```
 
-Demo login: `marcus@airia.com` / `vault-demo` (also `ana@` Editor, `dev@` Viewer).
+Demo login: `marcus@example.com` / `vault-demo` (also `ana@` Editor, `dev@` Viewer).
 `.claude/launch.json` defines the `frontend` (4200) and `prototype` (4173)
 preview servers.
 

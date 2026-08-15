@@ -143,7 +143,7 @@ export const en = {
     'Allow view-only links for collections in this tenant',
   'settings.access.policy.external.label': 'External sharing',
   'settings.access.policy.external.description':
-    'Allow sharing with people outside @airia.com',
+    'Allow sharing with people outside your organisation',
 
   'settings.account.data': 'Data',
   'settings.account.dataSub': '{items} items across {collections} collections',

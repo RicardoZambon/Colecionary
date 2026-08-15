@@ -204,8 +204,8 @@ public class ValidatorTests
     public void MemberValidator_ConstrainsRoleAndEmail()
     {
         var validator = new MemberDtoValidator();
-        Assert.True(validator.Validate(new MemberDto("Ana", "ana@airia.com", "AP", "Editor")).IsValid);
+        Assert.True(validator.Validate(new MemberDto("Ana", "ana@example.com", "AP", "Editor")).IsValid);
         Assert.False(validator.Validate(new MemberDto("Ana", "not-an-email", "AP", "Editor")).IsValid);
-        Assert.False(validator.Validate(new MemberDto("Ana", "ana@airia.com", "AP", "Admin")).IsValid);
+        Assert.False(validator.Validate(new MemberDto("Ana", "ana@example.com", "AP", "Admin")).IsValid);
     }
 }

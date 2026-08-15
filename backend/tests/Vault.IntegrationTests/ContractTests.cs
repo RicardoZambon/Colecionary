@@ -19,12 +19,12 @@ public class ContractTests(VaultApiFactory factory)
     public async Task Login_IssuesTokenWithProfile_And401OnBadPassword()
     {
         var client = factory.CreateClient();
-        var login = await VaultApiFactory.LoginAsync(client, "marcus@airia.com", VaultApiFactory.DemoPassword);
+        var login = await VaultApiFactory.LoginAsync(client, "marcus@example.com", VaultApiFactory.DemoPassword);
         Assert.NotEmpty(login.Token);
         Assert.Equal("Marcus Keller", login.Profile.Name);
         Assert.Equal("free", login.Profile.Plan);
 
-        var bad = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("marcus@airia.com", "wrong"));
+        var bad = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("marcus@example.com", "wrong"));
         Assert.Equal(HttpStatusCode.Unauthorized, bad.StatusCode);
     }
 
@@ -39,7 +39,7 @@ public class ContractTests(VaultApiFactory factory)
     [Fact]
     public async Task Json_IsCamelCaseWithStringEnums()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var raw = await client.GetStringAsync("/api/collections");
 
         Assert.Contains("\"linkShare\":", raw);
@@ -67,7 +67,7 @@ public class ContractTests(VaultApiFactory factory)
     [Fact]
     public async Task Collection_FullDocumentPut_ReplacesGraph()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
 
         var createResponse = await client.PostAsJsonAsync(
             "/api/collections",
@@ -100,7 +100,7 @@ public class ContractTests(VaultApiFactory factory)
                         new ItemCopyDto("i1_c2", "Mint", 30, 55m, null, "ForSale", ""),
                     ]),
             ],
-            Members = [new MemberDto("Ana Pereira", "ana@airia.com", "AP", "Editor")],
+            Members = [new MemberDto("Ana Pereira", "ana@example.com", "AP", "Editor")],
             LinkShare = false,
         };
 
@@ -193,7 +193,7 @@ public class ContractTests(VaultApiFactory factory)
     [Fact]
     public async Task Items_UpsertByClientId_AndIdempotentDelete()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         // No copies at all — a wantlist item.
         var item = new ItemDto("i1752300000000", "Panzer Dragoon Saga", "Grail hunt", 1998, 900, "Sega", ["wanted"], "pds.jpg", []);
 
@@ -237,7 +237,7 @@ public class ContractTests(VaultApiFactory factory)
     [Fact]
     public async Task SeededDemo_ExposesMultiCopyItems()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
 
         var squirtle = collections!.Single(c => c.Id == "pokemon").Items.Single(i => i.Id == "pk_squirtle");
@@ -254,7 +254,7 @@ public class ContractTests(VaultApiFactory factory)
     [Fact]
     public async Task Import_CreatesWantlistItemsWithNoCopies()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
 
         var imported = await client.PostAsync("/api/collections/import/store_ps1", null);
         Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
@@ -271,7 +271,7 @@ public class ContractTests(VaultApiFactory factory)
     [Fact]
     public async Task StoreListings_AreAGlobalCatalog()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var listings = await client.GetFromJsonAsync<List<StoreListingDto>>("/api/store/listings");
         Assert.Equal(5, listings!.Count);
         Assert.Contains(listings, l => l.Id == "store_ps1" && l.Items.Count == 5);
@@ -280,12 +280,12 @@ public class ContractTests(VaultApiFactory factory)
     [Fact]
     public async Task TenantMembers_OwnerOnlyUpdate_WithLastOwnerRule()
     {
-        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var members = await marcus.GetFromJsonAsync<List<MemberDto>>("/api/tenant/members");
-        Assert.Contains(members!, m => m.Email == "ana@airia.com");
+        Assert.Contains(members!, m => m.Email == "ana@example.com");
 
         // Editors are forbidden from tenant member management.
-        var ana = await factory.CreateAuthenticatedClientAsync("ana@airia.com");
+        var ana = await factory.CreateAuthenticatedClientAsync("ana@example.com");
         var forbidden = await ana.PutAsJsonAsync("/api/tenant/members", members);
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
 
@@ -295,17 +295,17 @@ public class ContractTests(VaultApiFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, badRequest.StatusCode);
 
         // Inviting a new member (no password yet) works and round-trips.
-        var invited = new MemberDto("Joana Silva", "joana.silva@airia.com", "JS", "Viewer");
+        var invited = new MemberDto("Joana Silva", "joana.silva@example.com", "JS", "Viewer");
         var ok = await marcus.PutAsJsonAsync("/api/tenant/members", members!.Append(invited).ToList());
         ok.EnsureSuccessStatusCode();
         var refreshed = await ok.Content.ReadFromJsonAsync<List<MemberDto>>();
-        Assert.Contains(refreshed!, m => m.Email == "joana.silva@airia.com" && m.Role == "Viewer");
+        Assert.Contains(refreshed!, m => m.Email == "joana.silva@example.com" && m.Role == "Viewer");
     }
 
     [Fact]
     public async Task Profile_UpdatesPlan_AndRefusesEmailChange()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("dev@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("dev@example.com");
         var profile = await client.GetFromJsonAsync<UserProfileDto>("/api/profile");
         Assert.Equal("free", profile!.Plan);
 
@@ -313,7 +313,7 @@ public class ContractTests(VaultApiFactory factory)
         upgraded.EnsureSuccessStatusCode();
         Assert.Equal("pro", (await upgraded.Content.ReadFromJsonAsync<UserProfileDto>())!.Plan);
 
-        var emailChange = await client.PutAsJsonAsync("/api/profile", profile with { Email = "other@airia.com" });
+        var emailChange = await client.PutAsJsonAsync("/api/profile", profile with { Email = "other@example.com" });
         Assert.Equal(HttpStatusCode.BadRequest, emailChange.StatusCode);
     }
 }

@@ -10,7 +10,7 @@ import { environment } from '../../../environments/environment';
 const SESSION: AuthSession = {
   token: 'jwt-token',
   expiresAt: new Date(Date.now() + 60_000).toISOString(),
-  profile: { name: 'Marcus Keller', email: 'marcus@airia.com', initials: 'MK', plan: 'free' },
+  profile: { name: 'Marcus Keller', email: 'marcus@example.com', initials: 'MK', plan: 'free' },
 };
 
 describe('AuthService', () => {
@@ -36,7 +36,7 @@ describe('AuthService', () => {
   });
 
   it('stores the session on login and clears it on logout', async () => {
-    const pending = service.login('marcus@airia.com', 'vault-demo');
+    const pending = service.login('marcus@example.com', 'vault-demo');
     const req = http.expectOne(`${environment.apiBaseUrl}/auth/login`);
     expect(req.request.method).toBe('POST');
     req.flush(SESSION);
@@ -52,7 +52,7 @@ describe('AuthService', () => {
   });
 
   it('treats an expired stored session as unauthenticated', async () => {
-    const pending = service.login('marcus@airia.com', 'vault-demo');
+    const pending = service.login('marcus@example.com', 'vault-demo');
     http.expectOne(`${environment.apiBaseUrl}/auth/login`).flush({
       ...SESSION,
       expiresAt: new Date(Date.now() - 1000).toISOString(),

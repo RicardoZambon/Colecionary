@@ -18,7 +18,7 @@ public class TenantIsolationTests(VaultApiFactory factory)
     {
         await factory.EnsureSecondTenantAsync();
 
-        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var acme = await marcus.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
         Assert.NotNull(acme);
         Assert.Contains(acme, c => c.Id == "retro");
@@ -56,7 +56,7 @@ public class TenantIsolationTests(VaultApiFactory factory)
     public async Task BothTenantsCanImportTheSameStoreListing()
     {
         await factory.EnsureSecondTenantAsync();
-        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var gary = await factory.CreateAuthenticatedClientAsync(VaultApiFactory.GlobexOwnerEmail);
 
         var first = await marcus.PostAsync("/api/collections/import/store_gb", null);

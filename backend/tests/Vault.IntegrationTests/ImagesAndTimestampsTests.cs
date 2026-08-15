@@ -18,7 +18,7 @@ public class ImagesAndTimestampsTests(VaultApiFactory factory)
         var denied = await anonymous.PostAsync("/api/images", BuildForm());
         Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
 
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var uploaded = await client.PostAsync("/api/images", BuildForm());
         Assert.Equal(HttpStatusCode.Created, uploaded.StatusCode);
         var response = (await uploaded.Content.ReadFromJsonAsync<ImageUploadResponse>())!;
@@ -36,7 +36,7 @@ public class ImagesAndTimestampsTests(VaultApiFactory factory)
     [Fact]
     public async Task Images_RejectsNonImagePayloads()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var form = new MultipartFormDataContent();
         var content = new ByteArrayContent([1, 2, 3]);
         content.Headers.ContentType = new("application/pdf");
@@ -49,7 +49,7 @@ public class ImagesAndTimestampsTests(VaultApiFactory factory)
     [Fact]
     public async Task ItemPhotos_RoundTripThroughUpsert()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var upload = await client.PostAsync("/api/images", BuildForm());
         var image = (await upload.Content.ReadFromJsonAsync<ImageUploadResponse>())!;
 
@@ -70,7 +70,7 @@ public class ImagesAndTimestampsTests(VaultApiFactory factory)
     [Fact]
     public async Task Collections_ListInCreationOrder_WithSeededRecentTimestamps()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var collections = (await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections"))!;
 
         // Seed order preserved — matches the design's sidebar.

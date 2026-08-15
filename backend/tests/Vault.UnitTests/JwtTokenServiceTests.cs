@@ -27,7 +27,7 @@ public class JwtTokenServiceTests
         {
             Id = Guid.NewGuid(),
             TenantId = Guid.NewGuid(),
-            Email = "marcus@airia.com",
+            Email = "marcus@example.com",
             Name = "Marcus Keller",
             Role = MemberRole.Owner,
             Plan = PlanId.Free,

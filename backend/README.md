@@ -12,8 +12,8 @@ dotnet run --project src/Vault.Api   # http://localhost:5100 (migrates + seeds i
 ```
 
 - API reference (dev): http://localhost:5100/scalar
-- Demo logins (password `vault-demo`): `marcus@airia.com` (Owner),
-  `ana@airia.com` (Editor), `dev@airia.com` (Viewer) — tenant `acme-vault`.
+- Demo logins (password `vault-demo`): `marcus@example.com` (Owner),
+  `ana@example.com` (Editor), `dev@example.com` (Viewer) — tenant `acme-vault`.
 
 ```sh
 dotnet build            # warnings are errors

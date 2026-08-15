@@ -41,7 +41,7 @@ public class ImageFocalTests(VaultApiFactory factory)
     [Fact]
     public async Task FreshUpload_IsUnframed()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var image = await UploadAsync(client);
 
         var meta = await FindMetaAsync(client, image.Id);
@@ -56,7 +56,7 @@ public class ImageFocalTests(VaultApiFactory factory)
     [Fact]
     public async Task Focal_RoundTripsAndCanBeCleared()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var image = await UploadAsync(client);
 
         var set = await client.PutAsJsonAsync(
@@ -76,7 +76,7 @@ public class ImageFocalTests(VaultApiFactory factory)
     [Fact]
     public async Task Focal_MustNameAPointOnThePicture()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var image = await UploadAsync(client);
 
         var response = await client.PutAsJsonAsync(
@@ -88,7 +88,7 @@ public class ImageFocalTests(VaultApiFactory factory)
     [Fact]
     public async Task SettingFocal_RequiresAuthentication()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var image = await UploadAsync(client);
 
         var anonymous = factory.CreateClient();
@@ -107,7 +107,7 @@ public class ImageFocalTests(VaultApiFactory factory)
     {
         await factory.EnsureSecondTenantAsync();
 
-        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var acmeImage = await UploadAsync(marcus);
 
         var gary = await factory.CreateAuthenticatedClientAsync(VaultApiFactory.GlobexOwnerEmail);
@@ -127,7 +127,7 @@ public class ImageFocalTests(VaultApiFactory factory)
     {
         await factory.EnsureSecondTenantAsync();
 
-        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var acmeImage = await UploadAsync(marcus);
 
         var gary = await factory.CreateAuthenticatedClientAsync(VaultApiFactory.GlobexOwnerEmail);
@@ -141,7 +141,7 @@ public class ImageFocalTests(VaultApiFactory factory)
     [Fact]
     public async Task Export_CarriesFramingSoABackupCanRestoreIt()
     {
-        var client = await factory.CreateAuthenticatedClientAsync("marcus@airia.com");
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var image = await UploadAsync(client);
         await client.PutAsJsonAsync(
             $"/api/images/{image.Id}/focal", new SetFocalRequest(new FocalPointDto(0.6, 0.2)));

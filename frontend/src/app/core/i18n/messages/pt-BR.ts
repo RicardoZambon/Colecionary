@@ -143,7 +143,7 @@ export const ptBR: Record<MessageKey, string> = {
     'Permitir links somente-leitura para as coleções deste tenant',
   'settings.access.policy.external.label': 'Compartilhamento externo',
   'settings.access.policy.external.description':
-    'Permitir compartilhar com pessoas de fora do @airia.com',
+    'Permitir compartilhar com pessoas de fora da sua organização',
 
   'settings.account.data': 'Dados',
   'settings.account.dataSub': '{items} itens em {collections} coleções',
