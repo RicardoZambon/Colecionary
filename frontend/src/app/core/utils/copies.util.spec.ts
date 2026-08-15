@@ -4,12 +4,15 @@ import { Condition, CopyStatus, Item, ItemCopy } from '../models';
 import {
   bestCondition,
   copyValue,
+  copyValueIsPaid,
   isOwned,
   newCopy,
   ownedValue,
   paidTotal,
   sortValue,
   syncWantedTag,
+  unitValue,
+  valueIsPaid,
 } from './copies.util';
 
 function copy(id: string, condition: Condition, price: number, overrides: Partial<ItemCopy> = {}): ItemCopy {
@@ -51,6 +54,50 @@ describe('copies.util', () => {
 
     const it2 = item([copy('a', 'Good', 10, { value: 55 })], 80);
     expect(copyValue(it2, it2.copies[0])).toBe(55);
+  });
+
+  it('falls back to what was paid when nothing was estimated', () => {
+    const subject = item([copy('a', 'Good', 42)], 0);
+    expect(copyValue(subject, subject.copies[0])).toBe(42);
+    expect(copyValueIsPaid(subject, subject.copies[0])).toBe(true);
+  });
+
+  it('prefers any estimate over the price paid', () => {
+    const itemLevel = item([copy('a', 'Good', 42)], 80);
+    expect(copyValueIsPaid(itemLevel, itemLevel.copies[0])).toBe(false);
+
+    const copyLevel = item([copy('a', 'Good', 42, { value: 55 })], 0);
+    expect(copyValue(copyLevel, copyLevel.copies[0])).toBe(55);
+    expect(copyValueIsPaid(copyLevel, copyLevel.copies[0])).toBe(false);
+  });
+
+  it('reports the per-unit figure, averaging the copies when unestimated', () => {
+    expect(unitValue(item([copy('a', 'Good', 10)], 80))).toBe(80);
+    expect(unitValue(item([copy('a', 'Good', 30), copy('b', 'Good', 50)], 0))).toBe(40);
+    // Nothing declared and nothing held: there is no figure to invent.
+    expect(unitValue(item([], 0))).toBe(0);
+  });
+
+  it('keeps the unit figure consistent with the owned total', () => {
+    const subject = item([copy('a', 'Good', 30), copy('b', 'Good', 50)], 0);
+    expect(unitValue(subject) * subject.copies.length).toBe(ownedValue(subject));
+  });
+
+  it('flags a value that leans on prices paid, even partly', () => {
+    expect(valueIsPaid(item([copy('a', 'Good', 42)], 0))).toBe(true);
+    expect(valueIsPaid(item([copy('a', 'Good', 42)], 80))).toBe(false);
+    // One copy priced, one estimated — still not an estimate.
+    expect(valueIsPaid(item([copy('a', 'Good', 42), copy('b', 'Good', 1, { value: 90 })], 0))).toBe(true);
+    expect(valueIsPaid(item([copy('a', 'Good', 42, { value: 90 })], 0))).toBe(false);
+    // A wantlist item has no price to lean on.
+    expect(valueIsPaid(item([], 0))).toBe(false);
+  });
+
+  it('counts an unestimated item at what it cost, not at zero', () => {
+    // The dashboard's value-vs-paid trend read −100% for these before.
+    const subject = item([copy('a', 'Mint', 150), copy('b', 'Fair', 40)], 0);
+    expect(ownedValue(subject)).toBe(190);
+    expect(ownedValue(subject)).toBe(paidTotal(subject));
   });
 
   it('sums owned value across copies, mixing overrides and fallbacks', () => {

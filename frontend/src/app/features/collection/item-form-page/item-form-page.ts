@@ -129,7 +129,9 @@ export class ItemFormPage {
       this.description.set(item?.description ?? '');
       this.groupId.set(this.initialGroupId(item));
       this.year.set(item ? String(item.year) : '');
-      this.value.set(item ? String(item.value) : '');
+      // Blank, not "0": zero *is* "not estimated", and showing it as a figure
+      // invites the user to keep a number they never entered.
+      this.value.set(item?.value ? String(item.value) : '');
       // A new item starts with one copy — adding something you own is the
       // common case, and the old form defaulted to "Owned". Remove it to put
       // the item on the wantlist instead.

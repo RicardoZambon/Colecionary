@@ -8,12 +8,23 @@ import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CopyStatus, Item } from '../../../core/models';
 import { NO_FILTERS, Neighbours, neighbours, visibleItems } from '../../../core/utils/browse.util';
-import { copyValue, isOwned, newCopy, ownedValue, paidTotal, syncWantedTag } from '../../../core/utils/copies.util';
+import {
+  copyValue,
+  copyValueIsPaid,
+  isOwned,
+  newCopy,
+  ownedValue,
+  paidTotal,
+  syncWantedTag,
+  unitValue,
+  valueIsPaid,
+} from '../../../core/utils/copies.util';
 import { formatDate } from '../../../core/utils/date.util';
 import { fieldsFor, groupById, pathOf } from '../../../core/utils/groups.util';
 import { readCriteria } from '../browse-params';
 import { formatMoney } from '../../../core/utils/money.util';
 import { conditionLabelKey, conditionTone, itemBadgeLabel, itemTone } from '../../../shared/ui/badge/badge';
+import { ItemValuePipe } from '../../../shared/pipes/item-value.pipe';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import { TPipe } from '../../../shared/pipes/t.pipe';
 import { UiBadge, UiButton, UiCard, UiSectionLabel } from '../../../shared/ui';
@@ -28,7 +39,7 @@ const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
 @Component({
   selector: 'app-item-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, TPipe, UiBadge, UiButton, UiCard, UiSectionLabel],
+  imports: [RouterLink, ItemValuePipe, MoneyPipe, TPipe, UiBadge, UiButton, UiCard, UiSectionLabel],
   templateUrl: './item-page.html',
   styleUrl: './item-page.scss',
   host: { '(document:keydown)': 'onKeydown($event)' },
@@ -182,6 +193,24 @@ export class ItemPage {
     return item ? paidTotal(item) : 0;
   });
 
+  /** The per-unit figure, whatever it turned out to be derived from. */
+  protected readonly unitValue = computed(() => {
+    const item = this.item();
+    return item ? unitValue(item) : 0;
+  });
+  /** Drives both the `≈` and the "Paid / copy" relabelling of the details row. */
+  protected readonly fromPaid = computed(() => {
+    const item = this.item();
+    return item ? valueIsPaid(item) : false;
+  });
+  protected readonly valuePerCopyKey = computed<MessageKey>(() =>
+    this.fromPaid() ? 'item.valuePaidPerCopy' : 'item.valuePerCopy',
+  );
+  /** The big number: everything held, or the reference figure for a wantlist item. */
+  protected readonly headlineValue = computed(() =>
+    this.owned() ? this.ownedValue() : this.unitValue(),
+  );
+
   protected readonly copyRows = computed(() => {
     const item = this.item();
     if (!item) return [];
@@ -190,6 +219,7 @@ export class ItemPage {
       tone: conditionTone(copy.condition),
       conditionKey: conditionLabelKey(copy.condition),
       value: copyValue(item, copy),
+      valueFromPaid: copyValueIsPaid(item, copy),
       // Status is only worth showing when it is not the default.
       statusKey: STATUS_KEYS[copy.status],
       acquiredOnLabel: formatDate(copy.acquiredOn, this.i18n.locale()),
@@ -200,7 +230,17 @@ export class ItemPage {
     const item = this.item();
     if (!item) return '';
     const count = item.copies.length;
-    return this.i18n.t(count === 1 ? 'item.copyTotal.one' : 'item.copyTotal.other', {
+    const one = count === 1;
+    // No "est." clause when the estimate *is* the price paid — restating the
+    // same figure twice in one line reads as two independent numbers.
+    const key: MessageKey = this.fromPaid()
+      ? one
+        ? 'item.copyTotalPaid.one'
+        : 'item.copyTotalPaid.other'
+      : one
+        ? 'item.copyTotal.one'
+        : 'item.copyTotal.other';
+    return this.i18n.t(key, {
       n: count,
       paid: formatMoney(this.paidTotal(), this.i18n.locale()),
       value: formatMoney(this.ownedValue(), this.i18n.locale()),

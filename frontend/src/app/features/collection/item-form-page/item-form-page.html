@@ -73,7 +73,11 @@
           <ui-text-input [value]="year()" (valueChange)="year.set($event)" />
         </ui-field>
         <ui-field [label]="'itemForm.value' | t">
-          <ui-text-input [value]="value()" (valueChange)="value.set($event)" />
+          <ui-text-input
+            [value]="value()"
+            [placeholder]="'itemForm.valuePlaceholder' | t"
+            (valueChange)="value.set($event)"
+          />
         </ui-field>
       </div>
 

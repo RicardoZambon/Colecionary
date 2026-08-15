@@ -17,6 +17,14 @@ export const en = {
   'common.active': '● Active',
   'common.clickToApply': 'Click to apply',
 
+  // --- value ---------------------------------------------------------------
+  // How an amount is qualified, not the amount itself: `MoneyPipe` still owns
+  // the digits. `≈` is the whole visual difference between "I estimated this"
+  // and "this is what I paid", so it travels with the number everywhere.
+  'value.fromPaid': '≈ {value}',
+  'value.none': '—',
+  'value.fromPaidHint': 'No estimate yet — showing what you paid for it.',
+
   // --- shell / sidebar ---------------------------------------------------
   'shell.loading': 'Loading your vault…',
   'nav.dashboard': 'Dashboard',
@@ -301,10 +309,13 @@ export const en = {
   'item.year': 'Year',
   'item.group': 'Group',
   'item.valuePerCopy': 'Est. value / copy',
+  'item.valuePaidPerCopy': 'Paid / copy',
   'item.copiesHeading': 'Copies · {n}',
   'item.copyPaid': 'paid {value}',
   'item.copyTotal.one': '{n} copy · paid {paid} · est. {value}',
   'item.copyTotal.other': '{n} copies · paid {paid} · est. {value}',
+  'item.copyTotalPaid.one': '{n} copy · paid {paid} · not estimated yet',
+  'item.copyTotalPaid.other': '{n} copies · paid {paid} · not estimated yet',
   'item.groupFields': 'Group fields · {name}',
   'item.edit': 'Edit item',
   'item.delete': 'Delete',
@@ -325,12 +336,13 @@ export const en = {
   'itemForm.group': 'Group',
   'itemForm.year': 'Year',
   'itemForm.value': 'Est. value (per copy)',
+  'itemForm.valuePlaceholder': '— uses what you paid',
   'itemForm.copiesHeading': 'Copies · {n}',
   'itemForm.copyTag': 'Copy #{n}',
   'itemForm.removeCopy': 'Remove copy',
   'itemForm.paid': 'Paid',
   'itemForm.copyValue': 'Est. value',
-  'itemForm.copyValuePlaceholder': '— uses item value',
+  'itemForm.copyValuePlaceholder': '— uses item value, or what you paid',
   'itemForm.acquired': 'Acquired',
   'itemForm.notes': 'Notes',
   'itemForm.notesPlaceholder': 'sealed · box A shelf 2 · missing manual…',

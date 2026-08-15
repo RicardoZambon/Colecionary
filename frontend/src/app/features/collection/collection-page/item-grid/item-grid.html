@@ -43,7 +43,7 @@
           }
         </div>
         <div class="item-card__foot">
-          <span class="item-card__value">{{ item.value | money }}</span>
+          <span class="item-card__value" [attr.title]="valueHint(item)">{{ item | itemValue }}</span>
           <ui-badge [tone]="badgeTone(item)">{{ badgeLabel(item) }}</ui-badge>
         </div>
       </div>

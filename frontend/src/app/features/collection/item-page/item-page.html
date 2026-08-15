@@ -94,10 +94,16 @@
 
         <div class="price-row">
           <ui-badge [tone]="tone()">{{ badge() }}</ui-badge>
-          <span class="value">{{ owned() ? (ownedValue() | money) : (it.value | money) }}</span>
-          <span class="note">{{
-            owned() ? ('item.paid' | t: { value: paidTotal() | money }) : ('item.marketEstimate' | t)
+          <span class="value" [attr.title]="fromPaid() ? ('value.fromPaidHint' | t) : null">{{
+            headlineValue() | itemValue: fromPaid()
           }}</span>
+          <!-- Nothing to qualify when there is no figure: a lone "—" reads
+               better than "— market estimate". -->
+          @if (owned() || headlineValue()) {
+            <span class="note">{{
+              owned() ? ('item.paid' | t: { value: paidTotal() | money }) : ('item.marketEstimate' | t)
+            }}</span>
+          }
         </div>
 
         @if (!owned()) {
@@ -113,7 +119,7 @@
           <ui-section-label class="fields__heading">{{ 'item.details' | t }}</ui-section-label>
           <div class="field-row"><span class="key">{{ 'item.year' | t }}</span><span>{{ it.year }}</span></div>
           <div class="field-row"><span class="key">{{ 'item.group' | t }}</span><span>{{ groupPath() }}</span></div>
-          <div class="field-row"><span class="key">{{ 'item.valuePerCopy' | t }}</span><span>{{ it.value | money }}</span></div>
+          <div class="field-row"><span class="key">{{ valuePerCopyKey() | t }}</span><span>{{ unitValue() | itemValue: fromPaid() }}</span></div>
         </ui-card>
 
         @if (owned()) {
@@ -123,7 +129,7 @@
               <div class="copy-row">
                 <ui-badge [tone]="copy.tone">{{ copy.conditionKey | t }}</ui-badge>
                 <span class="copy-row__paid">{{ 'item.copyPaid' | t: { value: copy.price | money } }}</span>
-                <span class="copy-row__est">{{ copy.value | money }}</span>
+                <span class="copy-row__est">{{ copy.value | itemValue: copy.valueFromPaid }}</span>
                 @if (copy.acquiredOnLabel) {
                   <span class="copy-row__date">{{ copy.acquiredOnLabel }}</span>
                 }

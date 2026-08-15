@@ -5,9 +5,9 @@ import { ImagesApi } from '../../../../core/api/images-api';
 import { I18nService } from '../../../../core/i18n';
 import { Item } from '../../../../core/models';
 import { ImageFocusService } from '../../../../core/state/image-focus.service';
-import { isOwned } from '../../../../core/utils/copies.util';
+import { isOwned, valueIsPaid } from '../../../../core/utils/copies.util';
 import { fieldValue } from '../../../../core/utils/sort.util';
-import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
+import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiBadge, UiCard, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
@@ -21,7 +21,7 @@ import { DragOrder } from '../drag-order';
 @Component({
   selector: 'app-item-grid',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, TPipe, UiBadge, UiCard, UiReorder],
+  imports: [RouterLink, ItemValuePipe, TPipe, UiBadge, UiCard, UiReorder],
   templateUrl: './item-grid.html',
   styleUrl: './item-grid.scss',
 })
@@ -45,6 +45,11 @@ export class ItemGrid {
 
   protected isOwned(item: Item): boolean {
     return isOwned(item);
+  }
+
+  /** Explains the `≈` on a card whose value is a price paid, not an estimate. */
+  protected valueHint(item: Item): string | null {
+    return valueIsPaid(item) ? this.i18n.t('value.fromPaidHint') : null;
   }
 
   protected badgeTone(item: Item) {

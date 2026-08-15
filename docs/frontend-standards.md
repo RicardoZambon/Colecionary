@@ -225,9 +225,24 @@ style the same raw element the same way, that's the signal to promote it here.
   item-level `condition`/`price`** — an item with at least one copy is owned,
   one with none is on the wantlist. Never re-derive that inline: use the pure
   helpers in `core/utils/copies.util.ts` (`isOwned`, `bestCondition`,
-  `copyValue`, `ownedValue`, `paidTotal`, `sortValue`, `newCopy`,
+  `copyValue`, `ownedValue`, `paidTotal`, `sortValue`, `unitValue`, `newCopy`,
   `syncWantedTag`). A copy's `value` is `null` when it inherits the item's —
   keep the null, it distinguishes "inherited" from "overridden".
+- **An un-estimated item is worth what it cost, and says so.** The estimate
+  chain is `copy.value ?? item.value ?? copy.price`: `item.value === 0` is the
+  model's only way to say "never estimated", and keeping a market estimate
+  current across a whole collection is work nobody does, so most items sit
+  there. Reading that as *worth nothing* emptied the collection total and made
+  the dashboard's value-vs-paid trend report −100% per un-estimated item. The
+  fallback lives in `copyValue` alone, so the card, the table, the item page,
+  the group totals and ordering by value can never disagree.
+  **The substitution is always visible**: `valueIsPaid`/`copyValueIsPaid` say
+  whether a figure is a receipt rather than an estimate, and every surface
+  renders through the `itemValue` pipe, which marks it `≈` and turns a genuine
+  absence into `—` rather than `$0` — "unknown", not "worthless". Hand the pipe
+  the whole `Item` for a per-unit figure so no view can pair the wrong number
+  with the wrong marker; the number-plus-flag form is only for totals the
+  caller already summed.
 - **Groups declare typed fields, their own ordering, and optionally the size of
   the set.** A `GroupNode` carries `fields: GroupField[]`
   (`{ name, type: 'text' | 'number' | 'date' }`),

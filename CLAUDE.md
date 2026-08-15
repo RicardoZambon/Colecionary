@@ -106,7 +106,11 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    is no `owned` flag and no item-level condition/price: at least one copy
    means owned, none means wantlist. Always go through the pure helpers in
    `core/utils/copies.util.ts` (backend mirror: `ItemCopy` in a `copies` JSON
-   column).
+   column). **An item nobody estimated (`value === 0`) is worth what it cost:**
+   the chain is `copy.value ?? item.value ?? copy.price`, resolved in
+   `copyValue` alone so no two surfaces disagree — and the substitution is
+   never silent. `valueIsPaid` flags it and the `itemValue` pipe renders it
+   `≈ $85`, with a genuine absence as `—` rather than `$0`.
 4. **Groups declare typed fields, their default order, and optionally how big
    the set is.** A `GroupNode` carries `fields: GroupField[]`
    (`{ name, type: text|number|date }`), `sort: GroupSort | null` and
