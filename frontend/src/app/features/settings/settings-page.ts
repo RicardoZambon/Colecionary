@@ -14,6 +14,7 @@ import {
   UiAvatar,
   UiButton,
   UiCard,
+  UiFlag,
   UiSelect,
   UiTabs,
   UiToggle,
@@ -60,7 +61,7 @@ const POLICIES: PolicyDef[] = [
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiAvatar, UiButton, UiCard, UiSelect, UiTabs, UiToggle],
+  imports: [TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiSelect, UiTabs, UiToggle],
   templateUrl: './settings-page.html',
   styleUrl: './settings-page.scss',
 })

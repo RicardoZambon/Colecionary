@@ -16,6 +16,7 @@
 
 <ui-dropdown #langMenu [width]="180">
   <button ddTrigger type="button" class="theme-trigger" [title]="'topbar.language' | t">
+    <ui-flag [lang]="i18n.currentDef.id" [size]="16" />
     {{ i18n.currentDef.id }} ▾
   </button>
   <ng-container ddPanel>
@@ -26,6 +27,7 @@
         [class.active]="lang.id === i18n.current()"
         (click)="i18n.apply(lang.id); langMenu.close()"
       >
+        <ui-flag [lang]="lang.id" [size]="20" />
         <span class="theme-row__name">{{ lang.name }}</span>
         <span class="theme-row__check">@if (lang.id === i18n.current()) { ✓ }</span>
       </button>

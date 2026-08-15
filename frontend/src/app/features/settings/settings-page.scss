@@ -92,10 +92,15 @@ h1 {
   }
 }
 
-// Same card, minus the swatch row — the gap keeps it aligned with the themes.
+// Same card with the flag standing in for the swatch row; the tighter gap and
+// the bottom alignment keep its state line level with the themes'.
 .lang-card {
   justify-content: flex-end;
   gap: 5px;
+
+  ui-flag {
+    margin-bottom: 4px;
+  }
 }
 
 // --- plan ---

@@ -8,13 +8,13 @@ import { I18nService } from '../../core/i18n';
 import { ThemeService } from '../../core/state/theme.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { pathOf } from '../../core/utils/groups.util';
-import { UiAvatar, UiDropdown, UiIcon, UiTextInput } from '../../shared/ui';
+import { UiAvatar, UiDropdown, UiFlag, UiIcon, UiTextInput } from '../../shared/ui';
 import { TPipe } from '../../shared/pipes/t.pipe';
 
 @Component({
   selector: 'app-topbar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, UiAvatar, UiDropdown, UiIcon, UiTextInput],
+  imports: [RouterLink, TPipe, UiAvatar, UiDropdown, UiFlag, UiIcon, UiTextInput],
   templateUrl: './topbar.html',
   styleUrl: './topbar.scss',
 })

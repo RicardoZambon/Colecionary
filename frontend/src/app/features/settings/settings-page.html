@@ -145,6 +145,7 @@
             [class.theme-card--active]="lang.id === i18n.current()"
             (click)="i18n.apply(lang.id)"
           >
+            <ui-flag [lang]="lang.id" [size]="34" />
             <div class="name">{{ lang.name }}</div>
             <div class="desc mono">{{ lang.locale }}</div>
             <div class="state" [class.active]="lang.id === i18n.current()">
