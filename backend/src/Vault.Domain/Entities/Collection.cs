@@ -18,6 +18,15 @@ public class Collection : ITenantOwned
 
     public bool LinkShare { get; set; } = true;
 
+    /// <summary>
+    /// ISO 4217 override for this collection's amounts. Null means the tenant's
+    /// <see cref="Tenant.DefaultCurrency"/> decides — and null is the only way
+    /// to say that, so it has to survive a round-trip. Copying the tenant's code
+    /// down here instead would silently pin the collection the day the account
+    /// default changed.
+    /// </summary>
+    public string? Currency { get; set; }
+
     public Guid? BannerImageId { get; set; }
 
     public Guid? IconImageId { get; set; }

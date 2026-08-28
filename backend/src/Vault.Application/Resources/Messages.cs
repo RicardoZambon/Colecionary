@@ -36,12 +36,15 @@ public static class Messages
         nameof(SortDirectionInvalid), nameof(SortKeyInvalid), nameof(TooManyPhotos),
         nameof(TooManyCopies), nameof(CopyIdsMustBeUnique), nameof(ConditionInvalid),
         nameof(CopyStatusInvalid), nameof(AcquiredOnImplausible), nameof(RoleInvalid),
-        nameof(PlanInvalid),
+        nameof(PlanInvalid), nameof(CurrencyInvalid),
         nameof(CollectionNotFound), nameof(StoreListingNotFound), nameof(AlreadyInYourVault),
+        nameof(ArchiveUnreadable), nameof(ArchiveHasNoCollections), nameof(ImportedCollectionName),
+        nameof(ArchiveFromNewerVersion),
         nameof(ImageFileEmpty), nameof(ImageTooLarge), nameof(ImageTypeUnsupported),
         nameof(ImageNotFound), nameof(ImageHasNoBytes), nameof(NoFileUploaded),
         nameof(TenantNeedsAnOwner), nameof(OwnerCannotBeRemoved), nameof(CannotRemoveYourself),
-        nameof(CurrentUserNotFound), nameof(EmailCannotBeChanged), nameof(InvalidCredentials),
+        nameof(CurrentUserNotFound), nameof(TenantNotFound), nameof(EmailCannotBeChanged),
+        nameof(InvalidCredentials),
         nameof(UnknownGroupFieldType), nameof(UnknownCondition), nameof(UnknownCopyStatus),
         nameof(UnknownRole), nameof(UnknownPlan),
         nameof(SetupFieldsRequired), nameof(SetupPasswordTooShort), nameof(SetupDatabaseNotUsable),
@@ -75,6 +78,7 @@ public static class Messages
     public static string AcquiredOnImplausible => Get(nameof(AcquiredOnImplausible));
     public static string RoleInvalid => Get(nameof(RoleInvalid));
     public static string PlanInvalid => Get(nameof(PlanInvalid));
+    public static string CurrencyInvalid => Get(nameof(CurrencyInvalid));
 
     // --- collections ---
     /// <param name="id">Collection id.</param>
@@ -84,6 +88,21 @@ public static class Messages
     public static string CollectionNotFound => Get(nameof(CollectionNotFound));
     public static string StoreListingNotFound => Get(nameof(StoreListingNotFound));
     public static string AlreadyInYourVault => Get(nameof(AlreadyInYourVault));
+
+    // --- import / export archives ---
+    public static string ArchiveUnreadable => Get(nameof(ArchiveUnreadable));
+    public static string ArchiveHasNoCollections => Get(nameof(ArchiveHasNoCollections));
+    public static string ImportedCollectionName => Get(nameof(ImportedCollectionName));
+    /// <param name="name">The collection's name in the archive.</param>
+    public static string ImportedCollectionNameFor(string name) =>
+        Format(nameof(ImportedCollectionName), name);
+
+    public static string ArchiveFromNewerVersion => Get(nameof(ArchiveFromNewerVersion));
+
+    /// <param name="version">The layout version the archive declares.</param>
+    /// <param name="supported">The newest layout this build reads.</param>
+    public static string ArchiveFromNewerVersionFor(int version, int supported) =>
+        Format(nameof(ArchiveFromNewerVersion), version, supported);
 
     // --- images ---
     public static string ImageFileEmpty => Get(nameof(ImageFileEmpty));
@@ -104,6 +123,7 @@ public static class Messages
 
     // --- profile / auth ---
     public static string CurrentUserNotFound => Get(nameof(CurrentUserNotFound));
+    public static string TenantNotFound => Get(nameof(TenantNotFound));
     public static string EmailCannotBeChanged => Get(nameof(EmailCannotBeChanged));
     public static string InvalidCredentials => Get(nameof(InvalidCredentials));
 
@@ -138,4 +158,8 @@ public static class Messages
     /// </summary>
     private static string Format(string name, object arg) =>
         string.Format(CultureInfo.CurrentCulture, Get(name), arg);
+
+    /// <inheritdoc cref="Format(string, object)"/>
+    private static string Format(string name, params object[] args) =>
+        string.Format(CultureInfo.CurrentCulture, Get(name), args);
 }

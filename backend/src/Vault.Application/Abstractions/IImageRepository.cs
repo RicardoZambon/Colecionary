@@ -33,5 +33,15 @@ public interface IImageRepository
     /// </summary>
     Task<List<StoredImage>> ListForCurrentTenantAsync(CancellationToken ct);
 
+    /// <summary>
+    /// The subset of <paramref name="ids"/> the current tenant owns, for a
+    /// single collection's export. Tenant-filtered like the overload above, so
+    /// an id belonging to someone else simply doesn't come back — a collection
+    /// referencing a foreign image exports without it rather than leaking it.
+    /// </summary>
+    Task<List<StoredImage>> ListForCurrentTenantAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken ct);
+
     Task SaveChangesAsync(CancellationToken ct);
 }

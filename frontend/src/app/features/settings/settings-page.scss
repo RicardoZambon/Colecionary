@@ -32,6 +32,12 @@ h1 {
   margin: 5px 0 0;
 }
 
+// Opens a second block inside a section that already had one — the
+// per-collection backups under the vault-wide ones.
+.heading.spaced {
+  margin-top: 22px;
+}
+
 .mono {
   font-family: var(--font-mono);
 }
@@ -209,29 +215,6 @@ h1 {
   }
 }
 
-.remove {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 13px;
-  width: 16px;
-  text-align: center;
-
-  &:hover {
-    color: var(--warn);
-  }
-
-  &.disabled {
-    color: var(--border);
-    cursor: default;
-
-    &:hover {
-      color: var(--border);
-    }
-  }
-}
 
 // --- account ---
 
@@ -268,4 +251,11 @@ h1 {
   border: 1px solid var(--accent);
   border-radius: var(--pill);
   padding: 3px 10px;
+}
+
+// The picker is a single control in a full-width section; left unbounded it
+// would stretch across the page and read as a search field rather than a
+// choice between a handful of codes.
+.currency {
+  max-width: 320px;
 }

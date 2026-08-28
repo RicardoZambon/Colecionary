@@ -8,6 +8,13 @@ import { ThemeService } from '../../core/state/theme.service';
 import { TPipe } from '../../shared/pipes/t.pipe';
 import { UiButton, UiCard, UiField, UiSelect, UiTextInput, UiToggle } from '../../shared/ui';
 import { SelectOption } from '../../shared/ui/select/select';
+import {
+  CurrencyCode,
+  FALLBACK_CURRENCY,
+  SUPPORTED_CURRENCIES,
+  currencyLabel,
+  isCurrencyCode,
+} from '../../core/utils/money.util';
 
 /** A message shown to the user, with the tone that colors its border. */
 interface Note {
@@ -67,6 +74,16 @@ export class SetupPage {
   // review step below reads a label out of it, so it stays a SelectOption[].
   protected readonly themeOptions: SelectOption[] = this.theme.themes.map(t => ({ value: t.id, label: t.name }));
 
+  protected readonly defaultCurrency = signal<CurrencyCode>(FALLBACK_CURRENCY);
+  // Locale-sorted like every other currency picker; the wizard runs before any
+  // vault exists, so this is the only place the first choice can be made.
+  protected readonly currencyOptions = computed<SelectOption[]>(() => {
+    const locale = this.i18n.locale();
+    return SUPPORTED_CURRENCIES.map(code => ({ value: code, label: currencyLabel(code, locale) })).sort(
+      (a, b) => a.label.localeCompare(b.label, locale),
+    );
+  });
+
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 
@@ -123,6 +140,10 @@ export class SetupPage {
     }
   });
 
+  protected pickCurrency(code: string): void {
+    if (isCurrencyCode(code)) this.defaultCurrency.set(code);
+  }
+
   /** Previews the theme as it's picked; `finish()` persists the final choice. */
   protected pickTheme(id: string): void {
     this.defaultTheme.set(id as ThemeId);
@@ -170,6 +191,7 @@ export class SetupPage {
         ownerName: this.ownerName().trim(),
         ownerPassword: this.ownerPassword(),
         defaultTheme: this.defaultTheme(),
+        defaultCurrency: this.defaultCurrency(),
       });
 
       // Persist the choice for this browser so the sign-in screen matches.

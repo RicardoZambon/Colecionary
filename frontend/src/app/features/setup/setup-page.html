@@ -97,6 +97,9 @@
       <ui-field [label]="'setup.prefs.theme' | t">
         <ui-select [options]="themeOptions" [value]="defaultTheme()" (valueChange)="pickTheme($event)" />
       </ui-field>
+      <ui-field [label]="'setup.prefs.currency' | t" [hint]="'setup.prefs.currencyHint' | t">
+        <ui-select [options]="currencyOptions()" [value]="defaultCurrency()" (valueChange)="pickCurrency($event)" />
+      </ui-field>
     }
 
     <!-- 4 — Review -->
@@ -107,6 +110,7 @@
         <dt>{{ 'setup.review.organization' | t }}</dt><dd>{{ organizationName() }}</dd>
         <dt>{{ 'setup.review.owner' | t }}</dt><dd>{{ ownerName() }} &lt;{{ ownerEmail() }}&gt;</dd>
         <dt>{{ 'setup.review.theme' | t }}</dt><dd>{{ themeLabel() }}</dd>
+        <dt>{{ 'setup.review.currency' | t }}</dt><dd>{{ defaultCurrency() }}</dd>
       </dl>
     }
 

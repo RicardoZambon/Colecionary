@@ -6,6 +6,7 @@ import { I18nService } from '../../../../core/i18n';
 import { Collection, Member } from '../../../../core/models';
 import { ImageFocusService } from '../../../../core/state/image-focus.service';
 import { ToastService } from '../../../../core/state/toast.service';
+import { currencyOf } from '../../../../core/utils/currency.util';
 import { VaultStore } from '../../../../core/state/vault.store';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
@@ -40,6 +41,12 @@ export class CollectionHero {
   readonly scopeName = input('');
   readonly members = input.required<Member[]>();
 
+  /**
+   * Amounts here belong to this collection, so they follow its currency rather
+   * than the account default — a collection may override it.
+   */
+  protected readonly currency = computed(() => currencyOf(this.collection(), this.store.defaultCurrency()));
+
   protected readonly heading = computed(() => this.scopeName() || this.collection().name);
 
   /** True while a group narrows what the numbers describe. */
@@ -69,19 +76,27 @@ export class CollectionHero {
         });
   });
 
+  /**
+   * Uploads the picture, puts it in place, and only then offers to frame it.
+   *
+   * The order is the point. Framing used to run first, against a file that had
+   * not been sent yet, so dismissing the editor — including by clicking beside
+   * it — threw the upload away. Now the banner is already changed by the time
+   * the editor appears, and closing it just leaves the crop centred. A banner
+   * is the one image whose crop really matters, which is why the editor still
+   * opens by itself here and not in the photo grid.
+   */
   protected async setImage(slot: 'banner' | 'icon', file: File): Promise<void> {
     const collection = this.collection();
     try {
-      const imageId = await this.focus.uploadAndFrame(file, slot);
-      // Discarded in the editor: the picture that was there stays there.
-      if (!imageId) return;
-
+      const imageId = await this.images.upload(file);
       await this.store.updateCollection({
         ...collection,
         bannerImageId: slot === 'banner' ? imageId : collection.bannerImageId,
         iconImageId: slot === 'icon' ? imageId : collection.iconImageId,
       });
       this.toast.flash(this.i18n.t('toast.image.updated'));
+      void this.focus.frame(imageId, slot);
     } catch (err) {
       this.toast.flash(
         err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),

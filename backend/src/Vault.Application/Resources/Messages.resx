@@ -129,6 +129,9 @@
   <data name="PlanInvalid" xml:space="preserve">
     <value>Plan must be free or pro.</value>
   </data>
+  <data name="CurrencyInvalid" xml:space="preserve">
+    <value>Currency must be a supported ISO 4217 code.</value>
+  </data>
 
   <!-- Collections -->
   <data name="CollectionNotFound" xml:space="preserve">
@@ -141,6 +144,22 @@
   </data>
   <data name="AlreadyInYourVault" xml:space="preserve">
     <value>Already in your vault</value>
+  </data>
+
+  <!-- Import / export archives -->
+  <data name="ArchiveUnreadable" xml:space="preserve">
+    <value>That file isn't a Vault archive.</value>
+  </data>
+  <data name="ArchiveHasNoCollections" xml:space="preserve">
+    <value>This archive has no collections to import.</value>
+  </data>
+  <data name="ArchiveFromNewerVersion" xml:space="preserve">
+    <value>This backup was made by a newer version of Vault (archive format v{0}; this one reads up to v{1}). Update Vault, then import it.</value>
+    <comment>{0} = the format version the archive declares. {1} = the newest format this build can read.</comment>
+  </data>
+  <data name="ImportedCollectionName" xml:space="preserve">
+    <value>{0} (imported)</value>
+    <comment>{0} = the collection's name in the archive. Used when a collection of that id is already in the vault, so the import lands as a separate copy.</comment>
   </data>
 
   <!-- Images -->
@@ -179,6 +198,9 @@
   <!-- Profile / auth -->
   <data name="CurrentUserNotFound" xml:space="preserve">
     <value>Current user not found.</value>
+  </data>
+  <data name="TenantNotFound" xml:space="preserve">
+    <value>Account not found.</value>
   </data>
   <data name="EmailCannotBeChanged" xml:space="preserve">
     <value>Email is the login identity and can't be changed yet.</value>

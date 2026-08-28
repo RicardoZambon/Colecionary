@@ -101,8 +101,8 @@ a core service's state).
    anywhere.
 8. **Copy and formatting.** No user-facing string is written in a component.
    Every one is a key in `core/i18n/messages/` rendered through the `t` pipe
-   or `I18nService.t` (see §6). USD values render through the `money` pipe
-   (`$4,200` / `$4.200`), dates through `core/utils/date.util.ts`.
+   or `I18nService.t` (see §6). Amounts render through the `money` pipe
+   (`$4,200.00` / `US$ 4.200,00`), dates through `core/utils/date.util.ts`.
    Micro-headings use `ui-section-label` / the `mono-label` mixin — uppercase
    is applied by CSS, never typed in copy, so translators get sentence case.
 
@@ -133,7 +133,7 @@ All are exported from `shared/ui/index.ts`.
 
 | Component | Selector | API (inputs / models / outputs) |
 | --- | --- | --- |
-| Button | `ui-button` | `variant: 'primary' \| 'ghost' \| 'danger'`, `size: 'md' \| 'sm'`, `block`, `disabled`, `type`, `ariaLabel` (required when the label is a bare glyph; also becomes the tooltip) — content-projected label |
+| Button | `ui-button` | `variant: 'primary' \| 'ghost' \| 'danger' \| 'link' \| 'icon'`, `size: 'md' \| 'sm'`, `block`, `disabled`, `muted`, `type`, `ariaLabel` (required when the label is a bare glyph; also becomes the tooltip) — content-projected label. `link` is a text action inside a dense row, `icon` a bare glyph (the ✕ that removes a copy, a field, a member). `muted` reads as unavailable but still fires: `disabled` would be the obvious choice and is the wrong one, because a dead control cannot say *why* it is dead — removing the tenant's owner has an explanation the click is what surfaces. An action that navigates stays a real `<a>`; see the `a.link` note in `collection-settings-page.scss` |
 | Field | `ui-field` | `label` (required) — wraps any control with the mono uppercase label |
 | Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`; outputs `keydown`, `blurred` |
 | Textarea | `ui-textarea` | `value` (model), `rows`, `placeholder` |
@@ -154,7 +154,9 @@ All are exported from `shared/ui/index.ts`.
 | Image slot | `ui-image-slot` | `src`, `focal` (CSS `background-position`), `placeholder`, `reframable`; outputs `fileSelected(File)`, `reframeRequested()` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
 | Image focus | `ui-image-focus` | none — global outlet in the shell, driven by `ImageFocusService`; the focal-point editor (drag or arrow keys, live previews of the surfaces that match the image's `usage`) |
 | Toast | `ui-toast` | none — global outlet in the shell, driven by `ToastService.flash()` |
-| Money pipe | `\| money` | formats numbers as `$1,234` (`$1.234` in pt-BR). Impure — see §6 |
+| Money pipe | `\| money: currency()` | formats numbers as `$1,234.57`, always two decimals, always rounded **up**. Takes the collection's currency; omitted, the account default. Impure — see §6 |
+| Photo manager | `<ui-photo-manager>` | add / reorder / cover / frame / remove an item's photos. Owns the dropzone and the upload queue; emits the whole list back |
+| Lightbox | `<ui-lightbox>` | full-screen photo viewer, arrow-key paging, links the original |
 | Translate pipe | `\| t` | `{{ 'settings.title' \| t }}`, or with placeholders `{{ 'key' \| t: { name } }}`. Impure — see §6 |
 
 **Adding a component:** put it in `shared/ui/<name>/<name>.ts`, consume tokens
@@ -360,8 +362,16 @@ first visit reads `navigator.language` (any `pt-*` → `pt-BR`, everything else 
 `I18nService.locale()` feeds `Intl`: dates through `core/utils/date.util.ts`
 (which parses date-only ISO strings as *local* midnight — `new Date('2026-08-13')`
 is UTC and would show the previous day in Brazil), amounts through
-`core/utils/money.util.ts`. **The `$` never changes**: the figures are USD, and
-relabelling them `R$` would restate the same number as a different amount.
+`core/utils/money.util.ts`. **The currency never follows the language**: it is
+data — the account's `defaultCurrency`, or a collection's override — resolved
+through `currencyOf` in `core/utils/currency.util.ts` and held for the account in
+`CurrencyService`. Only the separators and the symbol's spelling follow the
+locale, so pt-BR renders a USD figure `US$ 4.200,00`; relabelling it `R$` would
+restate the same number as a different amount of money. Amounts always carry two
+decimals and are rounded **up** to the cent, never half-up — see `ceilToCents`,
+which collapses binary floating-point error first so `0.07` does not bill as
+eight cents. Adding a currency means moving `SUPPORTED_CURRENCIES` here *and*
+`Money.SupportedCurrencies` on the backend together.
 `sort.util.ts`'s collator stays locale-agnostic on purpose — `sensitivity: 'base'`
 already folds accents, and pt/en share the Latin order.
 
@@ -409,3 +419,31 @@ language (indigo accent `#5453C4`, 7 themes). The Colecionary brand manual
 defines a different palette (Vault Purple `#7C5CFF`, Colecionary Night
 `#101827`, dark-first). Reconciling the two requires a formal identity review;
 mechanically it is a one-file change in `styles/_themes.scss`.
+
+
+## Images
+
+**Ask for the size you will render.** `images.url(id, variant)` takes
+`'thumb'` (400 px — cards, tiles, gallery thumbnails), `'display'` (1400 px —
+banners, the gallery's main image, the framing editor's stage) or `'full'` (the
+original, only behind the lightbox's "open original"). The server resizes to
+WebP on upload and caches the result, deriving on demand for images that predate
+variants or arrived through an archive import. Animated GIFs are never derived,
+so they keep moving. **Always name the variant**: leaving it to the server's
+default gives one picture two URLs and so two cache entries everywhere.
+
+`ImageMeta` carries `width`/`height` so a surface can reserve the right shape
+before the bytes arrive. Both or neither — a lone dimension describes nothing.
+
+**Uploading and framing are separate acts.** `PhotoUploadService` sends picked
+files immediately, one at a time, reporting progress; `ImageFocusService.frame`
+opens the editor on a photo that is *already stored*. They used to be one step,
+and that is what made dismissing the editor destroy the upload and made the
+first file of a batch the only one you could frame — or choose as the cover. The
+overlay must stay safe to dismiss: never gate an upload behind it again.
+
+**The cover is `photoIds[0]`.** There is no `coverId` field: a second source of
+truth can point at a removed photo and would need defending in the validator,
+the importer and the archive format to say what the order already says.
+`ui-photo-manager` is where the order is edited, and "Make cover" is exactly
+"move to the front".

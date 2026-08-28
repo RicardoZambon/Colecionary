@@ -44,9 +44,37 @@ import { UiButton } from '../button/button';
       z-index: 1;
     }
 
-    ::ng-deep .btn {
+    /*
+     * The doubled class is load-bearing, not a typo. These controls sit on top
+     * of arbitrary photos, so they have to be opaque — but ui-button's own
+     * .btn--ghost rule paints a transparent background at the same specificity
+     * as a plain ::ng-deep .btn, and won on stylesheet order:
+     * the panel this rule always meant to paint never appeared, leaving the
+     * arrows invisible against a busy picture. Doubling the class outranks it
+     * without reaching for !important, and without giving every other button in
+     * the app a variant only this one place needs.
+     *
+     * The :host prefix is the other half, and just as load-bearing: ::ng-deep on
+     * its own is not scoped to this component at all — it emits a plain global
+     * rule, so these chip dimensions leaked onto every button on any page that
+     * renders a reorder control, and "Save item" came out the size of an arrow.
+     */
+    :host ::ng-deep .btn.btn {
       padding: 2px 7px;
-      background: var(--panel);
+      background: var(--panel2);
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    /*
+     * At either end of the list one arrow is disabled, and ui-button dims the
+     * whole button to say so — which over a photo dims the chip back towards
+     * transparent, the very thing this fixes. The chip stays solid and only the
+     * glyph fades, so "can't move further" still reads as a button.
+     */
+    :host ::ng-deep .btn.btn:disabled {
+      opacity: 1;
+      color: var(--text2);
     }
   `,
 })

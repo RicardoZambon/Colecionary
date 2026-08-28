@@ -81,17 +81,35 @@ export const ptBR: Record<MessageKey, string> = {
   'ui.reorder.earlier': 'Mover {name} para antes',
   'ui.reorder.later': 'Mover {name} para depois',
   'ui.reorder.defaultLabel': 'item',
+  'ui.lightbox.title': 'Visualizador de fotos',
+  'ui.lightbox.caption': '{subject} — foto {n} de {total}',
+  'ui.lightbox.counter': '{n} / {total}',
+  'ui.lightbox.previous': 'Foto anterior',
+  'ui.lightbox.next': 'Próxima foto',
+  'ui.lightbox.original': 'Abrir original',
+  'ui.lightbox.close': 'Fechar visualizador',
+  'photos.drop': '⇪ solte as fotos aqui',
+  'photos.browse': 'ou clique para escolher · faltam {remaining}',
+  'photos.full': 'As {max} fotos já foram usadas — remova uma para adicionar outra',
+  'photos.cover': 'Capa',
+  'photos.makeCover': 'Tornar capa',
+  'photos.frame': 'Ajustar enquadramento',
+  'photos.remove': 'Remover foto',
+  'photos.photoAt': 'Foto {n}',
+  'photos.dismiss': 'Dispensar',
+  'photos.uploading': 'Enviando {name}',
+  'photos.coverHint': 'A primeira foto é a capa. Arraste ou use “Tornar capa” para mudar.',
+  'upload.error.notAnImage': 'Não é uma imagem',
+  'upload.error.tooLarge': 'Maior que 5 MB',
+  'upload.error.tooMany': 'Sem espaço',
+  'upload.error.failed': 'Falha no envio',
   'ui.focus.chooseView': 'Escolha o que mostrar',
   'ui.focus.coveredByHeader': 'coberto pelo cabeçalho',
   'ui.focus.reset': 'Redefinir',
-  'ui.focus.useCentred': 'Usar centralizado',
   'ui.focus.cancel': 'Cancelar',
-  'ui.focus.discard': 'Descartar envio',
   'ui.focus.save': 'Salvar enquadramento',
   'ui.focus.hint':
     'Arraste o alvo até o que importa. Todos os tamanhos recortam em volta dele.',
-  'ui.focus.hintNew':
-    'Descartar deixa a imagem como estava.',
   'ui.focus.targetLabel':
     'Ponto focal a {x}% da esquerda, {y}% do topo',
   'ui.focus.preset.itemCard': 'Card do item',
@@ -120,6 +138,9 @@ export const ptBR: Record<MessageKey, string> = {
   'settings.theme.sub': 'Escolha um estilo — aplica na hora e fica salvo no seu perfil.',
   'settings.language.heading': 'Idioma',
   'settings.language.sub': 'Aplica na hora. Sua escolha fica guardada neste navegador.',
+  'settings.currency.heading': 'Moeda',
+  'settings.currency.sub':
+    'A moeda em que todo valor do cofre é lido. É rótulo, não conversão — trocar aqui reapresenta os mesmos números com outro símbolo. Uma coleção pode sobrescrever.',
 
   'settings.plan.heading': 'Plano',
   'settings.plan.onPro': 'Você está no Pro — obrigado por apoiar o Vault.',
@@ -149,6 +170,15 @@ export const ptBR: Record<MessageKey, string> = {
   'settings.account.dataSub': '{items} itens em {collections} coleções',
   'settings.account.export': 'Exportar ZIP',
   'settings.account.exporting': 'Preparando…',
+  'settings.account.import': 'Importar ZIP',
+  'settings.account.perCollection': 'Uma coleção por vez',
+  'settings.account.perCollectionHint':
+    'Um .zip só desta coleção e das fotos que ela usa — para passar para alguém ou restaurar sozinha. Dá para exportar a coleção que você está vendo direto das configurações dela.',
+  'settings.account.collectionMeta': '{items} itens',
+  'settings.account.noCollections': 'Nenhuma coleção ainda.',
+  'settings.account.importing': 'Importando…',
+  'settings.account.importHint':
+    'Lê de volta um .zip do export — uma coleção ou o acervo inteiro. Importar só acrescenta: uma coleção que já está no seu acervo chega ao lado dela como cópia, nunca por cima.',
 
   // --- roles (display labels — the wire values stay Owner/Editor/Viewer) --
   'role.owner': 'Dono',
@@ -292,6 +322,8 @@ export const ptBR: Record<MessageKey, string> = {
 
   // --- item page ---------------------------------------------------------
   'item.addPhoto': 'Adicionar foto',
+  'item.viewLarge': 'Ver grande',
+  'item.openViewer': 'Abrir o visualizador de fotos',
   'item.adjustFraming': 'Ajustar enquadramento',
   'item.browse.aria': 'Percorrer o grupo',
   'item.browse.keyboardHint': 'Use ← e → para andar entre os itens',
@@ -324,13 +356,6 @@ export const ptBR: Record<MessageKey, string> = {
   // --- item form ---------------------------------------------------------
   'itemForm.editTitle': 'Editar item — {name}',
   'itemForm.newTitle': 'Adicionar item em {collection}',
-  'itemForm.uploading': 'enviando…',
-  'itemForm.dropzone': '⇪ solte as fotos aqui',
-  'itemForm.dropzoneBrowse': 'ou clique para escolher',
-  'itemForm.cover': 'Capa',
-  'itemForm.adjustFraming': 'Ajustar enquadramento',
-  'itemForm.removePhoto': 'Remover foto',
-  'itemForm.photoHint': 'Até 8 fotos · a primeira vira a capa',
   'itemForm.name': 'Nome',
   'itemForm.description': 'Descrição',
   'itemForm.group': 'Grupo',
@@ -400,6 +425,15 @@ export const ptBR: Record<MessageKey, string> = {
 
   'collSettings.general.name': 'Nome',
   'collSettings.general.description': 'Descrição',
+  'collSettings.general.currency': 'Moeda',
+  'collSettings.general.currencyInherit': 'Usar a moeda da conta',
+  'collSettings.general.currencyHint':
+    'Sobrescreve a moeda da conta ({currency}) só nesta coleção. Nenhum valor é convertido.',
+  'collSettings.general.backup': 'Backup',
+  'collSettings.general.backupHint':
+    'Um .zip desta coleção e das fotos que ela usa. Para ler de volta, use Configurações → Conta e dados.',
+  'collSettings.general.export': 'Exportar esta coleção',
+  'collSettings.general.exporting': 'Preparando…',
   'collSettings.general.delete': 'Excluir coleção',
   'collSettings.done': 'Concluir',
 
@@ -460,6 +494,9 @@ export const ptBR: Record<MessageKey, string> = {
 
   'setup.prefs.hint': 'Escolha um tema padrão. Você pode trocar quando quiser nas configurações.',
   'setup.prefs.theme': 'Tema padrão',
+  'setup.prefs.currency': 'Moeda',
+  'setup.prefs.currencyHint':
+    'A moeda em que os valores são lidos. Uma coleção pode sobrescrever depois, e nada é convertido.',
 
   'setup.review.hint':
     'Revise e aplique. O app vai reiniciar e levar você para a tela de entrada.',
@@ -467,6 +504,7 @@ export const ptBR: Record<MessageKey, string> = {
   'setup.review.organization': 'Organização',
   'setup.review.owner': 'Dono',
   'setup.review.theme': 'Tema',
+  'setup.review.currency': 'Moeda',
 
   'setup.back': 'Voltar',
   'setup.next': 'Avançar',
@@ -493,12 +531,35 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.member.removed': 'Acesso removido',
   'toast.export.done': 'vault-export.zip exportado ✓',
   'toast.export.failed': 'A exportação falhou — não deu para montar o arquivo',
+  'toast.import.done.one': '1 coleção importada ✓',
+  'toast.import.done.other': '{n} coleções importadas ✓',
+  'toast.import.failed': 'Falha ao importar — não deu para ler o arquivo',
+  'toast.export.collectionDone': 'Coleção exportada ✓',
+
+  // --- diálogo de importação -----------------------------------------------
+  'import.title': 'Importar backup',
+  'import.lede.one':
+    'Uma coleção deste arquivo já está no seu acervo com o mesmo nome. Diga o que fazer com ela.',
+  'import.lede.other':
+    '{n} coleções deste arquivo já estão no seu acervo com o mesmo nome. Diga o que fazer com cada uma.',
+  'import.choiceFor': 'O que fazer com {name}',
+  'import.createNew': 'Criar uma nova',
+  'import.overwrite': 'Sobrescrever a existente',
+  'import.willBeCreated': 'nova · será criada',
+  'import.overwriteWarning.one':
+    'Sobrescrever substitui a coleção inteira — o que não estiver no backup vai sumir. Nada é mesclado.',
+  'import.overwriteWarning.other':
+    'Sobrescrever substitui as {n} coleções inteiras — o que não estiver no backup vai sumir. Nada é mesclado.',
+  'import.cancel': 'Cancelar',
+  'import.confirm': 'Importar',
+  'import.importing': 'Importando…',
   'toast.collection.created': 'Coleção criada — dê um nome a ela aqui',
   'toast.collection.added': 'Adicionada ao seu acervo ✓',
   'toast.collection.addFailed': 'Não foi possível adicionar a checklist',
   'toast.image.updated': 'Imagem atualizada ✓',
   'toast.photo.limit': 'Até 8 fotos por item',
   'toast.photo.added': 'Foto adicionada ✓',
+  'toast.framing.failed': 'Não foi possível salvar o enquadramento',
   'toast.photo.uploadFailed': 'O envio falhou',
   'toast.copy.added': 'Exemplar adicionado ✓',
   'toast.item.deleted': 'Item excluído',
@@ -510,6 +571,8 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.item.saved': 'Item salvo na sua coleção ✓',
   'toast.collection.deleted': 'Coleção excluída',
   'toast.collection.updated': 'Coleção atualizada ✓',
+  'toast.currency.saved': 'Moeda atualizada ✓',
+  'toast.currency.failed': 'Não foi possível trocar a moeda — só um Owner pode.',
   'toast.group.hasItems': 'O grupo tem itens — mova-os primeiro',
   'toast.group.removed': 'Grupo removido',
   'toast.field.removed': 'Campo removido',

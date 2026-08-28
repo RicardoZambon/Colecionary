@@ -132,6 +132,12 @@
         one here would be dead. */
     &--photo {
       background-size: cover;
+      /* It is a <button> now — it opens the viewer — so the browser's own
+         button chrome has to be undone. Width, because a button does not fill
+         its column the way the <div> did. */
+      width: 100%;
+      padding: 0;
+      cursor: zoom-in;
     }
   }
 
@@ -330,4 +336,12 @@ h1 {
 .missing {
   color: var(--muted);
   font-size: 13px;
+}
+
+// Two ghost buttons under the gallery; they wrap rather than overflow the
+// column on a narrow viewport.
+.gallery__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }

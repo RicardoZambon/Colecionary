@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using FluentValidation;
 using Vault.Application.Collections.Dtos;
 using Vault.Application.Resources;
+using Vault.Domain.ValueObjects;
 
 namespace Vault.Application.Collections.Validators;
 
@@ -11,11 +12,25 @@ public static partial class IdRules
     public static partial Regex PublicId();
 }
 
+/// <summary>
+/// Limits shared by everything that writes a collection.
+/// </summary>
+/// <remarks>
+/// The name limit is a constant because the import has to respect it while
+/// building a name of its own ("… (imported)"): a collection sitting exactly at
+/// the limit must not become unsaveable purely by being imported, and a second
+/// literal 200 in that code would drift the first time this one moved.
+/// </remarks>
+public static class CollectionRules
+{
+    public const int MaxNameLength = 200;
+}
+
 public sealed class CreateCollectionRequestValidator : AbstractValidator<CreateCollectionRequest>
 {
     public CreateCollectionRequestValidator()
     {
-        RuleFor(r => r.Name).NotEmpty().MaximumLength(200);
+        RuleFor(r => r.Name).NotEmpty().MaximumLength(CollectionRules.MaxNameLength);
         RuleFor(r => r.Description).NotNull().MaximumLength(2000);
     }
 }
@@ -139,8 +154,14 @@ public sealed class CollectionDtoValidator : AbstractValidator<CollectionDto>
         IValidator<MemberDto> memberValidator)
     {
         RuleFor(c => c.Id).NotEmpty().Matches(IdRules.PublicId());
-        RuleFor(c => c.Name).NotEmpty().MaximumLength(200);
+        RuleFor(c => c.Name).NotEmpty().MaximumLength(CollectionRules.MaxNameLength);
         RuleFor(c => c.Description).NotNull().MaximumLength(2000);
+        // Null is the override being absent, which is always valid; only a code
+        // that is actually present has to be one the vault knows how to render.
+        RuleFor(c => c.Currency)
+            .Must(Money.IsSupported)
+            .When(c => c.Currency is not null)
+            .WithMessage(_ => Messages.CurrencyInvalid);
         RuleForEach(c => c.Groups).SetValidator(groupValidator);
         RuleForEach(c => c.Items).SetValidator(itemValidator);
         RuleForEach(c => c.Members).SetValidator(memberValidator);

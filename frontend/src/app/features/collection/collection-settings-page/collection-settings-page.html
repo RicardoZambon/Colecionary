@@ -14,11 +14,10 @@
           } @else {
             <span class="heading">{{ 'collSettings.groups.heading' | t }}</span>
           }
-          <button
-            type="button"
-            class="link"
+          <ui-button
+            variant="link"
             (click)="pendingGroupParent.set({ parentId: scopeGroup()?.id ?? null })"
-          >{{ 'collSettings.groups.add' | t }}</button>
+          >{{ 'collSettings.groups.add' | t }}</ui-button>
         </div>
 
         @for (row of groupRows(); track row.node.id) {
@@ -33,13 +32,12 @@
                 (blurred)="endRename()"
               />
               <span class="count">{{ 'collSettings.groups.itemCount' | t: { n: row.count } }}</span>
-              <button type="button" class="link" (click)="pendingGroupParent.set({ parentId: row.node.id })">{{ 'collSettings.groups.addSub' | t }}</button>
-              <button
-                type="button"
-                class="remove"
-                [attr.aria-label]="'collSettings.groups.remove' | t: { name: row.node.name }"
+              <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: row.node.id })">{{ 'collSettings.groups.addSub' | t }}</ui-button>
+              <ui-button
+                variant="icon"
+                [ariaLabel]="'collSettings.groups.remove' | t: { name: row.node.name }"
                 (click)="removeGroup(row.node.id)"
-              >✕</button>
+              >✕</ui-button>
             </div>
             <div class="group-row__fields">
               <span class="fields-label">{{ 'collSettings.groups.fields' | t }}</span>
@@ -52,12 +50,12 @@
                     [value]="field.type"
                     (valueChange)="setFieldType(row.node.id, field.name, $event)"
                   />
-                  <button
-                    type="button"
-                    class="remove"
-                    [attr.aria-label]="'collSettings.groups.removeField' | t: { name: field.name }"
+                  <ui-button
+                    variant="icon"
+                    size="sm"
+                    [ariaLabel]="'collSettings.groups.removeField' | t: { name: field.name }"
                     (click)="removeField(row.node.id, field.name)"
-                  >✕</button>
+                  >✕</ui-button>
                 </span>
               }
               @if (pendingFieldGroupId() === row.node.id) {
@@ -78,7 +76,7 @@
                   />
                 </span>
               }
-              <button type="button" class="link small" (click)="pendingFieldGroupId.set(row.node.id)">{{ 'collSettings.groups.addField' | t }}</button>
+              <ui-button variant="link" size="sm" (click)="pendingFieldGroupId.set(row.node.id)">{{ 'collSettings.groups.addField' | t }}</ui-button>
             </div>
 
             <div class="group-row__order">
@@ -163,13 +161,12 @@
                 [disabled]="row.fixed"
                 (valueChange)="setMemberRole(row.member.email, $event)"
               />
-              <button
-                type="button"
-                class="remove"
-                [class.disabled]="row.fixed"
-                [attr.aria-label]="'collSettings.sharing.removeMember' | t: { name: row.member.name }"
+              <ui-button
+                variant="icon"
+                [muted]="row.fixed"
+                [ariaLabel]="'collSettings.sharing.removeMember' | t: { name: row.member.name }"
                 (click)="removeMember(row.member.email, row.fixed)"
-              >✕</button>
+              >✕</ui-button>
             </div>
           }
         </ui-card>
@@ -196,6 +193,24 @@
         <ui-field [label]="'collSettings.general.description' | t">
           <ui-textarea [rows]="2" [value]="d.description" (valueChange)="setDescription($event)" />
         </ui-field>
+        <ui-field
+          [label]="'collSettings.general.currency' | t"
+          [hint]="'collSettings.general.currencyHint' | t: { currency: store.defaultCurrency() }"
+        >
+          <ui-select
+            [options]="currencyOverrideOptions()"
+            [value]="d.currency ?? ''"
+            (valueChange)="setCurrency($event)"
+          />
+        </ui-field>
+        <div class="backup">
+          <div class="heading">{{ 'collSettings.general.backup' | t }}</div>
+          <p class="sub">{{ 'collSettings.general.backupHint' | t }}</p>
+          <ui-button variant="ghost" [disabled]="exporting()" (click)="exportCollection()">
+            {{ (exporting() ? 'collSettings.general.exporting' : 'collSettings.general.export') | t }}
+          </ui-button>
+        </div>
+
         <ui-button variant="danger" (click)="deleteCollection()">{{ 'collSettings.general.delete' | t }}</ui-button>
       </div>
     }

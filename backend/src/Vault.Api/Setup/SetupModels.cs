@@ -28,4 +28,5 @@ public sealed record SetupApplyRequest(
     string OwnerEmail,
     string OwnerName,
     string OwnerPassword,
-    string? DefaultTheme);
+    string? DefaultTheme,
+    string? DefaultCurrency);

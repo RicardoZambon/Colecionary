@@ -28,6 +28,21 @@ public class StoredImage : ITenantOwned
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     /// <summary>
+    /// Intrinsic pixel width, or null for a row written before sizes were
+    /// recorded. Backfilled the first time the image is derived.
+    /// </summary>
+    /// <remarks>
+    /// Carried so the client can reserve the right aspect ratio before any bytes
+    /// arrive. Without it a gallery lays out at a guessed shape and then jumps
+    /// when each photo loads — and the jump is worst exactly where it is most
+    /// visible, on a slow connection loading a large picture.
+    /// </remarks>
+    public int? Width { get; set; }
+
+    /// <summary>Intrinsic pixel height. See <see cref="Width"/>.</summary>
+    public int? Height { get; set; }
+
+    /// <summary>
     /// Horizontal focal point, 0–1 across the image. Null means never framed.
     /// </summary>
     /// <remarks>

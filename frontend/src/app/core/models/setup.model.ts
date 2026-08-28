@@ -29,4 +29,5 @@ export interface SetupApplyPayload extends SetupConnection {
   ownerName: string;
   ownerPassword: string;
   defaultTheme: string | null;
+  defaultCurrency: string;
 }

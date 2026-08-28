@@ -56,13 +56,12 @@
               [disabled]="member.role === 'Owner'"
               (valueChange)="setMemberRole(member.email, $event)"
             />
-            <button
-              type="button"
-              class="remove"
-              [class.disabled]="member.role === 'Owner'"
-              [attr.aria-label]="'settings.access.removeMember' | t: { name: member.name }"
+            <ui-button
+              variant="icon"
+              [muted]="member.role === 'Owner'"
+              [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
               (click)="removeMember(member.email)"
-            >✕</button>
+            >✕</ui-button>
           </div>
         }
       </ui-card>
@@ -102,7 +101,60 @@
         <ui-button variant="ghost" size="sm" [disabled]="exporting()" (click)="exportArchive()">
           {{ (exporting() ? 'settings.account.exporting' : 'settings.account.export') | t }}
         </ui-button>
+        <!-- The input stays hidden and the button drives it: a bare file input
+             cannot be labelled or styled like the rest of the app, and it is the
+             button that has to look like every other action on this page. -->
+        <ui-button
+          variant="ghost"
+          size="sm"
+          [disabled]="importing()"
+          (click)="archiveInput.click()"
+        >
+          {{ (importing() ? 'settings.account.importing' : 'settings.account.import') | t }}
+        </ui-button>
+        <input
+          #archiveInput
+          type="file"
+          accept=".zip,application/zip"
+          hidden
+          (change)="importArchive($event)"
+        />
       </ui-card>
+      <p class="sub">{{ 'settings.account.importHint' | t }}</p>
+
+      <div class="heading spaced">{{ 'settings.account.perCollection' | t }}</div>
+      <p class="sub">{{ 'settings.account.perCollectionHint' | t }}</p>
+      @for (collection of store.collections(); track collection.id) {
+        <ui-card class="account-card">
+          <span class="who">
+            <span class="name">{{ collection.name }}</span>
+            <span class="email">{{
+              'settings.account.collectionMeta' | t: { items: collection.items.length }
+            }}</span>
+          </span>
+          <ui-button
+            variant="ghost"
+            size="sm"
+            [disabled]="exportingCollection() === collection.id"
+            (click)="exportCollection(collection.id)"
+          >
+            {{
+              (exportingCollection() === collection.id
+                ? 'settings.account.exporting'
+                : 'settings.account.export') | t
+            }}
+          </ui-button>
+        </ui-card>
+      } @empty {
+        <p class="sub">{{ 'settings.account.noCollections' | t }}</p>
+      }
+
+      <app-import-dialog
+        [plan]="importPlan()"
+        [busy]="importing()"
+        (confirmed)="applyImport($event)"
+        (cancelled)="cancelImport()"
+      />
     </section>
   }
   @default {
@@ -153,6 +205,18 @@
             </div>
           </ui-card>
         }
+      </div>
+
+      <div>
+        <div class="heading">{{ 'settings.currency.heading' | t }}</div>
+        <p class="sub">{{ 'settings.currency.sub' | t }}</p>
+      </div>
+      <div class="currency">
+        <ui-select
+          [options]="currencyOptions()"
+          [value]="store.tenantSettings()?.defaultCurrency ?? ''"
+          (valueChange)="chooseCurrency($event)"
+        />
       </div>
     </section>
   }

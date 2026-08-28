@@ -65,7 +65,7 @@
               <span class="soft">{{ 'progress.copies' | t: { n: stats().copies } }}</span>
             }
           </span>
-          <span class="card__value">{{ stats().value | money }}</span>
+          <span class="card__value">{{ stats().value | money: currency() }}</span>
         </div>
       }
     </div>

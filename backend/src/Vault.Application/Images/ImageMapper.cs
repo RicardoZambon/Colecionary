@@ -15,5 +15,9 @@ public static class ImageMapper
     public static ImageMetaDto ToMeta(this StoredImage image) => new(
         image.Id,
         image.ContentType,
-        image is { FocalX: { } x, FocalY: { } y } ? new FocalPointDto(x, y) : null);
+        image is { FocalX: { } x, FocalY: { } y } ? new FocalPointDto(x, y) : null,
+        // Same all-or-nothing rule as the focal pair: one dimension without the
+        // other cannot describe a shape, so a half-written row reads as unknown.
+        image is { Width: not null, Height: not null } ? image.Width : null,
+        image is { Width: not null, Height: not null } ? image.Height : null);
 }

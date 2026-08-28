@@ -147,10 +147,17 @@ drops the bytes. Start the API instead; it does both, in the right order.
 `GET /api/export` streams a zip of the caller's tenant:
 
 ```
+manifest.json             # what this file is, and which layout version wrote it
 collections.json          # same shape as GET /api/collections
 images.json               # id, content type and focal point for each image
 images/{imageId}.{ext}    # every image that tenant owns
 ```
+
+`GET /api/export/collections/{id}` writes the same format at a narrower scope:
+`collection.json` (one object, not an array) and only the images that
+collection actually references — a collection is a self-contained thing to hand
+to someone, and packing the tenant's unrelated photos into it would leak
+everything else they own.
 
 `images.json` exists because framing lives on the image row, not in the
 collection graph: without it an archive would restore every photo centred, and
@@ -166,6 +173,60 @@ The archive is built into a temp file rather than written straight to the
 response: `ZipArchive` emits its central directory with a *synchronous* write on
 dispose, which Kestrel rejects on the response body. The alternative,
 `AllowSynchronousIO`, would block a request thread for the whole download.
+
+## Import
+
+`POST /api/import` reads either archive back — the entry that is present
+(`collection.json` or `collections.json`) decides which, since a hand-edited
+manifest can lie and an entry cannot. The zip goes up as the raw request body.
+
+- **Images are copied, never referenced.** An id in an archive belongs to
+  whoever exported it, so every photo is written afresh under a new id in the
+  importing tenant's storage and every reference is remapped. Framing rides
+  along on `images.json`.
+- **Overwriting is the user's decision, never a default.** When the archive
+  holds a collection the vault already has *by name*, the request answers
+  **409** with an `ImportPlan` — every collection in the file, each paired with
+  the live one it would land on — and writes nothing. The client asks, then
+  posts the same file again with `?confirmed=true&replace=<id>&replace=<id>`.
+  Ids named there are overwritten; everything else lands as a new collection.
+  An archive with no name collisions imports on the first request.
+- **Overwriting replaces, and never merges.** It goes through the same
+  `ReplaceGraph` the full-document PUT uses, so the collection ends up holding
+  exactly what the archive holds: an item the archive lacks is an item the
+  collection loses. The collection keeps its id, so its links keep working.
+- **Creating instead keeps nothing of the live one.** The archived collection
+  keeps its own id when that id is free — restoring one you deleted brings back
+  its links — and is renamed when the name is taken, so two identically named
+  collections never appear.
+
+Matching is by name rather than by id, trimmed and case-insensitive, because
+that is what the user recognises: a collection restored once already carries a
+different id, and matching on ids would offer to overwrite nothing while a
+same-named duplicate piled up beside it. Names are not unique in this model, so
+the plan answers with an id, which is.
+
+The second upload is deliberate. Parking the first one server-side between the
+two requests would save the bytes and cost a stash with a lifetime, an expiry
+and a cleanup path; a stateless retry has none of that, and an archive with
+nothing to ask about never pays it.
+
+### Archive versioning
+
+`manifest.json` carries `ArchiveManifest.CurrentVersion`, and the import gate
+is one-directional: **older is readable, newer is refused.** Every entry a past
+version wrote is one this build still understands, and a field it never wrote
+deserialises to the same default an absent field always meant. The reverse has
+no such guarantee — a newer layout may have moved or re-scoped a field, and
+reading it under today's shapes would not fail, it would *succeed quietly* and
+write nonsense into the vault. A missing manifest is not an error: archives
+predating it are v1 by definition.
+
+So a change costs a version bump only when a reader that does not know about it
+would misread the file. Adding an optional field or a new entry does not;
+renaming a field, changing what one means, or changing a unit does. The check
+lives in `ArchiveCompatibility` — pure, and unit-tested — and runs before the
+first byte is written, so a refusal leaves nothing behind.
 
 ## Auth
 
@@ -196,6 +257,8 @@ documented follow-ups.
 | GET / PUT | `/api/tenant/members` | PUT is Owner-only |
 | GET / PUT | `/api/profile` | email immutable in v1 |
 | GET | `/api/export` | zip: `collections.json` + `images/…` for the caller's tenant |
+| GET | `/api/export/collections/{id}` | zip of one collection and only the images it references |
+| POST | `/api/import` | raw-body zip; 409 + `ImportPlan` when a name collides, `?confirmed=true&replace=<id>` answers it; refuses a newer archive format |
 
 JSON is camelCase with string enums — byte-compatible with the Angular
 models in `frontend/src/app/core/models/`.

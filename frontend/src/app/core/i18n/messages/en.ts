@@ -82,17 +82,35 @@ export const en = {
   'ui.reorder.earlier': 'Move {name} earlier',
   'ui.reorder.later': 'Move {name} later',
   'ui.reorder.defaultLabel': 'item',
+  'ui.lightbox.title': 'Photo viewer',
+  'ui.lightbox.caption': '{subject} — photo {n} of {total}',
+  'ui.lightbox.counter': '{n} / {total}',
+  'ui.lightbox.previous': 'Previous photo',
+  'ui.lightbox.next': 'Next photo',
+  'ui.lightbox.original': 'Open original',
+  'ui.lightbox.close': 'Close viewer',
+  'photos.drop': '⇪ drop photos here',
+  'photos.browse': 'or click to browse · {remaining} left',
+  'photos.full': 'All {max} photos used — remove one to add another',
+  'photos.cover': 'Cover',
+  'photos.makeCover': 'Make cover',
+  'photos.frame': 'Adjust framing',
+  'photos.remove': 'Remove photo',
+  'photos.photoAt': 'Photo {n}',
+  'photos.dismiss': 'Dismiss',
+  'photos.uploading': 'Uploading {name}',
+  'photos.coverHint': 'The first photo is the cover. Drag or use “Make cover” to change it.',
+  'upload.error.notAnImage': 'Not an image',
+  'upload.error.tooLarge': 'Larger than 5 MB',
+  'upload.error.tooMany': 'No room left',
+  'upload.error.failed': 'Upload failed',
   'ui.focus.chooseView': 'Choose what to show',
   'ui.focus.coveredByHeader': 'covered by header',
   'ui.focus.reset': 'Reset',
-  'ui.focus.useCentred': 'Use centred',
   'ui.focus.cancel': 'Cancel',
-  'ui.focus.discard': 'Discard upload',
   'ui.focus.save': 'Save framing',
   'ui.focus.hint':
     'Drag the target onto what matters. Every size crops around it.',
-  'ui.focus.hintNew':
-    'Discarding leaves the picture unchanged.',
   'ui.focus.targetLabel':
     'Focal point {x}% across, {y}% down',
   'ui.focus.preset.itemCard': 'Item card',
@@ -121,6 +139,9 @@ export const en = {
   'settings.theme.sub': 'Pick a style — applies instantly and is saved to your profile.',
   'settings.language.heading': 'Language',
   'settings.language.sub': 'Applies instantly. Your choice is remembered in this browser.',
+  'settings.currency.heading': 'Currency',
+  'settings.currency.sub':
+    'What every amount in the vault is read in. This is a label, not a conversion — changing it restates the same figures under a new symbol. A collection can override it.',
 
   'settings.plan.heading': 'Plan',
   'settings.plan.onPro': 'You are on Pro — thanks for supporting Vault.',
@@ -149,6 +170,15 @@ export const en = {
   'settings.account.dataSub': '{items} items across {collections} collections',
   'settings.account.export': 'Export ZIP',
   'settings.account.exporting': 'Preparing…',
+  'settings.account.import': 'Import ZIP',
+  'settings.account.perCollection': 'One collection at a time',
+  'settings.account.perCollectionHint':
+    'A .zip of a single collection and the photos it uses — a copy to hand to someone, or to restore on its own. You can also export the one you are looking at from its own settings.',
+  'settings.account.collectionMeta': '{items} items',
+  'settings.account.noCollections': 'No collections yet.',
+  'settings.account.importing': 'Importing…',
+  'settings.account.importHint':
+    'Reads back a .zip from the export — one collection or a whole vault. An import only ever adds: a collection already in your vault arrives beside it as a copy, never over it.',
 
   // --- roles (display labels — the wire values stay Owner/Editor/Viewer) --
   'role.owner': 'Owner',
@@ -292,6 +322,8 @@ export const en = {
 
   // --- item page ---------------------------------------------------------
   'item.addPhoto': 'Add photo',
+  'item.viewLarge': 'View large',
+  'item.openViewer': 'Open the photo viewer',
   'item.adjustFraming': 'Adjust framing',
   'item.browse.aria': 'Browse the group',
   'item.browse.keyboardHint': 'Use ← and → to move between items',
@@ -324,13 +356,6 @@ export const en = {
   // --- item form ---------------------------------------------------------
   'itemForm.editTitle': 'Edit item — {name}',
   'itemForm.newTitle': 'Add item to {collection}',
-  'itemForm.uploading': 'uploading…',
-  'itemForm.dropzone': '⇪ drop photos here',
-  'itemForm.dropzoneBrowse': 'or click to browse',
-  'itemForm.cover': 'Cover',
-  'itemForm.adjustFraming': 'Adjust framing',
-  'itemForm.removePhoto': 'Remove photo',
-  'itemForm.photoHint': 'Up to 8 photos · first becomes the cover',
   'itemForm.name': 'Name',
   'itemForm.description': 'Description',
   'itemForm.group': 'Group',
@@ -400,6 +425,15 @@ export const en = {
 
   'collSettings.general.name': 'Name',
   'collSettings.general.description': 'Description',
+  'collSettings.general.currency': 'Currency',
+  'collSettings.general.currencyInherit': 'Use the account currency',
+  'collSettings.general.currencyHint':
+    'Overrides the account currency ({currency}) for this collection only. No amount is converted.',
+  'collSettings.general.backup': 'Backup',
+  'collSettings.general.backupHint':
+    'A .zip of this collection and the photos it uses. Read it back from Settings → Account & data.',
+  'collSettings.general.export': 'Export this collection',
+  'collSettings.general.exporting': 'Preparing…',
   'collSettings.general.delete': 'Delete collection',
   'collSettings.done': 'Done',
 
@@ -460,6 +494,9 @@ export const en = {
 
   'setup.prefs.hint': 'Pick a default theme. You can change it any time in settings.',
   'setup.prefs.theme': 'Default theme',
+  'setup.prefs.currency': 'Currency',
+  'setup.prefs.currencyHint':
+    'What amounts are read in. A collection can override it later, and nothing is ever converted.',
 
   'setup.review.hint':
     'Review, then apply. The app will restart and take you to the sign-in screen.',
@@ -467,6 +504,7 @@ export const en = {
   'setup.review.organization': 'Organization',
   'setup.review.owner': 'Owner',
   'setup.review.theme': 'Theme',
+  'setup.review.currency': 'Currency',
 
   'setup.back': 'Back',
   'setup.next': 'Next',
@@ -493,12 +531,40 @@ export const en = {
   'toast.member.removed': 'Access removed',
   'toast.export.done': 'Exported vault-export.zip ✓',
   'toast.export.failed': "Export failed — couldn't build the archive",
+  'toast.export.collectionDone': 'Collection exported ✓',
+  // Not pluralised in code: the count is spelled into the sentence, and one
+  // collection restoring is the common case worth reading naturally.
+  'toast.import.done.one': 'Imported 1 collection ✓',
+  'toast.import.done.other': 'Imported {n} collections ✓',
+  'toast.import.failed': 'Import failed — the archive could not be read',
+
+  // --- import dialog -------------------------------------------------------
+  'import.title': 'Import backup',
+  // Counted sentences are spelled out per case rather than assembled: the `t`
+  // pipe substitutes placeholders and does not do plural rules, and "1
+  // collections" is exactly the seam where that shows.
+  'import.lede.one':
+    'One collection in this file is already in your vault under the same name. Say what should happen to it.',
+  'import.lede.other':
+    '{n} collections in this file are already in your vault under the same name. Say what should happen to each.',
+  'import.choiceFor': 'What to do with {name}',
+  'import.createNew': 'Create a new one',
+  'import.overwrite': 'Overwrite the existing one',
+  'import.willBeCreated': 'new · will be created',
+  'import.overwriteWarning.one':
+    'Overwriting replaces that collection entirely — anything the backup does not have will be gone. Nothing is merged.',
+  'import.overwriteWarning.other':
+    'Overwriting replaces those {n} collections entirely — anything the backup does not have will be gone. Nothing is merged.',
+  'import.cancel': 'Cancel',
+  'import.confirm': 'Import',
+  'import.importing': 'Importing…',
   'toast.collection.created': 'Collection created — name it here',
   'toast.collection.added': 'Added to your vault ✓',
   'toast.collection.addFailed': 'Could not add checklist',
   'toast.image.updated': 'Image updated ✓',
   'toast.photo.limit': 'Up to 8 photos per item',
   'toast.photo.added': 'Photo added ✓',
+  'toast.framing.failed': "Couldn't save the framing",
   'toast.photo.uploadFailed': 'Upload failed',
   'toast.copy.added': 'Copy added ✓',
   'toast.item.deleted': 'Item deleted',
@@ -510,6 +576,8 @@ export const en = {
   'toast.item.saved': 'Saved ✓',
   'toast.collection.deleted': 'Collection deleted',
   'toast.collection.updated': 'Collection updated ✓',
+  'toast.currency.saved': 'Currency updated ✓',
+  'toast.currency.failed': "Couldn't change the currency — only an Owner can.",
   'toast.group.hasItems': 'Group has items — move them first',
   'toast.group.removed': 'Group removed',
   'toast.field.removed': 'Field removed',

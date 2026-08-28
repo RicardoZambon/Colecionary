@@ -140,7 +140,23 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    `ImageFocusService.position(id)`; never compute a percentage inline — the
    conversion lives in `core/utils/focal.util.ts`. Null means "never framed"
    (renders centred) and must survive round-trips.
-6. **No user-facing string lives in a component.** The app ships pt-BR and en,
+   **Uploading and framing are separate acts.** Bytes go up as soon as they are
+   picked (`PhotoUploadService`, progress-reported, sequential); framing is
+   something you then choose to do to a photo that already exists. They used to
+   be one step, which is why closing the editor destroyed the upload and why
+   only the first file of a batch could be framed. Never reintroduce a framing
+   step that gates an upload — the overlay must always be safe to dismiss.
+6. **Ask for the size you are going to render.** Every image URL carries a
+   variant: `images.url(id, 'thumb' | 'display' | 'full')`. A card or tile takes
+   `thumb` (400px), a banner or gallery main image takes `display` (1400px), and
+   `full` is the original, which only the lightbox's "open original" link wants.
+   The server resizes to WebP on upload and caches the result, deriving on
+   demand for anything older; **always name the variant** rather than relying on
+   the server's default, or one picture ends up with two cache entries.
+   Animated GIFs are never derived, so they keep moving.
+   **The cover photo is `photoIds[0]`** — there is no `coverId`, and reordering
+   through `ui-photo-manager` is how it changes.
+7. **No user-facing string lives in a component.** The app ships pt-BR and en,
    switchable at runtime. Every string is a key in `core/i18n/messages/`,
    rendered through the `t` pipe in templates or `I18nService.t` in code;
    `en.ts` declares the keys and `pt-BR.ts` is `Record<MessageKey, string>`, so
@@ -151,16 +167,33 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    SQL representation and the server's validator whitelist. Both the `t` and
    `money` pipes are `pure: false` on purpose: a pure pipe memoizes by argument
    and would freeze every label in the old language. Dates go through
-   `core/utils/date.util.ts`, amounts through `core/utils/money.util.ts`, and
-   the `$` never changes with the language.
-7. **All data flows through the abstract `VaultApi`**
+   `core/utils/date.util.ts`, amounts through `core/utils/money.util.ts`.
+   **Currency is one of those data values, never copy.** Amounts are
+   denominated in the account's `defaultCurrency` (ISO 4217, on `Tenant`),
+   which a collection may override through its own nullable `currency` —
+   **null means "follow the account" and must survive a round-trip**, so never
+   resolve it to a code on write. Read it only through `currencyOf`
+   (`core/utils/currency.util.ts`); the account default lives in
+   `CurrencyService`, a dependency-free signal `VaultStore` owns, so that a
+   pipe never drags `HttpClient` into the TestBed of every component that
+   renders an amount. The language moves the separators and the symbol's
+   spelling, never the currency itself: pt-BR writes a USD figure `US$
+   4.200,00`, because relabelling it `R$` would restate the same number as a
+   different amount of money. Every amount carries two decimals and is rounded
+   **up** to the cent (`ceilToCents`, which collapses binary floating-point
+   error first — a naive `Math.ceil` bills `0.07` as eight cents). Mixed
+   currencies are never summed: `ownedValueByCurrency` returns one row per
+   currency, because adding BRL to USD is not an amount of money in either.
+   `SUPPORTED_CURRENCIES` mirrors `Money.SupportedCurrencies` on the backend
+   and the two move together, like the condition and role whitelists.
+8. **All data flows through the abstract `VaultApi`**
    (`frontend/src/app/core/api/vault-api.ts`), fulfilled by `HttpVaultApi`
    against the .NET backend. There is no mocked data in the frontend — demo
    data lives in the backend seeder. Feature code only ever sees the abstract
    contract.
-8. **Signals + zoneless + OnPush.** State lives in signal stores
+9. **Signals + zoneless + OnPush.** State lives in signal stores
    (`core/state`); no Zone.js patterns.
-9. **URL is state.** Selected group = `?g=`, view = `?v=`, item filters and
+10. **URL is state.** Selected group = `?g=`, view = `?v=`, item filters and
    order = `?cond=` / `?own=` / `?sort=` + `?dir=`, settings tabs = `?tab=`, ids
    in the path. In-collection navigation preserves the query string
    (`queryParamsHandling: 'preserve'`), which is what lets an open item rebuild
@@ -171,10 +204,10 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    first time a filter changed. Links that open a group go through
    `groupLinkParams`, which keeps the filters and drops the ad-hoc order, since
    every group declares its own.
-10. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
+11. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
    `:focus-visible`, status never communicated by color alone. Anything
    draggable also needs a keyboard path (`ui-reorder`, `ui-image-focus`).
-11. **Verify before merging:** `npm run build` clean (warnings included — the
+12. **Verify before merging:** `npm run build` clean (warnings included — the
    6 kB per-component style budget is real), unit tests green, and the
    affected flows exercised in the browser in at least one dark theme **and in
    Portuguese** — it runs ~20% longer than English, so that is where text

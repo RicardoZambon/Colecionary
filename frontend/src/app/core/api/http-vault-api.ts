@@ -3,7 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, throwError } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
-import { Collection, Item, Member, StoreListing, UserProfile } from '../models';
+import { Collection, Item, Member, StoreListing, TenantSettings, UserProfile } from '../models';
+import { problemMessage } from './problem-details';
 import { VaultApi } from './vault-api';
 
 /**
@@ -69,6 +70,14 @@ export class HttpVaultApi extends VaultApi {
     return this.request(this.http.put<Member[]>(`${this.base}/tenant/members`, members));
   }
 
+  getTenantSettings(): Observable<TenantSettings> {
+    return this.request(this.http.get<TenantSettings>(`${this.base}/tenant/settings`));
+  }
+
+  updateTenantSettings(settings: TenantSettings): Observable<TenantSettings> {
+    return this.request(this.http.put<TenantSettings>(`${this.base}/tenant/settings`, settings));
+  }
+
   getProfile(): Observable<UserProfile> {
     return this.request(this.http.get<UserProfile>(`${this.base}/profile`));
   }
@@ -81,9 +90,7 @@ export class HttpVaultApi extends VaultApi {
     return source.pipe(
       catchError((error: unknown) => {
         if (error instanceof HttpErrorResponse) {
-          const problem = error.error as { detail?: string; title?: string } | null;
-          const message = problem?.detail || problem?.title || 'Something went wrong';
-          return throwError(() => new Error(message));
+          return throwError(() => new Error(problemMessage(error) ?? 'Something went wrong'));
         }
         return throwError(() => error);
       }),

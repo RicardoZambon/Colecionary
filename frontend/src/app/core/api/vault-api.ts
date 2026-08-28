@@ -1,5 +1,5 @@
 import { Observable } from 'rxjs';
-import { Collection, Item, Member, StoreListing, UserProfile } from '../models';
+import { Collection, Item, Member, StoreListing, TenantSettings, UserProfile } from '../models';
 
 /**
  * Backend contract for the Vault app.
@@ -26,6 +26,9 @@ export abstract class VaultApi {
   abstract listStoreListings(): Observable<StoreListing[]>;
   abstract listTenantMembers(): Observable<Member[]>;
   abstract updateTenantMembers(members: Member[]): Observable<Member[]>;
+  abstract getTenantSettings(): Observable<TenantSettings>;
+  /** Owner-only on the server; a non-Owner caller gets a 403. */
+  abstract updateTenantSettings(settings: TenantSettings): Observable<TenantSettings>;
   abstract getProfile(): Observable<UserProfile>;
   abstract updateProfile(profile: UserProfile): Observable<UserProfile>;
 }

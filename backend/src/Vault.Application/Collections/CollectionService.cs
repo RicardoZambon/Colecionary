@@ -22,6 +22,14 @@ public class CollectionService(
         return [.. all.Select(c => c.ToDto())];
     }
 
+    /// <summary>One collection, tenant-filtered. Missing reads as not found.</summary>
+    public async Task<CollectionDto> GetAsync(string id, CancellationToken ct)
+    {
+        var collection = await collections.GetAsync(id, ct)
+            ?? throw new NotFoundException(Messages.CollectionNotFoundFor(id));
+        return collection.ToDto();
+    }
+
     public async Task<CollectionDto> CreateAsync(CreateCollectionRequest request, CancellationToken ct)
     {
         await createValidator.ValidateAndThrowAsync(request, ct);
@@ -57,6 +65,7 @@ public class CollectionService(
             LinkShare = dto.LinkShare,
             BannerImageId = dto.BannerImageId,
             IconImageId = dto.IconImageId,
+            Currency = dto.Currency,
             Groups = [.. dto.Groups.Select((g, i) => g.ToEntity(id, tenantId, i))],
             Items = [.. dto.Items.Select((it, i) => it.ToEntity(id, tenantId, i, now))],
             Members = [.. dto.Members.Select(m => m.ToEntity(id, tenantId))],

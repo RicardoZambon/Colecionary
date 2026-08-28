@@ -16,8 +16,20 @@ public sealed record FocalPointDto(double X, double Y);
 /// centred. It travels as one nullable object rather than two loose coordinates
 /// for the same reason <c>GroupSortDto</c> does: half a configuration is not a
 /// configuration, and an x with no y has no meaning to render.
+/// <para>
+/// <c>Width</c>/<c>Height</c> are the intrinsic pixel size, null for an image
+/// uploaded before sizes were recorded and not yet derived. The client uses them
+/// to reserve the right shape before the bytes arrive; null means "lay out
+/// without a hint". They travel as a pair for the same reason the focal
+/// coordinates do.
+/// </para>
 /// </remarks>
-public sealed record ImageMetaDto(Guid Id, string ContentType, FocalPointDto? Focal);
+public sealed record ImageMetaDto(
+    Guid Id,
+    string ContentType,
+    FocalPointDto? Focal,
+    int? Width = null,
+    int? Height = null);
 
 /// <summary>
 /// Body of <c>PUT /api/images/{id}/focal</c>. A null <see cref="Focal"/> clears

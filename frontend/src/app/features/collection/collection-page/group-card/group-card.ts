@@ -8,6 +8,7 @@ import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { MosaicTile, UiBadge, UiCard, UiMosaic, UiProgress } from '../../../../shared/ui';
 import { BadgeTone } from '../../../../shared/ui/badge/badge';
+import { VaultStore } from '../../../../core/state/vault.store';
 
 /**
  * One group, as something you can read at a glance: what it looks like, how
@@ -27,11 +28,18 @@ import { BadgeTone } from '../../../../shared/ui/badge/badge';
 })
 export class GroupCard {
   private readonly i18n = inject(I18nService);
+  private readonly store = inject(VaultStore);
 
   /** Opening a group keeps the filters and drops the ad-hoc order. */
   protected readonly linkParams = groupLinkParams;
 
   readonly collectionId = input.required<string>();
+
+  /**
+   * Amounts here belong to this collection, so they follow its currency rather
+   * than the account default — a collection may override it.
+   */
+  protected readonly currency = computed(() => this.store.currencyFor(this.collectionId()));
   readonly groupId = input.required<string>();
   readonly name = input.required<string>();
   readonly stats = input.required<GroupStats>();

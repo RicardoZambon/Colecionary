@@ -92,7 +92,7 @@ export class GroupDashboard {
 
   private tilesFor(stats: GroupStats): MosaicTile[] {
     return stats.coverPhotoIds.map(id => ({
-      src: this.images.url(id) ?? '',
+      src: this.images.url(id, 'thumb') ?? '',
       position: this.focus.position(id),
     }));
   }

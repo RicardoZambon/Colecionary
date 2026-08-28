@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Vault.Application.Resources;
 using Vault.Application.Setup;
+using Vault.Domain.ValueObjects;
 
 namespace Vault.Api.Setup;
 
@@ -82,6 +83,12 @@ public static class SetupEndpoints
                 OwnerName = request.OwnerName,
                 OwnerPassword = request.OwnerPassword,
                 DefaultTheme = request.DefaultTheme,
+                // The wizard's picker only offers supported codes; anything
+                // else reached the endpoint by hand, and the vault's own
+                // default is a better answer than a column no renderer accepts.
+                DefaultCurrency = Money.IsSupported(request.DefaultCurrency)
+                    ? request.DefaultCurrency!
+                    : Money.FallbackCurrency,
             });
             coordinator.RequestRestart();
 

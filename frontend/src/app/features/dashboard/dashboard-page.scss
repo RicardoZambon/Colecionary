@@ -41,6 +41,19 @@ h1 {
     font-size: 21px;
     font-weight: 700;
     letter-spacing: var(--ls-display);
+    // A tile normally holds one figure. The value tile holds one per currency
+    // the vault is denominated in, so the amounts stack instead of running
+    // together on one line.
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  // Only ever more than one when collections override the account currency;
+  // the second and later lines step down so the tile still has a headline.
+  &__amount:not(:first-child) {
+    font-size: 15px;
+    color: var(--text2);
   }
 
   &__sub {

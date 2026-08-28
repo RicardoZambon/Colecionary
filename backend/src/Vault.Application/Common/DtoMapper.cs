@@ -20,7 +20,8 @@ public static class DtoMapper
         [.. collection.Members.Select(ToDto)],
         collection.LinkShare,
         collection.BannerImageId,
-        collection.IconImageId);
+        collection.IconImageId,
+        collection.Currency);
 
     public static GroupNodeDto ToDto(this Group group) => new(
         group.Id,

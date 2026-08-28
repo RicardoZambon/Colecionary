@@ -3,6 +3,8 @@ import { Router, RouterLink } from '@angular/router';
 
 import { I18nService, MessageKey } from '../../../core/i18n';
 import { ToastService } from '../../../core/state/toast.service';
+import { ArchiveApi } from '../../../core/api/archive-api';
+import { saveFile } from '../../../core/utils/download.util';
 import { VaultStore } from '../../../core/state/vault.store';
 import {
   Collection,
@@ -13,6 +15,7 @@ import {
   SortDirection,
 } from '../../../core/models';
 import { fieldsFor, flattenTree, pathOf, sortFor, subtreeIds } from '../../../core/utils/groups.util';
+import { SUPPORTED_CURRENCIES, currencyLabel, isCurrencyCode } from '../../../core/utils/money.util';
 import { fieldSortKey, sortByOptions, sortLabel } from '../../../core/utils/sort.util';
 import { TPipe } from '../../../shared/pipes/t.pipe';
 import {
@@ -78,6 +81,7 @@ export class CollectionSettingsPage {
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly archives = inject(ArchiveApi);
 
   readonly collectionId = input.required<string>();
   readonly tab = input<string>('general');
@@ -105,6 +109,22 @@ export class CollectionSettingsPage {
   protected readonly directionOptions = computed<SelectOption[]>(() =>
     DIRECTION_KEYS.map(d => ({ value: d.value, label: this.i18n.t(d.label) })),
   );
+
+  /**
+   * The supported codes, led by an explicit "follow the account" entry carrying
+   * the empty string. That entry is not decoration: without it there is no way
+   * back to inheriting once an override has been set, and the collection would
+   * be pinned to whatever code was picked the day it was picked.
+   */
+  protected readonly currencyOverrideOptions = computed<SelectOption[]>(() => {
+    const locale = this.i18n.locale();
+    return [
+      { value: '', label: this.i18n.t('collSettings.general.currencyInherit') },
+      ...SUPPORTED_CURRENCIES.map(code => ({ value: code, label: currencyLabel(code, locale) })).sort(
+        (a, b) => a.label.localeCompare(b.label, locale),
+      ),
+    ];
+  });
 
   protected readonly activeTab = signal('general');
   protected readonly draft = signal<Collection | null>(null);
@@ -246,6 +266,34 @@ export class CollectionSettingsPage {
 
   protected setDescription(description: string): void {
     this.mutate(d => ({ ...d, description }));
+  }
+
+  protected readonly exporting = signal(false);
+
+  /**
+   * Downloads this collection alone, with the photos it uses.
+   *
+   * Sits beside the collection's own name and currency rather than only in
+   * account settings: it is a thing you do *to this collection*, usually while
+   * looking at it, and hunting for it in a list of every collection you own is
+   * the long way round to the one already on screen.
+   */
+  protected async exportCollection(): Promise<void> {
+    const draft = this.draft();
+    if (!draft || this.exporting()) {
+      return;
+    }
+
+    this.exporting.set(true);
+    try {
+      saveFile(await this.archives.downloadCollection(draft.id));
+      this.toast.flash(this.i18n.t('toast.export.collectionDone'));
+    } catch {
+      // Otherwise silent: a failed download just never starts.
+      this.toast.flash(this.i18n.t('toast.export.failed'));
+    } finally {
+      this.exporting.set(false);
+    }
   }
 
   protected async deleteCollection(): Promise<void> {
@@ -431,6 +479,11 @@ export class CollectionSettingsPage {
 
   protected setLinkShare(on: boolean): void {
     this.mutate(d => ({ ...d, linkShare: on }));
+  }
+
+  /** The empty option means "follow the account", which is stored as null. */
+  protected setCurrency(code: string): void {
+    this.mutate(d => ({ ...d, currency: isCurrencyCode(code) ? code : null }));
   }
 
   // --- done ---

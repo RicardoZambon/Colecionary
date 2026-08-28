@@ -62,15 +62,16 @@ describe('TPipe', () => {
     expect(read('.params')).toBe('Remover Ana');
   });
 
-  it('re-renders money with the new locale separators, keeping the dollar sign', () => {
+  it('re-renders money with the new locale separators, keeping the currency', () => {
     const i18n = TestBed.inject(I18nService);
     i18n.apply('en');
     const { fixture, read } = mount();
     fixture.detectChanges();
-    expect(read('.money')).toBe('$4,200');
+    expect(read('.money')).toBe('$4,200.00');
 
     i18n.apply('pt-BR');
     fixture.detectChanges();
-    expect(read('.money')).toBe('$4.200');
+    // The separators follow the language; USD stays USD.
+    expect(read('.money').replace(/\s/g, ' ')).toBe('US$ 4.200,00');
   });
 });
