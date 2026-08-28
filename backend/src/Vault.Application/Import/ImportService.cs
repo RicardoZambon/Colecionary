@@ -53,8 +53,17 @@ public sealed class ImportService(
     /// central directory lives at its end — and returns the collections as they
     /// were actually created, ids and image references already remapped.
     /// </summary>
-    public async Task<IReadOnlyList<CollectionDto>> ImportAsync(
+    /// <remarks>
+    /// Stops and returns a <see cref="ImportPlan"/> instead when the archive
+    /// holds a collection the vault already has by name and
+    /// <paramref name="decisions"/> has not answered for it. Nothing is written
+    /// in that case — the caller asks the user and posts the file again with an
+    /// answer, which costs a second upload and buys a server that keeps no
+    /// half-finished import between the two requests.
+    /// </remarks>
+    public async Task<ImportOutcome> ImportAsync(
         Stream archiveStream,
+        ImportDecisions decisions,
         CancellationToken ct)
     {
         using var archive = OpenArchive(archiveStream);
@@ -66,12 +75,22 @@ public sealed class ImportService(
             throw new DomainRuleException(Messages.ArchiveHasNoCollections);
         }
 
+        var plan = await PlanAsync(incoming, ct);
+        if (!decisions.Confirmed && plan.NeedsConfirmation)
+        {
+            return new ImportOutcome(null, plan);
+        }
+
         var photoMeta = await ReadImageMetadataAsync(archive, ct);
 
         var imported = new List<string>(incoming.Count);
-        foreach (var source in incoming)
+        for (var i = 0; i < incoming.Count; i++)
         {
-            imported.Add(await ImportOneAsync(archive, source, photoMeta, ct));
+            var replacing = plan.Entries[i].ExistingId is { } existing
+                && decisions.Replace.Contains(existing)
+                    ? existing
+                    : null;
+            imported.Add(await ImportOneAsync(archive, incoming[i], photoMeta, replacing, ct));
         }
 
         // Images before collections: a row with no file is a broken picture on
@@ -82,7 +101,38 @@ public sealed class ImportService(
         await images.SaveChangesAsync(ct);
         await collections.SaveChangesAsync(ct);
 
-        return await ReadBackAsync(imported, ct);
+        return new ImportOutcome(await ReadBackAsync(imported, ct), null);
+    }
+
+    /// <summary>
+    /// Pairs each archived collection with the live one it would land on.
+    /// </summary>
+    /// <remarks>
+    /// Matched by name rather than by id, because that is what the user
+    /// recognises: a collection restored once already carries a different id,
+    /// and matching on ids would offer to overwrite nothing while a
+    /// same-named duplicate piles up beside it. Compared case-insensitively and
+    /// trimmed — "Retro Consoles " and "retro consoles" are one collection to
+    /// everyone but a byte comparison. Names are not unique in this model, so
+    /// the first match wins and the client answers with an id, which is.
+    /// </remarks>
+    private async Task<ImportPlan> PlanAsync(
+        IReadOnlyList<CollectionDto> incoming,
+        CancellationToken ct)
+    {
+        var live = await collections.ListIdentitiesAsync(ct);
+        var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in live)
+        {
+            byName.TryAdd(candidate.Name.Trim(), candidate.Id);
+        }
+
+        return new ImportPlan(
+        [
+            .. incoming.Select(source => new ImportEntry(
+                source.Name,
+                byName.GetValueOrDefault(source.Name.Trim()))),
+        ]);
     }
 
     /// <summary>
@@ -228,16 +278,25 @@ public sealed class ImportService(
     }
 
     /// <summary>Stages one archived collection, and returns the id it landed under.</summary>
+    /// <remarks>
+    /// A non-null <c>replacing</c> is the live collection the user chose to
+    /// overwrite; null lands the archive as a new collection instead.
+    /// Overwriting keeps that collection's id — its links and bookmarks keep
+    /// working — and replaces everything else it holds.
+    /// </remarks>
     private async Task<string> ImportOneAsync(
         ZipArchive archive,
         CollectionDto source,
         Dictionary<Guid, ImageMetaDto> photoMeta,
+        string? replacing,
         CancellationToken ct)
     {
         var tenantId = currentTenant.TenantId;
         var now = timeProvider.GetUtcNow();
 
-        var (id, name) = await ResolveIdentityAsync(source, ct);
+        var (id, name) = replacing is null
+            ? await ResolveIdentityAsync(source, ct)
+            : (replacing, source.Name);
         var proposed = PublicIdRepair.Apply(source) with { Id = id, Name = name };
 
         // Before a single byte is written, and on the identity it will actually
@@ -250,7 +309,7 @@ public sealed class ImportService(
         var photos = await CopyPhotosAsync(archive, proposed, photoMeta, tenantId, ct);
         var dto = Remap(proposed, photos);
 
-        collections.Add(new Collection
+        var restored = new Collection
         {
             TenantId = tenantId,
             Id = dto.Id,
@@ -271,8 +330,22 @@ public sealed class ImportService(
                     item.ToEntity(dto.Id, tenantId, i, AddedAt(item, now))),
             ],
             Members = [.. dto.Members.Select(member => member.ToEntity(dto.Id, tenantId))],
-        });
+        };
 
+        if (replacing is null)
+        {
+            collections.Add(restored);
+            return dto.Id;
+        }
+
+        // Overwrite, never merge: ReplaceGraph is the same call the
+        // full-document PUT makes, so the collection ends up holding exactly
+        // what the archive holds — an item the archive lacks is an item the
+        // collection loses. Reusing that path is deliberate; a second way to
+        // write a whole collection is a second set of rules to keep in step.
+        var tracked = await collections.GetAsync(replacing, ct)
+            ?? throw new NotFoundException(Messages.CollectionNotFoundFor(replacing));
+        collections.ReplaceGraph(tracked, restored);
         return dto.Id;
     }
 

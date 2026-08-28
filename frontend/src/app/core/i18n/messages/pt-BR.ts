@@ -171,6 +171,11 @@ export const ptBR: Record<MessageKey, string> = {
   'settings.account.export': 'Exportar ZIP',
   'settings.account.exporting': 'Preparando…',
   'settings.account.import': 'Importar ZIP',
+  'settings.account.perCollection': 'Uma coleção por vez',
+  'settings.account.perCollectionHint':
+    'Um .zip só desta coleção e das fotos que ela usa — para passar para alguém ou restaurar sozinha. Dá para exportar a coleção que você está vendo direto das configurações dela.',
+  'settings.account.collectionMeta': '{items} itens',
+  'settings.account.noCollections': 'Nenhuma coleção ainda.',
   'settings.account.importing': 'Importando…',
   'settings.account.importHint':
     'Lê de volta um .zip do export — uma coleção ou o acervo inteiro. Importar só acrescenta: uma coleção que já está no seu acervo chega ao lado dela como cópia, nunca por cima.',
@@ -424,6 +429,11 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.general.currencyInherit': 'Usar a moeda da conta',
   'collSettings.general.currencyHint':
     'Sobrescreve a moeda da conta ({currency}) só nesta coleção. Nenhum valor é convertido.',
+  'collSettings.general.backup': 'Backup',
+  'collSettings.general.backupHint':
+    'Um .zip desta coleção e das fotos que ela usa. Para ler de volta, use Configurações → Conta e dados.',
+  'collSettings.general.export': 'Exportar esta coleção',
+  'collSettings.general.exporting': 'Preparando…',
   'collSettings.general.delete': 'Excluir coleção',
   'collSettings.done': 'Concluir',
 
@@ -524,6 +534,25 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.import.done.one': '1 coleção importada ✓',
   'toast.import.done.other': '{n} coleções importadas ✓',
   'toast.import.failed': 'Falha ao importar — não deu para ler o arquivo',
+  'toast.export.collectionDone': 'Coleção exportada ✓',
+
+  // --- diálogo de importação -----------------------------------------------
+  'import.title': 'Importar backup',
+  'import.lede.one':
+    'Uma coleção deste arquivo já está no seu acervo com o mesmo nome. Diga o que fazer com ela.',
+  'import.lede.other':
+    '{n} coleções deste arquivo já estão no seu acervo com o mesmo nome. Diga o que fazer com cada uma.',
+  'import.choiceFor': 'O que fazer com {name}',
+  'import.createNew': 'Criar uma nova',
+  'import.overwrite': 'Sobrescrever a existente',
+  'import.willBeCreated': 'nova · será criada',
+  'import.overwriteWarning.one':
+    'Sobrescrever substitui a coleção inteira — o que não estiver no backup vai sumir. Nada é mesclado.',
+  'import.overwriteWarning.other':
+    'Sobrescrever substitui as {n} coleções inteiras — o que não estiver no backup vai sumir. Nada é mesclado.',
+  'import.cancel': 'Cancelar',
+  'import.confirm': 'Importar',
+  'import.importing': 'Importando…',
   'toast.collection.created': 'Coleção criada — dê um nome a ela aqui',
   'toast.collection.added': 'Adicionada ao seu acervo ✓',
   'toast.collection.addFailed': 'Não foi possível adicionar a checklist',

@@ -2,10 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router } from '@angular/router';
 
 import { PLANS } from './plans';
-import { ArchiveApi } from '../../core/api/archive-api';
+import { ArchiveApi, ImportNeedsConfirmation, ImportPlan } from '../../core/api/archive-api';
 import { I18nService, MessageKey } from '../../core/i18n';
 import { ThemeService } from '../../core/state/theme.service';
 import { ToastService } from '../../core/state/toast.service';
+import { ImportDialog } from './import-dialog/import-dialog';
 import { VaultStore } from '../../core/state/vault.store';
 import { MemberRole, PlanId } from '../../core/models';
 import { saveFile } from '../../core/utils/download.util';
@@ -63,7 +64,7 @@ const POLICIES: PolicyDef[] = [
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiSelect, UiTabs, UiToggle],
+  imports: [TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiSelect, UiTabs, UiToggle, ImportDialog],
   templateUrl: './settings-page.html',
   styleUrl: './settings-page.scss',
 })
@@ -186,6 +187,24 @@ export class SettingsPage {
   }
 
   protected readonly importing = signal(false);
+  protected readonly exportingCollection = signal<string | null>(null);
+
+  /** One collection and the photos it uses, rather than the whole vault. */
+  protected async exportCollection(collectionId: string): Promise<void> {
+    if (this.exportingCollection()) {
+      return;
+    }
+
+    this.exportingCollection.set(collectionId);
+    try {
+      saveFile(await this.archives.downloadCollection(collectionId));
+      this.toast.flash(this.i18n.t('toast.export.collectionDone'));
+    } catch {
+      this.toast.flash(this.i18n.t('toast.export.failed'));
+    } finally {
+      this.exportingCollection.set(null);
+    }
+  }
 
   /**
    * Restores a `.zip` written by the export — one collection or a whole vault;
@@ -208,9 +227,39 @@ export class SettingsPage {
       return;
     }
 
+    await this.runImport(file);
+  }
+
+  /** The archive waiting on an answer, and the plan the dialog is showing. */
+  private readonly pendingArchive = signal<File | null>(null);
+  protected readonly importPlan = signal<ImportPlan | null>(null);
+
+  /** Answers the dialog: these ids get overwritten, everything else lands new. */
+  protected async applyImport(replace: string[]): Promise<void> {
+    const file = this.pendingArchive();
+    if (!file) {
+      return;
+    }
+
+    this.importPlan.set(null);
+    this.pendingArchive.set(null);
+    await this.runImport(file, replace);
+  }
+
+  protected cancelImport(): void {
+    this.importPlan.set(null);
+    this.pendingArchive.set(null);
+  }
+
+  /**
+   * One attempt at the import. Called twice at most: once blind, and again with
+   * the user's answer if the server came back asking which collections to
+   * overwrite.
+   */
+  private async runImport(file: File, replace?: string[]): Promise<void> {
     this.importing.set(true);
     try {
-      const imported = await this.store.importArchive(file);
+      const imported = await this.store.importArchive(file, replace);
       this.toast.flash(
         this.i18n.t(
           imported.length === 1 ? 'toast.import.done.one' : 'toast.import.done.other',
@@ -218,6 +267,14 @@ export class SettingsPage {
         ),
       );
     } catch (error) {
+      if (error instanceof ImportNeedsConfirmation) {
+        // Nothing was written; the file is held so the answer can be sent with
+        // it, and the dialog does the asking.
+        this.pendingArchive.set(file);
+        this.importPlan.set(error.plan);
+        return;
+      }
+
       // The server's own explanation when it gave one — it is localized, and it
       // is the only thing that can say *why* an archive was refused.
       const reason = error instanceof Error ? error.message : '';

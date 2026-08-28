@@ -3,6 +3,8 @@ import { Router, RouterLink } from '@angular/router';
 
 import { I18nService, MessageKey } from '../../../core/i18n';
 import { ToastService } from '../../../core/state/toast.service';
+import { ArchiveApi } from '../../../core/api/archive-api';
+import { saveFile } from '../../../core/utils/download.util';
 import { VaultStore } from '../../../core/state/vault.store';
 import {
   Collection,
@@ -79,6 +81,7 @@ export class CollectionSettingsPage {
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly archives = inject(ArchiveApi);
 
   readonly collectionId = input.required<string>();
   readonly tab = input<string>('general');
@@ -263,6 +266,34 @@ export class CollectionSettingsPage {
 
   protected setDescription(description: string): void {
     this.mutate(d => ({ ...d, description }));
+  }
+
+  protected readonly exporting = signal(false);
+
+  /**
+   * Downloads this collection alone, with the photos it uses.
+   *
+   * Sits beside the collection's own name and currency rather than only in
+   * account settings: it is a thing you do *to this collection*, usually while
+   * looking at it, and hunting for it in a list of every collection you own is
+   * the long way round to the one already on screen.
+   */
+  protected async exportCollection(): Promise<void> {
+    const draft = this.draft();
+    if (!draft || this.exporting()) {
+      return;
+    }
+
+    this.exporting.set(true);
+    try {
+      saveFile(await this.archives.downloadCollection(draft.id));
+      this.toast.flash(this.i18n.t('toast.export.collectionDone'));
+    } catch {
+      // Otherwise silent: a failed download just never starts.
+      this.toast.flash(this.i18n.t('toast.export.failed'));
+    } finally {
+      this.exporting.set(false);
+    }
   }
 
   protected async deleteCollection(): Promise<void> {

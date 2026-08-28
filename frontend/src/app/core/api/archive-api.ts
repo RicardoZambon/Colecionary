@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
@@ -10,6 +10,33 @@ import { problemMessage } from './problem-details';
 export interface ArchiveDownload {
   blob: Blob;
   filename: string;
+}
+
+/** One collection inside an archive, paired with the live one it would land on. */
+export interface ImportEntry {
+  name: string;
+  /**
+   * The collection already in the vault under that name, or null when the name
+   * is free. It is the id — not the name — that answers the question, since the
+   * user can rename between being asked and answering.
+   */
+  existingId: string | null;
+}
+
+/** What an archive would do to the vault, as worked out by the server. */
+export interface ImportPlan {
+  entries: ImportEntry[];
+}
+
+/**
+ * The archive holds a collection the vault already has by name, and the server
+ * stopped to ask rather than pick for the user. Nothing was written.
+ */
+export class ImportNeedsConfirmation extends Error {
+  constructor(readonly plan: ImportPlan) {
+    super('import needs confirmation');
+    this.name = 'ImportNeedsConfirmation';
+  }
 }
 
 const FALLBACK_FILENAME = 'vault-export.zip';
@@ -50,14 +77,28 @@ export class ArchiveApi {
    * The zip goes up as the raw body: it is one file with no fields beside it,
    * so a multipart envelope would buy nothing.
    */
-  async importArchive(file: File): Promise<Collection[]> {
+  async importArchive(file: File, replace?: readonly string[]): Promise<Collection[]> {
+    // `replace` present at all means the user has answered — an empty array is
+    // a real answer ("create new ones"), and must not read as "not asked yet".
+    const params = replace
+      ? new HttpParams({ fromObject: { confirmed: 'true', replace: [...replace] } })
+      : undefined;
+
     try {
       return await firstValueFrom(
         this.http.post<Collection[]>(`${environment.apiBaseUrl}/import`, file, {
           headers: { 'Content-Type': 'application/zip' },
+          params,
         }),
       );
     } catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 409) {
+        // Not a failure: the server is asking which collections to overwrite.
+        // The file has to go up again with the answer — the alternative, a
+        // server that parks the upload between the two requests, buys one less
+        // upload at the price of state with a lifetime to manage.
+        throw new ImportNeedsConfirmation(error.error as ImportPlan);
+      }
       // The server's `detail`, in the user's language: "that file isn't a Vault
       // archive", "this backup was made by a newer version". Nothing here could
       // reconstruct those, and a generic "import failed" would send someone

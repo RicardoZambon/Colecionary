@@ -154,14 +154,25 @@ export class VaultStore {
   /**
    * Restores collections from an archive — one collection or a whole vault.
    *
-   * The server decides what each one lands as: a collection whose id is free
-   * comes back under it, one whose id is taken arrives as a separate copy, and
-   * every photo is re-uploaded under a new id. So the results are appended, never
-   * merged over what is already here — an import adds, it never overwrites.
+   * Without `replace`, the server stops and asks whenever the archive holds a
+   * collection this vault already has by name, throwing
+   * `ImportNeedsConfirmation` with the plan. Passing `replace` answers it: the
+   * ids listed are overwritten wholesale, and every other archived collection
+   * lands as a new one. An empty array is a valid answer — "create new ones" —
+   * so it must be passed, not omitted.
+   *
+   * Results are folded in by id rather than appended: an overwritten collection
+   * comes back under the id already on screen, and appending it would leave the
+   * sidebar showing the same collection twice.
    */
-  async importArchive(file: File): Promise<Collection[]> {
-    const imported = await this.archives.importArchive(file);
-    this.collectionsState.update(all => [...all, ...imported]);
+  async importArchive(file: File, replace?: readonly string[]): Promise<Collection[]> {
+    const imported = await this.archives.importArchive(file, replace);
+    this.collectionsState.update(all => {
+      const byId = new Map(imported.map(c => [c.id, c]));
+      const overwritten = all.map(c => byId.get(c.id) ?? c);
+      const known = new Set(all.map(c => c.id));
+      return [...overwritten, ...imported.filter(c => !known.has(c.id))];
+    });
     return imported;
   }
 

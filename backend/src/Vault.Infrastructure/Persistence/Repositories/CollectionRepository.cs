@@ -10,6 +10,12 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
         // Creation order — matches the design's sidebar/dashboard ordering.
         WithGraph().OrderBy(c => c.CreatedAtUtc).ThenBy(c => c.Id).ToListAsync(ct);
 
+    public Task<List<CollectionIdentity>> ListIdentitiesAsync(CancellationToken ct) =>
+        db.Collections
+            .OrderBy(c => c.CreatedAtUtc).ThenBy(c => c.Id)
+            .Select(c => new CollectionIdentity(c.Id, c.Name))
+            .ToListAsync(ct);
+
     public Task<Collection?> GetAsync(string id, CancellationToken ct) =>
         WithGraph().FirstOrDefaultAsync(c => c.Id == id, ct);
 

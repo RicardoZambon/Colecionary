@@ -32,6 +32,12 @@ h1 {
   margin: 5px 0 0;
 }
 
+// Opens a second block inside a section that already had one — the
+// per-collection backups under the vault-wide ones.
+.heading.spaced {
+  margin-top: 22px;
+}
+
 .mono {
   font-family: var(--font-mono);
 }

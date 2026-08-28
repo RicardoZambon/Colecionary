@@ -122,6 +122,40 @@
         />
       </ui-card>
       <p class="sub">{{ 'settings.account.importHint' | t }}</p>
+
+      <div class="heading spaced">{{ 'settings.account.perCollection' | t }}</div>
+      <p class="sub">{{ 'settings.account.perCollectionHint' | t }}</p>
+      @for (collection of store.collections(); track collection.id) {
+        <ui-card class="account-card">
+          <span class="who">
+            <span class="name">{{ collection.name }}</span>
+            <span class="email">{{
+              'settings.account.collectionMeta' | t: { items: collection.items.length }
+            }}</span>
+          </span>
+          <ui-button
+            variant="ghost"
+            size="sm"
+            [disabled]="exportingCollection() === collection.id"
+            (click)="exportCollection(collection.id)"
+          >
+            {{
+              (exportingCollection() === collection.id
+                ? 'settings.account.exporting'
+                : 'settings.account.export') | t
+            }}
+          </ui-button>
+        </ui-card>
+      } @empty {
+        <p class="sub">{{ 'settings.account.noCollections' | t }}</p>
+      }
+
+      <app-import-dialog
+        [plan]="importPlan()"
+        [busy]="importing()"
+        (confirmed)="applyImport($event)"
+        (cancelled)="cancelImport()"
+      />
     </section>
   }
   @default {

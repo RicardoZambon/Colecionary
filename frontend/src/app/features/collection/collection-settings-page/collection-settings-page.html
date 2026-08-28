@@ -206,6 +206,14 @@
             (valueChange)="setCurrency($event)"
           />
         </ui-field>
+        <div class="backup">
+          <div class="heading">{{ 'collSettings.general.backup' | t }}</div>
+          <p class="sub">{{ 'collSettings.general.backupHint' | t }}</p>
+          <ui-button variant="ghost" [disabled]="exporting()" (click)="exportCollection()">
+            {{ (exporting() ? 'collSettings.general.exporting' : 'collSettings.general.export') | t }}
+          </ui-button>
+        </div>
+
         <ui-button variant="danger" (click)="deleteCollection()">{{ 'collSettings.general.delete' | t }}</ui-button>
       </div>
     }

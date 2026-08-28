@@ -9,6 +9,7 @@ using Vault.Application.Archives;
 using Vault.Application.Collections.Dtos;
 using Vault.Application.Images;
 using Vault.Application.Images.Dtos;
+using Vault.Application.Import;
 
 namespace Vault.IntegrationTests;
 
@@ -98,12 +99,78 @@ public class CollectionArchiveTests(VaultApiFactory factory)
     }
 
     [Fact]
-    public async Task ImportingOverALiveCollection_LandsBesideItInsteadOfReplacingIt()
+    public async Task Import_AsksBeforeTouchingACollectionOfTheSameName()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+        var collection = await SeedCollectionAsync(client, banner: null, photo: null);
+        var archive = await DownloadBytesAsync(client, $"/api/export/collections/{collection.Id}");
+
+        var response = await PostArchiveAsync(client, archive);
+
+        // Overwriting is destructive and unmergeable, so it is never a default.
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var plan = await response.Content.ReadFromJsonAsync<ImportPlan>();
+        var entry = Assert.Single(plan!.Entries);
+        Assert.Equal(collection.Name, entry.Name);
+        Assert.Equal(collection.Id, entry.ExistingId);
+
+        // And asking cost nothing: the question is answered before any write.
+        var live = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        Assert.Equal(collection.Items.Count, live!.Single(c => c.Id == collection.Id).Items.Count);
+    }
+
+    [Fact]
+    public async Task Import_OverwritesTheCollectionTheUserPicked_AndKeepsItsId()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+        var collection = await SeedCollectionAsync(client, banner: null, photo: null);
+        var archive = await DownloadBytesAsync(client, $"/api/export/collections/{collection.Id}");
+
+        // The live collection drifts away from the archive: an item the backup
+        // has is edited, and one it has never seen is added.
+        var edited = collection with
+        {
+            Items =
+            [
+                collection.Items[0] with { Name = "Edited since the backup" },
+                new ItemDto(
+                    Id: "added-after-the-backup",
+                    Name: "Added after the backup",
+                    Description: string.Empty,
+                    Year: 2001,
+                    Value: 5m,
+                    GroupId: string.Empty,
+                    Tags: [],
+                    Img: string.Empty,
+                    Custom: []),
+            ],
+        };
+        await client.PutAsJsonAsync($"/api/collections/{collection.Id}", edited);
+
+        var imported = Assert.Single(await ImportAsync(client, archive, collection.Id));
+
+        // Same collection — its id, and therefore its links, survive.
+        Assert.Equal(collection.Id, imported.Id);
+        Assert.Equal(collection.Name, imported.Name);
+
+        // Overwritten, not merged: the archive is now the whole content, so the
+        // edit is undone and the item added afterwards is gone.
+        Assert.Equal(collection.Items[0].Name, Assert.Single(imported.Items).Name);
+        Assert.DoesNotContain(imported.Items, item => item.Id == "added-after-the-backup");
+
+        // And it replaced rather than duplicated.
+        var all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        Assert.Single(all!, c => c.Name == collection.Name);
+    }
+
+    [Fact]
+    public async Task Import_LandsBesideALiveCollectionWhenTheAnswerIsNotToOverwrite()
     {
         var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var collection = await SeedCollectionAsync(client, await UploadAsync(client), photo: null);
         var archive = await DownloadBytesAsync(client, $"/api/export/collections/{collection.Id}");
 
+        // Confirmed, replacing nothing: the user said "make a new one".
         var imported = Assert.Single(await ImportAsync(client, archive));
 
         Assert.NotEqual(collection.Id, imported.Id);
@@ -323,9 +390,17 @@ public class CollectionArchiveTests(VaultApiFactory factory)
     private static async Task<ZipArchive> DownloadArchiveAsync(HttpClient client, string url) =>
         new(new MemoryStream(await DownloadBytesAsync(client, url)), ZipArchiveMode.Read);
 
-    private static async Task<List<CollectionDto>> ImportAsync(HttpClient client, byte[] archive)
+    /// <summary>
+    /// Imports, answering any name collision the way <paramref name="replace"/>
+    /// says. The default — confirmed, replacing nothing — is "create new ones",
+    /// which is what every test written before overwriting existed assumed.
+    /// </summary>
+    private static async Task<List<CollectionDto>> ImportAsync(
+        HttpClient client,
+        byte[] archive,
+        params string[] replace)
     {
-        var response = await PostArchiveAsync(client, archive);
+        var response = await PostArchiveAsync(client, archive, confirmed: true, replace);
         if (!response.IsSuccessStatusCode)
         {
             // The ProblemDetails body, not just the status: an import rejects
@@ -335,11 +410,24 @@ public class CollectionArchiveTests(VaultApiFactory factory)
         return (await response.Content.ReadFromJsonAsync<List<CollectionDto>>())!;
     }
 
-    private static Task<HttpResponseMessage> PostArchiveAsync(HttpClient client, byte[] archive)
+    private static Task<HttpResponseMessage> PostArchiveAsync(
+        HttpClient client,
+        byte[] archive,
+        bool confirmed = false,
+        params string[] replace)
     {
         var content = new ByteArrayContent(archive);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
-        return client.PostAsync("/api/import", content);
+
+        var query = new List<string>();
+        if (confirmed)
+        {
+            query.Add("confirmed=true");
+        }
+        query.AddRange(replace.Select(id => $"replace={Uri.EscapeDataString(id)}"));
+
+        var url = query.Count == 0 ? "/api/import" : $"/api/import?{string.Join('&', query)}";
+        return client.PostAsync(url, content);
     }
 
     /// <summary>

@@ -171,6 +171,11 @@ export const en = {
   'settings.account.export': 'Export ZIP',
   'settings.account.exporting': 'Preparing…',
   'settings.account.import': 'Import ZIP',
+  'settings.account.perCollection': 'One collection at a time',
+  'settings.account.perCollectionHint':
+    'A .zip of a single collection and the photos it uses — a copy to hand to someone, or to restore on its own. You can also export the one you are looking at from its own settings.',
+  'settings.account.collectionMeta': '{items} items',
+  'settings.account.noCollections': 'No collections yet.',
   'settings.account.importing': 'Importing…',
   'settings.account.importHint':
     'Reads back a .zip from the export — one collection or a whole vault. An import only ever adds: a collection already in your vault arrives beside it as a copy, never over it.',
@@ -424,6 +429,11 @@ export const en = {
   'collSettings.general.currencyInherit': 'Use the account currency',
   'collSettings.general.currencyHint':
     'Overrides the account currency ({currency}) for this collection only. No amount is converted.',
+  'collSettings.general.backup': 'Backup',
+  'collSettings.general.backupHint':
+    'A .zip of this collection and the photos it uses. Read it back from Settings → Account & data.',
+  'collSettings.general.export': 'Export this collection',
+  'collSettings.general.exporting': 'Preparing…',
   'collSettings.general.delete': 'Delete collection',
   'collSettings.done': 'Done',
 
@@ -521,11 +531,33 @@ export const en = {
   'toast.member.removed': 'Access removed',
   'toast.export.done': 'Exported vault-export.zip ✓',
   'toast.export.failed': "Export failed — couldn't build the archive",
+  'toast.export.collectionDone': 'Collection exported ✓',
   // Not pluralised in code: the count is spelled into the sentence, and one
   // collection restoring is the common case worth reading naturally.
   'toast.import.done.one': 'Imported 1 collection ✓',
   'toast.import.done.other': 'Imported {n} collections ✓',
   'toast.import.failed': 'Import failed — the archive could not be read',
+
+  // --- import dialog -------------------------------------------------------
+  'import.title': 'Import backup',
+  // Counted sentences are spelled out per case rather than assembled: the `t`
+  // pipe substitutes placeholders and does not do plural rules, and "1
+  // collections" is exactly the seam where that shows.
+  'import.lede.one':
+    'One collection in this file is already in your vault under the same name. Say what should happen to it.',
+  'import.lede.other':
+    '{n} collections in this file are already in your vault under the same name. Say what should happen to each.',
+  'import.choiceFor': 'What to do with {name}',
+  'import.createNew': 'Create a new one',
+  'import.overwrite': 'Overwrite the existing one',
+  'import.willBeCreated': 'new · will be created',
+  'import.overwriteWarning.one':
+    'Overwriting replaces that collection entirely — anything the backup does not have will be gone. Nothing is merged.',
+  'import.overwriteWarning.other':
+    'Overwriting replaces those {n} collections entirely — anything the backup does not have will be gone. Nothing is merged.',
+  'import.cancel': 'Cancel',
+  'import.confirm': 'Import',
+  'import.importing': 'Importing…',
   'toast.collection.created': 'Collection created — name it here',
   'toast.collection.added': 'Added to your vault ✓',
   'toast.collection.addFailed': 'Could not add checklist',

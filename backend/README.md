@@ -180,16 +180,36 @@ dispose, which Kestrel rejects on the response body. The alternative,
 (`collection.json` or `collections.json`) decides which, since a hand-edited
 manifest can lie and an entry cannot. The zip goes up as the raw request body.
 
-Two rules make a restore safe to run without a confirmation dialog:
-
-- **Nothing already in the vault is overwritten.** An archived collection keeps
-  its id when that id is free — restoring one you deleted brings back its links
-  — and otherwise lands beside the live one as a copy, renamed. An import can
-  therefore be undone by deleting what it created.
 - **Images are copied, never referenced.** An id in an archive belongs to
   whoever exported it, so every photo is written afresh under a new id in the
   importing tenant's storage and every reference is remapped. Framing rides
   along on `images.json`.
+- **Overwriting is the user's decision, never a default.** When the archive
+  holds a collection the vault already has *by name*, the request answers
+  **409** with an `ImportPlan` — every collection in the file, each paired with
+  the live one it would land on — and writes nothing. The client asks, then
+  posts the same file again with `?confirmed=true&replace=<id>&replace=<id>`.
+  Ids named there are overwritten; everything else lands as a new collection.
+  An archive with no name collisions imports on the first request.
+- **Overwriting replaces, and never merges.** It goes through the same
+  `ReplaceGraph` the full-document PUT uses, so the collection ends up holding
+  exactly what the archive holds: an item the archive lacks is an item the
+  collection loses. The collection keeps its id, so its links keep working.
+- **Creating instead keeps nothing of the live one.** The archived collection
+  keeps its own id when that id is free — restoring one you deleted brings back
+  its links — and is renamed when the name is taken, so two identically named
+  collections never appear.
+
+Matching is by name rather than by id, trimmed and case-insensitive, because
+that is what the user recognises: a collection restored once already carries a
+different id, and matching on ids would offer to overwrite nothing while a
+same-named duplicate piled up beside it. Names are not unique in this model, so
+the plan answers with an id, which is.
+
+The second upload is deliberate. Parking the first one server-side between the
+two requests would save the bytes and cost a stash with a lifetime, an expiry
+and a cleanup path; a stateless retry has none of that, and an archive with
+nothing to ask about never pays it.
 
 ### Archive versioning
 
@@ -238,7 +258,7 @@ documented follow-ups.
 | GET / PUT | `/api/profile` | email immutable in v1 |
 | GET | `/api/export` | zip: `collections.json` + `images/…` for the caller's tenant |
 | GET | `/api/export/collections/{id}` | zip of one collection and only the images it references |
-| POST | `/api/import` | raw-body zip; adds collections, never overwrites; refuses a newer archive format |
+| POST | `/api/import` | raw-body zip; 409 + `ImportPlan` when a name collides, `?confirmed=true&replace=<id>` answers it; refuses a newer archive format |
 
 JSON is camelCase with string enums — byte-compatible with the Angular
 models in `frontend/src/app/core/models/`.
