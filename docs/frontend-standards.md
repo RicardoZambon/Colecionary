@@ -133,7 +133,7 @@ All are exported from `shared/ui/index.ts`.
 
 | Component | Selector | API (inputs / models / outputs) |
 | --- | --- | --- |
-| Button | `ui-button` | `variant: 'primary' \| 'ghost' \| 'danger'`, `size: 'md' \| 'sm'`, `block`, `disabled`, `type`, `ariaLabel` (required when the label is a bare glyph; also becomes the tooltip) — content-projected label |
+| Button | `ui-button` | `variant: 'primary' \| 'ghost' \| 'danger' \| 'link' \| 'icon'`, `size: 'md' \| 'sm'`, `block`, `disabled`, `muted`, `type`, `ariaLabel` (required when the label is a bare glyph; also becomes the tooltip) — content-projected label. `link` is a text action inside a dense row, `icon` a bare glyph (the ✕ that removes a copy, a field, a member). `muted` reads as unavailable but still fires: `disabled` would be the obvious choice and is the wrong one, because a dead control cannot say *why* it is dead — removing the tenant's owner has an explanation the click is what surfaces. An action that navigates stays a real `<a>`; see the `a.link` note in `collection-settings-page.scss` |
 | Field | `ui-field` | `label` (required) — wraps any control with the mono uppercase label |
 | Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`; outputs `keydown`, `blurred` |
 | Textarea | `ui-textarea` | `value` (model), `rows`, `placeholder` |

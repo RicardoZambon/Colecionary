@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
-export type ButtonVariant = 'primary' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'ghost' | 'danger' | 'link' | 'icon';
 export type ButtonSize = 'md' | 'sm';
 
 /**
@@ -21,6 +21,9 @@ export type ButtonSize = 'md' | 'sm';
       [class.btn--primary]="variant() === 'primary'"
       [class.btn--ghost]="variant() === 'ghost'"
       [class.btn--danger]="variant() === 'danger'"
+      [class.btn--link]="variant() === 'link'"
+      [class.btn--icon]="variant() === 'icon'"
+      [class.btn--muted]="muted()"
       [class.btn--sm]="size() === 'sm'"
       [class.btn--block]="block()"
     >
@@ -90,6 +93,70 @@ export type ButtonSize = 'md' | 'sm';
         border-color: var(--warn);
       }
     }
+
+    /*
+     * An action that reads as text rather than as a control — "add a subgroup",
+     * "add a field" — sitting inside a row that is already dense with borders.
+     * A fourth bordered box there would compete with the thing it acts on.
+     */
+    .btn--link {
+      background: none;
+      border: 0;
+      padding: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+
+      &:hover:not(:disabled) {
+        text-decoration: underline;
+      }
+    }
+
+    .btn--link.btn--sm {
+      font-size: 11px;
+      padding: 0;
+    }
+
+    /*
+     * A bare glyph — the ✕ that removes a copy, a field, a member. Quiet until
+     * pointed at, then warn-coloured, because removal is the one action here
+     * that cannot be undone by clicking again.
+     */
+    .btn--icon {
+      background: none;
+      border: 0;
+      padding: 2px 4px;
+      min-width: 20px;
+      font-size: 13px;
+      line-height: 1;
+      color: var(--muted);
+
+      &:hover:not(:disabled) {
+        color: var(--warn);
+      }
+    }
+
+    .btn--icon.btn--sm {
+      font-size: 11px;
+      padding: 1px 3px;
+    }
+
+    /*
+     * Looks unavailable, still clicks. The disabled attribute would be the
+     * obvious thing and is the wrong one: a dead control cannot say why, and
+     * these are the cases with something to say — removing the tenant's owner,
+     * for instance. The click is what surfaces the explanation.
+     */
+    .btn--muted:not(:disabled) {
+      color: var(--border);
+      cursor: default;
+
+      &:hover {
+        color: var(--border);
+        border-color: var(--border);
+        text-decoration: none;
+      }
+    }
   `,
 })
 export class UiButton {
@@ -104,4 +171,10 @@ export class UiButton {
   readonly ariaLabel = input('');
   /** Stretch to the full width of the container (e.g. plan cards). */
   readonly block = input(false);
+  /**
+   * Reads as unavailable but still fires. For actions that are refused with a
+   * reason the user deserves to hear — see the styles for why this is not
+   * `disabled`.
+   */
+  readonly muted = input(false);
 }

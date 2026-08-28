@@ -56,13 +56,12 @@
               [disabled]="member.role === 'Owner'"
               (valueChange)="setMemberRole(member.email, $event)"
             />
-            <button
-              type="button"
-              class="remove"
-              [class.disabled]="member.role === 'Owner'"
-              [attr.aria-label]="'settings.access.removeMember' | t: { name: member.name }"
+            <ui-button
+              variant="icon"
+              [muted]="member.role === 'Owner'"
+              [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
               (click)="removeMember(member.email)"
-            >✕</button>
+            >✕</ui-button>
           </div>
         }
       </ui-card>

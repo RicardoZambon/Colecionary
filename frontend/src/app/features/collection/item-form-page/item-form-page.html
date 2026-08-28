@@ -60,13 +60,11 @@
                 [value]="copy.status"
                 (valueChange)="patchCopy($index, { status: $any($event) })"
               />
-              <button
-                type="button"
-                class="copies__remove"
-                [title]="'itemForm.removeCopy' | t"
-                [attr.aria-label]="'itemForm.removeCopy' | t"
+              <ui-button
+                variant="icon"
+                [ariaLabel]="'itemForm.removeCopy' | t"
                 (click)="removeCopy($index)"
-              >✕</button>
+              >✕</ui-button>
             </div>
             <div class="copies__fields">
               <ui-field [label]="'itemForm.paid' | t">

@@ -18,43 +18,20 @@ h1 {
   margin: 0;
 }
 
-.link {
-  background: none;
-  border: none;
-  padding: 0;
+/*
+ * The anchor twin of ui-button's link variant. It stays a real <a> because it
+ * navigates — middle-click, open-in-new-tab and the status bar all depend on
+ * that, and a button pretending to be a link takes those away. Only the four
+ * declarations that make it look the same live here.
+ */
+a.link {
   font-size: 12px;
   font-weight: 600;
-  font-family: var(--font-body);
   color: var(--accent);
-  cursor: pointer;
-
-  &.small {
-    font-size: 11px;
-  }
-}
-
-.remove {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 13px;
-  width: 16px;
-  text-align: center;
-  flex: none;
+  text-decoration: none;
 
   &:hover {
-    color: var(--warn);
-  }
-
-  &.disabled {
-    color: var(--border);
-    cursor: default;
-
-    &:hover {
-      color: var(--border);
-    }
+    text-decoration: underline;
   }
 }
 
