@@ -53,8 +53,13 @@ import { UiButton } from '../button/button';
      * arrows invisible against a busy picture. Doubling the class outranks it
      * without reaching for !important, and without giving every other button in
      * the app a variant only this one place needs.
+     *
+     * The :host prefix is the other half, and just as load-bearing: ::ng-deep on
+     * its own is not scoped to this component at all — it emits a plain global
+     * rule, so these chip dimensions leaked onto every button on any page that
+     * renders a reorder control, and "Save item" came out the size of an arrow.
      */
-    ::ng-deep .btn.btn {
+    :host ::ng-deep .btn.btn {
       padding: 2px 7px;
       background: var(--panel2);
       border-color: var(--border);
@@ -67,7 +72,7 @@ import { UiButton } from '../button/button';
      * transparent, the very thing this fixes. The chip stays solid and only the
      * glyph fades, so "can't move further" still reads as a button.
      */
-    ::ng-deep .btn.btn:disabled {
+    :host ::ng-deep .btn.btn:disabled {
       opacity: 1;
       color: var(--text2);
     }
