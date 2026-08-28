@@ -173,6 +173,14 @@ static WebApplication BuildConfiguredApplication(WebApplicationBuilder builder, 
                 .AllowAnyHeader()
                 .AllowAnyMethod();
         }
+
+        // AllowAnyHeader governs what a *request* may send; a response header is
+        // hidden from cross-origin script unless it is named here. Without it an
+        // archive download cannot read the name the server chose and falls back
+        // to a generic one — which looked correct for the vault export, whose
+        // fallback happens to be its real name, and only showed up once a single
+        // collection started naming its own file.
+        policy.WithExposedHeaders("Content-Disposition");
     }));
 
     var app = builder.Build();
