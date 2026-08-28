@@ -56,12 +56,15 @@
     <div class="layout">
       <div class="gallery">
         @if (mainPhoto(); as photo) {
-          <div
+          <button
+            type="button"
             class="gallery__main gallery__main--photo"
             [class.wanted]="!owned()"
+            [attr.aria-label]="'item.openViewer' | t"
             [style.background-image]="'url(' + photo.url + ')'"
             [style.background-position]="focus.position(photo.id)"
-          ></div>
+            (click)="viewerOpen.set(true)"
+          ></button>
         } @else {
           <div class="gallery__main">img: {{ it.img }}</div>
         }
@@ -72,7 +75,7 @@
               class="thumb thumb--photo"
               [class.thumb--active]="$index === selectedPhoto()"
               [class.wanted]="!owned()"
-              [style.background-image]="'url(' + photo.url + ')'"
+              [style.background-image]="'url(' + photo.thumb + ')'"
               [style.background-position]="focus.position(photo.id)"
               (click)="selectedPhoto.set($index)"
             ></button>
@@ -82,9 +85,23 @@
           }
         </div>
         @if (mainPhoto(); as photo) {
-          <ui-button variant="ghost" size="sm" (click)="reframe(photo.id)">{{ 'item.adjustFraming' | t }}</ui-button>
+          <div class="gallery__actions">
+            <ui-button variant="ghost" size="sm" (click)="viewerOpen.set(true)">
+              {{ 'item.viewLarge' | t }}
+            </ui-button>
+            <ui-button variant="ghost" size="sm" (click)="reframe(photo.id)">
+              {{ 'item.adjustFraming' | t }}
+            </ui-button>
+          </div>
         }
       </div>
+
+      <ui-lightbox
+        [ids]="photoIds()"
+        [subject]="it.name"
+        [(index)]="selectedPhoto"
+        [(open)]="viewerOpen"
+      />
 
       <div class="details">
         <div>
@@ -95,13 +112,13 @@
         <div class="price-row">
           <ui-badge [tone]="tone()">{{ badge() }}</ui-badge>
           <span class="value" [attr.title]="fromPaid() ? ('value.fromPaidHint' | t) : null">{{
-            headlineValue() | itemValue: fromPaid()
+            headlineValue() | itemValue: currency() : fromPaid()
           }}</span>
           <!-- Nothing to qualify when there is no figure: a lone "—" reads
                better than "— market estimate". -->
           @if (owned() || headlineValue()) {
             <span class="note">{{
-              owned() ? ('item.paid' | t: { value: paidTotal() | money }) : ('item.marketEstimate' | t)
+              owned() ? ('item.paid' | t: { value: paidTotal() | money: currency() }) : ('item.marketEstimate' | t)
             }}</span>
           }
         </div>
@@ -119,7 +136,7 @@
           <ui-section-label class="fields__heading">{{ 'item.details' | t }}</ui-section-label>
           <div class="field-row"><span class="key">{{ 'item.year' | t }}</span><span>{{ it.year }}</span></div>
           <div class="field-row"><span class="key">{{ 'item.group' | t }}</span><span>{{ groupPath() }}</span></div>
-          <div class="field-row"><span class="key">{{ valuePerCopyKey() | t }}</span><span>{{ unitValue() | itemValue: fromPaid() }}</span></div>
+          <div class="field-row"><span class="key">{{ valuePerCopyKey() | t }}</span><span>{{ unitValue() | itemValue: currency() : fromPaid() }}</span></div>
         </ui-card>
 
         @if (owned()) {
@@ -128,8 +145,8 @@
             @for (copy of copyRows(); track copy.id) {
               <div class="copy-row">
                 <ui-badge [tone]="copy.tone">{{ copy.conditionKey | t }}</ui-badge>
-                <span class="copy-row__paid">{{ 'item.copyPaid' | t: { value: copy.price | money } }}</span>
-                <span class="copy-row__est">{{ copy.value | itemValue: copy.valueFromPaid }}</span>
+                <span class="copy-row__paid">{{ 'item.copyPaid' | t: { value: copy.price | money: currency() } }}</span>
+                <span class="copy-row__est">{{ copy.value | itemValue: currency() : copy.valueFromPaid }}</span>
                 @if (copy.acquiredOnLabel) {
                   <span class="copy-row__date">{{ copy.acquiredOnLabel }}</span>
                 }

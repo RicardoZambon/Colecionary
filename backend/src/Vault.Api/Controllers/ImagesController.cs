@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Vault.Application.Images;
 using Vault.Application.Images.Dtos;
 using Vault.Application.Resources;
+using Vault.Domain.Enums;
 
 namespace Vault.Api.Controllers;
 
@@ -29,11 +30,31 @@ public class ImagesController(ImageService images) : ControllerBase
     /// Anonymous by design: &lt;img&gt; tags can't attach Authorization headers,
     /// so the unguessable GUID acts as the capability. Follow-up: signed URLs.
     /// </summary>
+    /// <param name="id">The image's unguessable id.</param>
+    /// <param name="size">
+    /// Which rendition to serve. Defaults to <see cref="ImageVariant.Display"/>
+    /// rather than to the original: every surface in the app wants a resized
+    /// copy, and defaulting to the original would mean every caller that
+    /// predates variants — including URLs already sitting in a user's cache —
+    /// kept downloading full-size photos.
+    /// </param>
+    /// <param name="ct">Cancellation.</param>
+    /// <remarks>
+    /// The variant rides as a query parameter rather than a path segment so an
+    /// id stays one canonical resource with renditions, and so the existing
+    /// route keeps matching unchanged. `Vary` is not needed: the URL differs per
+    /// variant, so caches key them apart on their own.
+    /// </remarks>
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
-    public async Task<IActionResult> Get(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Get(
+        Guid id,
+        [FromQuery] ImageVariant size = ImageVariant.Display,
+        CancellationToken ct = default)
     {
-        var image = await images.OpenAsync(id, ct);
+        var image = await images.OpenAsync(id, size, ct);
+        // Still immutable: bytes for a given (id, size) never change — framing
+        // is metadata applied at render time, and there is no re-upload path.
         Response.Headers.CacheControl = "private, max-age=86400, immutable";
         // File(Stream, ...) streams and disposes the handle — the bytes never
         // land in a buffer, which matters now that they come off disk.

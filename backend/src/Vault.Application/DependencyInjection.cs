@@ -17,8 +17,10 @@ public static class DependencyInjection
         services.AddScoped<CollectionService>();
         services.AddScoped<Images.ImageService>();
         services.AddScoped<Export.ExportService>();
+        services.AddScoped<Import.ImportService>();
         services.AddScoped<StoreService>();
         services.AddScoped<TenantMemberService>();
+        services.AddScoped<TenantSettingsService>();
         services.AddScoped<ProfileService>();
         return services;
     }

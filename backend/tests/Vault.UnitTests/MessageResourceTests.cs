@@ -27,6 +27,8 @@ public class MessageResourceTests
         nameof(Messages.StoreListingNotFound),
         nameof(Messages.ImageNotFound),
         nameof(Messages.ImageHasNoBytes),
+        nameof(Messages.ImportedCollectionName),
+        nameof(Messages.ArchiveFromNewerVersion),
         nameof(Messages.UnknownGroupFieldType),
         nameof(Messages.UnknownCondition),
         nameof(Messages.UnknownCopyStatus),
@@ -61,6 +63,23 @@ public class MessageResourceTests
         {
             Assert.Contains("{0}", Messages.In(name, English));
             Assert.Contains("{0}", Messages.In(name, Portuguese));
+        }
+    }
+
+    /// <remarks>
+    /// The sweep above only pins <c>{0}</c>, which is all every other formatted
+    /// message has. This one splices two numbers, and a translation that kept
+    /// the first and dropped the second would render "reads up to v" — passing
+    /// that sweep while telling the user nothing.
+    /// </remarks>
+    [Fact]
+    public void TheArchiveVersionMessage_KeepsBothPlaceholdersInEveryLanguage()
+    {
+        foreach (var culture in new[] { English, Portuguese })
+        {
+            var value = Messages.In(nameof(Messages.ArchiveFromNewerVersion), culture);
+            Assert.Contains("{0}", value);
+            Assert.Contains("{1}", value);
         }
     }
 

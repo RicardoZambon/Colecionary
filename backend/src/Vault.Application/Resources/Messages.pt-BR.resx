@@ -118,6 +118,9 @@
   <data name="PlanInvalid" xml:space="preserve">
     <value>O plano precisa ser free ou pro.</value>
   </data>
+  <data name="CurrencyInvalid" xml:space="preserve">
+    <value>A moeda precisa ser um código ISO 4217 suportado.</value>
+  </data>
   <data name="CollectionNotFound" xml:space="preserve">
     <value>Coleção '{0}' não encontrada.</value>
   </data>
@@ -126,6 +129,18 @@
   </data>
   <data name="AlreadyInYourVault" xml:space="preserve">
     <value>Já está no seu acervo</value>
+  </data>
+  <data name="ArchiveUnreadable" xml:space="preserve">
+    <value>Esse arquivo não é um backup do Vault.</value>
+  </data>
+  <data name="ArchiveHasNoCollections" xml:space="preserve">
+    <value>Este backup não tem nenhuma coleção para importar.</value>
+  </data>
+  <data name="ArchiveFromNewerVersion" xml:space="preserve">
+    <value>Este backup foi feito por uma versão mais nova do Vault (formato v{0}; esta lê até a v{1}). Atualize o Vault e importe de novo.</value>
+  </data>
+  <data name="ImportedCollectionName" xml:space="preserve">
+    <value>{0} (importada)</value>
   </data>
   <data name="ImageFileEmpty" xml:space="preserve">
     <value>O arquivo enviado está vazio.</value>
@@ -156,6 +171,9 @@
   </data>
   <data name="CurrentUserNotFound" xml:space="preserve">
     <value>Usuário atual não encontrado.</value>
+  </data>
+  <data name="TenantNotFound" xml:space="preserve">
+    <value>Conta não encontrada.</value>
   </data>
   <data name="EmailCannotBeChanged" xml:space="preserve">
     <value>O e-mail é a identidade de login e ainda não pode ser alterado.</value>

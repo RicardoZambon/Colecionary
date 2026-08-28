@@ -1,3 +1,5 @@
+using Vault.Domain.ValueObjects;
+
 namespace Vault.Application.Setup;
 
 /// <summary>
@@ -17,6 +19,14 @@ public sealed class SetupBootstrapOptions
 
     /// <summary>Optional default UI theme id (e.g. "devlight").</summary>
     public string? DefaultTheme { get; init; }
+
+    /// <summary>
+    /// ISO 4217 code the vault's amounts are read in. Unlike the theme this has
+    /// no client-side default worth falling back to, so an unrecognised or
+    /// absent value settles on <see cref="Money.FallbackCurrency"/> rather than
+    /// leaving the column empty.
+    /// </summary>
+    public string DefaultCurrency { get; init; } = Money.FallbackCurrency;
 }
 
 /// <summary>Outcome of probing a candidate SQL Server connection during setup.</summary>

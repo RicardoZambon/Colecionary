@@ -4,27 +4,28 @@ import { ImagesApi } from '../api/images-api';
 import { FocalPoint, ImageUsage } from '../models';
 import { focalToPosition } from '../utils/focal.util';
 import { ToastService } from './toast.service';
+import { I18nService } from '../i18n/i18n.service';
 
 /** What the editor overlay needs to render, or null when it is closed. */
 export interface FramingRequest {
   /**
-   * Null while framing a file that has not been uploaded yet — the editor is
-   * shown before the upload so cancelling costs nothing.
+   * Always a stored image. Framing used to run against files that were not
+   * uploaded yet, which is what made closing the overlay destroy the upload;
+   * now the bytes are always safe before this opens.
    */
-  imageId: string | null;
+  imageId: string;
   url: string;
   /** Decides which surfaces the editor previews. */
   usage: ImageUsage;
-  /** The url is a local object url and must be released when the editor closes. */
-  local: boolean;
 }
 
 /**
  * How the editor closed.
  *
- * `cancelled` and `applied` with a null focal are deliberately different: the
- * first means "undo what I started", the second "keep it, centred". Collapsing
- * them is what made cancelling an upload still replace the picture.
+ * `cancelled` and `applied` with a null focal stay different: the first means
+ * "leave the framing as it was", the second "centre it". Since the image is
+ * always already stored, neither can lose a picture — which is what makes
+ * closing the overlay by clicking the scrim safe.
  */
 export type FramingResult =
   | { status: 'applied'; focal: FocalPoint | null }
@@ -43,6 +44,7 @@ export type FramingResult =
 export class ImageFocusService {
   private readonly images = inject(ImagesApi);
   private readonly toast = inject(ToastService);
+  private readonly i18n = inject(I18nService);
 
   /** id → focal. Absent means unframed, which renders centred. */
   private readonly focals = signal(new Map<string, FocalPoint>());
@@ -52,9 +54,6 @@ export class ImageFocusService {
   private settle: ((result: FramingResult) => void) | null = null;
 
   readonly pending = this.request.asReadonly();
-
-  /** True while framing a picture that is not saved anywhere yet. */
-  readonly isNew = computed(() => this.request()?.imageId === null);
 
   readonly current = computed(() => {
     const id = this.request()?.imageId;
@@ -86,38 +85,12 @@ export class ImageFocusService {
    * surfaces that will actually show it.
    */
   frame(imageId: string, usage: ImageUsage): Promise<FramingResult> {
-    const url = this.images.url(imageId);
+    // `display` and not `full`: the stage is a few hundred pixels tall, so the
+    // original would be megabytes downloaded to be drawn small — the very thing
+    // this release set out to stop.
+    const url = this.images.url(imageId, 'display');
     if (!url) return Promise.resolve({ status: 'cancelled' });
-    return this.open({ imageId, url, usage, local: false });
-  }
-
-  /**
-   * Frames a picked file and uploads it only if the user goes through with it,
-   * returning the new image id — or null if they cancelled.
-   *
-   * The editor runs against a local object url, so the bytes never reach the
-   * server unless the user commits. That matters because there is no delete
-   * endpoint: uploading first would leave an unreferenced file behind every
-   * time someone changed their mind.
-   */
-  async uploadAndFrame(file: File, usage: ImageUsage): Promise<string | null> {
-    const url = URL.createObjectURL(file);
-    const result = await this.open({ imageId: null, url, usage, local: true });
-    if (result.status === 'cancelled') return null;
-
-    const id = await this.images.upload(file);
-    if (result.focal) {
-      this.apply(id, result.focal);
-      // The image is already in place; a failed framing write is worth a toast
-      // but must not fail the upload the caller is about to persist.
-      try {
-        await this.images.setFocal(id, result.focal);
-      } catch {
-        this.apply(id, null);
-        this.toast.flash('Image saved, but its framing could not be stored');
-      }
-    }
-    return id;
+    return this.open({ imageId, url, usage });
   }
 
   /** Keeps the chosen point and closes the editor. */
@@ -153,25 +126,23 @@ export class ImageFocusService {
    * framing that isn't stored would come back "undone" on the next reload with
    * no explanation.
    *
-   * A picture that isn't uploaded yet has nothing to write to; its focal point
-   * travels back to `uploadAndFrame` in the result instead.
    */
   private async commit(focal: FocalPoint | null): Promise<void> {
     const open = this.request();
     if (!open) return;
 
     const { imageId } = open;
-    const previous = imageId ? (this.focals().get(imageId) ?? null) : null;
-    if (imageId) this.apply(imageId, focal);
+    const previous = this.focals().get(imageId) ?? null;
+    this.apply(imageId, focal);
     this.finish({ status: 'applied', focal });
-
-    if (!imageId) return;
 
     try {
       await this.images.setFocal(imageId, focal);
     } catch (err) {
       this.apply(imageId, previous);
-      this.toast.flash(err instanceof Error ? err.message : 'Could not save framing');
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.framing.failed'),
+      );
     }
   }
 
@@ -188,9 +159,6 @@ export class ImageFocusService {
   }
 
   private finish(result: FramingResult): void {
-    const open = this.request();
-    if (open?.local) URL.revokeObjectURL(open.url);
-
     this.request.set(null);
     const settle = this.settle;
     this.settle = null;

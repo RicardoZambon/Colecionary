@@ -54,9 +54,13 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
  * crops around.
  *
  * Mounted once in the shell and driven by `ImageFocusService`, the same
- * arrangement as `ui-toast`. It carries its own overlay because the app has no
- * modal primitive yet; when a second modal appears, that overlay is what to
- * extract into `ui-modal`.
+ * arrangement as `ui-toast`.
+ *
+ * Closing it — Escape, Cancel, or a click on the scrim — only ever means "leave
+ * the framing alone". It used to be able to destroy an upload, because the
+ * editor opened *before* the bytes were sent; uploading no longer goes through
+ * here, so the escape hatch is safe by construction rather than by warning the
+ * user about it.
  *
  * Nothing here touches the bytes: the result is two numbers, applied at render
  * time as a `background-position`.
@@ -72,12 +76,7 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
       <div class="panel" role="dialog" aria-modal="true" [attr.aria-label]="'ui.focus.chooseView' | t">
         <header>
           <h2>{{ 'ui.focus.chooseView' | t }}</h2>
-          <p>
-            {{ 'ui.focus.hint' | t }}
-            @if (focus.isNew()) {
-              {{ 'ui.focus.hintNew' | t }}
-            }
-          </p>
+          <p>{{ 'ui.focus.hint' | t }}</p>
         </header>
 
         <div class="body">
@@ -127,12 +126,8 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
         <footer>
           <span class="coords">{{ targetLabel() }}</span>
           <div class="actions">
-            <ui-button variant="ghost" (click)="reset()">
-              {{ (focus.isNew() ? 'ui.focus.useCentred' : 'ui.focus.reset') | t }}
-            </ui-button>
-            <ui-button variant="ghost" (click)="cancel()">
-              {{ (focus.isNew() ? 'ui.focus.discard' : 'ui.focus.cancel') | t }}
-            </ui-button>
+            <ui-button variant="ghost" (click)="reset()">{{ 'ui.focus.reset' | t }}</ui-button>
+            <ui-button variant="ghost" (click)="cancel()">{{ 'ui.focus.cancel' | t }}</ui-button>
             <ui-button variant="primary" (click)="save()">{{ 'ui.focus.save' | t }}</ui-button>
           </div>
         </footer>

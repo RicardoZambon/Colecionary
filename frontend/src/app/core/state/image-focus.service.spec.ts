@@ -104,62 +104,55 @@ describe('ImageFocusService', () => {
     expect(focus.pending()?.imageId).toBe('b');
   });
 
-  describe('uploadAndFrame', () => {
-    const file = () => new File([new Uint8Array([1, 2, 3])], 'photo.png', { type: 'image/png' });
-
-    /** The upload is issued after the editor's promise resumes, a tick later. */
+  describe('framing is never destructive', () => {
+    /** The editor's promise resumes a tick after it is settled. */
     const settled = () => new Promise(resolve => setTimeout(resolve, 0));
 
-    it('uploads nothing at all when the editor is discarded', async () => {
+    it('never uploads anything — bytes are already stored before it opens', async () => {
       const { focus, http } = setup();
-      const pending = focus.uploadAndFrame(file(), 'item');
-
-      focus.close();
-      await settled();
-
-      // The whole point of framing before uploading: a discarded picture leaves
-      // no bytes on a server that has no way to delete them.
-      await expect(pending).resolves.toBeNull();
-      http.expectNone(`${environment.apiBaseUrl}/images`);
-    });
-
-    it('uploads and stores the framing once the user commits', async () => {
-      const { focus, http } = setup();
-      const pending = focus.uploadAndFrame(file(), 'item');
+      void focus.frame('a', 'item');
 
       void focus.save({ x: 0.2, y: 0.4 });
       await settled();
 
-      http.expectOne(`${environment.apiBaseUrl}/images`).flush({ id: 'new' });
-      await settled();
-      const write = http.expectOne(focalUrl('new'));
-      expect(write.request.body).toEqual({ focal: { x: 0.2, y: 0.4 } });
-      write.flush({ id: 'new', contentType: 'image/png', focal: { x: 0.2, y: 0.4 } });
-
-      await expect(pending).resolves.toBe('new');
-      expect(focus.position('new')).toBe('20% 40%');
+      // The defect this replaced: framing used to *be* the upload, so closing
+      // the overlay threw the picture away.
+      http.expectNone(`${environment.apiBaseUrl}/images`);
+      http.expectOne(focalUrl('a')).flush({ id: 'a', contentType: 'image/png', focal: null });
     });
 
-    it('uploads without a framing write when the user keeps it centred', async () => {
+    it('leaves the existing framing alone when it is cancelled', async () => {
       const { focus, http } = setup();
-      const pending = focus.uploadAndFrame(file(), 'item');
+      const loaded = focus.load();
+      http.expectOne(`${environment.apiBaseUrl}/images/meta`).flush([
+        { id: 'a', contentType: 'image/png', focal: { x: 0.2, y: 0.9 } },
+      ]);
+      await loaded;
 
-      void focus.reset();
-      await settled();
+      const closing = focus.frame('a', 'item');
+      focus.close();
 
-      http.expectOne(`${environment.apiBaseUrl}/images`).flush({ id: 'new' });
-      await settled();
-      // Centred is the stored default, so there is nothing to write.
-      http.expectNone(focalUrl('new'));
-      await expect(pending).resolves.toBe('new');
+      await expect(closing).resolves.toEqual({ status: 'cancelled' });
+      // Clicking the scrim is the common way this happens, and it must cost
+      // nothing at all.
+      expect(focus.position('a')).toBe('20% 90%');
+      http.expectNone(focalUrl('a'));
     });
 
-    it('knows a picked file is not saved anywhere yet', () => {
+    it('only ever opens on a stored image', () => {
       const { focus } = setup();
-      void focus.uploadAndFrame(file(), 'item');
+      void focus.frame('a', 'item');
 
-      expect(focus.isNew()).toBe(true);
-      expect(focus.pending()?.imageId).toBeNull();
+      expect(focus.pending()?.imageId).toBe('a');
+    });
+
+    it('frames against the display rendition, not the original', () => {
+      // The stage is a few hundred pixels tall; pulling the full-size original
+      // into it is the exact waste this release removed.
+      const { focus } = setup();
+      void focus.frame('a', 'item');
+
+      expect(focus.pending()?.url).toBe(`${environment.apiBaseUrl}/images/a?size=display`);
     });
   });
 });

@@ -8,6 +8,7 @@ import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { isOwned, ownedValue, paidTotal, sortValue } from '../../core/utils/copies.util';
 import { formatRelative } from '../../core/utils/date.util';
+import { CurrencyCode, formatMoney } from '../../core/utils/money.util';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { TPipe } from '../../shared/pipes/t.pipe';
 import { UiCard, UiImageSlot, UiSectionLabel } from '../../shared/ui';
@@ -18,6 +19,8 @@ interface RecentEntry {
   name: string;
   sub: string;
   value: number;
+  /** The item's own collection decides the symbol, not the page. */
+  currency: CurrencyCode;
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -66,13 +69,25 @@ export class DashboardPage {
     return this.i18n.t('dashboard.appreciation', { arrow: pct >= 0 ? '▲' : '▼', pct: magnitude });
   });
 
-  protected readonly stats = computed(() => {
+  /**
+   * The value tile carries one line per currency in play, not a single sum.
+   *
+   * Collections can override the account currency, and adding BRL to USD gives
+   * a number that is not an amount of money in either. With one currency — the
+   * usual case — there is exactly one line and the tile reads as it always did.
+   */
+  protected readonly stats = computed<{ label: string; values: string[]; sub: string }[]>(() => {
     const collections = this.store.collections().length;
+    const locale = this.i18n.locale();
     return [
-      { label: this.i18n.t('dashboard.stat.items'), value: String(this.store.totalItems()), sub: this.i18n.t('dashboard.stat.itemsSub', { collections }), money: false },
-      { label: this.i18n.t('dashboard.stat.value'), value: this.store.totalOwnedValue(), sub: this.appreciationLabel(), money: true },
-      { label: this.i18n.t('dashboard.stat.groups'), value: String(this.store.totalGroups()), sub: this.i18n.t('dashboard.stat.groupsSub', { collections }), money: false },
-      { label: this.i18n.t('dashboard.stat.added'), value: String(this.addedThisWeek()), sub: this.i18n.t('dashboard.stat.addedSub'), money: false },
+      { label: this.i18n.t('dashboard.stat.items'), values: [String(this.store.totalItems())], sub: this.i18n.t('dashboard.stat.itemsSub', { collections }) },
+      {
+        label: this.i18n.t('dashboard.stat.value'),
+        values: this.store.ownedValueByCurrency().map(x => formatMoney(x.total, locale, x.currency)),
+        sub: this.appreciationLabel(),
+      },
+      { label: this.i18n.t('dashboard.stat.groups'), values: [String(this.store.totalGroups())], sub: this.i18n.t('dashboard.stat.groupsSub', { collections }) },
+      { label: this.i18n.t('dashboard.stat.added'), values: [String(this.addedThisWeek())], sub: this.i18n.t('dashboard.stat.addedSub') },
     ];
   });
 
@@ -93,6 +108,7 @@ export class DashboardPage {
           when: formatRelative(x.item.createdAt!, this.i18n.locale(), new Date()),
         }),
         value: sortValue(x.item),
+        currency: this.store.currencyFor(x.collection.id),
       })),
   );
 

@@ -17,7 +17,11 @@
   @for (stat of stats(); track stat.label) {
     <ui-card class="stat">
       <div class="stat__label">{{ stat.label }}</div>
-      <div class="stat__value">{{ stat.money ? (+stat.value | money) : stat.value }}</div>
+      <div class="stat__value">
+        @for (amount of stat.values; track amount) {
+          <span class="stat__amount">{{ amount }}</span>
+        }
+      </div>
       <div class="stat__sub">{{ stat.sub }}</div>
     </ui-card>
   }
@@ -30,7 +34,7 @@
       <ui-card [interactive]="true" [routerLink]="['/c', collection.id]">
         <div class="banner">
           <ui-image-slot
-            [src]="images.url(collection.bannerImageId)"
+            [src]="images.url(collection.bannerImageId, 'thumb')"
             [focal]="focus.position(collection.bannerImageId)"
             [placeholder]="collection.name"
           />
@@ -48,7 +52,7 @@
                     }
             }}
           </div>
-          <div class="value">{{ ownedValue(collection.id) | money }}</div>
+          <div class="value">{{ ownedValue(collection.id) | money: store.currencyFor(collection.id) }}</div>
         </div>
       </ui-card>
     }
@@ -64,7 +68,7 @@
         <span class="recent__name">{{ entry.name }}</span>
         <span class="recent__sub">{{ entry.sub }}</span>
       </span>
-      <span class="recent__value">{{ entry.value | money }}</span>
+      <span class="recent__value">{{ entry.value | money: entry.currency }}</span>
     </a>
   }
 </ui-card>

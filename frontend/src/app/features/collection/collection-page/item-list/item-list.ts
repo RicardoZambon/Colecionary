@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { I18nService } from '../../../../core/i18n';
@@ -10,6 +10,7 @@ import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiCard, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
+import { VaultStore } from '../../../../core/state/vault.store';
 
 /** The dense table view of the same items {@link ItemGrid} renders as cards. */
 @Component({
@@ -21,9 +22,16 @@ import { DragOrder } from '../drag-order';
 })
 export class ItemList {
   private readonly i18n = inject(I18nService);
+  private readonly store = inject(VaultStore);
 
   readonly items = input.required<Item[]>();
   readonly collectionId = input.required<string>();
+
+  /**
+   * Amounts here belong to this collection, so they follow its currency rather
+   * than the account default — a collection may override it.
+   */
+  protected readonly currency = computed(() => this.store.currencyFor(this.collectionId()));
   readonly manual = input(false);
   readonly sortFieldName = input<string | null>(null);
   readonly groupNames = input.required<ReadonlyMap<string, string>>();

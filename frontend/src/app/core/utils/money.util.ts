@@ -1,13 +1,104 @@
 /**
- * The one place an amount becomes a string: `$4,200` in en-US, `$4.200` in
- * pt-BR. `MoneyPipe` is the template door onto this; code that has to build a
+ * The one place an amount becomes a string: `$1,234.57` in en-US, `R$ 1.234,57`
+ * in pt-BR. `MoneyPipe` is the template door onto this; code that has to build a
  * sentence around an amount calls it directly rather than re-deriving the
  * format.
  *
- * The `$` is deliberately not locale-dependent. These figures are USD (see the
- * model comments on `Item.value`); swapping the symbol per language would
- * restate the same number as a different amount of money without converting it.
+ * Two things vary and they vary independently. The **currency** is data — the
+ * account's `defaultCurrency`, or a collection's override — and it decides the
+ * symbol and where the symbol sits. The **locale** is the language and decides
+ * only the separators. Changing the language must never change the symbol:
+ * relabelling a USD figure `R$` restates the same number as a different amount
+ * of money without converting it. That is why the code is stored per account
+ * rather than derived from `I18nService`.
  */
-export function formatMoney(value: number | null | undefined, locale: string): string {
-  return '$' + Number(value ?? 0).toLocaleString(locale);
+
+/**
+ * ISO 4217 codes a vault can be read in. Mirrors `Money.SupportedCurrencies` on
+ * the backend, the same way the condition and role whitelists are mirrored —
+ * the server is the validator, but a code missing here is one no user can pick.
+ * Both lists move together.
+ */
+export const SUPPORTED_CURRENCIES = [
+  'AUD', 'BRL', 'CAD', 'CHF', 'CNY', 'DKK', 'EUR', 'GBP', 'INR', 'JPY',
+  'MXN', 'NOK', 'NZD', 'PLN', 'SEK', 'USD', 'ZAR',
+] as const;
+
+export type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
+
+/** What an amount is read in before anyone chooses otherwise. */
+export const FALLBACK_CURRENCY: CurrencyCode = 'USD';
+
+export function isCurrencyCode(code: string | null | undefined): code is CurrencyCode {
+  return !!code && (SUPPORTED_CURRENCIES as readonly string[]).includes(code);
+}
+
+/**
+ * `Intl.NumberFormat` is expensive to construct and both pipes that use it are
+ * `pure: false`, so they re-run on every change detection pass — once per
+ * visible amount, of which a large collection has hundreds. Formatters are
+ * immutable and keyed entirely by (locale, currency), so one instance per pair
+ * is safe to keep forever; the set of pairs is bounded by two languages times
+ * the supported codes.
+ */
+const formatters = new Map<string, Intl.NumberFormat>();
+
+function formatterFor(locale: string, currency: CurrencyCode): Intl.NumberFormat {
+  const key = `${locale}|${currency}`;
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      // Always two, for every currency. An amount is a figure in a column here,
+      // and a list where some rows carry cents and others don't is read as
+      // ragged rather than as precise. This overrides the currency's own
+      // convention where they disagree (JPY writes no minor unit).
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    formatters.set(key, formatter);
+  }
+  return formatter;
+}
+
+/**
+ * Rounds up to whole cents — 1234.561 and 1234.001 both become 1234.57 and
+ * 1234.01. Deliberately not `Intl`'s own rounding, which is half-up and would
+ * round 1234.561 *down* to 1234.56.
+ *
+ * The `toFixed` is not decoration. `value * 100` is binary floating point, so an
+ * exact amount can land a hair above its true value — `0.07 * 100` is
+ * `7.000000000000001`, which `Math.ceil` would turn into 8 cents and quietly
+ * overcharge every seven-cent figure in the app. Collapsing that error before
+ * the ceiling is what keeps exact inputs exact.
+ */
+export function ceilToCents(value: number): number {
+  return Math.ceil(Number((value * 100).toFixed(6))) / 100;
+}
+
+export function formatMoney(
+  value: number | null | undefined,
+  locale: string,
+  currency: CurrencyCode = FALLBACK_CURRENCY,
+): string {
+  return formatterFor(locale, currency).format(ceilToCents(Number(value ?? 0)));
+}
+
+/**
+ * A currency as a person picks it from a list: `BRL — Brazilian real`, or
+ * `BRL — Real brasileiro` with the UI in Portuguese.
+ *
+ * The name comes from `Intl.DisplayNames` rather than from the message
+ * catalogue. Currency names are the one kind of user-facing text the platform
+ * already translates into every locale the app could ship, and adding 17 names
+ * per language by hand would be 34 keys that only ever restate what the browser
+ * knows. The code leads because the code is the value being chosen — the name is
+ * there to disambiguate it.
+ */
+export function currencyLabel(code: CurrencyCode, locale: string): string {
+  // Not every runtime carries currency display names; the code alone is still a
+  // usable choice, so a missing name degrades rather than breaks the picker.
+  const name = new Intl.DisplayNames([locale], { type: 'currency', fallback: 'none' }).of(code);
+  return name ? `${code} — ${name}` : code;
 }

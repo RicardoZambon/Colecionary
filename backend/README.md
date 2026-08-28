@@ -147,10 +147,17 @@ drops the bytes. Start the API instead; it does both, in the right order.
 `GET /api/export` streams a zip of the caller's tenant:
 
 ```
+manifest.json             # what this file is, and which layout version wrote it
 collections.json          # same shape as GET /api/collections
 images.json               # id, content type and focal point for each image
 images/{imageId}.{ext}    # every image that tenant owns
 ```
+
+`GET /api/export/collections/{id}` writes the same format at a narrower scope:
+`collection.json` (one object, not an array) and only the images that
+collection actually references — a collection is a self-contained thing to hand
+to someone, and packing the tenant's unrelated photos into it would leak
+everything else they own.
 
 `images.json` exists because framing lives on the image row, not in the
 collection graph: without it an archive would restore every photo centred, and
@@ -166,6 +173,40 @@ The archive is built into a temp file rather than written straight to the
 response: `ZipArchive` emits its central directory with a *synchronous* write on
 dispose, which Kestrel rejects on the response body. The alternative,
 `AllowSynchronousIO`, would block a request thread for the whole download.
+
+## Import
+
+`POST /api/import` reads either archive back — the entry that is present
+(`collection.json` or `collections.json`) decides which, since a hand-edited
+manifest can lie and an entry cannot. The zip goes up as the raw request body.
+
+Two rules make a restore safe to run without a confirmation dialog:
+
+- **Nothing already in the vault is overwritten.** An archived collection keeps
+  its id when that id is free — restoring one you deleted brings back its links
+  — and otherwise lands beside the live one as a copy, renamed. An import can
+  therefore be undone by deleting what it created.
+- **Images are copied, never referenced.** An id in an archive belongs to
+  whoever exported it, so every photo is written afresh under a new id in the
+  importing tenant's storage and every reference is remapped. Framing rides
+  along on `images.json`.
+
+### Archive versioning
+
+`manifest.json` carries `ArchiveManifest.CurrentVersion`, and the import gate
+is one-directional: **older is readable, newer is refused.** Every entry a past
+version wrote is one this build still understands, and a field it never wrote
+deserialises to the same default an absent field always meant. The reverse has
+no such guarantee — a newer layout may have moved or re-scoped a field, and
+reading it under today's shapes would not fail, it would *succeed quietly* and
+write nonsense into the vault. A missing manifest is not an error: archives
+predating it are v1 by definition.
+
+So a change costs a version bump only when a reader that does not know about it
+would misread the file. Adding an optional field or a new entry does not;
+renaming a field, changing what one means, or changing a unit does. The check
+lives in `ArchiveCompatibility` — pure, and unit-tested — and runs before the
+first byte is written, so a refusal leaves nothing behind.
 
 ## Auth
 
@@ -196,6 +237,8 @@ documented follow-ups.
 | GET / PUT | `/api/tenant/members` | PUT is Owner-only |
 | GET / PUT | `/api/profile` | email immutable in v1 |
 | GET | `/api/export` | zip: `collections.json` + `images/…` for the caller's tenant |
+| GET | `/api/export/collections/{id}` | zip of one collection and only the images it references |
+| POST | `/api/import` | raw-body zip; adds collections, never overwrites; refuses a newer archive format |
 
 JSON is camelCase with string enums — byte-compatible with the Angular
 models in `frontend/src/app/core/models/`.

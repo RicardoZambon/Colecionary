@@ -32,6 +32,7 @@ public static class DependencyInjection
 
         services.AddScoped<ICollectionRepository, CollectionRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<IStoreListingRepository, StoreListingRepository>();
         services.AddScoped<IImageRepository, ImageRepository>();
 
@@ -49,6 +50,8 @@ public static class DependencyInjection
                 Path.IsPathRooted(root) ? root : Path.Combine(contentRootPath, root));
         });
         services.AddScoped<LegacyImageBlobExporter>();
+        // Stateless and thread-safe; one instance serves every request.
+        services.AddSingleton<IImageDeriver, SkiaImageDeriver>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IJwtTokenService, JwtTokenService>();

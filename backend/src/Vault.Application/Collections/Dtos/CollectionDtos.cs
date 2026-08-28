@@ -69,6 +69,11 @@ public sealed record ItemDto(
 
 public sealed record MemberDto(string Name, string Email, string Initials, string Role);
 
+/// <summary>
+/// A null Currency means the account default applies. Keep the null — it is the
+/// only way to say "follow the account", and resolving it to a code here would
+/// turn every GET → PUT round-trip into a silent per-collection pin.
+/// </summary>
 public sealed record CollectionDto(
     string Id,
     string Name,
@@ -78,6 +83,7 @@ public sealed record CollectionDto(
     IReadOnlyList<MemberDto> Members,
     bool LinkShare,
     Guid? BannerImageId = null,
-    Guid? IconImageId = null);
+    Guid? IconImageId = null,
+    string? Currency = null);
 
 public sealed record CreateCollectionRequest(string Name, string Description);

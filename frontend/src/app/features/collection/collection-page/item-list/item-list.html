@@ -26,7 +26,7 @@
         <span class="year">{{ item.year }}</span>
         <span class="right copies" [class.copies--many]="item.copies.length > 1">{{ item.copies.length }}</span>
         <span class="cond" [class]="'tone-' + badgeTone(item)">{{ badgeLabel(item) }}</span>
-        <span class="right value" [attr.title]="valueHint(item)">{{ item | itemValue }}</span>
+        <span class="right value" [attr.title]="valueHint(item)">{{ item | itemValue: currency() }}</span>
       </a>
       @if (manual()) {
         <ui-reorder

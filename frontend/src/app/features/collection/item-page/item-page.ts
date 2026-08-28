@@ -27,7 +27,7 @@ import { conditionLabelKey, conditionTone, itemBadgeLabel, itemTone } from '../.
 import { ItemValuePipe } from '../../../shared/pipes/item-value.pipe';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import { TPipe } from '../../../shared/pipes/t.pipe';
-import { UiBadge, UiButton, UiCard, UiSectionLabel } from '../../../shared/ui';
+import { UiBadge, UiButton, UiCard, UiLightbox, UiSectionLabel } from '../../../shared/ui';
 
 /** Null for the default, so only a notable status shows up on a copy row. */
 const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
@@ -39,7 +39,17 @@ const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
 @Component({
   selector: 'app-item-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, ItemValuePipe, MoneyPipe, TPipe, UiBadge, UiButton, UiCard, UiSectionLabel],
+  imports: [
+    RouterLink,
+    ItemValuePipe,
+    MoneyPipe,
+    TPipe,
+    UiBadge,
+    UiButton,
+    UiCard,
+    UiLightbox,
+    UiSectionLabel,
+  ],
   templateUrl: './item-page.html',
   styleUrl: './item-page.scss',
   host: { '(document:keydown)': 'onKeydown($event)' },
@@ -68,10 +78,24 @@ export class ItemPage {
 
   protected readonly selectedPhoto = signal(0);
 
-  /** Id alongside url: the id is what resolves the photo's framing. */
+  /**
+   * Id alongside both renditions: the id resolves the photo's framing, and the
+   * strip and the main image want very different numbers of pixels — a 64px
+   * thumbnail served the display copy is most of this page's weight.
+   */
   protected readonly photos = computed(
-    () => this.item()?.photoIds.map(id => ({ id, url: this.images.url(id)! })) ?? [],
+    () =>
+      this.item()?.photoIds.map(id => ({
+        id,
+        url: this.images.url(id, 'display')!,
+        thumb: this.images.url(id, 'thumb')!,
+      })) ?? [],
   );
+
+  /** Photo ids alone, for the viewer. */
+  protected readonly photoIds = computed(() => this.item()?.photoIds ?? []);
+
+  protected readonly viewerOpen = signal(false);
 
   protected readonly mainPhoto = computed(() => {
     const photos = this.photos();
@@ -80,6 +104,9 @@ export class ItemPage {
   });
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
+
+  /** This collection's currency; every amount on the page is denominated in it. */
+  protected readonly currency = computed(() => this.store.currencyFor(this.collectionId()));
   protected readonly item = computed(() =>
     this.collection()?.items.find(i => i.id === this.itemId()),
   );
@@ -242,8 +269,8 @@ export class ItemPage {
         : 'item.copyTotal.other';
     return this.i18n.t(key, {
       n: count,
-      paid: formatMoney(this.paidTotal(), this.i18n.locale()),
-      value: formatMoney(this.ownedValue(), this.i18n.locale()),
+      paid: formatMoney(this.paidTotal(), this.i18n.locale(), this.currency()),
+      value: formatMoney(this.ownedValue(), this.i18n.locale(), this.currency()),
     });
   });
 
@@ -290,10 +317,9 @@ export class ItemPage {
       const file = picker.files?.[0];
       if (!file) return;
       try {
-        const imageId = await this.focus.uploadAndFrame(file, 'item');
-        // Discarded in the editor: nothing is added to the item.
-        if (!imageId) return;
-
+        // No editor in the way: the photo lands centred and the gallery's
+        // "adjust framing" is there whenever the user wants it.
+        const imageId = await this.images.upload(file);
         await this.store.upsertItem(this.collectionId(), {
           ...item,
           photoIds: [...item.photoIds, imageId],

@@ -28,4 +28,21 @@ public static class ImageContentTypes
         "image/avif" => ".avif",
         _ => ".bin",
     };
+
+    /// <summary>
+    /// The inverse of <see cref="ExtensionFor"/>, or null for an extension we
+    /// don't serve. Only the import needs it, and only as a fallback: an archive
+    /// carries <c>images.json</c> with the real content type, but one written
+    /// before that entry existed — or assembled by hand — leaves the file name
+    /// as the sole evidence of what a photo is.
+    /// </summary>
+    public static string? FromExtension(string extension) => extension.ToLowerInvariant() switch
+    {
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".png" => "image/png",
+        ".webp" => "image/webp",
+        ".gif" => "image/gif",
+        ".avif" => "image/avif",
+        _ => null,
+    };
 }

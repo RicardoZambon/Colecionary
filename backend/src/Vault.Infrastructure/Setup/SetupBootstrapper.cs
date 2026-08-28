@@ -37,6 +37,7 @@ public sealed class SetupBootstrapper(
             Name = options.OrganizationName,
             Slug = Slugify(options.OrganizationName),
             DefaultTheme = options.DefaultTheme,
+            DefaultCurrency = options.DefaultCurrency,
         });
 
         var owner = new User

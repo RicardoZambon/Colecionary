@@ -16,6 +16,8 @@ public sealed class CollectionConfiguration : IEntityTypeConfiguration<Collectio
         builder.Property(c => c.Id).HasMaxLength(64);
         builder.Property(c => c.Name).HasMaxLength(200);
         builder.Property(c => c.Description).HasMaxLength(2000);
+        // Nullable on purpose — null is "follow the account", not a missing value.
+        builder.Property(c => c.Currency).HasMaxLength(3);
 
         builder.HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Cascade);
 

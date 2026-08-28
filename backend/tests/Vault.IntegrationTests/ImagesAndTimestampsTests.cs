@@ -24,7 +24,9 @@ public class ImagesAndTimestampsTests(VaultApiFactory factory)
         var response = (await uploaded.Content.ReadFromJsonAsync<ImageUploadResponse>())!;
 
         // Read is anonymous — the GUID is the capability (img tags can't send auth).
-        var fetched = await anonymous.GetAsync($"/api/images/{response.Id}");
+        // `size=full` because this asserts the bytes that went in: a bare read
+        // serves the resized `display` rendition, which is a different file.
+        var fetched = await anonymous.GetAsync($"/api/images/{response.Id}?size=full");
         Assert.Equal(HttpStatusCode.OK, fetched.StatusCode);
         Assert.Equal("image/png", fetched.Content.Headers.ContentType?.MediaType);
         Assert.Equal(TinyPng, await fetched.Content.ReadAsByteArrayAsync());

@@ -2,12 +2,14 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router } from '@angular/router';
 
 import { PLANS } from './plans';
-import { ExportApi } from '../../core/api/export-api';
+import { ArchiveApi } from '../../core/api/archive-api';
 import { I18nService, MessageKey } from '../../core/i18n';
 import { ThemeService } from '../../core/state/theme.service';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { MemberRole, PlanId } from '../../core/models';
+import { saveFile } from '../../core/utils/download.util';
+import { CurrencyCode, SUPPORTED_CURRENCIES, currencyLabel } from '../../core/utils/money.util';
 import {
   SelectOption,
   TabDef,
@@ -71,7 +73,7 @@ export class SettingsPage {
   protected readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
-  private readonly exportApi = inject(ExportApi);
+  private readonly archives = inject(ArchiveApi);
 
   readonly tab = input<string>('appearance');
 
@@ -86,6 +88,14 @@ export class SettingsPage {
   protected readonly roleOptions = computed<SelectOption[]>(() =>
     ROLE_KEYS.map(r => ({ value: r.value, label: this.i18n.t(r.label) })),
   );
+
+  // Sorted by the label the user actually reads, which is locale-dependent —
+  // "Real brasileiro" and "Brazilian real" do not fall in the same place.
+  protected readonly currencyOptions = computed<SelectOption[]>(() => {
+    const locale = this.i18n.locale();
+    return SUPPORTED_CURRENCIES.map(code => ({ value: code, label: currencyLabel(code, locale) }))
+      .sort((a, b) => a.label.localeCompare(b.label, locale));
+  });
 
   protected readonly activeTab = signal('appearance');
   protected readonly policies = signal<Record<PolicyDef['key'], boolean>>({
@@ -105,6 +115,22 @@ export class SettingsPage {
   protected onTabChange(tab: string): void {
     this.activeTab.set(tab);
     void this.router.navigate([], { queryParams: { tab }, queryParamsHandling: 'merge' });
+  }
+
+  /**
+   * Saves the account currency. Owner-only on the server, and the client does
+   * not duplicate that check: a role the browser believes in is a suggestion,
+   * and the 403 is the real answer either way.
+   */
+  protected async chooseCurrency(code: string): Promise<void> {
+    const current = this.store.tenantSettings();
+    if (!current || current.defaultCurrency === code) return;
+    try {
+      await this.store.updateTenantSettings({ defaultCurrency: code as CurrencyCode });
+      this.toast.flash(this.i18n.t('toast.currency.saved'));
+    } catch {
+      this.toast.flash(this.i18n.t('toast.currency.failed'));
+    }
   }
 
   protected async choosePlan(plan: PlanId): Promise<void> {
@@ -149,18 +175,55 @@ export class SettingsPage {
 
     this.exporting.set(true);
     try {
-      const blob = await this.exportApi.downloadArchive();
-      const anchor = document.createElement('a');
-      anchor.href = URL.createObjectURL(blob);
-      anchor.download = 'vault-export.zip';
-      anchor.click();
-      URL.revokeObjectURL(anchor.href);
+      saveFile(await this.archives.downloadVault());
       this.toast.flash(this.i18n.t('toast.export.done'));
     } catch {
       // A failed download is otherwise silent — the anchor just never fires.
       this.toast.flash(this.i18n.t('toast.export.failed'));
     } finally {
       this.exporting.set(false);
+    }
+  }
+
+  protected readonly importing = signal(false);
+
+  /**
+   * Restores a `.zip` written by the export — one collection or a whole vault;
+   * the server reads both through the same endpoint.
+   *
+   * An import only ever *adds*: a collection whose id is free comes back under
+   * it, one whose id is taken lands beside it as a copy, and every photo is
+   * re-uploaded under a fresh id. So there is nothing to confirm before running
+   * it — no existing collection can be overwritten by it.
+   */
+  protected async importArchive(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    // Cleared before anything can go wrong: without this, picking the very same
+    // file after a failed attempt fires no `change` event and the button looks
+    // dead.
+    input.value = '';
+
+    if (!file || this.importing()) {
+      return;
+    }
+
+    this.importing.set(true);
+    try {
+      const imported = await this.store.importArchive(file);
+      this.toast.flash(
+        this.i18n.t(
+          imported.length === 1 ? 'toast.import.done.one' : 'toast.import.done.other',
+          { n: imported.length },
+        ),
+      );
+    } catch (error) {
+      // The server's own explanation when it gave one — it is localized, and it
+      // is the only thing that can say *why* an archive was refused.
+      const reason = error instanceof Error ? error.message : '';
+      this.toast.flash(reason || this.i18n.t('toast.import.failed'));
+    } finally {
+      this.importing.set(false);
     }
   }
 }

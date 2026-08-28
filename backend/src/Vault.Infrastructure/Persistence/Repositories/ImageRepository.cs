@@ -19,5 +19,15 @@ public sealed class ImageRepository(VaultDbContext db) : IImageRepository
     public Task<List<StoredImage>> ListForCurrentTenantAsync(CancellationToken ct) =>
         db.Images.AsNoTracking().OrderBy(i => i.CreatedAtUtc).ToListAsync(ct);
 
+    public Task<List<StoredImage>> ListForCurrentTenantAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken ct) =>
+        ids.Count == 0
+            ? Task.FromResult(new List<StoredImage>())
+            : db.Images.AsNoTracking()
+                .Where(i => ids.Contains(i.Id))
+                .OrderBy(i => i.CreatedAtUtc)
+                .ToListAsync(ct);
+
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

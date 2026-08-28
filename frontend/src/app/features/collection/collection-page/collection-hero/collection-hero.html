@@ -1,6 +1,6 @@
 <div class="banner">
   <ui-image-slot
-    [src]="images.url(collection().bannerImageId)"
+    [src]="images.url(collection().bannerImageId, 'display')"
     [focal]="focus.position(collection().bannerImageId)"
     [reframable]="!!collection().bannerImageId"
     [placeholder]="'hero.bannerPlaceholder' | t"
@@ -13,7 +13,7 @@
 <div class="header">
   <div class="header__icon">
     <ui-image-slot
-      [src]="images.url(collection().iconImageId)"
+      [src]="images.url(collection().iconImageId, 'thumb')"
       [focal]="focus.position(collection().iconImageId)"
       [reframable]="!!collection().iconImageId"
       [placeholder]="'hero.iconPlaceholder' | t"
@@ -71,7 +71,7 @@
       </div>
     </div>
     <div class="value-box">
-      {{ 'hero.estimate' | t }} <span class="value">{{ scope().value | money }}</span>
+      {{ 'hero.estimate' | t }} <span class="value">{{ scope().value | money: currency() }}</span>
     </div>
     <a [routerLink]="['/c', collection().id, 'settings']" [queryParams]="{ tab: 'sharing' }" [title]="'hero.manageSharing' | t">
       <ui-avatar-stack [members]="members()" />

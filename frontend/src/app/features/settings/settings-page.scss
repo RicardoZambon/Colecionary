@@ -269,3 +269,10 @@ h1 {
   border-radius: var(--pill);
   padding: 3px 10px;
 }
+
+// The picker is a single control in a full-width section; left unbounded it
+// would stretch across the page and read as a search field rather than a
+// choice between a handful of codes.
+.currency {
+  max-width: 320px;
+}

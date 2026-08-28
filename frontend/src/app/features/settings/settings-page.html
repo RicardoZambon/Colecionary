@@ -102,7 +102,26 @@
         <ui-button variant="ghost" size="sm" [disabled]="exporting()" (click)="exportArchive()">
           {{ (exporting() ? 'settings.account.exporting' : 'settings.account.export') | t }}
         </ui-button>
+        <!-- The input stays hidden and the button drives it: a bare file input
+             cannot be labelled or styled like the rest of the app, and it is the
+             button that has to look like every other action on this page. -->
+        <ui-button
+          variant="ghost"
+          size="sm"
+          [disabled]="importing()"
+          (click)="archiveInput.click()"
+        >
+          {{ (importing() ? 'settings.account.importing' : 'settings.account.import') | t }}
+        </ui-button>
+        <input
+          #archiveInput
+          type="file"
+          accept=".zip,application/zip"
+          hidden
+          (change)="importArchive($event)"
+        />
       </ui-card>
+      <p class="sub">{{ 'settings.account.importHint' | t }}</p>
     </section>
   }
   @default {
@@ -153,6 +172,18 @@
             </div>
           </ui-card>
         }
+      </div>
+
+      <div>
+        <div class="heading">{{ 'settings.currency.heading' | t }}</div>
+        <p class="sub">{{ 'settings.currency.sub' | t }}</p>
+      </div>
+      <div class="currency">
+        <ui-select
+          [options]="currencyOptions()"
+          [value]="store.tenantSettings()?.defaultCurrency ?? ''"
+          (valueChange)="chooseCurrency($event)"
+        />
       </div>
     </section>
   }

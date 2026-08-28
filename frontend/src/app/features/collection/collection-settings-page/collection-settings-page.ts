@@ -13,6 +13,7 @@ import {
   SortDirection,
 } from '../../../core/models';
 import { fieldsFor, flattenTree, pathOf, sortFor, subtreeIds } from '../../../core/utils/groups.util';
+import { SUPPORTED_CURRENCIES, currencyLabel, isCurrencyCode } from '../../../core/utils/money.util';
 import { fieldSortKey, sortByOptions, sortLabel } from '../../../core/utils/sort.util';
 import { TPipe } from '../../../shared/pipes/t.pipe';
 import {
@@ -105,6 +106,22 @@ export class CollectionSettingsPage {
   protected readonly directionOptions = computed<SelectOption[]>(() =>
     DIRECTION_KEYS.map(d => ({ value: d.value, label: this.i18n.t(d.label) })),
   );
+
+  /**
+   * The supported codes, led by an explicit "follow the account" entry carrying
+   * the empty string. That entry is not decoration: without it there is no way
+   * back to inheriting once an override has been set, and the collection would
+   * be pinned to whatever code was picked the day it was picked.
+   */
+  protected readonly currencyOverrideOptions = computed<SelectOption[]>(() => {
+    const locale = this.i18n.locale();
+    return [
+      { value: '', label: this.i18n.t('collSettings.general.currencyInherit') },
+      ...SUPPORTED_CURRENCIES.map(code => ({ value: code, label: currencyLabel(code, locale) })).sort(
+        (a, b) => a.label.localeCompare(b.label, locale),
+      ),
+    ];
+  });
 
   protected readonly activeTab = signal('general');
   protected readonly draft = signal<Collection | null>(null);
@@ -431,6 +448,11 @@ export class CollectionSettingsPage {
 
   protected setLinkShare(on: boolean): void {
     this.mutate(d => ({ ...d, linkShare: on }));
+  }
+
+  /** The empty option means "follow the account", which is stored as null. */
+  protected setCurrency(code: string): void {
+    this.mutate(d => ({ ...d, currency: isCurrencyCode(code) ? code : null }));
   }
 
   // --- done ---

@@ -11,7 +11,16 @@ import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
 import { fieldsFor, flattenTree, groupById, resolveGroupId } from '../../../core/utils/groups.util';
 import { groupLinkParams } from '../browse-params';
 import { TPipe } from '../../../shared/pipes/t.pipe';
-import { SelectOption, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea } from '../../../shared/ui';
+import {
+  SelectOption,
+  UiButton,
+  UiCard,
+  UiField,
+  UiPhotoManager,
+  UiSelect,
+  UiTextInput,
+  UiTextarea,
+} from '../../../shared/ui';
 import { conditionLabelKey } from '../../../shared/ui/badge/badge';
 
 const COPY_STATUS_KEYS: { value: CopyStatus; label: MessageKey }[] = [
@@ -66,7 +75,17 @@ function fromDraft(draft: CopyDraft): ItemCopy {
 @Component({
   selector: 'app-item-form-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiTextarea],
+  imports: [
+    RouterLink,
+    TPipe,
+    UiButton,
+    UiCard,
+    UiField,
+    UiPhotoManager,
+    UiSelect,
+    UiTextInput,
+    UiTextarea,
+  ],
   templateUrl: './item-form-page.html',
   styleUrl: './item-form-page.scss',
 })
@@ -112,7 +131,6 @@ export class ItemFormPage {
   protected readonly copies = signal<CopyDraft[]>([]);
   protected readonly custom = signal<Record<string, string>>({});
   protected readonly photoIds = signal<string[]>([]);
-  protected readonly uploading = signal(false);
 
   private initializedFor: string | null = null;
 
@@ -151,57 +169,17 @@ export class ItemFormPage {
     return resolveGroupId(this.collection()?.groups ?? [], item ? item.groupId : this.g());
   }
 
-  protected browsePhotos(): void {
-    const picker = document.createElement('input');
-    picker.type = 'file';
-    picker.accept = 'image/*';
-    picker.multiple = true;
-    picker.onchange = () => void this.addPhotos([...(picker.files ?? [])]);
-    picker.click();
+  protected readonly maxPhotos = MAX_PHOTOS;
+
+  /**
+   * The manager hands back the whole list after any edit — added, reordered,
+   * made cover, removed — so the form has one way in rather than four.
+   */
+  protected setPhotos(ids: string[]): void {
+    this.photoIds.set(ids);
   }
 
-  protected onPhotoDrop(event: DragEvent): void {
-    event.preventDefault();
-    void this.addPhotos([...(event.dataTransfer?.files ?? [])]);
-  }
-
-  protected async addPhotos(files: File[]): Promise<void> {
-    const imageFiles = files.filter(f => f.type.startsWith('image/'));
-    if (!imageFiles.length) return;
-    this.uploading.set(true);
-    try {
-      for (const [index, file] of imageFiles.entries()) {
-        if (this.photoIds().length >= MAX_PHOTOS) {
-          this.toast.flash(this.i18n.t('toast.photo.limit'));
-          break;
-        }
-        // Only the first of a batch opens the editor: five modals in a row for
-        // one drop would be hostile. The rest land centred and can be adjusted
-        // from the grid whenever the user wants.
-        const imageId =
-          index === 0
-            ? await this.focus.uploadAndFrame(file, 'item')
-            : await this.images.upload(file);
-        // Discarded in the editor: skip this one, but a batch's remaining
-        // photos were still picked deliberately, so they carry on.
-        if (!imageId) continue;
-
-        this.photoIds.update(ids => [...ids, imageId]);
-      }
-    } catch (err) {
-      this.toast.flash(
-        err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),
-      );
-    } finally {
-      this.uploading.set(false);
-    }
-  }
-
-  protected removePhoto(index: number): void {
-    this.photoIds.update(ids => ids.filter((_, i) => i !== index));
-  }
-
-  /** Reopens the editor for a photo already on the item. */
+  /** Opens the framing editor for one photo. Cancelling changes nothing. */
   protected reframe(imageId: string): void {
     void this.focus.frame(imageId, 'item');
   }

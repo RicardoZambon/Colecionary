@@ -196,6 +196,16 @@
         <ui-field [label]="'collSettings.general.description' | t">
           <ui-textarea [rows]="2" [value]="d.description" (valueChange)="setDescription($event)" />
         </ui-field>
+        <ui-field
+          [label]="'collSettings.general.currency' | t"
+          [hint]="'collSettings.general.currencyHint' | t: { currency: store.defaultCurrency() }"
+        >
+          <ui-select
+            [options]="currencyOverrideOptions()"
+            [value]="d.currency ?? ''"
+            (valueChange)="setCurrency($event)"
+          />
+        </ui-field>
         <ui-button variant="danger" (click)="deleteCollection()">{{ 'collSettings.general.delete' | t }}</ui-button>
       </div>
     }

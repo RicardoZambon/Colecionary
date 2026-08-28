@@ -27,6 +27,10 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
         tracked.LinkShare = replacement.LinkShare;
         tracked.BannerImageId = replacement.BannerImageId;
         tracked.IconImageId = replacement.IconImageId;
+        // Plain assignment, never a coalesce: clearing the override back to null
+        // is how a collection goes back to following the account currency, and
+        // a coalesce would pin it to the first code ever chosen.
+        tracked.Currency = replacement.Currency;
 
         MergeByKey(
             tracked.Groups,

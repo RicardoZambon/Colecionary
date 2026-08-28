@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../../core/api/images-api';
@@ -12,6 +12,7 @@ import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiBadge, UiCard, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
+import { VaultStore } from '../../../../core/state/vault.store';
 
 /**
  * The card grid. Purely a rendering of the items it is handed: filtering,
@@ -29,9 +30,16 @@ export class ItemGrid {
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
   private readonly i18n = inject(I18nService);
+  private readonly store = inject(VaultStore);
 
   readonly items = input.required<Item[]>();
   readonly collectionId = input.required<string>();
+
+  /**
+   * Amounts here belong to this collection, so they follow its currency rather
+   * than the account default — a collection may override it.
+   */
+  protected readonly currency = computed(() => this.store.currencyFor(this.collectionId()));
   /** Manual ordering is on, so the cards are draggable. */
   readonly manual = input(false);
   /** Set while ordering by a custom field — drives the chip on each cover. */
