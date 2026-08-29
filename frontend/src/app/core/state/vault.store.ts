@@ -1,8 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 
-import { ArchiveApi } from '../api/archive-api';
-import { VaultApi } from '../api/vault-api';
+import { ArchiveApi, ReplaceDecision } from '../api/archive-api';
+import { VaultApi, VaultConflictError, VersionedCollection } from '../api/vault-api';
+import { ConflictService } from './conflict.service';
 import { CurrencyService } from './currency.service';
 import { I18nService } from '../i18n/i18n.service';
 import { ToastService } from './toast.service';
@@ -21,11 +22,25 @@ import { CurrencyCode } from '../utils/money.util';
 export class VaultStore {
   private readonly api = inject(VaultApi);
   private readonly archives = inject(ArchiveApi);
+  private readonly conflicts = inject(ConflictService);
   private readonly currencies = inject(CurrencyService);
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
 
   private readonly collectionsState = signal<Collection[]>([]);
+  /**
+   * The version this app last synchronised with, per collection — the token
+   * every write of that collection has to quote back.
+   *
+   * A plain `Map` and not a signal: nothing renders it, and making it reactive
+   * would invite a template to depend on a value whose only meaning is "what to
+   * send next". It is here rather than on the `Collection` objects because a
+   * page holds its own long-lived copy of one — the settings page edits a draft
+   * for as long as the tab is open — and a token frozen into that copy would go
+   * stale the moment the page saved once. What has to be quoted is the version
+   * *the app* is at, which is what this holds.
+   */
+  private readonly versions = new Map<string, string>();
   private readonly storeListingsState = signal<StoreListing[]>([]);
   private readonly tenantMembersState = signal<Member[]>([]);
   private readonly profileState = signal<UserProfile | null>(null);
@@ -92,7 +107,10 @@ export class VaultStore {
       firstValueFrom(this.api.getProfile()),
       firstValueFrom(this.api.getTenantSettings()),
     ]);
-    this.collectionsState.set(collections);
+    // Cleared and rebuilt, never merged: a version left over from before a
+    // reload describes a document nobody is holding any more.
+    this.versions.clear();
+    this.collectionsState.set(collections.map(v => this.remember(v)));
     this.storeListingsState.set(listings);
     this.tenantMembersState.set(members);
     this.profileState.set(profile);
@@ -117,7 +135,9 @@ export class VaultStore {
   // --- collections ---
 
   async createCollection(name: string, description: string): Promise<Collection> {
-    const created = await firstValueFrom(this.api.createCollection({ name, description }));
+    const created = this.remember(
+      await firstValueFrom(this.api.createCollection({ name, description })),
+    );
     this.collectionsState.update(all => [...all, created]);
     return created;
   }
@@ -125,20 +145,33 @@ export class VaultStore {
   /**
    * Persists a modified collection (metadata, groups, members, link sharing).
    * Pass a fully updated copy — never mutate store state in place.
+   *
+   * Rejects with a {@link VaultConflictError} when somebody else saved first.
+   * **Nothing was written** in that case, and nothing here is changed either —
+   * the caller's screen is still the only copy of what the user typed, which is
+   * why every caller has to catch rather than navigate away.
    */
   async updateCollection(updated: Collection): Promise<void> {
-    const saved = await firstValueFrom(this.api.updateCollection(updated));
-    this.collectionsState.update(all => all.map(c => (c.id === saved.id ? saved : c)));
+    // Read synchronously, before the first await. This is the closest thing
+    // there is to "the version the payload was derived from": the page built
+    // `updated` from what the store held a moment ago, so the token current at
+    // the moment it asked to save is the one that describes it. Reading it after
+    // an await would quote a version that a write finishing in between had
+    // already moved, and the guard would pass exactly when it should not.
+    const version = this.versionFor(updated.id);
+    const saved = await this.guard(updated.id, this.api.updateCollection(updated, version));
+    this.replace(this.remember(saved));
   }
 
   async deleteCollection(id: string): Promise<void> {
     await firstValueFrom(this.api.deleteCollection(id));
+    this.versions.delete(id);
     this.collectionsState.update(all => all.filter(c => c.id !== id));
   }
 
   async importStoreListing(listingId: string): Promise<Collection | null> {
     try {
-      const created = await firstValueFrom(this.api.importStoreListing(listingId));
+      const created = this.remember(await firstValueFrom(this.api.importStoreListing(listingId)));
       this.collectionsState.update(all => [...all, created]);
       return created;
     } catch (err) {
@@ -165,8 +198,8 @@ export class VaultStore {
    * comes back under the id already on screen, and appending it would leave the
    * sidebar showing the same collection twice.
    */
-  async importArchive(file: File, replace?: readonly string[]): Promise<Collection[]> {
-    const imported = await this.archives.importArchive(file, replace);
+  async importArchive(file: File, replace?: readonly ReplaceDecision[]): Promise<Collection[]> {
+    const imported = (await this.archives.importArchive(file, replace)).map(v => this.remember(v));
     this.collectionsState.update(all => {
       const byId = new Map(imported.map(c => [c.id, c]));
       const overwritten = all.map(c => byId.get(c.id) ?? c);
@@ -178,22 +211,35 @@ export class VaultStore {
 
   // --- items ---
 
+  /**
+   * Saves one item. Rejects with a {@link VaultConflictError} exactly like
+   * {@link updateCollection} — the server guards item writes with the
+   * collection's version, because there is nowhere to keep a per-item one.
+   */
   async upsertItem(collectionId: string, item: Item): Promise<void> {
-    const saved = await firstValueFrom(this.api.upsertItem(collectionId, item));
+    const version = this.versionFor(collectionId);
+    const saved = await this.guard(collectionId, this.api.upsertItem(collectionId, item, version));
+    this.versions.set(collectionId, saved.version);
     this.collectionsState.update(all =>
       all.map(c => {
         if (c.id !== collectionId) return c;
-        const exists = c.items.some(i => i.id === saved.id);
+        const exists = c.items.some(i => i.id === saved.item.id);
         return {
           ...c,
-          items: exists ? c.items.map(i => (i.id === saved.id ? saved : i)) : [...c.items, saved],
+          items: exists
+            ? c.items.map(i => (i.id === saved.item.id ? saved.item : i))
+            : [...c.items, saved.item],
         };
       }),
     );
   }
 
   async deleteItem(collectionId: string, itemId: string): Promise<void> {
-    await firstValueFrom(this.api.deleteItem(collectionId, itemId));
+    // Unguarded on the server, but it still moves the version — so the token it
+    // answers with has to be kept, or the next save would be refused for a
+    // change this app made itself.
+    const version = await firstValueFrom(this.api.deleteItem(collectionId, itemId));
+    this.versions.set(collectionId, version);
     this.collectionsState.update(all =>
       all.map(c => (c.id === collectionId ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c)),
     );
@@ -216,5 +262,58 @@ export class VaultStore {
     const saved = await firstValueFrom(this.api.updateTenantSettings(settings));
     this.tenantSettingsState.set(saved);
     this.currencies.apply(saved.defaultCurrency);
+  }
+
+  // --- versions ---
+
+  /** Records a collection's version and hands back the document. */
+  private remember(versioned: VersionedCollection): Collection {
+    this.versions.set(versioned.collection.id, versioned.version);
+    return versioned.collection;
+  }
+
+  private replace(saved: Collection): void {
+    this.collectionsState.update(all => all.map(c => (c.id === saved.id ? saved : c)));
+  }
+
+  /**
+   * The token a write of this collection must quote.
+   *
+   * Missing means this app never synchronised with the collection it is being
+   * asked to overwrite — after a failed reload, say. Sending the write anyway is
+   * not an option (there is nothing to send), and inventing a token would ask
+   * the server to accept a document derived from nothing. So it raises the same
+   * notice a real conflict does: the honest answer is "reload first", and the
+   * user's work stays on screen either way.
+   */
+  private versionFor(collectionId: string): string {
+    const version = this.versions.get(collectionId);
+    if (version === undefined) {
+      const message = this.i18n.t('conflict.unknownVersion');
+      this.conflicts.raise({ collectionId, message });
+      throw new VaultConflictError(collectionId, message);
+    }
+    return version;
+  }
+
+  /**
+   * Runs a guarded write, putting a refusal in front of the user before it is
+   * rethrown.
+   *
+   * Reported here rather than at each call site on purpose. There are seven
+   * places that save a collection or an item, and a conflict that one of them
+   * forgot to surface is a save the user believes happened. The rethrow is what
+   * lets the page do the other half — stay put, keep the form as it is — and a
+   * page that only needs the default gets it for free.
+   */
+  private async guard<T>(collectionId: string, write: Observable<T>): Promise<T> {
+    try {
+      return await firstValueFrom(write);
+    } catch (err) {
+      if (err instanceof VaultConflictError) {
+        this.conflicts.raise({ collectionId, message: err.message });
+      }
+      throw err;
+    }
   }
 }

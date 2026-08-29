@@ -32,6 +32,7 @@ function item(id: string, overrides: Partial<Item> = {}): Item {
     year: 1995,
     value: 100,
     groupId: 'revistas',
+    sectionId: '',
     tags: [],
     img: `${id}.jpg`,
     custom: [],
@@ -150,5 +151,82 @@ describe('sort.util', () => {
     const all = [item('a'), item('hidden'), item('b'), item('c')];
     const reordered = applyManualOrder(all, ['a', 'b', 'c'], ['c', 'a', 'b']);
     expect(ids(reordered)).toEqual(['c', 'hidden', 'a', 'b']);
+  });
+
+  // --- sections as the primary key (rule: a section orders, it does not scope) ---
+
+  describe('section ordering', () => {
+    // Bronze → Prata → Ouro: the arranged order, which the alphabet gets wrong.
+    const RANK = new Map([
+      ['bronze', 0],
+      ['prata', 1],
+      ['ouro', 2],
+    ]);
+
+    const sectioned = (id: string, sectionId: string, name = id) =>
+      item(id, { sectionId, name });
+
+    it('groups the runs before applying the chosen order inside them', () => {
+      const items = [
+        sectioned('z', 'bronze', 'Zeta'),
+        sectioned('m', 'ouro', 'Mu'),
+        sectioned('a', 'bronze', 'Alpha'),
+        sectioned('b', 'prata', 'Beta'),
+      ];
+
+      expect(
+        ids(sortItems(items, { by: 'name', direction: 'asc' }, [], RANK)),
+      ).toEqual(['a', 'z', 'b', 'm']);
+    });
+
+    it('reverses the items inside each run, never the runs themselves', () => {
+      // The order of the sections is something the user arranged by hand, so a
+      // sort direction has no business flipping it.
+      const items = [
+        sectioned('a', 'bronze', 'Alpha'),
+        sectioned('z', 'bronze', 'Zeta'),
+        sectioned('b', 'prata', 'Beta'),
+      ];
+
+      expect(
+        ids(sortItems(items, { by: 'name', direction: 'desc' }, [], RANK)),
+      ).toEqual(['z', 'a', 'b']);
+    });
+
+    it('keeps manual order inside a run while still grouping the runs', () => {
+      const items = [
+        sectioned('b1', 'bronze'),
+        sectioned('o1', 'ouro'),
+        sectioned('b2', 'bronze'),
+      ];
+
+      expect(ids(sortItems(items, { by: 'manual', direction: 'asc' }, [], RANK))).toEqual([
+        'b1',
+        'b2',
+        'o1',
+      ]);
+    });
+
+    it('sinks an item with no applicable section to the end', () => {
+      const items = [
+        sectioned('loose', ''),
+        sectioned('stray', 'a-section-of-another-group'),
+        sectioned('b1', 'bronze'),
+      ];
+
+      expect(ids(sortItems(items, { by: 'manual', direction: 'asc' }, [], RANK))).toEqual([
+        'b1',
+        'loose',
+        'stray',
+      ]);
+    });
+
+    it('is a no-op without a rank, so nothing changes where no section applies', () => {
+      const items = [item('b'), item('a')];
+      expect(ids(sortItems(items, { by: 'manual', direction: 'asc' }, [], new Map()))).toEqual([
+        'b',
+        'a',
+      ]);
+    });
   });
 });

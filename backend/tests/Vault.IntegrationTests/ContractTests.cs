@@ -104,10 +104,10 @@ public class ContractTests(VaultApiFactory factory)
             LinkShare = false,
         };
 
-        var putResponse = await client.PutAsJsonAsync($"/api/collections/{created.Id}", updated);
+        var putResponse = await client.PutCollectionAsync(updated);
         putResponse.EnsureSuccessStatusCode();
 
-        var all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var all = await client.GetCollectionsAsync();
         var fetched = all!.Single(c => c.Id == created.Id);
         Assert.Equal("Manga (renamed)", fetched.Name);
         Assert.Equal(["g1", "g2"], fetched.Groups.Select(g => g.Id));
@@ -156,8 +156,8 @@ public class ContractTests(VaultApiFactory factory)
                 },
             ],
         };
-        (await client.PutAsJsonAsync($"/api/collections/{created.Id}", edited)).EnsureSuccessStatusCode();
-        all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        (await client.PutCollectionAsync(edited)).EnsureSuccessStatusCode();
+        all = await client.GetCollectionsAsync();
         var reFetchedGroup = all!.Single(c => c.Id == created.Id).Groups[0];
         Assert.Equal(new GroupSortDto("name", "desc"), reFetchedGroup.Sort);
         Assert.Equal("text", Assert.Single(reFetchedGroup.Fields).Type);
@@ -181,14 +181,128 @@ public class ContractTests(VaultApiFactory factory)
             Groups = [updated.Groups[0] with { Sort = null, Target = null }, updated.Groups[1]],
             Items = [],
         };
-        (await client.PutAsJsonAsync($"/api/collections/{created.Id}", emptied)).EnsureSuccessStatusCode();
-        all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        (await client.PutCollectionAsync(emptied)).EnsureSuccessStatusCode();
+        all = await client.GetCollectionsAsync();
         Assert.Empty(all!.Single(c => c.Id == created.Id).Items);
         Assert.Null(all!.Single(c => c.Id == created.Id).Groups[0].Sort);
         Assert.Null(all!.Single(c => c.Id == created.Id).Groups[0].Target);
 
         (await client.DeleteAsync($"/api/collections/{created.Id}")).EnsureSuccessStatusCode();
     }
+
+
+    [Fact]
+    public async Task Collection_Sections_RoundTripInOrder_AndMergeLikeGroups()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+
+        var created = (await (await client.PostAsJsonAsync(
+            "/api/collections",
+            new CreateCollectionRequest("Saint Seiya", "Diecast")))
+            .Content.ReadFromJsonAsync<CollectionDto>())!;
+
+        // A collection created before this feature — and every archive written
+        // then — carries no sections at all. Absent has to read as none.
+        Assert.Empty(created.Sections);
+
+        // Bronze → Prata → Ouro is a rank order, which is the whole reason a
+        // section persists a position and a group does not: alphabetically this
+        // would come back Bronze, Ouro, Prata.
+        var updated = created with
+        {
+            Groups = [new GroupNodeDto("espanha", "Espanha", null, [])],
+            Sections =
+            [
+                new SectionDto("bronze", "espanha", "Cavaleiros de Bronze", Target: 10),
+                new SectionDto("prata", "espanha", "Cavaleiros de Prata", Target: 12),
+                new SectionDto("ouro", "espanha", "Cavaleiros de Ouro"),
+            ],
+            Items =
+            [
+                Item("seiya", "espanha", "bronze"),
+                Item("loose", "espanha", string.Empty),
+            ],
+        };
+
+        (await client.PutCollectionAsync(updated)).EnsureSuccessStatusCode();
+
+        var fetched = (await client.GetCollectionsAsync()).Single(c => c.Id == created.Id);
+        Assert.Equal(["bronze", "prata", "ouro"], fetched.Sections.Select(s => s.Id));
+        Assert.Equal("espanha", fetched.Sections[0].GroupId);
+        Assert.Equal(10, fetched.Sections[0].Target);
+        Assert.Null(fetched.Sections[2].Target);            // undeclared stays undeclared
+        Assert.Equal("bronze", fetched.Items.Single(i => i.Id == "seiya").SectionId);
+        Assert.Equal(string.Empty, fetched.Items.Single(i => i.Id == "loose").SectionId);
+
+        // A second PUT goes through ReplaceGraph's update lambda rather than its
+        // add-newcomer branch: a rename, a target cleared back to null, and a
+        // reorder that only lands if SortOrder is reassigned from array order.
+        var edited = updated with
+        {
+            Sections =
+            [
+                updated.Sections[2],
+                updated.Sections[1] with { Name = "Prata (renomeado)", Target = null },
+                updated.Sections[0],
+            ],
+        };
+        (await client.PutCollectionAsync(edited)).EnsureSuccessStatusCode();
+
+        fetched = (await client.GetCollectionsAsync()).Single(c => c.Id == created.Id);
+        Assert.Equal(["ouro", "prata", "bronze"], fetched.Sections.Select(s => s.Id));
+        Assert.Equal("Prata (renomeado)", fetched.Sections[1].Name);
+        // Fails if the update lambda coalesces instead of assigning: the target
+        // would save on create and then never be clearable again.
+        Assert.Null(fetched.Sections[1].Target);
+
+        // A third PUT drops one. The wholesale replace has to remove it, and the
+        // item that pointed at it keeps its now-dangling reference — which reads
+        // as "no section" rather than failing the write.
+        var emptied = edited with { Sections = [edited.Sections[0]] };
+        (await client.PutCollectionAsync(emptied)).EnsureSuccessStatusCode();
+
+        fetched = (await client.GetCollectionsAsync()).Single(c => c.Id == created.Id);
+        Assert.Equal(["ouro"], fetched.Sections.Select(s => s.Id));
+        Assert.Equal("bronze", fetched.Items.Single(i => i.Id == "seiya").SectionId);
+
+        (await client.DeleteAsync($"/api/collections/{created.Id}")).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Collection_Section_ReferencingNothing_IsRefused()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+        var created = (await (await client.PostAsJsonAsync(
+            "/api/collections",
+            new CreateCollectionRequest("Saint Seiya", string.Empty)))
+            .Content.ReadFromJsonAsync<CollectionDto>())!;
+
+        // A divider that belongs to no group has nothing to divide. The group
+        // does not have to exist yet — that is a reference, resolved on read —
+        // but it has to be named.
+        var invalid = created with
+        {
+            Sections = [new SectionDto("s1", string.Empty, "Bronze")],
+        };
+
+        var response = await client.PutCollectionAsync(invalid);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        (await client.DeleteAsync($"/api/collections/{created.Id}")).EnsureSuccessStatusCode();
+    }
+
+    private static ItemDto Item(string id, string groupId, string sectionId) =>
+        new(
+            id,
+            id,
+            string.Empty,
+            1987,
+            10m,
+            groupId,
+            [],
+            $"{id}.jpg",
+            [],
+            SectionId: sectionId);
 
     [Fact]
     public async Task Items_UpsertByClientId_AndIdempotentDelete()
@@ -197,7 +311,7 @@ public class ContractTests(VaultApiFactory factory)
         // No copies at all — a wantlist item.
         var item = new ItemDto("i1752300000000", "Panzer Dragoon Saga", "Grail hunt", 1998, 900, "Sega", ["wanted"], "pds.jpg", []);
 
-        var createResponse = await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", item);
+        var createResponse = await client.PutItemAsync("retro", item);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         Assert.Empty((await createResponse.Content.ReadFromJsonAsync<ItemDto>())!.Copies);
 
@@ -212,10 +326,10 @@ public class ContractTests(VaultApiFactory factory)
                 new ItemCopyDto("pds_c2", "Fair", 400, 700m, null, "ForSale", ""),
             ],
         };
-        var updateResponse = await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", owned);
+        var updateResponse = await client.PutItemAsync("retro", owned);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
-        var collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var collections = await client.GetCollectionsAsync();
         var fetched = collections!.Single(c => c.Id == "retro").Items.Single(i => i.Id == item.Id);
         Assert.Equal(["pds_c1", "pds_c2"], fetched.Copies.Select(c => c.Id));
         Assert.Equal(650, fetched.Copies[0].Price);
@@ -225,8 +339,8 @@ public class ContractTests(VaultApiFactory factory)
 
         // Sold one — shrink back to a single copy, still through ApplyTo.
         var sold = owned with { Copies = [owned.Copies[0] with { Notes = "kept the good one" }] };
-        (await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", sold)).EnsureSuccessStatusCode();
-        collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        (await client.PutItemAsync("retro", sold)).EnsureSuccessStatusCode();
+        collections = await client.GetCollectionsAsync();
         fetched = collections!.Single(c => c.Id == "retro").Items.Single(i => i.Id == item.Id);
         Assert.Equal("kept the good one", Assert.Single(fetched.Copies).Notes);
 
@@ -238,7 +352,7 @@ public class ContractTests(VaultApiFactory factory)
     public async Task SeededDemo_ExposesMultiCopyItems()
     {
         var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
-        var collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var collections = await client.GetCollectionsAsync();
 
         var squirtle = collections!.Single(c => c.Id == "pokemon").Items.Single(i => i.Id == "pk_squirtle");
         Assert.Equal(3, squirtle.Copies.Count);

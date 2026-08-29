@@ -9,7 +9,12 @@ export interface SelectOption {
   selector: 'ui-select',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <select [value]="value()" [disabled]="disabled()" (change)="onChange($event)">
+    <select
+      [value]="value()"
+      [disabled]="disabled()"
+      [attr.aria-label]="ariaLabel() || null"
+      (change)="onChange($event)"
+    >
       @for (option of options(); track option.value) {
         <option [value]="option.value" [selected]="option.value === value()">
           {{ option.label }}
@@ -31,7 +36,10 @@ export interface SelectOption {
       padding: 9px 10px;
       font-family: var(--font-body);
       font-size: 13px;
-      outline: none;
+      /* Deliberately no 'outline: none'. Angular scopes this rule to
+         select[_ngcontent-…], which outranks the global :focus-visible ring
+         in styles.scss — suppressing it here leaves every select in the app
+         with no visible focus at all. */
 
       &:disabled {
         color: var(--text2);
@@ -49,6 +57,12 @@ export class UiSelect {
   readonly value = model('');
   readonly options = input.required<SelectOption[]>();
   readonly disabled = input(false);
+  /**
+   * Accessible name for the selects in dense rows, which have no `ui-field`
+   * label beside them — a bare combobox announces its value and nothing about
+   * what the value is for.
+   */
+  readonly ariaLabel = input('');
 
   protected onChange(event: Event): void {
     this.value.set((event.target as HTMLSelectElement).value);

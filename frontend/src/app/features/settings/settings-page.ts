@@ -2,7 +2,12 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router } from '@angular/router';
 
 import { PLANS } from './plans';
-import { ArchiveApi, ImportNeedsConfirmation, ImportPlan } from '../../core/api/archive-api';
+import {
+  ArchiveApi,
+  ImportNeedsConfirmation,
+  ImportPlan,
+  ReplaceDecision,
+} from '../../core/api/archive-api';
 import { I18nService, MessageKey } from '../../core/i18n';
 import { ThemeService } from '../../core/state/theme.service';
 import { ToastService } from '../../core/state/toast.service';
@@ -234,16 +239,29 @@ export class SettingsPage {
   private readonly pendingArchive = signal<File | null>(null);
   protected readonly importPlan = signal<ImportPlan | null>(null);
 
-  /** Answers the dialog: these ids get overwritten, everything else lands new. */
+  /**
+   * Answers the dialog: these ids get overwritten, everything else lands new.
+   *
+   * Each id travels with the version the plan reported for it. Without that the
+   * server would be replacing a whole document on the strength of a read the
+   * user made before a dialog and a second upload — and if the collection moved
+   * in between, it asks again rather than overwriting work nobody chose to lose.
+   */
   protected async applyImport(replace: string[]): Promise<void> {
     const file = this.pendingArchive();
-    if (!file) {
+    const plan = this.importPlan();
+    if (!file || !plan) {
       return;
     }
 
+    const chosen = new Set(replace);
+    const decisions = plan.entries
+      .filter(entry => entry.existingId && entry.existingVersion && chosen.has(entry.existingId))
+      .map(entry => ({ id: entry.existingId!, version: entry.existingVersion! }));
+
     this.importPlan.set(null);
     this.pendingArchive.set(null);
-    await this.runImport(file, replace);
+    await this.runImport(file, decisions);
   }
 
   protected cancelImport(): void {
@@ -256,7 +274,7 @@ export class SettingsPage {
    * the user's answer if the server came back asking which collections to
    * overwrite.
    */
-  private async runImport(file: File, replace?: string[]): Promise<void> {
+  private async runImport(file: File, replace?: ReplaceDecision[]): Promise<void> {
     this.importing.set(true);
     try {
       const imported = await this.store.importArchive(file, replace);

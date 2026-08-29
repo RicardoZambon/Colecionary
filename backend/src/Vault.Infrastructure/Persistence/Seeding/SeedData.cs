@@ -170,13 +170,23 @@ public static class SeedData
                         [Field("Issue", GroupFieldType.Number), Field("Print")],
                         2, sortBy: "field:Issue", sortDirection: "asc"),
                 ],
+                // Marvel's runs are eras, not another level of the shelf: they
+                // label its items and stop there. Seeded in chronological
+                // order, which is deliberately NOT alphabetical — a group would
+                // list them Bronze, Silver and lose the point. The group's own
+                // "sort by Issue" still orders the items inside each era.
+                Sections =
+                [
+                    Section("comics", "silver", "Marvel", "Silver Age", 0),
+                    Section("comics", "bronze", "Marvel", "Bronze Age", 1),
+                ],
                 Items =
                 [
                     // Deliberately seeded out of order: the group's sort is what
                     // puts them back in sequence.
-                    Item("comics", "xmen101", "X-Men #101", 1976, Condition.Good, 850, 520, "Marvel", ["key", "graded"], "xmen_101.jpg", "First appearance of Phoenix. CGC 6.5 with off-white pages.", Custom(("Issue", "101"), ("Grade", "CGC 6.5"), ("Key", "1st Phoenix"))),
-                    Item("comics", "xmen94", "X-Men #94", 1975, Condition.Fair, 1200, 780, "Marvel", ["key"], "xmen_94.jpg", "First issue of the new team in the regular run. Well read, complete and flat.", Custom(("Issue", "94"), ("Grade", "Raw VG"), ("Key", "New team begins"))),
-                    Item("comics", "xmen9", "X-Men #9", 1965, Condition.Fair, 640, 400, "Marvel", [], "xmen_9.jpg", "Early Silver Age crossover with the Avengers. Spine wear, no restoration.", Custom(("Issue", "9"), ("Grade", "Raw GD"))),
+                    Item("comics", "xmen101", "X-Men #101", 1976, Condition.Good, 850, 520, "Marvel", ["key", "graded"], "xmen_101.jpg", "First appearance of Phoenix. CGC 6.5 with off-white pages.", Custom(("Issue", "101"), ("Grade", "CGC 6.5"), ("Key", "1st Phoenix")), sectionId: "bronze"),
+                    Item("comics", "xmen94", "X-Men #94", 1975, Condition.Fair, 1200, 780, "Marvel", ["key"], "xmen_94.jpg", "First issue of the new team in the regular run. Well read, complete and flat.", Custom(("Issue", "94"), ("Grade", "Raw VG"), ("Key", "New team begins")), sectionId: "bronze"),
+                    Item("comics", "xmen9", "X-Men #9", 1965, Condition.Fair, 640, 400, "Marvel", [], "xmen_9.jpg", "Early Silver Age crossover with the Avengers. Spine wear, no restoration.", Custom(("Issue", "9"), ("Grade", "Raw GD")), sectionId: "silver"),
                     Item("comics", "watchmen", "Watchmen #1", 1986, Condition.Mint, 240, 120, "DC", ["key"], "watchmen_1.jpg", "First print, raw but immaculate. Stored bagged and boarded since the 90s.", Custom(("Issue", "1"), ("Print", "1st"))),
                     Item("comics", "saga", "Saga #1 (1st print)", 2012, Condition.Mint, 180, 90, "Indie", ["key"], "saga_1.jpg", "First print of the Image hit. Modern key that keeps climbing.", Custom(("Issue", "1"), ("Print", "1st"))),
                 ],
@@ -338,6 +348,22 @@ public static class SeedData
             SortOrder = sortOrder,
         };
 
+    private static Section Section(
+        string collectionId,
+        string id,
+        string groupId,
+        string name,
+        int sortOrder,
+        int? target = null) => new()
+        {
+            CollectionId = collectionId,
+            Id = id,
+            GroupId = groupId,
+            Name = name,
+            Target = target,
+            SortOrder = sortOrder,
+        };
+
     private static CollectionMember Member(string collectionId, string name, string email, string initials, MemberRole role) => new()
     {
         CollectionId = collectionId,
@@ -366,7 +392,8 @@ public static class SeedData
         string description,
         List<CustomFieldValue>? custom = null,
         bool owned = true,
-        List<ItemCopy>? extraCopies = null) => new()
+        List<ItemCopy>? extraCopies = null,
+        string sectionId = "") => new()
         {
             CollectionId = collectionId,
             Id = id,
@@ -374,6 +401,7 @@ public static class SeedData
             Year = year,
             Value = value,
             GroupId = groupId,
+            SectionId = sectionId,
             Tags = tags,
             Img = img,
             Description = description,

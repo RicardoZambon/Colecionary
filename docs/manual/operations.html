@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deploy e suporte · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="operations">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">09 · Operação</p>
+<h1>Deploy, configuração e suporte</h1>
+<p class="lede">
+  Uma imagem, uma porta, um banco que você fornece. Esta página é a referência
+  operacional: o que configurar, o que precisa de volume, como o release
+  acontece, o que fazer antes de restaurar um backup e a tabela de sintomas.
+</p>
+
+<h2 id="rodar">Rodar a imagem</h2>
+
+<pre><code>docker run -d --name colecionary \
+  -p 8080:80 \
+  -v colecionary-config:/data/config \
+  -v colecionary-images:/data/images \
+  -e ImageStorage__Root=/data/images \
+  ricardozambon/vault:latest</code></pre>
+
+<p>
+  Abra <code>http://&lt;host&gt;:8080/</code>. TLS termina no proxy reverso; o
+  contêiner fala HTTP puro na porta 80. Só <code>linux/amd64</code>. Você fornece
+  o SQL Server (2022+).
+</p>
+
+<h2 id="persistencia">O que precisa sobreviver ao contêiner</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Caminho</th><th>Guarda</th><th>Declarado na imagem?</th><th>Se não montar</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>/data/config</code></td>
+      <td><code>colecionary.json</code>: connection string + chave JWT gerada</td>
+      <td><span class="tag good">sim</span></td>
+      <td>O wizard roda de novo a cada recriação, e todas as sessões caem (chave
+          JWT nova)</td>
+    </tr>
+    <tr>
+      <td><code>ImageStorage:Root</code></td>
+      <td>Todos os bytes de imagem, um diretório por tenant</td>
+      <td><span class="tag danger">não</span></td>
+      <td><strong>Todas as fotos são perdidas na recriação do contêiner.</strong>
+          O padrão <code>App_Data/images</code> é relativo ao content root, ou
+          seja, dentro da camada de escrita</td>
+    </tr>
+    <tr>
+      <td>SQL Server</td>
+      <td>Tudo o mais</td>
+      <td>externo</td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout danger">
+  <span class="label">Monte o volume de imagens explicitamente</span>
+  <p>
+    A imagem declara <code>VOLUME ["/data/config"]</code> e não declara nada para
+    imagens. Em qualquer implantação real, monte um volume e aponte
+    <code>ImageStorage__Root</code> para ele. Sem isso, a arquitetura de
+    “bytes fora do banco” — que existe para tornar backup e cota possíveis —
+    entrega exatamente o contrário: um backup do banco que não contém as fotos, e
+    um contêiner que as leva embora ao ser recriado.
+  </p>
+</div>
+
+<h2 id="setup">Primeiro uso</h2>
+
+<ol class="steps">
+  <li>
+    Sem connection string, o app entra em <strong>modo setup</strong> e imprime um
+    token de uso único no log: <code>docker logs colecionary</code> → procure
+    <code>SETUP MODE — … token …</code>.
+  </li>
+  <li>
+    Abra o app; ele redireciona para <code>/setup</code>. Informe o token, depois
+    a conexão do SQL Server (o login precisa de direito de criar o banco se ele
+    não existir), a primeira organização + conta owner, e o tema padrão.
+  </li>
+  <li>
+    Aplicar cria o schema e a conta owner, grava
+    <code>/data/config/colecionary.json</code> e reinicia no login normal.
+  </li>
+  <li>
+    Reconfigurar depois: apague <code>colecionary.json</code> do volume.
+  </li>
+</ol>
+
+<h3>Pular o wizard (configuração headless)</h3>
+
+<pre><code>docker run -d --name colecionary -p 8080:80 \
+  -v colecionary-config:/data/config \
+  -v colecionary-images:/data/images \
+  -e ConnectionStrings__Vault="Server=db-host,1433;Database=Colecionary;User Id=sa;Password=…;TrustServerCertificate=true" \
+  -e Jwt__SigningKey="um-segredo-aleatorio-longo-de-pelo-menos-32-bytes" \
+  -e ImageStorage__Root=/data/images \
+  ricardozambon/vault:latest</code></pre>
+
+<h2 id="config">Referência de configuração</h2>
+
+<p>
+  Toda chave abaixo é uma seção de <code>appsettings.json</code> e também uma
+  variável de ambiente, trocando <code>:</code> por <code>__</code>
+  (<code>Jwt:SigningKey</code> → <code>Jwt__SigningKey</code>).
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Chave</th><th>Padrão</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><code>ConnectionStrings:Vault</code></td><td>vazio</td><td>SQL Server. Vazio = modo setup</td></tr>
+    <tr><td><code>Jwt:SigningKey</code></td><td>vazio</td><td>HS256, ≥ 32 caracteres. Gerado pelo wizard se ausente. <strong>Trocá-la invalida todas as sessões</strong></td></tr>
+    <tr><td><code>Jwt:Issuer</code> / <code>:Audience</code></td><td><code>vault-api</code> / <code>vault-app</code></td><td>Validados no token</td></tr>
+    <tr><td><code>Jwt:LifetimeMinutes</code></td><td><code>480</code></td><td>8 h. Não há refresh token</td></tr>
+    <tr><td><code>Seed:Enabled</code></td><td><code>false</code></td><td><code>true</code> só em Development. Popula o tenant de demonstração</td></tr>
+    <tr><td><code>Seed:DemoPassword</code></td><td><code>vault-demo</code></td><td>Senha das contas semeadas</td></tr>
+    <tr><td><code>ImageStorage:Root</code></td><td><code>App_Data/images</code></td><td>Relativo resolve contra o content root. <strong>Aponte para um volume</strong></td></tr>
+    <tr><td><code>Cors:Origins</code></td><td><code>[]</code></td><td>Fora de Development. Em Development, qualquer origem é refletida (auth é bearer, não cookie)</td></tr>
+    <tr><td><code>ForwardedHeaders:KnownProxies</code></td><td><code>[]</code></td><td>Opt-in. Um valor que não parseia como IP <strong>impede o boot</strong></td></tr>
+    <tr><td><code>Setup:ConfigDirectory</code></td><td><code>App_Data/config</code> (na imagem: <code>/data/config</code>)</td><td>Onde <code>colecionary.json</code> vive</td></tr>
+    <tr><td><code>Serilog:MinimumLevel</code></td><td><code>Information</code>, ASP.NET e EF em <code>Warning</code></td><td>Console</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Throttle de login</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Chave</th><th>Padrão</th><th>Significa</th></tr></thead>
+  <tbody>
+    <tr><td><code>LoginThrottle:Enabled</code></td><td><code>true</code></td><td>—</td></tr>
+    <tr><td><code>LoginThrottle:FailureWindow</code></td><td><code>00:05:00</code></td><td>Janela em que as falhas são contadas</td></tr>
+    <tr><td><code>LoginThrottle:MaxAccountFailures</code></td><td><code>10</code></td><td>Por conta, na janela</td></tr>
+    <tr><td><code>LoginThrottle:AccountDelay</code></td><td><code>00:05:00</code></td><td>Penalidade inicial da conta, dobrando a cada reincidência</td></tr>
+    <tr><td><code>LoginThrottle:MaxAccountDelay</code></td><td><code>00:30:00</code></td><td>Teto. Precisa ser ≥ <code>AccountDelay</code>, senão o boot falha</td></tr>
+    <tr><td><code>LoginThrottle:MaxClientFailures</code></td><td><code>30</code></td><td>Por endereço, na janela</td></tr>
+    <tr><td><code>LoginThrottle:ClientDelay</code></td><td><code>00:05:00</code></td><td>Penalidade do endereço, fixa</td></tr>
+    <tr><td><code>LoginThrottle:MaxConcurrentPerClient</code></td><td><code>8</code></td><td>Tentativas em voo por endereço</td></tr>
+    <tr><td><code>LoginThrottle:RecordExpiry</code></td><td><code>01:00:00</code></td><td>Quanto um registro é retido</td></tr>
+    <tr><td><code>LoginThrottle:MaxTrackedRecords</code></td><td><code>20000</code></td><td>Limite de memória; a evicção poupa quem cumpre penalidade</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Coletor de imagens</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Chave</th><th>Padrão</th><th>Significa</th></tr></thead>
+  <tbody>
+    <tr><td><code>ImageGc:Enabled</code></td><td><span class="tag good">false</span></td><td>Desligado, o <code>BackgroundService</code> <strong>não é registrado</strong></td></tr>
+    <tr><td><code>ImageGc:DryRun</code></td><td><span class="tag good">true</span></td><td>Relata o que removeria; não escreve nada</td></tr>
+    <tr><td><code>ImageGc:GracePeriod</code></td><td><code>30.00:00:00</code></td><td>Mínimo 1 h — abaixo disso o <strong>boot falha</strong></td></tr>
+    <tr><td><code>ImageGc:Interval</code></td><td><code>06:00:00</code></td><td>Máximo 45 dias</td></tr>
+    <tr><td><code>ImageGc:InitialDelay</code></td><td><code>00:05:00</code></td><td>Máximo 45 dias</td></tr>
+    <tr><td><code>ImageGc:BatchSize</code></td><td><code>200</code></td><td>Raio de uma varredura</td></tr>
+    <tr><td><code>ImageGc:CollectOrphanFiles</code></td><td><code>true</code></td><td>Recupera bytes que nenhuma linha jamais nomeou</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="backup">Backup e restore</h2>
+
+<p>
+  Não existe backup automático em lugar nenhum do sistema. Um backup completo tem
+  <strong>duas partes que precisam concordar</strong>:
+</p>
+
+<ol class="steps">
+  <li>O banco SQL Server (backup nativo do SQL).</li>
+  <li>O diretório de <code>ImageStorage:Root</code>, inteiro.</li>
+</ol>
+
+<div class="callout danger">
+  <span class="label">Antes de restaurar: desligue o coletor</span>
+  <p>
+    A varredura acredita no banco sobre o que existe e no storage sobre o que está
+    em disco. Restaure um sem o outro e <strong>todo arquivo que o banco
+    restaurado esqueceu lê como lixo mais velho que a carência</strong>, porque
+    <code>rsync -a</code> e afins preservam a data de modificação. Coloque
+    <code>ImageGc:Enabled</code> em <code>false</code> (ou <code>DryRun</code> de
+    volta em <code>true</code>) até saber que as duas partes concordam.
+  </p>
+</div>
+
+<p>
+  Para dados de um usuário específico existe também <code>GET /api/export</code>
+  (zip do tenant com fotos) e <code>POST /api/import</code> para restaurar. Isso é
+  autoatendimento pelo app, não substituto de backup de infraestrutura: ele é por
+  tenant e roda no contexto de uma sessão.
+</p>
+
+<h2 id="release">Pipeline de release</h2>
+
+<p>
+  <code>.github/workflows/release.yml</code> roda em todo push para
+  <code>main</code>, em pull requests e por disparo manual.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 720 176" role="img" aria-labelledby="ci-t">
+      <title id="ci-t">Jobs do pipeline de release</title>
+
+      <rect class="box accent" x="8" y="46" width="150" height="80" rx="8"/>
+      <text class="t b mid" x="83" y="70">validate</text>
+      <text class="t s mid" x="83" y="88">“Build validation”</text>
+      <text class="t s mid" x="83" y="104">TODOS os portões</text>
+      <text class="t s mid" x="83" y="118">num job só</text>
+
+      <path class="ln accent" d="M162 86 H222"/><polygon class="fill-accent" points="222,86 214,82 214,90"/>
+
+      <rect class="box" x="228" y="18" width="150" height="56" rx="8"/>
+      <text class="t b mid" x="303" y="40">image-check</text>
+      <text class="t s mid" x="303" y="58">só em PR, sem push</text>
+
+      <rect class="box" x="228" y="96" width="150" height="60" rx="8"/>
+      <text class="t b mid" x="303" y="118">version</text>
+      <text class="t s mid" x="303" y="136">semantic-release</text>
+      <text class="t s mid" x="303" y="150">dry-run</text>
+
+      <path class="ln accent" d="M382 126 H442"/><polygon class="fill-accent" points="442,126 434,122 434,130"/>
+
+      <rect class="box" x="448" y="96" width="150" height="60" rx="8"/>
+      <text class="t b mid" x="523" y="118">publish</text>
+      <text class="t s mid" x="523" y="136">estampa a versão,</text>
+      <text class="t s mid" x="523" y="150">builda e faz push</text>
+
+      <path class="ln accent" d="M602 126 H656"/><polygon class="fill-accent" points="656,126 648,122 648,130"/>
+
+      <rect class="box goodbox" x="600" y="30" width="112" height="56" rx="8"/>
+      <text class="t b mid" x="656" y="52">release</text>
+      <text class="t s mid" x="656" y="70">tag + GitHub</text>
+      <path class="ln accent" d="M656 96 V88"/>
+
+      <text class="t s" x="8" y="168">A tag só nasce depois da imagem existir — nunca aponta para artefato ausente.</text>
+    </svg>
+  </div>
+</figure>
+
+<h3>O que o job de validação roda, em ordem</h3>
+
+<ol>
+  <li>Guarda: “todo projeto de teste da solução está coberto abaixo” — falha alto
+      se alguém adicionar um terceiro projeto sem adicionar o passo.</li>
+  <li><code>dotnet build -c Release</code> — <strong>avisos são erros</strong>.</li>
+  <li><code>dotnet format --verify-no-changes</code>.</li>
+  <li>Testes unitários do backend, com <code>TreatNoTestsAsError=true</code>.</li>
+  <li><code>npm ci</code>, <code>npm test -- --watch=false</code>,
+      <code>npm run build</code>.</li>
+  <li><strong>Testes de integração</strong> (SQL Server via Testcontainers) —
+      por último de propósito: é o único passo que precisa de Docker e o único que
+      pode falhar por motivo que não é o código.</li>
+</ol>
+
+<div class="callout warn">
+  <span class="label">Por que tudo num job só</span>
+  <p>
+    Proteção de branch exige um check <em>por nome</em>, e só um admin do
+    repositório adiciona nomes àquela lista. Um portão movido para um job próprio
+    deixaria de ser obrigatório no instante em que se mudasse, em silêncio, e nada
+    neste arquivo diria isso. O custo é rodar em série. Pague.
+  </p>
+  <p>
+    E <strong>nunca</strong> adicione <code>TESTCONTAINERS_RYUK_DISABLED</code> ou
+    <code>TESTCONTAINERS_HOST_OVERRIDE</code> ao CI: essas variáveis existem só num
+    dev container cujo Docker alcança o SQL Server pelo host, e no CI desligariam
+    o reaper que limpa depois de uma execução cancelada.
+  </p>
+</div>
+
+<h3>Versionamento = conventional commits</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Prefixo do commit</th><th>Efeito</th></tr></thead>
+  <tbody>
+    <tr><td><code>fix:</code></td><td>patch</td></tr>
+    <tr><td><code>feat:</code></td><td>minor</td></tr>
+    <tr><td><code>feat!:</code> ou <code>BREAKING CHANGE:</code></td><td>major</td></tr>
+    <tr><td><code>chore:</code>, <code>docs:</code>, <code>refactor:</code>, <code>ci:</code>…</td><td><strong>nenhum release</strong></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  A versão é estampada em <code>Vault.Api.csproj</code> e
+  <code>frontend/package.json</code> no job <code>publish</code>, que verifica os
+  dois depois de escrever. A imagem sai como
+  <code>ricardozambon/vault:&lt;versão&gt;</code> e <code>:latest</code>.
+</p>
+
+<h3>Segredos e variáveis necessários</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Nome</th><th>Onde</th><th>O quê</th></tr></thead>
+  <tbody>
+    <tr><td><code>DOCKERHUB_USERNAME</code></td><td>Variable <em>ou</em> Secret</td><td>Conta dona de <code>ricardozambon/vault</code> (não é sensível)</td></tr>
+    <tr><td><code>DOCKERHUB_TOKEN</code></td><td>Secret</td><td>Token de acesso do Docker Hub (Read/Write)</td></tr>
+    <tr><td><code>GITHUB_TOKEN</code></td><td>automático</td><td>O workflow pede <code>contents: write</code> para tag e release</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Os dois primeiros precisam ser <strong>de repositório</strong>, e não escopados a
+  um Environment: o job <code>publish</code> não declara <code>environment:</code>,
+  então valores escopados não seriam visíveis para ele.
+</p>
+
+<h2 id="logs">O que procurar no log</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Linha</th><th>Significa</th></tr></thead>
+  <tbody>
+    <tr><td><code>SETUP MODE — … token …</code></td><td>App sem connection string. Essa é a autenticação do wizard</td></tr>
+    <tr><td>Falha de startup mencionando <code>ImageGc.GracePeriod</code></td><td>Carência abaixo de 1 h. Deliberadamente fatal</td></tr>
+    <tr><td>Falha mencionando <code>LoginThrottle</code></td><td>Combinação sem sentido (janela ≤ 0, ou <code>MaxAccountDelay &lt; AccountDelay</code>)</td></tr>
+    <tr><td>Falha mencionando <code>KnownProxies</code></td><td>Um valor não é um IP. Preferimos não subir a subir confiando em ninguém</td></tr>
+    <tr><td><code>Cross-tenant write rejected for …</code></td><td>O interceptor de stamping barrou uma escrita. <strong>Isso é um bug de código, não do usuário</strong></td></tr>
+    <tr><td>Relatório do coletor de imagens</td><td>Em <code>DryRun</code>, é exatamente o que ele removeria. Leia antes de desligar o dry run</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="troubleshooting">Sintomas e causas</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Sintoma</th><th>Causa provável</th><th>O que fazer</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>“O wizard de setup roda toda vez”</td>
+      <td><code>/data/config</code> não está montado</td>
+      <td>Monte o volume. Depois de configurado, a rota <code>/api/setup/status</code> nem é mapeada</td>
+    </tr>
+    <tr>
+      <td>“Todas as fotos sumiram depois de atualizar”</td>
+      <td><code>ImageStorage:Root</code> na camada de escrita do contêiner</td>
+      <td>Não há recuperação sem backup. Monte volume e aponte <code>ImageStorage__Root</code></td>
+    </tr>
+    <tr>
+      <td>“Todo mundo foi deslogado”</td>
+      <td><code>Jwt:SigningKey</code> mudou — inclusive por uma nova execução do wizard</td>
+      <td>Restaure a chave anterior ou aceite o novo login</td>
+    </tr>
+    <tr>
+      <td>“Diz que alguém alterou antes, mas sou só eu”</td>
+      <td>Concorrência é por <strong>coleção</strong>: outra aba, outro dispositivo, ou uma edição de item na mesma coleção</td>
+      <td>Recarregar resolve. O que o usuário digitou <strong>não</strong> é descartado</td>
+    </tr>
+    <tr>
+      <td>“Salvei uma vez e depois todo save é recusado”</td>
+      <td>O cliente não está lendo <code>ETag</code> — tipicamente CORS sem <code>WithExposedHeaders</code> num deploy cross-origin</td>
+      <td>Confira <code>Cors:Origins</code> e que <code>ETag</code> está exposto</td>
+    </tr>
+    <tr>
+      <td>“429 para todo mundo, sem ataque nenhum”</td>
+      <td>Proxy reverso na frente sem <code>ForwardedHeaders:KnownProxies</code>: todos no mesmo bucket</td>
+      <td>Nomeie o proxy. Só o endereço do proxy, e apenas um hop</td>
+    </tr>
+    <tr>
+      <td>“Login lento / API demorada no login”</td>
+      <td>Sem índice em <code>Email</code> sozinho: todo login varre a tabela</td>
+      <td>Limitação conhecida. O pré-portão evita que tentativa recusada chegue ao SQL</td>
+    </tr>
+    <tr>
+      <td>“O arquivo baixado tem nome genérico”</td>
+      <td><code>Content-Disposition</code> não exposto no CORS</td>
+      <td>Confira a política. Aparece primeiro no export de <em>uma</em> coleção</td>
+    </tr>
+    <tr>
+      <td>“Uma imagem carrega enorme num card pequeno”</td>
+      <td>Chamada sem variante nomeada</td>
+      <td>Use <code>images.url(id, 'thumb')</code>. Duas URLs = duas entradas de cache</td>
+    </tr>
+    <tr>
+      <td>“GIF parou de animar”</td>
+      <td>Não deveria: GIF nunca é derivado</td>
+      <td>Se acontecer, alguém mudou <code>SkiaImageDeriver.CanDerive</code></td>
+    </tr>
+    <tr>
+      <td>“Imagem some sozinha depois de um tempo”</td>
+      <td>Coletor ligado <em>e</em> fora de dry run, e a imagem realmente ficou sem referência a carência inteira</td>
+      <td>Confirme <code>ImageGc</code>. Uma restauração parcial de backup é a outra causa</td>
+    </tr>
+    <tr>
+      <td>“Import não sobrescreveu o que eu escolhi”</td>
+      <td>A versão da coleção alvo se moveu entre o plano e a confirmação</td>
+      <td>O 409 traz um plano novo — responda contra o que está no vault agora</td>
+    </tr>
+    <tr>
+      <td>“Membro convidado não consegue entrar”</td>
+      <td><code>PasswordHash</code> nulo; não existe fluxo de convite</td>
+      <td>Limitação conhecida da v1</td>
+    </tr>
+    <tr>
+      <td>“Um deploy zerou o bloqueio de força bruta”</td>
+      <td>O estado do throttle é em memória</td>
+      <td>Limitação conhecida; a forma durável é uma tabela</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="upgrade">Notas de atualização</h2>
+
+<ul>
+  <li>
+    <strong>Sempre suba a API para migrar.</strong>
+    <code>MoveImageBytesToFileStorage</code> derruba a coluna de blobs, e a
+    exportação para o storage vive no startup, antes de
+    <code>Database.Migrate()</code>. <code>dotnet ef database update</code> contra
+    um banco que ainda guarda blobs apaga os bytes.
+  </li>
+  <li>
+    Migrations são aplicadas automaticamente no boot. Não há passo manual — e não
+    há downgrade.
+  </li>
+  <li>
+    <code>colecionary.json</code> é lido apenas se nenhum provedor normal fornecer
+    connection string, então uma implantação headless é sempre determinística.
+  </li>
+  <li>
+    <code>index.html</code> nunca é cacheado (<code>no-cache, no-store,
+    must-revalidate</code>); um deploy não deixa clientes presos a um shell velho
+    referenciando bundles com hash que já foram removidos.
+  </li>
+</ul>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

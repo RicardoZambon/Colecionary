@@ -1,0 +1,71 @@
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pick__twisty {
+  flex: none;
+  width: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pick__twisty--leaf {
+  cursor: default;
+}
+
+.pick__link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.pick__link:hover {
+  background: var(--panel2);
+}
+
+.pick--selected .pick__link {
+  background: var(--panel2);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pick__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.pick__count {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.pick__empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}

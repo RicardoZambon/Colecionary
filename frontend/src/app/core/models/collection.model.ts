@@ -1,6 +1,7 @@
 import { GroupNode } from './group.model';
 import { Item } from './item.model';
 import { Member } from './member.model';
+import { Section } from './section.model';
 import { CurrencyCode } from '../utils/money.util';
 
 export interface Collection {
@@ -8,6 +9,8 @@ export interface Collection {
   name: string;
   description: string;
   groups: GroupNode[];
+  /** Item-level dividers, in display order. Each belongs to one group. */
+  sections: Section[];
   items: Item[];
   /** People this collection is shared with (the tenant owner is implicit). */
   members: Member[];

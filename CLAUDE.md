@@ -17,6 +17,7 @@ collections. The current implementation ships under the working name
 | `backend/` | **The API.** .NET 10 clean-architecture solution (Domain / Application / Infrastructure / Api), SQL Server + EF Core, JWT auth, multi-tenancy via global query filters. See `backend/README.md`. |
 | `prototype/` | Frozen dependency-free HTML/JS port of the design file. Reference only — do not add features here. |
 | `docs/frontend-standards.md` | **The frontend rulebook.** Architecture, component catalog, theming, data layer. Read it before touching `frontend/`. |
+| `docs/manual/` | **The technical manual (HTML).** How the system actually works: architecture, end-to-end flows, the HTTP contract, tenancy, images, the frontend, operations, the test matrix and the decision record. Open `docs/manual/index.html`. Descriptive, not normative — and **every feature updates it** (see below). |
 | `docs/` (rest) | Colecionary brand manual (identity, design system, brand tokens, voice). Brand reference — not yet the app's visual language (see governance below). |
 
 ## Commands
@@ -55,27 +56,52 @@ Full detail in [`backend/README.md`](backend/README.md).
 3. **The API contract mirrors `VaultApi`** (frontend). JSON stays camelCase
    with string enums so the Angular models never change. Contract changes must
    update both sides plus the integration tests.
-4. **Tests:** integration tests run against real SQL Server (Testcontainers);
+   Sections travel in the same document (`CollectionDto.Sections`,
+   `ItemDto.SectionId`), both **optional on the wire and normalised** to `[]` /
+   `""` — that DTO is also the archive format, so an export taken before
+   sections existed has to restore rather than fail.
+   **A write to a collection or any of its items requires an `If-Match`
+   carrying the version the client last synchronised with**, and a missing
+   precondition is refused with `428` — an optional precondition only protects
+   the clients that already remember to send one, which is never the buggy one
+   about to erase someone's afternoon. Versions reach the client through the
+   collection list envelope and an `ETag` header, **never as a field inside
+   `CollectionDto`**: that DTO is also the archive format, and a concurrency
+   token has no business in a backup. Item writes bump the collection's version
+   and are guarded by it — there is nowhere to put a per-item token, so the real
+   choice was collection-wide or nothing, and nothing loses updates in silence.
+4. **The aggregate is Collection + Groups + Sections + Items + Members.**
+   Every one of them needs a `MergeByKey` block in
+   `CollectionRepository.ReplaceGraph` (plain assignment, never a coalesce —
+   clearing a target back to null is a legitimate edit) and needs to be
+   recognised by `CollectionVersionInterceptor`. A child written without moving
+   the root's version is a silently lost update, which is the one failure that
+   whole feature exists to prevent.
+5. **Tests:** integration tests run against real SQL Server (Testcontainers);
    tenant isolation has dedicated coverage that must stay green.
-5. **User-facing API text is localized, and the middleware order is load-bearing.**
+6. **User-facing API text is localized, and the middleware order is load-bearing.**
    Validation messages, ProblemDetails titles and service exceptions come from
    `Vault.Application/Resources/Messages.resx` (+ `.pt-BR.resx`), resolved
    against `CurrentUICulture`, which `UseRequestLocalization` sets from the
    frontend's `Accept-Language`. That middleware is registered **before**
    `UseExceptionHandler` in both hosts: the handler builds its title while an
-   exception unwinds, so the culture must still be in scope. Never assert a
+   exception unwinds, so the culture must still be in scope. The general
+   property is broader than the exception handler, which is only its most
+   obvious instance: **anything that produces localized text must run
+   downstream of `UseRequestLocalization`** — the login throttle's `429` is not
+   an exception and would answer in English from the wrong position. Never assert a
    literal user-facing message in a test — go through `Messages.In(name,
    culture)`, or the test becomes a second copy of the English translation that
    drifts silently. `MessageResourceTests` pins name parity and placeholders
    across both files; `LocalizationTests` pins the pipeline order.
-6. **Tables are PascalCase and explicitly schema-qualified.** Schemas are
+7. **Tables are PascalCase and explicitly schema-qualified.** Schemas are
    declared only in `VaultSchemas` (`Identity`, `Catalog`, `Store`, `Storage`);
    every configuration calls `ToTable("Name", VaultSchemas.X)` and columns —
    JSON container columns included — are PascalCase.
    `TableNamingConventionTests` fails the build otherwise. Migrations predating
    `UseSchemaQualifiedPascalCaseNames` keep their old lowercase names; never
    retro-edit an applied migration.
-7. **Image bytes live in `IImageStore`, never in the database.** The `Images`
+8. **Image bytes live in `IImageStore`, never in the database.** The `Images`
    row is metadata only (id → tenant, content type). `FileSystemImageStore`
    writes `{ImageStorage:Root}/{tenantId}/{imageId}.{ext}` — **one directory per
    tenant**, so a tenant's images are a unit you can copy, quota or delete, and
@@ -87,6 +113,16 @@ Full detail in [`backend/README.md`](backend/README.md).
    `GetForCurrentTenantAsync`, never `GetUnfilteredAsync`: ignoring the filter
    is only defensible for the anonymous byte read, and using it for a write
    would let one tenant reframe another's image.
+   **Bytes are destroyed only by the collector, and only after
+   `UnreferencedSinceUtc` has stood for the whole grace period.** Deletion is
+   never on the dereference path: a mark is not a death sentence, it is a clock
+   that any write resets, which is what makes an accidental dereference
+   survivable. Reachability is deliberately computed across every tenant with
+   `IgnoreQueryFilters()` — outside a request the filter resolves against no
+   tenant and would compute an **empty** reference set, i.e. "collect
+   everything". That call is the single most dangerous query in the
+   application, it is covered only by the Testcontainers suite, and a
+   plausible-looking cleanup that removes it is total data loss.
 
 ## Non-negotiable frontend rules
 
@@ -133,7 +169,24 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    remembered group id passes through `resolveGroupId` first — blank, the
    `UNGROUPED_ID` bucket sentinel and a since-deleted group all collapse to `''`.
    `UNGROUPED_ID` is a key to read by, never a value to store.
-5. **Image framing is a focal point, never a crop.** Every surface renders with
+5. **A section is a separator inside one group, never a level.** A `Section`
+   (`{ id, groupId, name, target }`) labels a run of a group's items;
+   `item.sectionId` points at it, `''` means none. It has **no `parentId`, no
+   `fields`, no `sort`** — the recursion already lives on `GroupNode`, fields
+   are taxonomy, and a run inside one ordered list cannot declare its own
+   order. What it has and a group does not is a persisted position: order is
+   the array order of `collection.sections`, read only through `sectionsOf`
+   (`core/utils/sections.util.ts`), because Bronze → Prata → Ouro is a
+   progression the alphabet reads Bronze, Ouro, Prata. **A section orders, it
+   does not scope:** `sortItems` takes `sectionRank` as its *primary* key and
+   `chunkBySection` only cuts the already-ordered list into runs, each entry
+   keeping its index **in the list** — which is what leaves `scopeItems`,
+   `subtreeIds`, the breadcrumb and the item page's `←`/`→` untouched.
+   Narrowing to one run is a filter (`?s=`), never a destination. A reference
+   to another group's section, or to a deleted one, resolves to "no section"
+   rather than failing — groups, sections and items arrive in the same PUT, so
+   cross-checking them would refuse legitimate intermediate states.
+6. **Image framing is a focal point, never a crop.** Every surface renders with
    `background-size: cover`, so which part shows is one property:
    `background-position`. An image carries `focal: {x, y}` (0–1) on its own row,
    so one adjustment fixes the card, the gallery and the banner at once. Bind
@@ -146,7 +199,7 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    be one step, which is why closing the editor destroyed the upload and why
    only the first file of a batch could be framed. Never reintroduce a framing
    step that gates an upload — the overlay must always be safe to dismiss.
-6. **Ask for the size you are going to render.** Every image URL carries a
+7. **Ask for the size you are going to render.** Every image URL carries a
    variant: `images.url(id, 'thumb' | 'display' | 'full')`. A card or tile takes
    `thumb` (400px), a banner or gallery main image takes `display` (1400px), and
    `full` is the original, which only the lightbox's "open original" link wants.
@@ -156,7 +209,7 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    Animated GIFs are never derived, so they keep moving.
    **The cover photo is `photoIds[0]`** — there is no `coverId`, and reordering
    through `ui-photo-manager` is how it changes.
-7. **No user-facing string lives in a component.** The app ships pt-BR and en,
+8. **No user-facing string lives in a component.** The app ships pt-BR and en,
    switchable at runtime. Every string is a key in `core/i18n/messages/`,
    rendered through the `t` pipe in templates or `I18nService.t` in code;
    `en.ts` declares the keys and `pt-BR.ts` is `Record<MessageKey, string>`, so
@@ -186,15 +239,16 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    currency, because adding BRL to USD is not an amount of money in either.
    `SUPPORTED_CURRENCIES` mirrors `Money.SupportedCurrencies` on the backend
    and the two move together, like the condition and role whitelists.
-8. **All data flows through the abstract `VaultApi`**
+9. **All data flows through the abstract `VaultApi`**
    (`frontend/src/app/core/api/vault-api.ts`), fulfilled by `HttpVaultApi`
    against the .NET backend. There is no mocked data in the frontend — demo
    data lives in the backend seeder. Feature code only ever sees the abstract
    contract.
-9. **Signals + zoneless + OnPush.** State lives in signal stores
+10. **Signals + zoneless + OnPush.** State lives in signal stores
    (`core/state`); no Zone.js patterns.
-10. **URL is state.** Selected group = `?g=`, view = `?v=`, item filters and
-   order = `?cond=` / `?own=` / `?sort=` + `?dir=`, settings tabs = `?tab=`, ids
+11. **URL is state.** Selected group = `?g=`, section = `?s=`, view = `?v=`,
+   item filters and order = `?cond=` / `?own=` / `?sort=` + `?dir=`, settings
+   tabs = `?tab=`, ids
    in the path. In-collection navigation preserves the query string
    (`queryParamsHandling: 'preserve'`), which is what lets an open item rebuild
    the exact list the grid showed and step to its neighbours. Query strings are
@@ -204,14 +258,62 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    first time a filter changed. Links that open a group go through
    `groupLinkParams`, which keeps the filters and drops the ad-hoc order, since
    every group declares its own.
-11. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
+12. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
    `:focus-visible`, status never communicated by color alone. Anything
    draggable also needs a keyboard path (`ui-reorder`, `ui-image-focus`).
-12. **Verify before merging:** `npm run build` clean (warnings included — the
+13. **Verify before merging:** `npm run build` clean (warnings included — the
    6 kB per-component style budget is real), unit tests green, and the
    affected flows exercised in the browser in at least one dark theme **and in
    Portuguese** — it runs ~20% longer than English, so that is where text
    overflow shows up first.
+
+## Documentation is part of the change
+
+The technical manual lives in [`docs/manual/`](docs/manual/index.html) — 12
+self-contained HTML pages, no build step, no external dependency (it must keep
+opening straight off disk over `file://`). It is where the *mechanism* is
+written down: how a request travels, why a null is meaningful, what breaks if a
+guard is removed. **A feature is not finished until the manual describes what it
+did.**
+
+The division of labour is what stops the two from duplicating each other:
+**this file commands, the manual explains.** A new rule lands here in one or two
+imperative sentences; the diagram, the flow and the consequence land in the
+manual. Copy the link, never the whole rule.
+
+Route the update by what you changed:
+
+| Changed | Update |
+| --- | --- |
+| Entity, column, migration, key, JSON column | `domain-model.html` (tables, migrations, the meaningful-nulls list) and the ER diagram |
+| Endpoint, route, status code, header, precondition | `api-reference.html` — plus `VaultApi` on the frontend and `ContractTests` |
+| Auth rule, role, query filter, throttle | `security.html` (including the anonymous-route list) and `testing.html` |
+| Anything about images: variants, derivation, focal, the collector | `images.html` and the config reference in `operations.html` |
+| Page, SPA route, `ui-*` component, store, pure util | `frontend.html` **and** `docs/frontend-standards.md` (the catalog is normative there) |
+| Config key, env var, volume, CI step | `operations.html` and `docs/deployment.md` |
+| An end-to-end path (login, save, upload, import…) | `flows.html` |
+| A test that pins an invariant | the matrix in `testing.html` — the matrix, not the count |
+| **Any deliberate trade-off** | a new ADR in `decisions.html`, next free number. Never renumber existing ones |
+| A known limitation appeared or was closed | `index.html` (limits) and `security.html` (gaps) |
+| A new symptom support will receive | the symptom table in `operations.html` |
+
+Three rules for writing in it, spelled out in
+[`docs/manual/maintaining.html`](docs/manual/maintaining.html):
+
+1. **Describe what exists, never what should exist.** Half-finished behaviour is
+   documented as half-finished, in a marked callout — a feature documented as
+   done when it is not is worse than one that is undocumented.
+2. **Prose is pt-BR; identifiers stay in English.** Never translate `If-Match`,
+   `ETag`, `ImageGc:GracePeriod`, a file path, or a test name.
+3. **State the consequence, not just the mechanism.** "There is an interceptor"
+   helps nobody; "without the bump, a stale PUT silently undoes somebody else's
+   edit" is the sentence worth writing.
+
+A new page goes in one list — `PAGES` at the top of
+`docs/manual/assets/manual.js` — which drives the sidebar, the numbering and the
+prev/next links on every page. Diagrams use the theme tokens
+(`.box`/`.t`/`.ln` in `assets/manual.css`), never fixed colours: the manual has a
+light and a dark theme, like the app.
 
 ## ⚠️ Brand governance (pending)
 
@@ -224,8 +326,23 @@ mechanically it is a one-file change (`styles/_themes.scss`).
 
 ## Known v1 tradeoffs (documented follow-ups)
 
-JWT in localStorage without refresh tokens; no optimistic concurrency on the
-full-document collection PUT; collection members are denormalized snapshots;
-invited members can't log in until an invite/set-password flow exists; images
-are served via unguessable-GUID URLs (signed URLs later); replaced/removed
-images are not garbage-collected yet.
+JWT in localStorage without refresh tokens; collection members are
+denormalized snapshots; invited members can't log in until an invite/set-password
+flow exists; images are served via unguessable-GUID URLs (signed URLs later).
+
+Login throttling is real but its state is **in-memory**: a deploy hands every
+attacker a clean slate and a scaled-out deployment throttles per node. The
+durable form is an `Identity.LoginAttempts` table keyed by `(Kind, Key)`,
+deliberately *not* tenant-owned since login precedes any tenant claim.
+Login also still **enumerates accounts by timing** — an unknown email skips
+PBKDF2 entirely and answers in microseconds, and status, title, body and
+headers are otherwise identical, so timing is the whole leak. The fix is a
+fixed decoy hash, at the cost of making every unknown-email attempt pay a
+PBKDF2. Relatedly, `Identity.Users` has no index on `Email` alone
+(`IX_Users_TenantId_Email` leads with `TenantId`), so **every login scans**;
+the read-only pre-gate exists so that a refused attempt never reaches SQL.
+
+Concurrency is guarded at **collection** granularity, so two people editing
+different items in the same collection will see one of them refused. There is
+nowhere to put a per-item token, and the alternative was losing writes
+silently.

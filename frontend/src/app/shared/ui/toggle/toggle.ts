@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, model } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
 
 @Component({
   selector: 'ui-toggle',
@@ -8,6 +8,7 @@ import { ChangeDetectionStrategy, Component, model } from '@angular/core';
       type="button"
       role="switch"
       class="track"
+      [attr.aria-label]="ariaLabel() || null"
       [attr.aria-checked]="on()"
       [class.on]="on()"
       (click)="on.set(!on())"
@@ -55,4 +56,10 @@ import { ChangeDetectionStrategy, Component, model } from '@angular/core';
 })
 export class UiToggle {
   readonly on = model(false);
+  /**
+   * Accessible name. A switch says whether it is on; only this says what it
+   * switches — and these sit beside a `ui-field` label that is not associated
+   * with them, so there is no fallback.
+   */
+  readonly ariaLabel = input('');
 }

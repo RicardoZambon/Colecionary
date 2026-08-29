@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visão geral · Manual técnico Colecionary</title>
+<meta name="description" content="Manual técnico do Colecionary (Vault — Collection Control): arquitetura, contrato HTTP, multi-tenancy, imagens, frontend Angular, operação e decisões técnicas.">
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="index">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">Manual técnico</p>
+<h1>Colecionary — como esta aplicação funciona</h1>
+<p class="lede">
+  Referência de engenharia e suporte para o Colecionary, que hoje é entregue sob
+  o nome de trabalho <strong>Vault — Collection Control</strong>: uma API .NET 10
+  que serve um SPA Angular 21 a partir da mesma imagem Docker, com SQL Server e
+  multi-tenancy imposta pela camada de dados.
+</p>
+
+<div class="meta">
+  <span>Angular 21 · .NET 10 · SQL Server 2022 · EF Core</span>
+  <span>Revisado em 2026-08-28</span>
+  <span>Base: commit 36da57e</span>
+</div>
+
+<div class="callout plain">
+  <span class="label">Para que serve este manual</span>
+  <p>
+    Ele responde três perguntas que nenhum arquivo de código responde sozinho:
+    <strong>como as peças se encaixam</strong>, <strong>por que estão desse
+    jeito</strong> e <strong>o que quebra se você mudar</strong>. As regras
+    normativas — o que é permitido escrever — continuam em
+    <a href="../../CLAUDE.md">CLAUDE.md</a> e
+    <a href="../frontend-standards.md">docs/frontend-standards.md</a>. Aqui está
+    o mecanismo.
+  </p>
+</div>
+
+<h2 id="mapa">Mapa do manual</h2>
+
+<ul class="cards">
+  <li><a class="card" href="architecture.html">
+    <span class="n">02</span>
+    <h3>Arquitetura</h3>
+    <p>Topologia, camadas, ordem do pipeline HTTP, o que roda no boot e por quê
+       a ordem importa.</p>
+  </a></li>
+  <li><a class="card" href="flows.html">
+    <span class="n">03</span>
+    <h3>Fluxos ponta a ponta</h3>
+    <p>Login, abrir coleção, salvar item, subir foto, importar do store,
+       exportar/importar arquivo, primeiro boot — passo a passo, com arquivos.</p>
+  </a></li>
+  <li><a class="card" href="domain-model.html">
+    <span class="n">04</span>
+    <h3>Modelo e banco</h3>
+    <p>Entidades, chaves compostas, schemas, colunas JSON, migrations e as
+       invariantes que o modelo carrega.</p>
+  </a></li>
+  <li><a class="card" href="api-reference.html">
+    <span class="n">05</span>
+    <h3>Contrato HTTP</h3>
+    <p>Todos os endpoints, precondições <code>If-Match</code>, códigos de erro,
+       ProblemDetails e o formato dos arquivos de backup.</p>
+  </a></li>
+  <li><a class="card" href="security.html">
+    <span class="n">06</span>
+    <h3>Tenancy e segurança</h3>
+    <p>Filtro global por tenant, interceptor de stamping, JWT, throttle de login
+       em duas dimensões, e as lacunas conhecidas.</p>
+  </a></li>
+  <li><a class="card" href="images.html">
+    <span class="n">07</span>
+    <h3>Imagens e coletor</h3>
+    <p>Upload, variantes WebP, ponto focal, armazenamento por tenant e o
+       coletor mark-and-sweep — o único código que apaga dados de verdade.</p>
+  </a></li>
+  <li><a class="card" href="frontend.html">
+    <span class="n">08</span>
+    <h3>App Angular</h3>
+    <p>Signals, URL como estado, biblioteca <code>ui-*</code>, i18n, temas,
+       utilitários puros e a camada de dados.</p>
+  </a></li>
+  <li><a class="card" href="operations.html">
+    <span class="n">09</span>
+    <h3>Deploy e suporte</h3>
+    <p>Imagem única, wizard de primeiro uso, referência de configuração,
+       backup/restore, pipeline de release e troubleshooting.</p>
+  </a></li>
+  <li><a class="card" href="testing.html">
+    <span class="n">10</span>
+    <h3>Testes e garantias</h3>
+    <p>Qual teste prende qual invariante — e quais regressões passam
+       silenciosamente se a suíte errada for enfraquecida.</p>
+  </a></li>
+  <li><a class="card" href="decisions.html">
+    <span class="n">11</span>
+    <h3>Decisões técnicas</h3>
+    <p>Registro no formato contexto → decisão → consequência, com onde cada uma
+       é imposta e o que acontece se for revertida.</p>
+  </a></li>
+  <li><a class="card" href="maintaining.html">
+    <span class="n">12</span>
+    <h3>Manter este manual</h3>
+    <p>Que página atualizar para cada tipo de mudança, e o checklist que
+       CLAUDE.md exige antes de fechar uma feature.</p>
+  </a></li>
+</ul>
+
+<h2 id="produto">O produto, em um parágrafo</h2>
+
+<p>
+  O Colecionary cataloga coleções pessoais. Uma <strong>coleção</strong> tem uma
+  árvore de <strong>grupos</strong> aninhados e uma lista de <strong>itens</strong>;
+  cada item é a entrada de catálogo e carrega as <strong>cópias</strong> físicas
+  que a pessoa possui. Posse não é um campo: um item com pelo menos uma cópia é
+  possuído, um item sem nenhuma está na lista de desejos. Grupos declaram campos
+  personalizados tipados, a ordenação padrão dos seus itens e, opcionalmente, o
+  tamanho declarado do conjunto completo — para que o progresso seja medido
+  contra a série, e não apenas contra o que já foi catalogado. Um
+  <strong>Store</strong> global publica checklists curados que qualquer conta
+  pode instanciar como coleção nova. Tudo é multi-tenant: um <em>tenant</em> é
+  uma conta/organização, e o isolamento é imposto pelo banco.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 760 232" role="img" aria-labelledby="ov-title ov-desc">
+      <title id="ov-title">Topologia do Colecionary em produção</title>
+      <desc id="ov-desc">Navegador fala com um único contêiner que serve o SPA e a
+        API; o contêiner fala com SQL Server e com um diretório de imagens em disco.</desc>
+
+      <rect class="box" x="8" y="72" width="120" height="62" rx="8"/>
+      <text class="t b mid" x="68" y="98">Navegador</text>
+      <text class="t s mid" x="68" y="116">SPA Angular</text>
+
+      <path class="ln accent" d="M132 103 H198"/>
+      <polygon class="fill-accent" points="198,103 190,99 190,107"/>
+      <text class="t s mid" x="165" y="94">HTTPS</text>
+
+      <rect class="box dashed" x="204" y="16" width="330" height="200" rx="10"/>
+      <text class="t s" x="216" y="36">contêiner ricardozambon/vault — porta 80</text>
+
+      <rect class="box accent" x="222" y="50" width="132" height="58" rx="8"/>
+      <text class="t b mid" x="288" y="74">wwwroot</text>
+      <text class="t s mid" x="288" y="92">SPA compilado</text>
+
+      <rect class="box accent" x="222" y="126" width="132" height="72" rx="8"/>
+      <text class="t b mid" x="288" y="152">Vault.Api</text>
+      <text class="t s mid" x="288" y="170">ASP.NET Core</text>
+      <text class="t s mid" x="288" y="186">/api/*</text>
+
+      <rect class="box" x="376" y="50" width="142" height="58" rx="8"/>
+      <text class="t b mid" x="447" y="74">/data/config</text>
+      <text class="t s mid" x="447" y="92">colecionary.json</text>
+
+      <rect class="box" x="376" y="126" width="142" height="72" rx="8"/>
+      <text class="t b mid" x="447" y="152">App_Data/images</text>
+      <text class="t s mid" x="447" y="170">um diretório</text>
+      <text class="t s mid" x="447" y="186">por tenant</text>
+
+      <path class="ln" d="M354 79 H376"/>
+      <path class="ln" d="M354 162 H376"/>
+
+      <path class="ln accent" d="M538 162 H620"/>
+      <polygon class="fill-accent" points="620,162 612,158 612,166"/>
+      <path class="ln accent" d="M534 150 H538 V162"/>
+
+      <rect class="box" x="626" y="130" width="126" height="64" rx="8"/>
+      <text class="t b mid" x="689" y="156">SQL Server</text>
+      <text class="t s mid" x="689" y="174">2022+, externo</text>
+
+      <text class="t s mid" x="580" y="152">EF Core</text>
+    </svg>
+  </div>
+  <figcaption>
+    Um processo, uma porta. O SPA é estático dentro da mesma imagem; o banco é
+    fornecido por quem hospeda. Em desenvolvimento, SPA (4200) e API (5100)
+    rodam separados — veja <a href="architecture.html#topologia">Arquitetura</a>.
+  </figcaption>
+</figure>
+
+<h2 id="comecar">Rodar em desenvolvimento</h2>
+
+<pre><code>./dev.sh                 <span class="c"># API em :5100 + SPA em :4200, logs prefixados</span>
+./dev.sh api             <span class="c"># só o backend</span>
+./dev.sh web             <span class="c"># só o frontend</span>
+
+<span class="c"># backend/ — precisa de um SQL Server acessível</span>
+docker compose up -d                    <span class="c"># SQL Server 2022 em localhost:1433</span>
+dotnet run --project src/Vault.Api      <span class="c"># migra e popula demo em Development</span>
+dotnet test                             <span class="c"># unitários + integração (Testcontainers)</span>
+dotnet format --verify-no-changes
+
+<span class="c"># frontend/</span>
+npm start                <span class="c"># dev server em :4200, espera a API em :5100</span>
+npm test -- --watch=false
+npm run build            <span class="c"># precisa passar antes de qualquer merge</span></code></pre>
+
+<p>
+  Login de demonstração (senha <code>vault-demo</code>):
+  <code>marcus@example.com</code> (Owner), <code>ana@example.com</code> (Editor),
+  <code>dev@example.com</code> (Viewer) — tenant <code>acme-vault</code>. O seed
+  só roda com <code>Seed:Enabled</code>, que é <code>true</code> apenas em
+  <code>appsettings.Development.json</code>.
+</p>
+
+<h2 id="conceitos">Conceitos essenciais</h2>
+
+<p>
+  Vocabulário que aparece em todas as páginas seguintes, no código e nas
+  mensagens de erro. Vale ler antes de abrir qualquer arquivo.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Termo</th><th>O que é</th><th>Onde vive</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="nowrap"><strong>Tenant</strong></td>
+      <td>A conta/organização. Toda entidade que pertence a um tenant implementa
+          <code>ITenantOwned</code> e é filtrada automaticamente.</td>
+      <td class="nowrap"><code>Identity.Tenants</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Coleção</strong></td>
+      <td>Raiz de agregado. Grupos, itens e membros só mudam através dela — não
+          existem endpoints de grupo.</td>
+      <td class="nowrap"><code>Catalog.Collections</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Grupo</strong></td>
+      <td>Nó da árvore da coleção. Declara <code>fields</code> tipados,
+          <code>sort</code> e <code>target</code>. Grupos sempre listam em ordem
+          alfabética.</td>
+      <td class="nowrap"><code>Catalog.Groups</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Item</strong></td>
+      <td>Entrada de catálogo: nome, ano, fotos e <code>value</code> = estimativa
+          de referência por unidade.</td>
+      <td class="nowrap"><code>Catalog.Items</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Cópia</strong></td>
+      <td>Um exemplar físico, com condição, preço pago, estimativa própria
+          opcional, data de aquisição, status e notas.</td>
+      <td class="nowrap">coluna JSON <code>Items.Copies</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Version</strong></td>
+      <td>Contador de concorrência otimista do <em>agregado inteiro</em>. Viaja
+          como <code>ETag</code> opaco; nunca como campo de DTO.</td>
+      <td class="nowrap"><code>Catalog.Collections.Version</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Focal</strong></td>
+      <td>Ponto focal (x, y de 0 a 1) na linha da imagem. Um ponto serve todas as
+          proporções; nunca reescreve os bytes.</td>
+      <td class="nowrap"><code>Storage.Images.FocalX/Y</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Variant</strong></td>
+      <td><code>thumb</code> (400 px), <code>display</code> (1400 px) ou
+          <code>full</code> (original). Sempre nomeada pelo cliente.</td>
+      <td class="nowrap"><code>?size=</code> em <code>/api/images/{id}</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Store listing</strong></td>
+      <td>Checklist curado global, fora de qualquer tenant, que uma conta pode
+          instanciar como coleção nova.</td>
+      <td class="nowrap"><code>Store.StoreListings</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Archive</strong></td>
+      <td>Zip de backup: <code>manifest.json</code> + JSON das coleções + os
+          bytes das imagens. Serve para exportar e reimportar.</td>
+      <td class="nowrap"><code>/api/export</code>, <code>/api/import</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="invariantes">As invariantes que sustentam o resto</h2>
+
+<p>
+  Se você só tem cinco minutos antes de mexer no código, leia estas. Cada uma
+  tem um teste que falha quando é quebrada, e cada uma tem um modo de falha
+  silencioso — o motivo de estarem escritas.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Invariante</th><th>O que acontece se quebrar</th><th>Detalhe</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Isolamento de tenant é do banco, não do serviço. Ninguém escreve
+          <code>WHERE TenantId = …</code> à mão.</td>
+      <td>Um filtro esquecido em uma query nova vaza dados entre contas sem erro
+          nenhum.</td>
+      <td class="nowrap"><a href="security.html#tenancy">Tenancy</a></td>
+    </tr>
+    <tr>
+      <td>Escrita em coleção ou item exige <code>If-Match</code>; ausência é
+          recusada com <code>428</code>.</td>
+      <td>Uma precondição opcional só protege o cliente que já lembrava de
+          enviá-la — nunca o que está a ponto de apagar uma tarde de trabalho.</td>
+      <td class="nowrap"><a href="api-reference.html#concorrencia">Concorrência</a></td>
+    </tr>
+    <tr>
+      <td>Bytes de imagem vivem em <code>IImageStore</code>, um diretório por
+          tenant; a linha no banco é só metadado.</td>
+      <td>Blobs no banco tornam backup, cota e cópia por tenant impossíveis de
+          oferecer honestamente.</td>
+      <td class="nowrap"><a href="images.html#armazenamento">Imagens</a></td>
+    </tr>
+    <tr>
+      <td>Imagem só é destruída pelo coletor, e só depois da carência inteira.</td>
+      <td>Apagar no momento da desreferência acopla destruição irreversível a um
+          PUT de documento inteiro. Não há backup em lugar nenhum do sistema.</td>
+      <td class="nowrap"><a href="images.html#coletor">Coletor</a></td>
+    </tr>
+    <tr>
+      <td>Qualquer coisa que produza texto localizado roda depois de
+          <code>UseRequestLocalization</code>.</td>
+      <td>O handler de exceção monta o título enquanto a exceção sobe: fora de
+          ordem, responde em inglês para quem pediu português.</td>
+      <td class="nowrap"><a href="architecture.html#pipeline">Pipeline</a></td>
+    </tr>
+    <tr>
+      <td>Posse é derivada de <code>copies</code>; não existe flag
+          <code>owned</code>.</td>
+      <td>Um valor que o servidor calcula mas ignora na entrada dessincroniza em
+          silêncio no round-trip GET → PUT.</td>
+      <td class="nowrap"><a href="domain-model.html#itens">Itens</a></td>
+    </tr>
+    <tr>
+      <td><code>null</code> significa algo em <code>currency</code>,
+          <code>sort</code>, <code>target</code>, <code>focal</code> e
+          <code>copy.value</code>.</td>
+      <td>Resolver o null na escrita congela a herança: o dia em que o padrão da
+          conta muda, a coleção não acompanha.</td>
+      <td class="nowrap"><a href="domain-model.html#nulls">Nulls</a></td>
+    </tr>
+    <tr>
+      <td>Nenhuma string visível ao usuário nasce em componente; nenhum valor
+          visual nasce fora de <code>_themes.scss</code>.</td>
+      <td>Uma string literal quebra a troca de idioma em runtime; um hex literal
+          quebra 6 dos 7 temas — e só aparece nos escuros.</td>
+      <td class="nowrap"><a href="frontend.html#i18n">Frontend</a></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="fontes">Fontes de verdade</h2>
+
+<p>
+  Documentação divergente é pior que documentação ausente. A tabela abaixo diz
+  qual arquivo decide o quê — e este manual nunca é a fonte de verdade de nada:
+  ele descreve o que o código faz.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Pergunta</th><th>Quem decide</th></tr></thead>
+  <tbody>
+    <tr><td>O que é permitido escrever neste repositório</td>
+        <td><a href="../../CLAUDE.md">CLAUDE.md</a> (regras não negociáveis)</td></tr>
+    <tr><td>Como o frontend é construído e como deve evoluir</td>
+        <td><a href="../frontend-standards.md">docs/frontend-standards.md</a></td></tr>
+    <tr><td>Racional detalhado do backend</td>
+        <td><a href="../../backend/README.md">backend/README.md</a></td></tr>
+    <tr><td>Como rodar a imagem e configurar</td>
+        <td><a href="../../README.md">README.md</a>, <a href="../deployment.md">docs/deployment.md</a></td></tr>
+    <tr><td>Identidade visual da marca (ainda não é a do app)</td>
+        <td><a href="../brand-identity.md">brand-identity.md</a>, <a href="../design-system.md">design-system.md</a>, <a href="../design-tokens.md">design-tokens.md</a></td></tr>
+    <tr><td>Tom de voz do texto de produto</td>
+        <td><a href="../voice-and-tone.md">voice-and-tone.md</a></td></tr>
+    <tr><td>O contrato HTTP de fato</td>
+        <td><code>VaultApi</code> (frontend) + <code>Vault.IntegrationTests/ContractTests.cs</code></td></tr>
+    <tr><td>O formato dos temas e tokens em uso</td>
+        <td><code>frontend/src/styles/_themes.scss</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout warn">
+  <span class="label">Divergências conhecidas na documentação</span>
+  <p>
+    <code>docs/frontend-standards.md</code> §5 ainda descreve
+    <code>ExportApi</code> em <code>core/api/export-api.ts</code> e
+    <code>ImageFocusService.uploadAndFrame(...)</code>. Nenhum dos dois existe: o
+    arquivo é <code>core/api/archive-api.ts</code> (classe
+    <code>ArchiveApi</code>, que também faz import) e upload e enquadramento
+    foram separados — hoje são <code>PhotoUploadService.add(...)</code> e
+    <code>ImageFocusService.frame(id, usage)</code>. A seção “Images” no fim do
+    mesmo arquivo já está correta. Corrija na próxima passagem por lá.
+  </p>
+</div>
+
+<h2 id="limites">Estado atual e limites conhecidos</h2>
+
+<p>
+  Nada abaixo é bug: são escolhas de v1 registradas como follow-up. Suporte
+  precisa reconhecê-las porque cada uma tem um sintoma visível.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Limite</th><th>Sintoma para quem usa</th><th>Forma durável</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>JWT em <code>localStorage</code>, 8 h, sem refresh token</td>
+      <td>Sessão cai sem aviso depois de 8 h; um 401 no meio da sessão desloga</td>
+      <td>Refresh token + cookie <code>HttpOnly</code></td>
+    </tr>
+    <tr>
+      <td>Throttle de login com estado em memória</td>
+      <td>Um deploy zera todos os contadores; com mais de uma instância, o limite
+          é por nó</td>
+      <td>Tabela <code>Identity.LoginAttempts</code> por <code>(Kind, Key)</code>,
+          deliberadamente <em>não</em> tenant-owned</td>
+    </tr>
+    <tr>
+      <td>Login enumera contas por tempo de resposta</td>
+      <td>E-mail inexistente responde em microssegundos; e-mail válido paga
+          PBKDF2</td>
+      <td>Hash-chamariz fixo, ao custo de todo palpite pagar PBKDF2</td>
+    </tr>
+    <tr>
+      <td>Sem índice em <code>Email</code> sozinho
+          (<code>IX_Users_TenantId_Email</code> começa por <code>TenantId</code>)</td>
+      <td>Todo login varre a tabela; o pré-portão em memória existe para a
+          tentativa recusada nem chegar ao SQL</td>
+      <td>Índice dedicado em <code>Email</code></td>
+    </tr>
+    <tr>
+      <td>Concorrência tem granularidade de <em>coleção</em></td>
+      <td>Duas pessoas editando itens diferentes da mesma coleção: uma é recusada
+          com 412 e precisa recarregar</td>
+      <td>Não há onde guardar um token por item — recusar demais custa um reload,
+          recusar de menos custa o trabalho</td>
+    </tr>
+    <tr>
+      <td>Seções dividem só os itens do <em>próprio</em> grupo</td>
+      <td>Num grupo que tem sub-grupos <em>e</em> seções, os itens vindos dos
+          sub-grupos aparecem na faixa “sem seção” no fim da lista</td>
+      <td>Rotular cada faixa pelo rótulo mais específico que o item tem — a
+          seção dele, ou o sub-grupo a que pertence</td>
+    </tr>
+    <tr>
+      <td>Membros de coleção são snapshots desnormalizados</td>
+      <td>Renomear um membro no tenant não propaga para as coleções</td>
+      <td>Referência ao usuário em vez de cópia</td>
+    </tr>
+    <tr>
+      <td>Membros convidados não conseguem entrar</td>
+      <td><code>PasswordHash</code> nulo e não existe fluxo de convite/definir
+          senha</td>
+      <td>Fluxo de convite com token</td>
+    </tr>
+    <tr>
+      <td>Imagens são servidas por URL de GUID não adivinhável, anônima</td>
+      <td>Quem tem o link vê a foto, mesmo sem sessão</td>
+      <td>URL assinada com validade</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout">
+  <span class="label">Governança de marca — pendente</span>
+  <p>
+    O app usa a linguagem visual “Vault” do design de origem (acento indigo
+    <code>#5453C4</code>, 7 temas trocáveis). O manual de marca Colecionary em
+    <code>docs/</code> define outra identidade (Vault Purple
+    <code>#7C5CFF</code>, Colecionary Night <code>#101827</code>, dark-first).
+    <strong>Nenhuma linguagem visual nova pode ser inventada fora desses dois
+    sistemas.</strong> Reconciliar exige revisão formal de identidade;
+    mecanicamente é uma mudança em um arquivo
+    (<code>styles/_themes.scss</code>).
+  </p>
+</div>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

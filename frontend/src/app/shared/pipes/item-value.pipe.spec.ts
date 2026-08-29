@@ -33,6 +33,7 @@ function item(copies: ItemCopy[], value: number): Item {
     year: 1995,
     value,
     groupId: 'g1',
+    sectionId: '',
     tags: [],
     img: '',
     custom: [],

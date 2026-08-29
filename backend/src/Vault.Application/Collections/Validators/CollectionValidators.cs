@@ -88,6 +88,27 @@ public sealed class GroupNodeDtoValidator : AbstractValidator<GroupNodeDto>
     }
 }
 
+public sealed class SectionDtoValidator : AbstractValidator<SectionDto>
+{
+    public SectionDtoValidator()
+    {
+        RuleFor(s => s.Id).NotEmpty().Matches(IdRules.PublicId());
+        // Required, unlike an item's GroupId: a section divides one group's
+        // list, so a section belonging to nothing has nothing to divide. It is
+        // still not checked against the groups in the payload — groups,
+        // sections and items all arrive in the same document, so a reference
+        // that dangles mid-edit is legal and resolves to "no section" on read.
+        RuleFor(s => s.GroupId).NotEmpty().Matches(IdRules.PublicId());
+        RuleFor(s => s.Name).NotEmpty().MaximumLength(200);
+        // Same range and the same reasoning as a group's target, including
+        // allowing one below what is already catalogued.
+        RuleFor(s => s.Target)
+            .InclusiveBetween(1, 100_000)
+            .When(s => s.Target.HasValue)
+            .WithMessage(_ => Messages.TargetOutOfRange);
+    }
+}
+
 public sealed class ItemDtoValidator : AbstractValidator<ItemDto>
 {
     public ItemDtoValidator()
@@ -98,6 +119,8 @@ public sealed class ItemDtoValidator : AbstractValidator<ItemDto>
         RuleFor(i => i.Year).InclusiveBetween(0, 3000);
         RuleFor(i => i.Value).GreaterThanOrEqualTo(0);
         RuleFor(i => i.GroupId).MaximumLength(64);
+        // A reference, not an id of its own: "" is "no section" and has to pass.
+        RuleFor(i => i.SectionId).MaximumLength(64);
         RuleFor(i => i.Img).NotNull().MaximumLength(260);
         RuleForEach(i => i.Tags).NotEmpty().MaximumLength(50);
         RuleFor(i => i.PhotoIds).Must(p => p.Count <= 8)
@@ -150,6 +173,7 @@ public sealed class CollectionDtoValidator : AbstractValidator<CollectionDto>
 {
     public CollectionDtoValidator(
         IValidator<GroupNodeDto> groupValidator,
+        IValidator<SectionDto> sectionValidator,
         IValidator<ItemDto> itemValidator,
         IValidator<MemberDto> memberValidator)
     {
@@ -163,6 +187,13 @@ public sealed class CollectionDtoValidator : AbstractValidator<CollectionDto>
             .When(c => c.Currency is not null)
             .WithMessage(_ => Messages.CurrencyInvalid);
         RuleForEach(c => c.Groups).SetValidator(groupValidator);
+        // Ids have to be distinct here and not merely on the way in: the graph
+        // merge keys its replacement list by id, so a duplicate would fail deep
+        // inside persistence as a 500 instead of as the 400 it is.
+        RuleFor(c => c.Sections)
+            .Must(s => s.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() == s.Count)
+            .WithMessage(_ => Messages.SectionIdsMustBeUnique);
+        RuleForEach(c => c.Sections).SetValidator(sectionValidator);
         RuleForEach(c => c.Items).SetValidator(itemValidator);
         RuleForEach(c => c.Members).SetValidator(memberValidator);
     }

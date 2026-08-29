@@ -8,6 +8,10 @@
   max-width: 720px;
 }
 
+:host(.wide) {
+  max-width: 1080px;
+}
+
 .back {
   font-size: 12.5px;
   font-weight: 600;
@@ -65,25 +69,14 @@ a.link {
   }
 }
 
-.group-row {
-  border-top: 1px solid var(--border);
-  padding: 7px 0 9px;
-
-  &__main {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .tick {
-    color: var(--muted);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    width: 12px;
-    text-align: center;
-    flex: none;
-  }
-
+/*
+ * The editor for one group. These used to be rows of a flat list, nested under
+ * a `.group-row` element that the master-detail split removed — so the rules
+ * that were descendants of it are scoped to the pane instead. Leaving them
+ * keyed on a class no element carries any more is how `.rename` quietly stopped
+ * flexing and every name input collapsed to its intrinsic width.
+ */
+.groups-split__detail {
   .rename {
     flex: 1;
     min-width: 0;
@@ -95,65 +88,105 @@ a.link {
   }
 
   .count {
-    font-size: 11px;
-    color: var(--muted);
+    flex: none;
     width: 56px;
     text-align: right;
-    flex: none;
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
+
+.detail__name,
+.detail__order,
+.detail__fields,
+.detail__sections {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 0 0;
+
+  .fields-label {
+    @include mono-label(9px, 0.1em);
+    text-transform: uppercase;
+  }
+}
+
+/* One declaration per line, for fields and sections alike. Both are lists of
+   things a group declares, so they get one shape: name on the left, the
+   controls that belong to it lining up down a column on the right. As inline
+   pills they wrapped at arbitrary points and nothing lined up with anything.
+   Full-width children are what break the flex row, so the label takes a line
+   of its own and the trailing buttons still share the last one. */
+.detail__fields,
+.detail__sections {
+  .fields-label,
+  .field-chip,
+  .section-chip {
+    width: 100%;
+  }
+}
+
+.detail__order {
+  .order-by {
+    min-width: 170px;
   }
 
-  &__fields,
-  &__order {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    padding: 8px 0 0 22px;
-
-    .fields-label {
-      @include mono-label(9px, 0.1em);
-      text-transform: uppercase;
-    }
+  .direction {
+    min-width: 86px;
   }
 
-  &__order {
-    .order-by {
-      min-width: 170px;
-    }
+  /* Wide enough for a five-digit run, narrow enough to read as a number
+     rather than as another dropdown. */
+  .target {
+    width: 78px;
+  }
 
-    .direction {
-      min-width: 86px;
-    }
+  .fields-label.spaced {
+    margin-left: 10px;
+  }
+}
 
-    /* Wide enough for a five-digit run, narrow enough to read as a number
-       rather than as another dropdown. */
-    .target {
-      width: 78px;
-    }
+/* The shared row. A declared field and a section are the same kind of thing to
+   the eye — something this group declares, with its own controls — so they get
+   the same frame. Not the pill radius they used to carry: at full width a pill
+   reads as a button, and neither row is clickable. */
+.field-chip,
+.section-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Matches a row whose left side is a text input, so a list of fields and a
+     list of sections keep the same rhythm down the card. */
+  min-height: 38px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-size: 12.5px;
+  color: var(--text2);
 
-    .fields-label.spaced {
-      margin-left: 10px;
-    }
+  .name {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Dashed accent for the row that does not exist yet, in both lists. */
+  &--new {
+    border-style: dashed;
+    border-color: var(--accent);
   }
 }
 
 .field-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--pill);
-  padding: 3px 4px 3px 10px;
-  font-size: 11px;
-  color: var(--text2);
-
   .remove {
     font-size: 11px;
     width: auto;
   }
 
   .type {
-    min-width: 78px;
+    width: 110px;
+    flex: none;
 
     ::ng-deep select {
       border: none;
@@ -161,32 +194,36 @@ a.link {
       padding: 0 2px;
     }
   }
-
-  &--new {
-    border-style: dashed;
-    border-color: var(--accent);
-  }
 }
 
+/* The inline editor inside a "new" row. It has to read as the row it is about
+   to become — same height, same metrics, filling the line — which is why it is
+   no longer the 120px, 11px inline scrap that suited a pill. */
 .field-input {
-  border: none;
-  background: none;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
   color: var(--text);
-  padding: 0;
-  font-size: 11px;
+  font-size: 12.5px;
   font-family: var(--font-body);
-  outline: none;
-  width: 120px;
+  background: var(--panel2);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
 }
 
 .new-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* Wraps because it now lives in a 260px column: "In Cavaleiros de Bronze"
+     beside a text field leaves neither of them a usable width, so the context
+     takes a line of its own and the field keeps the one below it. */
+  flex-wrap: wrap;
+  gap: 6px 10px;
   padding: 8px 0;
   border-top: 1px solid var(--border);
 
   .context {
+    width: 100%;
     font-family: var(--font-mono);
     font-size: 10px;
     text-transform: uppercase;
@@ -204,7 +241,6 @@ a.link {
     padding: 7px 10px;
     font-family: var(--font-body);
     font-size: 12.5px;
-    outline: none;
   }
 }
 
@@ -285,4 +321,88 @@ a.link {
 .missing {
   color: var(--muted);
   font-size: 13px;
+}
+
+.section-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--border);
+  /* Not the pill radius the field chips use: at full width a pill reads as a
+     button, and these rows are not clickable. */
+  border-radius: var(--radius);
+  background: var(--panel);
+
+  /* No max-width here on purpose — `.rename` flexes at the pane level, so the
+     name takes whatever the fixed columns to its right leave. */
+  .count {
+    width: 56px;
+    flex: none;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+
+  .target {
+    width: 78px;
+    flex: none;
+  }
+
+}
+
+/* Master–detail. 240px is enough for four levels of indent plus a name before
+   it truncates; below 900px the two stack, because a 240px column beside a
+   detail pane on a phone leaves neither of them usable. */
+.groups-split {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .groups-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.groups-split__tree app-group-picker {
+  display: block;
+  margin-top: 4px;
+}
+
+.detail__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail__path {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail__here {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.detail__sep {
+  margin: 0 4px;
+}
+
+.detail__empty {
+  padding: 28px 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
 }

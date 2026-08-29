@@ -18,6 +18,8 @@ public sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
         // GroupId is intentionally NOT a foreign key: groups are replaced
         // wholesale by collection updates and item group references may dangle.
         builder.Property(i => i.GroupId).HasMaxLength(64);
+        // Neither is SectionId, and for the same reason.
+        builder.Property(i => i.SectionId).HasMaxLength(64);
         builder.Property(i => i.Img).HasMaxLength(260);
         // List<string> Tags maps to an nvarchar(max) JSON column; Custom is a JSON document.
         builder.OwnsMany(i => i.Custom, custom => custom.ToJson("Custom"));

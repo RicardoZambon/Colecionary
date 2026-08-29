@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modelo e banco · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="domain-model">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">04 · Backend</p>
+<h1>Modelo de domínio e banco</h1>
+<p class="lede">
+  Oito entidades, quatro schemas, três colunas JSON e um contador de
+  concorrência. O que dá forma a este modelo não são as tabelas: são as
+  invariantes que ele carrega — posse derivada, nulls que significam algo, e
+  chaves compostas que tornam referência entre tenants impossível no nível do
+  banco.
+</p>
+
+<h2 id="er">O grafo</h2>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 740 420" role="img" aria-labelledby="er-t">
+      <title id="er-t">Entidades e relações</title>
+
+      <rect class="box dashed" x="6" y="6" width="220" height="126" rx="8"/>
+      <text class="t s" x="18" y="24">schema Identity</text>
+      <rect class="box accent" x="20" y="34" width="190" height="40" rx="6"/>
+      <text class="t b" x="32" y="52">Tenant</text>
+      <text class="t s" x="32" y="66">Id · Slug ᵁ · DefaultCurrency</text>
+      <rect class="box accent" x="20" y="82" width="190" height="40" rx="6"/>
+      <text class="t b" x="32" y="100">User</text>
+      <text class="t s" x="32" y="114">Id · Email · Role · Plan</text>
+      <path class="ln" d="M115 74 V82"/>
+
+      <rect class="box dashed" x="248" y="6" width="304" height="330" rx="8"/>
+      <text class="t s" x="260" y="24">schema Catalog — tudo tenant-owned</text>
+
+      <rect class="box accent" x="266" y="34" width="268" height="52" rx="6"/>
+      <text class="t b" x="278" y="52">Collection</text>
+      <text class="t s" x="278" y="66">PK (TenantId, Id) · Version 🔒 · Currency?</text>
+      <text class="t s" x="278" y="80">BannerImageId? · IconImageId?</text>
+
+      <rect class="box" x="266" y="112" width="128" height="66" rx="6"/>
+      <text class="t b" x="278" y="130">Group</text>
+      <text class="t s" x="278" y="144">Fields ⌗ · SortBy</text>
+      <text class="t s" x="278" y="158">SortDirection · Target?</text>
+      <text class="t s" x="278" y="172">ParentId (sem FK)</text>
+
+      <rect class="box" x="406" y="112" width="128" height="66" rx="6"/>
+      <text class="t b" x="418" y="130">CollectionMember</text>
+      <text class="t s" x="418" y="144">PK (…, Email)</text>
+      <text class="t s" x="418" y="158">snapshot</text>
+      <text class="t s" x="418" y="172">desnormalizado</text>
+
+      <rect class="box" x="266" y="204" width="268" height="118" rx="6"/>
+      <text class="t b" x="278" y="222">Item</text>
+      <text class="t s" x="278" y="238">PK (TenantId, CollectionId, Id)</text>
+      <text class="t s" x="278" y="254">Value (12,2) · Year · GroupId (sem FK)</text>
+      <text class="t s" x="278" y="270">Copies ⌗  ← posse é derivada disto</text>
+      <text class="t s" x="278" y="286">Custom ⌗ · Tags · PhotoIds</text>
+      <text class="t s" x="278" y="302">SortOrder · CreatedAtUtc</text>
+
+      <path class="ln accent" d="M330 86 V112"/><polygon class="fill-accent" points="330,112 326,104 334,104"/>
+      <path class="ln accent" d="M470 86 V112"/><polygon class="fill-accent" points="470,112 466,104 474,104"/>
+      <path class="ln accent" d="M400 86 V204"/><polygon class="fill-accent" points="400,204 396,196 404,196"/>
+      <path class="ln dashed" d="M330 178 V204"/>
+      <text class="t s" x="336" y="196">GroupId, pode pender</text>
+
+      <rect class="box dashed" x="572" y="6" width="162" height="120" rx="8"/>
+      <text class="t s" x="584" y="24">schema Storage</text>
+      <rect class="box warnbox" x="586" y="34" width="134" height="82" rx="6"/>
+      <text class="t b" x="598" y="52">StoredImage</text>
+      <text class="t s" x="598" y="68">PK Id (GUID)</text>
+      <text class="t s" x="598" y="82">ContentType · Focal?</text>
+      <text class="t s" x="598" y="96">Width? Height?</text>
+      <text class="t s" x="598" y="110">UnreferencedSinceUtc?</text>
+
+      <path class="ln dashed" d="M534 250 H586 V116"/>
+      <text class="t s" x="540" y="242">PhotoIds: só ids,</text>
+      <text class="t s" x="540" y="256">sem FK nenhuma</text>
+
+      <rect class="box dashed" x="572" y="148" width="162" height="104" rx="8"/>
+      <text class="t s" x="584" y="166">schema Store</text>
+      <rect class="box goodbox" x="586" y="176" width="134" height="64" rx="6"/>
+      <text class="t b" x="598" y="194">StoreListing</text>
+      <text class="t s" x="598" y="210">global, sem tenant</text>
+      <text class="t s" x="598" y="224">Items ⌗</text>
+      <text class="t s" x="598" y="236">nunca escrito por tenant</text>
+
+      <text class="t s" x="14" y="360">🔒 token de concorrência otimista     ⌗ coluna JSON (OwnsMany().ToJson())     ᵁ índice único</text>
+      <text class="t s" x="14" y="380">Bytes de imagem NÃO estão no banco: vivem em IImageStore, um diretório por tenant.</text>
+      <text class="t s" x="14" y="400">Não há FK de Item/Collection para StoredImage — uma referência é apenas um id, e pode pender.</text>
+    </svg>
+  </div>
+</figure>
+
+<h2 id="tabelas">Tabelas e schemas</h2>
+
+<p>
+  Toda tabela é <strong>PascalCase e explicitamente qualificada por schema</strong>
+  — nenhum objeto resolve pelo schema padrão de quem chama. Os schemas são
+  declarados em um lugar só (<code>VaultSchemas</code>) e agrupados por
+  preocupação, o que torna <code>GRANT</code> por schema possível: um papel que
+  precisa do catálogo do store não precisa receber o banco inteiro.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Schema</th><th>Tabela</th><th>Chave primária</th><th>Notas</th></tr></thead>
+  <tbody>
+    <tr><td class="nowrap"><code>Identity</code></td><td><code>Tenants</code></td><td><code>Id</code></td>
+        <td>Global. <code>Slug</code> com índice único. <code>DefaultCurrency</code> obrigatório</td></tr>
+    <tr><td class="nowrap"><code>Identity</code></td><td><code>Users</code></td><td><code>Id</code></td>
+        <td>Tenant-owned. Único em <code>(TenantId, Email)</code> — <strong>não há índice em <code>Email</code> sozinho</strong></td></tr>
+    <tr><td class="nowrap"><code>Catalog</code></td><td><code>Collections</code></td><td><code>(TenantId, Id)</code></td>
+        <td>Raiz de agregado. <code>Version</code> é token de concorrência</td></tr>
+    <tr><td class="nowrap"><code>Catalog</code></td><td><code>Groups</code></td><td><code>(TenantId, CollectionId, Id)</code></td>
+        <td><code>ParentId</code> é string simples, sem FK — a árvore é substituída por inteiro</td></tr>
+    <tr><td class="nowrap"><code>Catalog</code></td><td><code>Sections</code></td><td><code>(TenantId, CollectionId, Id)</code></td>
+        <td><code>GroupId</code> é string simples, sem FK, como <code>Items.GroupId</code>. <code>SortOrder</code> é a ordem exibida</td></tr>
+    <tr><td class="nowrap"><code>Catalog</code></td><td><code>Items</code></td><td><code>(TenantId, CollectionId, Id)</code></td>
+        <td><code>Value</code> com precisão <code>(12,2)</code>; <code>Copies</code>/<code>Custom</code> em JSON</td></tr>
+    <tr><td class="nowrap"><code>Catalog</code></td><td><code>CollectionMembers</code></td><td><code>(TenantId, CollectionId, Email)</code></td>
+        <td>Snapshot desnormalizado com semântica de value object</td></tr>
+    <tr><td class="nowrap"><code>Store</code></td><td><code>StoreListings</code></td><td><code>Id</code></td>
+        <td>Global e somente leitura para tenants. <code>Items</code> em JSON</td></tr>
+    <tr><td class="nowrap"><code>Storage</code></td><td><code>Images</code></td><td><code>Id</code> (GUID)</td>
+        <td>Só metadado. Os bytes estão em disco</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout warn">
+  <span class="label">Duas exceções deliberadas de nomenclatura</span>
+  <ul>
+    <li>
+      <code>dbo.__EFMigrationsHistory</code> <strong>fica em <code>dbo</code></strong>.
+      O EF a lê <em>antes</em> de poder aplicar qualquer coisa, então mudá-la de
+      lugar num banco existente faria o EF ver zero migrations aplicadas e tentar
+      rodar a cadeia inteira de novo.
+    </li>
+    <li>
+      Migrations anteriores a <code>UseSchemaQualifiedPascalCaseNames</code>
+      referenciam os nomes minúsculos antigos. Isso está <strong>correto</strong>:
+      elas rodaram contra a forma antiga, e os backfills em T-SQL cru de
+      <code>AddItemCopies</code> / <code>AddGroupFieldTypesAndSort</code> executam
+      antes do rename. <strong>Nunca edite uma migration já aplicada.</strong>
+    </li>
+  </ul>
+</div>
+
+<p>
+  <code>Identity</code> e <code>Storage</code> são palavras reservadas do T-SQL:
+  SQL escrito à mão precisa de <code>[Identity].[Tenants]</code>. O EF sempre
+  coloca colchetes, então código de aplicação não se preocupa.
+  <code>TableNamingConventionTests</code> valida tudo isso contra o modelo
+  construído — uma entidade nova mapeada com <code>ToTable("coisa")</code> falha
+  nos testes unitários em vez de despejar uma tabela minúscula perdida em
+  <code>dbo</code>.
+</p>
+
+<h2 id="chaves">Por que chaves compostas</h2>
+
+<p>
+  <code>(TenantId, Id)</code> para coleções e <code>(TenantId, CollectionId, Id)</code>
+  para os filhos. Duas consequências, ambas desejadas:
+</p>
+
+<ul>
+  <li>
+    <strong>Referência entre tenants é impossível no nível do banco</strong> — não
+    depende de nenhuma verificação em serviço.
+  </li>
+  <li>
+    <strong>Dois tenants podem possuir o mesmo id público.</strong> Ids de coleção,
+    grupo e item são strings geradas pelo cliente ou copiadas de um listing do
+    store; duas contas importando o checklist <code>store_ps1</code> acabam com o
+    mesmo id, e isso está certo.
+  </li>
+</ul>
+
+<h2 id="json">Colunas JSON, e os nomes que estão fixados</h2>
+
+<p>
+  Quatro documentos JSON são mapeados com
+  <code>OwnsMany(...).ToJson(...)</code>: <code>Items.Copies</code>,
+  <code>Items.Custom</code>, <code>Groups.Fields</code> e
+  <code>StoreListings.Items</code>. Duas coisas neles são carga estrutural e têm
+  teste unitário dedicado:
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Regra</th><th>Se quebrar</th><th>Teste</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Enums dentro do JSON mantêm <code>HasConversion&lt;string&gt;()</code></td>
+      <td>Um enum sem conversão é escrito no JSON como <strong>inteiro</strong> —
+          e o documento existente passa a ser lido errado</td>
+      <td class="nowrap"><code>ItemCopyJsonShapeTests</code></td>
+    </tr>
+    <tr>
+      <td>Propriedades mantêm <code>HasJsonPropertyName</code></td>
+      <td>A migration escreveu aquele documento uma vez, em T-SQL cru, e nunca
+          regenera: um rename <strong>órfã os dados existentes sem erro em lugar
+          nenhum</strong></td>
+      <td class="nowrap"><code>GroupFieldJsonShapeTests</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>SortBy</code>, <code>SortDirection</code> e <code>Target</code> são
+  colunas escalares em <code>Groups</code>, e não parte do documento
+  <code>Fields</code>, justamente para não carregarem esse risco de nome fixado.
+</p>
+
+<h2 id="itens">Itens, cópias e posse derivada</h2>
+
+<p>
+  Um <code>Item</code> é a entrada de catálogo; os exemplares físicos vivem em
+  <code>Copies : List&lt;ItemCopy&gt;</code>. Cada cópia carrega sua própria
+  <code>Condition</code>, <code>Price</code> pago, <code>Value</code> opcional de
+  override (null = herda o <code>Value</code> por unidade do item),
+  <code>AcquiredOn</code> (<code>DateOnly?</code>, serializado
+  <code>yyyy-MM-dd</code>), <code>Status</code>
+  (<code>Keep</code>/<code>ForTrade</code>/<code>ForSale</code>) e
+  <code>Notes</code>.
+</p>
+
+<div class="callout">
+  <span class="label">Posse é derivada, nunca transportada</span>
+  <p>
+    Item com pelo menos uma cópia é possuído; sem nenhuma, está na lista de
+    desejos. <code>ItemDto</code> deliberadamente não tem campo
+    <code>owned</code>: ele faz round-trip GET → PUT, e um valor que o servidor
+    calcula mas ignora na entrada dessincroniza em silêncio.
+    <code>Item.Condition</code>, <code>Item.Price</code> e
+    <code>Item.Owned</code> foram removidos na migration
+    <code>AddItemCopies</code>, que faz backfill de uma cópia por item
+    anteriormente possuído.
+  </p>
+</div>
+
+<h3>A cadeia de estimativa</h3>
+
+<p>
+  <code>copy.value ?? item.value ?? copy.price</code>. <code>item.value === 0</code>
+  é a única forma que o modelo tem de dizer “nunca estimado”, e manter uma
+  estimativa de mercado atualizada numa coleção inteira é trabalho que ninguém
+  faz — então a maioria dos itens fica ali. Ler isso como <em>vale zero</em>
+  esvaziava o total da coleção e fazia o painel reportar −100% de tendência por
+  item não estimado.
+</p>
+
+<p>
+  A substituição vive em <code>copyValue</code> sozinho, para que o card, a
+  tabela, a página do item, os totais do grupo e a ordenação por valor não
+  possam discordar — e <strong>nunca é silenciosa</strong>:
+  <code>valueIsPaid</code> sinaliza, e o pipe <code>itemValue</code> renderiza
+  <code>≈ $85</code>, com ausência genuína como <code>—</code> em vez de
+  <code>$0</code>. “Desconhecido”, não “sem valor”.
+</p>
+
+<h2 id="grupos">Grupos: campos, ordenação e tamanho do conjunto</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Campo</th><th>Forma</th><th>Regra de herança</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>fields</code></td>
+      <td><code>{ Name, Type }</code> com <code>Type</code> em
+          <code>Text|Number|Date</code>, JSON</td>
+      <td><strong>Mescla o caminho inteiro de ancestrais</strong>; um nome
+          redeclarado sobrescreve o tipo e mantém a posição do ancestral</td>
+    </tr>
+    <tr>
+      <td><code>sort</code></td>
+      <td><code>{ by, direction }</code>, duas colunas escalares</td>
+      <td><strong>Só o ancestral mais próximo</strong> que define uma</td>
+    </tr>
+    <tr>
+      <td><code>target</code></td>
+      <td><code>int?</code>, coluna escalar</td>
+      <td>Não herda. Null = não declarado; o denominador cai para a contagem de
+          catalogados</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>by</code> é uma chave embutida (<code>manual</code>, <code>added</code>,
+  <code>name</code>, <code>value</code>, <code>year</code>) ou
+  <code>field:&lt;nome do campo&gt;</code>. Os <em>valores</em> dos campos
+  continuam no item, em <code>Custom</code>, como strings: o tipo pertence à
+  declaração, então <strong>retipar um campo nunca reescreve dados de item</strong>.
+</p>
+
+<p>
+  <code>GroupNodeDtoValidator</code> aceita <code>target</code> null ou
+  <code>1..100_000</code> — zero não é uma série, e o teto é uma guarda de
+  plausibilidade contra um paste digitado errado. Um target
+  <strong>abaixo</strong> do número de itens já catalogados é aceito
+  <em>de propósito</em>: grupos e itens chegam no mesmo documento, então
+  cross-checar impediria declarar um target antes de catalogar e travaria a
+  coleção inteira até o usuário apagar itens. O excedente é um problema de
+  exibição.
+</p>
+
+<div class="callout plain">
+  <span class="label">Não existem endpoints de grupo</span>
+  <p>
+    Grupos só mudam pelo PUT de documento inteiro da coleção. Portanto
+    <code>CollectionRepository.ReplaceGraph</code> tem que copiar
+    <code>SortBy</code>, <code>SortDirection</code> <strong>e
+    <code>Target</code></strong> no lambda de grupo, por atribuição simples e
+    nunca por coalesce. Esquecer um: a configuração salva na criação e depois
+    nunca mais muda, em silêncio. Coalescer: limpar de volta para null se torna
+    impossível. <code>ContractTests</code> faz PUT da mesma coleção
+    <strong>três vezes</strong> exatamente para pegar os dois casos — e o
+    terceiro PUT limpa sort e target de volta para null.
+  </p>
+</div>
+
+<h2 id="secoes">Seções: separadores dentro de um grupo</h2>
+
+<p>
+  Uma <strong>seção</strong> é uma faixa rotulada de itens dentro de <em>um</em>
+  grupo. Ela existe porque um grupo cobra coisas que um separador não quer: um
+  grupo é um destino — aparece na árvore e no breadcrumb, transforma a visão do
+  pai num painel de cards, pode declarar campos e ordenação, e lista em ordem
+  alfabética porque nada guarda posição para ele. Quebrar “Espanha” em
+  “Cavaleiros de Bronze / Prata / Ouro” com sub-grupos comprava três destinos
+  que ninguém queria visitar e perdia justamente o que importava: vê-los lado a
+  lado, nessa ordem, numa lista só.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Tem</th><th>Não tem</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>SortOrder</code> — posição arrumada à mão</td>
+      <td><code>ParentId</code></td>
+      <td>A recursão já existe em <code>Group</code>. Seção que aninha é a
+          árvore com outro nome — quem precisa de nível precisa de grupo</td>
+    </tr>
+    <tr>
+      <td><code>Name</code></td>
+      <td><code>Fields</code></td>
+      <td>Campo é taxonomia. Um separador que muda o conjunto de campos do
+          formulário do item é exatamente o defeito que a seção conserta</td>
+    </tr>
+    <tr>
+      <td><code>Target</code> (<code>int?</code>)</td>
+      <td><code>Sort</code></td>
+      <td>A seção é uma faixa de <em>uma</em> lista ordenada. Ordenação por
+          faixa faria a ordem declarada pelo grupo não significar nada</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>SortOrder</code> é a diferença que justifica a entidade:
+  <strong>Bronze → Prata → Ouro é uma progressão de casta</strong>, e em ordem
+  alfabética isso vira Bronze, Ouro, Prata. Um grupo é um lugar que você procura
+  (alfabético = achável); uma seção é um cabeçalho dentro de uma lista, e a
+  ordem dela é a do conteúdo.
+</p>
+
+<div class="callout plain">
+  <span class="label">Referência solta degrada, não dá 400</span>
+  <p>
+    <code>Item.SectionId</code> só vale quando a seção pertence ao
+    <code>GroupId</code> do próprio item; qualquer outra coisa — seção de outro
+    grupo, seção apagada, string vazia — <strong>lê como “sem seção”</strong>.
+    Grupos, seções e itens chegam no <em>mesmo</em> PUT de documento inteiro,
+    então cross-checá-los na validação recusaria estados intermediários
+    legítimos, pela mesma razão que <code>Group.Target</code> aceita um número
+    abaixo do que já está catalogado. O que o validador <em>exige</em> é
+    <code>Section.GroupId</code> não vazio: um separador que não pertence a nada
+    não tem nada para separar.
+  </p>
+</div>
+
+<p>
+  <code>Section.Target</code> sobe para o grupo do mesmo jeito que o target de um
+  sub-grupo: um grupo que não declara nada, cujas seções declaram 10 e 12,
+  declarou um conjunto de 22. Um target no próprio grupo continua vencendo a
+  soma. As seções <strong>não mudam contagem nenhuma</strong> — um item é
+  contado esteja sob qual separador estiver.
+</p>
+
+<div class="callout plain">
+  <span class="label">Também não existem endpoints de seção</span>
+  <p>
+    Como grupos, elas só mudam pelo PUT da coleção, então
+    <code>ReplaceGraph</code> tem um quarto bloco <code>MergeByKey</code> que
+    copia <code>Name</code>, <code>GroupId</code>, <code>Target</code> e
+    <code>SortOrder</code> por atribuição simples. <code>SortOrder</code> é
+    reatribuído a partir da ordem do array a cada PUT, que é como uma
+    reordenação chega ao banco. <code>CollectionVersionInterceptor</code>
+    reconhece <code>Section</code> como parte do agregado: uma escrita que não
+    movesse a versão seria um lost update silencioso.
+  </p>
+</div>
+
+<h2 id="nulls">Os nulls que significam algo</h2>
+
+<p>
+  Seis campos em que <code>null</code> não é “vazio”, é uma afirmação. Resolver
+  qualquer um deles na escrita congela a herança que ele existe para expressar.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Campo</th><th>Null significa</th><th>Custo de resolver na escrita</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>Collection.Currency</code></td>
+      <td>Siga o <code>DefaultCurrency</code> da conta</td>
+      <td>A coleção fica presa no código do dia em que foi salva; mudar o padrão
+          da conta não a acompanha</td>
+    </tr>
+    <tr>
+      <td><code>Group.SortBy</code>/<code>SortDirection</code></td>
+      <td>Herde do ancestral mais próximo</td>
+      <td>Cada grupo passa a declarar a sua e a herança morre</td>
+    </tr>
+    <tr>
+      <td><code>Group.Target</code></td>
+      <td>Nenhum tamanho de conjunto declarado</td>
+      <td>Um <code>int</code> não-anulável cairia em <code>0</code> e declararia
+          todo grupo existente uma série vazia</td>
+    </tr>
+    <tr>
+      <td><code>Section.Target</code></td>
+      <td>Nenhum tamanho declarado para a faixa</td>
+      <td>O mesmo de <code>Group.Target</code>: <code>0</code> declararia toda
+          seção existente uma série vazia</td>
+    </tr>
+    <tr>
+      <td><code>StoredImage.FocalX/Y</code></td>
+      <td>Nunca enquadrada (renderiza centralizada)</td>
+      <td>Perde a distinção entre “nunca escolheram” e “escolheram o centro”, e
+          uma futura detecção de assunto sobrescreveria escolha humana</td>
+    </tr>
+    <tr>
+      <td><code>ItemCopy.Value</code></td>
+      <td>Herda o <code>Value</code> por unidade do item</td>
+      <td>Perde a distinção entre “herdado” e “sobrescrito”</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  No frontend, esses campos são <strong>obrigatórios-e-anuláveis</strong>, não
+  opcionais (<code>target: number | null</code>, não <code>target?: number</code>).
+  A coleção é salva como PUT de documento inteiro, onde um
+  <code>undefined</code> faria round-trip como <em>deleção</em> e limparia todos
+  os targets da coleção.
+</p>
+
+<h2 id="moeda">Moeda</h2>
+
+<p>
+  Valores são denominados no <code>DefaultCurrency</code> da conta (ISO 4217, em
+  <code>Tenant</code>), que uma coleção pode sobrescrever pelo seu
+  <code>Currency</code> anulável. Sempre um <strong>código</strong>, nunca um
+  símbolo: “R$” e “$” são como um código é <em>renderizado</em> num locale, e
+  quem renderiza é o <code>Intl.NumberFormat</code> do navegador — que também
+  sabe que pt-BR escreve <code>R$ 1.234,57</code> e en-US escreve
+  <code>$1,234.57</code>.
+</p>
+
+<p>
+  A lista é curada (<code>Money.SupportedCurrencies</code>, 17 códigos), não
+  derivada de <code>RegionInfo</code>: dados de cultura variam com o build de ICU
+  do host, e um whitelist que muda com a imagem base começaria a rejeitar valores
+  já salvos no banco. O frontend espelha a lista em
+  <code>core/utils/money.util.ts</code> — <strong>as duas se movem juntas</strong>,
+  como os whitelists de condição e de papel.
+</p>
+
+<p>
+  O idioma move os separadores e a grafia do símbolo, nunca a moeda: pt-BR
+  escreve um valor em USD como <code>US$ 4.200,00</code>, porque rotular de
+  <code>R$</code> reafirmaria o mesmo número como outra quantidade de dinheiro.
+  Todo valor tem duas decimais e é arredondado <strong>para cima</strong> ao
+  centavo (<code>ceilToCents</code>, que colapsa o erro de ponto flutuante
+  binário primeiro — um <code>Math.ceil</code> ingênuo cobra <code>0.07</code>
+  como oito centavos). <strong>Moedas diferentes nunca são somadas</strong>:
+  <code>ownedValueByCurrency</code> devolve uma linha por moeda, porque somar BRL
+  com USD não é uma quantidade de dinheiro em nenhuma das duas.
+</p>
+
+<h2 id="version">Version: o token do agregado</h2>
+
+<p>
+  <code>Catalog.Collections.Version</code> é um <code>int</code> configurado com
+  <code>IsConcurrencyToken()</code>. Ele conta mudanças no
+  <strong>agregado</strong>, não na linha: uma edição de item não escreve coluna
+  nenhuma em <code>Collections</code>, e ainda assim um cliente que não viu
+  aquela edição não pode ter permissão de dar PUT no documento inteiro por cima.
+</p>
+
+<p>
+  É por isso que é um contador e não um <code>rowversion</code> do SQL: um
+  rowversion só se move quando a própria linha é atualizada, que é precisamente o
+  caso que uma edição de item <em>não</em> é.
+  <code>CollectionVersionInterceptor</code> avança o valor quando qualquer
+  entidade sob a coleção é adicionada, alterada ou removida — e
+  <strong>lança</strong> quando um filho é escrito sem a coleção em escopo.
+</p>
+
+<div class="callout warn">
+  <span class="label">O interceptor sobe para o principal por um motivo</span>
+  <p>
+    <code>Copies</code> e <code>Custom</code> de um item e <code>Fields</code> de
+    um grupo são entidades <em>owned</em> mapeadas em colunas JSON, e reescrever
+    uma deixa a linha que a carrega como <code>Unchanged</code>. Casar por tipo
+    de entidade não via nada nesse caso: sem bump, e sem <code>UPDATE</code> da
+    raiz — ou seja, o token de concorrência nunca era consultado e a escrita
+    passava completamente desguardada. A entrada owned carrega a chave do
+    principal sob nomes que o EF compõe (<code>Item.TenantId</code> vira
+    <code>ItemTenantId</code> em <code>ItemCopy</code>), então os nomes são
+    resolvidos pelas FKs de ownership e não adivinhados.
+  </p>
+</div>
+
+<p>
+  A versão viaja como <strong>entity-tag opaca</strong>:
+  <code>CollectionVersions.ToETag</code> formata num lugar só, e nada fora daquele
+  arquivo lê os dígitos — o que permitiria trocar por <code>rowversion</code>
+  depois sem tocar uma linha do frontend. Ela chega ao cliente pelo cabeçalho
+  <code>ETag</code> e pelo envelope <code>{ version, collection }</code> da
+  listagem, e deliberadamente <strong>não</strong> como campo de
+  <code>CollectionDto</code>: esse DTO é byte a byte o que um arquivo exportado
+  guarda, e token de concorrência não tem lugar num backup.
+</p>
+
+<h2 id="migrations">Migrations</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>#</th><th>Migration</th><th>O que fez</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td class="nowrap"><code>InitialCreate</code></td><td>Modelo inicial (nomes minúsculos, sem schema explícito)</td></tr>
+    <tr><td>2</td><td class="nowrap"><code>AddTenantDefaultTheme</code></td><td><code>Tenants.DefaultTheme</code></td></tr>
+    <tr><td>3</td><td class="nowrap"><code>AddItemCopies</code></td><td>Coluna <code>Copies</code>; remove <code>Condition</code>/<code>Price</code>/<code>Owned</code> do item; backfill em T-SQL de uma cópia por item possuído</td></tr>
+    <tr><td>4</td><td class="nowrap"><code>AddGroupFieldTypesAndSort</code></td><td>Converte <code>["Número"]</code> em <code>[{"Name":"Número","Type":"Text"}]</code> com <code>OPENJSON</code> + <code>FOR JSON PATH</code>; adiciona <code>SortBy</code>/<code>SortDirection</code></td></tr>
+    <tr><td>5</td><td class="nowrap"><code>UseSchemaQualifiedPascalCaseNames</code></td><td>Rename para PascalCase + schemas explícitos. <strong>A fronteira</strong>: migrations anteriores citam os nomes antigos e isso é correto</td></tr>
+    <tr><td>6</td><td class="nowrap"><code>MoveImageBytesToFileStorage</code></td><td>Derruba <code>Images.Data</code> (<code>varbinary(max)</code>). Exige que a API suba — veja o aviso abaixo</td></tr>
+    <tr><td>7</td><td class="nowrap"><code>AddImageFocalPoint</code></td><td><code>FocalX</code>/<code>FocalY</code></td></tr>
+    <tr><td>8</td><td class="nowrap"><code>AddGroupTarget</code></td><td><code>Groups.Target</code></td></tr>
+    <tr><td>9</td><td class="nowrap"><code>AddCurrencySettings</code></td><td><code>Tenants.DefaultCurrency</code>, <code>Collections.Currency</code></td></tr>
+    <tr><td>10</td><td class="nowrap"><code>AddImageDimensions</code></td><td><code>Width</code>/<code>Height</code></td></tr>
+    <tr><td>11</td><td class="nowrap"><code>AddImageUnreferencedSince</code></td><td><code>UnreferencedSinceUtc</code> — o relógio da carência do coletor</td></tr>
+    <tr><td>12</td><td class="nowrap"><code>AddCollectionVersion</code></td><td><code>Collections.Version</code>, começando em 1 nas linhas existentes</td></tr>
+    <tr><td>13</td><td class="nowrap"><code>AddSections</code></td><td><code>Catalog.Sections</code> e <code>Items.SectionId</code> (<code>nvarchar(64)</code>, default <code>''</code>)</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Detalhe da #4 que vale conhecer: o <code>COALESCE(..., N'[]')</code> em volta do
+  <code>FOR JSON PATH</code> é carga estrutural — <code>FOR JSON PATH</code> sobre
+  zero linhas devolve <code>NULL</code>, então sem ele todo grupo que não tinha
+  campos teria a coluna anulada.
+</p>
+
+<div class="callout danger">
+  <span class="label">Migration 6 e a perda de bytes</span>
+  <p>
+    <code>LegacyImageBlobExporter</code> roda no startup <strong>antes</strong> de
+    <code>Database.Migrate()</code>, copia cada blob para o store e só então
+    deixa a migration derrubar a coluna. Uma migration não escreve arquivos —
+    então <code>dotnet ef database update</code> contra um banco que ainda guarda
+    blobs apaga os bytes. Suba a API.
+  </p>
+</div>
+
+<h2 id="em-andamento">Trabalho em andamento não documentado aqui</h2>
+
+<div class="callout warn">
+  <span class="label">Sections — em desenvolvimento no working tree, ainda não commitado</span>
+  <p>
+    Há uma feature em andamento adicionando <code>Section</code>:
+    “uma sequência rotulada de itens dentro de <em>um</em> grupo — um separador,
+    não um nível”. O argumento escrito na entidade é que um grupo é um
+    <em>destino</em> (aparece na árvore e no breadcrumb, vira card no dashboard
+    do pai, declara campos e ordenação, e lista alfabeticamente), então dividir
+    “Espanha” em sub-grupos compraria três destinos que ninguém queria navegar e
+    perderia o que importava: vê-los lado a lado, naquela ordem, numa lista só.
+  </p>
+  <p>
+    Uma seção deliberadamente <strong>não</strong> tem <code>ParentId</code> (a
+    recursão já existe em <code>Group</code>), <strong>não</strong> tem campos
+    (são taxonomia) e <strong>não</strong> tem ordenação própria (é um trecho
+    dentro de <em>uma</em> lista ordenada). O que ela tem e um grupo não é
+    <code>SortOrder</code> — Bronze → Prata → Ouro é uma progressão, e
+    alfabeticamente isso lê Bronze, Ouro, Prata. <code>Item.SectionId</code> só é
+    honrado quando a seção pertence ao <code>GroupId</code> do item; divergência
+    lê como “sem seção” em vez de falhar a escrita, porque grupos, seções e itens
+    chegam no mesmo PUT.
+  </p>
+  <p>
+    <strong>Ainda não descrita como implementada</strong>: no momento desta
+    revisão os arquivos estão no working tree e não commitados
+    (<code>Vault.Domain/Entities/Section.cs</code>,
+    <code>SectionConfiguration.cs</code>, migration <code>AddSections</code>,
+    <code>core/models/section.model.ts</code>,
+    <code>core/utils/sections.util.ts</code> e o componente
+    <code>section-header</code>), e o contrato ainda está em movimento. Quem
+    fechar a feature atualiza esta página, o
+    <a href="api-reference.html">contrato HTTP</a>, o
+    <a href="decisions.html">registro de decisões</a> (um ADR novo: grupo vs.
+    seção) e a <a href="testing.html">matriz de testes</a> — conforme
+    <a href="maintaining.html">Manter este manual</a>.
+  </p>
+</div>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

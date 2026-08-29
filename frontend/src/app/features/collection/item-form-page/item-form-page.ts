@@ -4,11 +4,13 @@ import { Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../../core/api/images-api';
 import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
+import { VaultConflictError } from '../../../core/api/vault-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
 import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
 import { fieldsFor, flattenTree, groupById, resolveGroupId } from '../../../core/utils/groups.util';
+import { resolveSectionId, sectionsOf } from '../../../core/utils/sections.util';
 import { groupLinkParams } from '../browse-params';
 import { TPipe } from '../../../shared/pipes/t.pipe';
 import {
@@ -107,6 +109,12 @@ export class ItemFormPage {
    * vanish from the view you created it in.
    */
   readonly g = input<string | undefined>(undefined);
+  /**
+   * The section open behind the form, carried by the same links as `?g=` — so
+   * an item added while reading one divider lands under it instead of in the
+   * leftovers you would then have to drag it out of.
+   */
+  readonly s = input<string | undefined>(undefined);
 
   // Options carry the *wire* value and a translated label — the enum itself is
   // both the SQL representation and the validator whitelist, so it never moves.
@@ -126,6 +134,7 @@ export class ItemFormPage {
   protected readonly name = signal('');
   protected readonly description = signal('');
   protected readonly groupId = signal('');
+  protected readonly sectionId = signal('');
   protected readonly year = signal('');
   protected readonly value = signal('');
   protected readonly copies = signal<CopyDraft[]>([]);
@@ -146,6 +155,7 @@ export class ItemFormPage {
       this.name.set(item?.name ?? '');
       this.description.set(item?.description ?? '');
       this.groupId.set(this.initialGroupId(item));
+      this.sectionId.set(this.initialSectionId(item));
       this.year.set(item ? String(item.year) : '');
       // Blank, not "0": zero *is* "not estimated", and showing it as a figure
       // invites the user to keep a number they never entered.
@@ -167,6 +177,19 @@ export class ItemFormPage {
    */
   private initialGroupId(item: Item | undefined): string {
     return resolveGroupId(this.collection()?.groups ?? [], item ? item.groupId : this.g());
+  }
+
+  /**
+   * The same story one level down, and resolved against the group the form
+   * actually opened on: a section belongs to exactly one group, so a remembered
+   * `?s=` from somewhere else, or one deleted since, opens as "no section".
+   */
+  private initialSectionId(item: Item | undefined): string {
+    return resolveSectionId(
+      this.collection()?.sections ?? [],
+      this.groupId(),
+      item ? item.sectionId : this.s(),
+    );
   }
 
   protected readonly maxPhotos = MAX_PHOTOS;
@@ -213,6 +236,22 @@ export class ItemFormPage {
     })),
   ]);
 
+  /**
+   * The dividers of the chosen group, plus "no section".
+   *
+   * Empty of real options for a group that declares none, which is why the
+   * whole field disappears rather than offering a picker with one entry: a
+   * control whose only choice is "none" asks a question that has no answer.
+   */
+  protected readonly sectionOptions = computed<SelectOption[]>(() => {
+    const sections = sectionsOf(this.collection()?.sections ?? [], this.groupId() || null);
+    if (!sections.length) return [];
+    return [
+      { value: '', label: this.i18n.t('section.none') },
+      ...sections.map(section => ({ value: section.id, label: section.name })),
+    ];
+  });
+
   protected readonly groupFields = computed(() =>
     fieldsFor(this.collection()?.groups ?? [], this.groupId() || null),
   );
@@ -229,6 +268,19 @@ export class ItemFormPage {
     const name = groupById(collection.groups, this.groupId())?.name;
     return (name ?? this.i18n.t('group.none')).toUpperCase();
   });
+
+  /**
+   * Changing the group clears a section the new group does not have. Left
+   * alone the value would still render as "no section" — the resolution rule
+   * sees to that — but the form would be showing one thing and saving another,
+   * and the difference would only surface later as an item nobody can find.
+   */
+  protected setGroupId(groupId: string): void {
+    this.groupId.set(groupId);
+    this.sectionId.set(
+      resolveSectionId(this.collection()?.sections ?? [], groupId, this.sectionId()),
+    );
+  }
 
   protected customValue(field: string): string {
     return this.custom()[field] ?? '';
@@ -254,6 +306,7 @@ export class ItemFormPage {
       name,
       description: this.description().trim(),
       groupId: this.groupId(),
+      sectionId: this.sectionId(),
       year: parseNumber(this.year()) || new Date().getFullYear(),
       value: parseNumber(this.value()),
       copies: this.copies().map(fromDraft),
@@ -266,7 +319,21 @@ export class ItemFormPage {
         .filter(c => c.value),
     };
 
-    await this.store.upsertItem(collection.id, syncWantedTag(item));
+    try {
+      await this.store.upsertItem(collection.id, syncWantedTag(item));
+    } catch (err) {
+      // The one thing that must not happen here is navigating away: this form
+      // is the only copy of what was typed, and a refused save leaves it
+      // unsaved. A conflict explains itself through the shell's notice; any
+      // other failure gets a toast. Either way the page stays exactly as it is.
+      if (!(err instanceof VaultConflictError)) {
+        this.toast.flash(
+          err instanceof Error ? err.message : this.i18n.t('toast.item.saveFailed'),
+        );
+      }
+      return;
+    }
+
     this.toast.flash(this.i18n.t('toast.item.saved'));
 
     if (existing) {

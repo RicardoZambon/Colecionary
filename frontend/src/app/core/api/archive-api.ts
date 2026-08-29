@@ -3,8 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
-import { Collection } from '../models';
 import { problemMessage } from './problem-details';
+import { VersionedCollection } from './vault-api';
 
 /** A downloaded archive and the name it should be saved under. */
 export interface ArchiveDownload {
@@ -21,6 +21,23 @@ export interface ImportEntry {
    * user can rename between being asked and answering.
    */
   existingId: string | null;
+  /**
+   * That collection's version when the plan was drawn, or null when
+   * {@link existingId} is.
+   *
+   * Sent back with the answer, and it is the only thing binding the plan the
+   * user read to the overwrite the server then performs: the two are separate
+   * requests with a dialog and a second upload between them, and an overwrite is
+   * the same wholesale replace the collection PUT is guarded against making
+   * blind. If it has moved on, the server asks again rather than overwriting.
+   */
+  existingVersion: string | null;
+}
+
+/** "Overwrite this collection, which I last saw at this version." */
+export interface ReplaceDecision {
+  id: string;
+  version: string;
 }
 
 /** What an archive would do to the vault, as worked out by the server. */
@@ -74,19 +91,37 @@ export class ArchiveApi {
    * references come back remapped, so the caller must use what it is given here
    * rather than what it saw in the file.
    *
+   * Each comes back with its version. An import that overwrites moves the
+   * version of a collection this app may already have on screen, so a client
+   * left holding the old token would be refused on its very next save — for a
+   * change it asked for itself.
+   *
    * The zip goes up as the raw body: it is one file with no fields beside it,
    * so a multipart envelope would buy nothing.
    */
-  async importArchive(file: File, replace?: readonly string[]): Promise<Collection[]> {
+  async importArchive(
+    file: File,
+    replace?: readonly ReplaceDecision[],
+  ): Promise<VersionedCollection[]> {
     // `replace` present at all means the user has answered — an empty array is
     // a real answer ("create new ones"), and must not read as "not asked yet".
+    //
+    // Two parallel lists, paired by position: the server refuses a request whose
+    // lists do not line up, so a decision can never lose its version on the way
+    // and be acted on unguarded.
     const params = replace
-      ? new HttpParams({ fromObject: { confirmed: 'true', replace: [...replace] } })
+      ? new HttpParams({
+          fromObject: {
+            confirmed: 'true',
+            replace: replace.map(r => r.id),
+            replaceVersion: replace.map(r => r.version),
+          },
+        })
       : undefined;
 
     try {
       return await firstValueFrom(
-        this.http.post<Collection[]>(`${environment.apiBaseUrl}/import`, file, {
+        this.http.post<VersionedCollection[]>(`${environment.apiBaseUrl}/import`, file, {
           headers: { 'Content-Type': 'application/zip' },
           params,
         }),

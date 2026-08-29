@@ -35,6 +35,12 @@ export interface Item {
   /** Per-unit reference estimate, in USD. A copy's own `value` overrides it. */
   value: number;
   groupId: string;
+  /**
+   * The divider this item sits under inside its group, or `''` for none.
+   * Only honoured when the section belongs to `groupId`; a mismatch reads as
+   * "no section" rather than being an error, exactly like a dangling `groupId`.
+   */
+  sectionId: string;
   tags: string[];
   img: string;
   custom: CustomFieldValue[];

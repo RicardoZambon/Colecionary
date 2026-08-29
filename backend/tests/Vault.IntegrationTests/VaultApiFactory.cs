@@ -40,6 +40,21 @@ public sealed class VaultApiFactory : WebApplicationFactory<Program>, IAsyncLife
         builder.UseSetting("Seed:DemoPassword", DemoPassword);
         builder.UseSetting("Jwt:SigningKey", "integration-test-signing-key-0123456789abcdef");
         builder.UseSetting("ImageStorage:Root", ImageRoot);
+
+        // The login throttle's per-account rule runs at its production settings
+        // here — that is the rule an attacker meets, so it is the rule the suite
+        // should meet too, and it costs nothing because a successful sign-in
+        // refunds its charge and every test signs in successfully.
+        //
+        // The per-address rule is the one that cannot survive contact with a
+        // shared TestServer: every request in the suite comes from the same
+        // client (in fact from no address at all), so one class's deliberate
+        // failures would be charged to the next class's login. It is raised out
+        // of reach here and pinned deterministically in
+        // Vault.UnitTests.LoginThrottleTests, where the address is a parameter.
+        // Never do this in a real deployment: it is the half of the defence that
+        // sees a password spray across many accounts.
+        builder.UseSetting("LoginThrottle:MaxClientFailures", "1000000");
     }
 
     public async Task<HttpClient> CreateAuthenticatedClientAsync(string email, string password = DemoPassword)
@@ -82,6 +97,40 @@ public sealed class VaultApiFactory : WebApplicationFactory<Program>, IAsyncLife
         owner.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordService>().Hash(owner, DemoPassword);
         db.Users.Add(owner);
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Creates a user in a tenant of its own and returns its email.
+    /// </summary>
+    /// <remarks>
+    /// A test that wants to throttle a <em>real</em> account cannot use a demo
+    /// login — every other class signs in as those, and a five-minute penalty
+    /// would look like a broken app. Its own tenant keeps it out of the demo
+    /// tenant's member list too, which <c>ContractTests</c> reads and writes back.
+    /// </remarks>
+    public async Task<string> CreateThrowawayUserAsync()
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VaultDbContext>();
+
+        var slug = $"throwaway-{Guid.NewGuid():N}";
+        var tenantId = Guid.NewGuid();
+        db.Tenants.Add(new Tenant { Id = tenantId, Slug = slug, Name = "Throwaway" });
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Email = $"{slug}@example.com",
+            Name = "Throwaway",
+            Initials = "TA",
+            Role = MemberRole.Owner,
+            Plan = PlanId.Free,
+        };
+        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordService>().Hash(user, DemoPassword);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user.Email;
     }
 
     /// <summary>Unfiltered database access for direct assertions.</summary>

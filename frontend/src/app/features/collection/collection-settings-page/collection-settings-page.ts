@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router, RouterLink } from '@angular/router';
 
 import { I18nService, MessageKey } from '../../../core/i18n';
+import { VaultConflictError } from '../../../core/api/vault-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { ArchiveApi } from '../../../core/api/archive-api';
 import { saveFile } from '../../../core/utils/download.util';
@@ -12,12 +13,16 @@ import {
   GroupFieldType,
   GroupNode,
   MemberRole,
+  Section,
   SortDirection,
 } from '../../../core/models';
-import { fieldsFor, flattenTree, pathOf, sortFor, subtreeIds } from '../../../core/utils/groups.util';
+import { childrenOf, fieldsFor, pathOf, sortFor, subtreeIds } from '../../../core/utils/groups.util';
+import { sectionsOf } from '../../../core/utils/sections.util';
+import { moveInList } from '../../../core/utils/sort.util';
 import { SUPPORTED_CURRENCIES, currencyLabel, isCurrencyCode } from '../../../core/utils/money.util';
 import { fieldSortKey, sortByOptions, sortLabel } from '../../../core/utils/sort.util';
 import { TPipe } from '../../../shared/pipes/t.pipe';
+import { GroupPicker } from './group-picker/group-picker';
 import {
   SelectOption,
   TabDef,
@@ -72,7 +77,12 @@ const PERSIST_DEBOUNCE_MS = 400;
 @Component({
   selector: 'app-collection-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, UiAvatar, UiButton, UiCard, UiField, UiSelect, UiTabs, UiTextInput, UiTextarea, UiToggle],
+  // The page is a 720px column of forms — the right width for reading one
+  // field per line. The groups tab is not that: it is a tree beside an editor,
+  // and at 720px the editor gets 450 of them, which is where a section's name,
+  // count, target and four buttons stop fitting on one line.
+  host: { '[class.wide]': "activeTab() === 'groups'" },
+  imports: [RouterLink, TPipe, GroupPicker, UiAvatar, UiButton, UiCard, UiField, UiSelect, UiTabs, UiTextInput, UiTextarea, UiToggle],
   templateUrl: './collection-settings-page.html',
   styleUrl: './collection-settings-page.scss',
 })
@@ -86,9 +96,11 @@ export class CollectionSettingsPage {
   readonly collectionId = input.required<string>();
   readonly tab = input<string>('general');
   /**
-   * Narrows the groups tab to one branch. A collection with forty groups is
-   * unreadable as one flat indented list, and you almost always arrive here
-   * wanting to fix the part you were just looking at.
+   * The group selected in the groups tab — the tree on the left, its editor on
+   * the right. It is a route param rather than local state so that back works
+   * and "the group I am fixing" is a link somebody can send; it is also what
+   * `?g=` already carried when arriving here from a collection, so you land on
+   * the branch you were just looking at.
    */
   readonly g = input<string | undefined>(undefined);
 
@@ -130,17 +142,16 @@ export class CollectionSettingsPage {
   protected readonly draft = signal<Collection | null>(null);
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
   protected readonly pendingFieldGroupId = signal<string | null>(null);
+  protected readonly pendingSectionGroupId = signal<string | null>(null);
   protected readonly pendingFieldType = signal<GroupFieldType>('text');
   protected readonly inviteEmail = signal('');
   protected readonly inviteRole = signal<string>('Viewer');
   /**
-   * The row order frozen while a rename is being typed. Groups list
-   * alphabetically, so without this the row would re-sort on every keystroke —
-   * moving the focused input in the DOM, which blurs it, so renaming "Zeta" to
-   * "Alpha" would end after the first letter. Captured on the first keystroke
-   * and released on blur, when the list settles into its new order.
+   * Which branches of the picker are open. Seeded with the path to whatever
+   * `?g=` names, so arriving on a group five levels down opens showing it.
    */
-  private readonly renameOrderPin = signal<string[] | null>(null);
+  protected readonly pickerExpanded = signal<ReadonlySet<string>>(new Set());
+  private expandedFor: string | null = null;
 
   private persistTimer: ReturnType<typeof setTimeout> | undefined;
   private draftFor: string | null = null;
@@ -154,67 +165,113 @@ export class CollectionSettingsPage {
       }
     });
     effect(() => this.activeTab.set(this.tab() || 'general'));
+
+    // Opening on a group five levels down has to show it. Seeded once per
+    // selection rather than continuously, so a branch the user folds by hand
+    // stays folded.
+    effect(() => {
+      const draft = this.draft();
+      const id = this.g();
+      if (!draft || !id || this.expandedFor === id) return;
+      this.expandedFor = id;
+      const next = new Set(this.pickerExpanded());
+      for (const node of pathOf(draft.groups, id)) next.add(node.id);
+      this.pickerExpanded.set(next);
+    });
   }
 
-  /** The branch the groups tab is scoped to, when `?g=` names a real group. */
-  protected readonly scopeGroup = computed(() => {
+  /** The group the tree has selected, or null when nothing is. */
+  protected readonly selectedGroup = computed(() => {
     const draft = this.draft();
     const id = this.g();
     if (!draft || !id) return null;
     return draft.groups.find(group => group.id === id) ?? null;
   });
 
-  protected readonly groupRows = computed(() => {
+  /** Root → … → group, so the detail pane can say where you are. */
+  protected readonly selectedPath = computed(() => {
     const draft = this.draft();
-    if (!draft) return [];
-    const scope = this.scopeGroup();
-    const scoped = scope ? new Set(subtreeIds(draft.groups, scope.id)) : null;
-    // Indentation is relative to the branch, so a deeply nested group opens
-    // flush left instead of pushed halfway across the card for no reason.
-    const offset = scope ? pathOf(draft.groups, scope.id).length - 1 : 0;
+    const selected = this.selectedGroup();
+    return draft && selected ? pathOf(draft.groups, selected.id) : [];
+  });
 
-    const pin = this.renameOrderPin();
-    const pinned = pin ? new Map(pin.map((id, index) => [id, index])) : null;
-
-    const rows = flattenTree(draft.groups).filter(({ node }) => !scoped || scoped.has(node.id));
-    if (pinned) {
-      // Stable sort, so a group the pin does not know about (there should be
-      // none — the pin only outlives a keystroke) keeps its place at the end.
-      rows.sort(
-        (a, b) =>
-          (pinned.get(a.node.id) ?? pinned.size) - (pinned.get(b.node.id) ?? pinned.size),
-      );
+  /**
+   * Items in each group's whole subtree, for the tree's counts. A parent shown
+   * as empty because everything under it sits in its children would be a lie,
+   * and it is the number you look at when deciding whether a branch is safe to
+   * delete.
+   */
+  protected readonly subtreeCounts = computed<ReadonlyMap<string, number>>(() => {
+    const draft = this.draft();
+    const out = new Map<string, number>();
+    if (!draft) return out;
+    for (const group of draft.groups) {
+      const ids = new Set(subtreeIds(draft.groups, group.id));
+      out.set(group.id, draft.items.filter(item => ids.has(item.groupId)).length);
     }
+    return out;
+  });
 
-    return rows.map(({ node, depth }) => {
-        // The picker offers inherited fields too — ordering by a field the
-        // parent declared is exactly what a sub-group usually wants.
-        const fields = fieldsFor(draft.groups, node.id);
-        const parentSort = node.parentId ? sortFor(draft.groups, node.parentId) : null;
-        return {
-          node,
-          depth: depth - offset,
-          count: draft.items.filter(i => new Set(subtreeIds(draft.groups, node.id)).has(i.groupId))
-            .length,
-          sortBy: node.sort?.by ?? INHERIT,
-          sortDirection: node.sort?.direction ?? 'asc',
-          // Empty string, not '0': the input must read as blank when no target
-          // is declared, and blank is what writes the null back.
-          target: node.target === null ? '' : String(node.target),
-          showDirection: !!node.sort && node.sort.by !== 'manual',
-          sortByOptions: [
-            {
-              value: INHERIT,
-              label: parentSort
-                ? this.i18n.t('collSettings.groups.inherited', {
-                    label: sortLabel(parentSort, this.i18n.t),
-                  })
-                : this.i18n.t('collSettings.groups.notSet'),
-            },
-            ...sortByOptions(fields, this.i18n.t),
-          ] satisfies SelectOption[],
-        };
-      });
+  /**
+   * Everything the right-hand pane needs about the selected group. Null when
+   * nothing is selected, which the template renders as an invitation rather
+   * than as an empty editor.
+   */
+  protected readonly detail = computed(() => {
+    const draft = this.draft();
+    const node = this.selectedGroup();
+    if (!draft || !node) return null;
+
+    // The picker offers inherited fields too — ordering by a field the
+    // parent declared is exactly what a sub-group usually wants.
+    const fields = fieldsFor(draft.groups, node.id);
+    const parentSort = node.parentId ? sortFor(draft.groups, node.parentId) : null;
+    const own = draft.items.filter(i => i.groupId === node.id);
+    const children = childrenOf(draft.groups, node.id);
+
+    return {
+      node,
+      count: this.subtreeCounts().get(node.id) ?? 0,
+      childCount: children.length,
+      sections: sectionsOf(draft.sections, node.id).map(section => ({
+        section,
+        count: own.filter(i => i.sectionId === section.id).length,
+        // Blank, not '0', for the same reason a group's target is blank:
+        // blank is what writes the null back.
+        target: section.target === null ? '' : String(section.target),
+      })),
+      /**
+       * Offered only when every sub-group could become a divider. A partial
+       * conversion would leave the group with children *and* sections — it
+       * would still open as a board of cards, which is the very thing the
+       * user was trying to stop.
+       */
+      convertible:
+        children.length > 0 &&
+        children.every(
+          child =>
+            childrenOf(draft.groups, child.id).length === 0 &&
+            child.fields.length === 0 &&
+            child.sort === null,
+        ),
+      sortBy: node.sort?.by ?? INHERIT,
+      sortDirection: node.sort?.direction ?? 'asc',
+      // Empty string, not '0': the input must read as blank when no target
+      // is declared, and blank is what writes the null back.
+      target: node.target === null ? '' : String(node.target),
+      showDirection: !!node.sort && node.sort.by !== 'manual',
+      sortByOptions: [
+        {
+          value: INHERIT,
+          label: parentSort
+            ? this.i18n.t('collSettings.groups.inherited', {
+                label: sortLabel(parentSort, this.i18n.t),
+              })
+            : this.i18n.t('collSettings.groups.notSet'),
+        },
+        ...sortByOptions(fields, this.i18n.t),
+      ] satisfies SelectOption[],
+    };
   });
 
   protected readonly memberRows = computed(() => {
@@ -252,10 +309,27 @@ export class CollectionSettingsPage {
     this.persistTimer = setTimeout(() => void this.persist(), PERSIST_DEBOUNCE_MS);
   }
 
+  /**
+   * Flushes the debounced save.
+   *
+   * Never rethrows, and never clears the draft. This page is a long-lived
+   * working copy of the collection, so a refused save has to leave it exactly
+   * as it is — the shell's conflict notice explains what happened and the user
+   * decides whether to reload. Before this, a rejection here was unhandled: the
+   * user kept typing into a draft that had silently stopped being saved.
+   */
   private async persist(): Promise<void> {
     clearTimeout(this.persistTimer);
     const draft = this.draft();
-    if (draft) await this.store.updateCollection(draft);
+    if (!draft) return;
+    try {
+      await this.store.updateCollection(draft);
+    } catch (err) {
+      if (err instanceof VaultConflictError) return;
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.collection.saveFailed'),
+      );
+    }
   }
 
   // --- general ---
@@ -306,20 +380,19 @@ export class CollectionSettingsPage {
 
   // --- groups & fields ---
 
+  /**
+   * No frozen row order here any more, and the split is what removed the need.
+   * The name lived in the same alphabetical list it sorted, so every keystroke
+   * moved the focused input in the DOM and blurred it — renaming "Zeta" to
+   * "Alpha" ended after the first letter, and a pin held the order until blur.
+   * Now the field is in the detail pane and only the tree re-sorts, which
+   * cannot touch focus.
+   */
   protected renameGroup(id: string, name: string): void {
-    const draft = this.draft();
-    if (draft && !this.renameOrderPin()) {
-      this.renameOrderPin.set(flattenTree(draft.groups).map(row => row.node.id));
-    }
     this.mutate(d => ({
       ...d,
       groups: d.groups.map(g => (g.id === id ? { ...g, name } : g)),
     }));
-  }
-
-  /** Leaving the rename field lets the list re-sort into the new alphabetical order. */
-  protected endRename(): void {
-    this.renameOrderPin.set(null);
   }
 
   protected removeGroup(id: string): void {
@@ -332,6 +405,10 @@ export class CollectionSettingsPage {
     }
     this.mutate(d => ({ ...d, groups: d.groups.filter(g => !ids.includes(g.id)) }));
     this.toast.flash(this.i18n.t('toast.group.removed'));
+    // The detail pane was showing it. Leaving `?g=` pointing at a group that no
+    // longer exists would render the empty state anyway, but the URL would keep
+    // claiming a selection that is gone.
+    if (ids.includes(this.g() ?? '')) this.select(null);
   }
 
   protected newGroupKeydown(event: KeyboardEvent): void {
@@ -358,6 +435,18 @@ export class CollectionSettingsPage {
     };
     this.mutate(d => ({ ...d, groups: [...d.groups, node] }));
     this.toast.flash(this.i18n.t('toast.group.added', { name: trimmed }));
+    // Straight into its editor: you create a group in order to configure it,
+    // and a new row appearing somewhere alphabetical in the tree is not an
+    // answer to "where did it go?".
+    this.select(node.id);
+  }
+
+  /** Moves the selection, which is a query param like every other bit of state. */
+  private select(groupId: string | null): void {
+    void this.router.navigate([], {
+      queryParams: { tab: 'groups', g: groupId },
+      queryParamsHandling: 'merge',
+    });
   }
 
   private mutateGroup(groupId: string, fn: (group: GroupNode) => GroupNode): void {
@@ -432,6 +521,121 @@ export class CollectionSettingsPage {
     const parsed = Number.parseInt(raw.trim(), 10);
     const target = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     this.mutateGroup(groupId, g => ({ ...g, target }));
+  }
+
+  // --- sections ---
+
+  /**
+   * Sections are edited here and nowhere else, which is deliberate: unlike a
+   * group there is no tree to drop one into, and the only thing that needs
+   * arranging — their order — is a property of the group they belong to.
+   */
+  protected newSectionKeydown(event: KeyboardEvent, groupId: string): void {
+    const input = event.target as HTMLInputElement;
+    if (event.key === 'Enter') this.commitNewSection(groupId, input.value);
+    else if (event.key === 'Escape') {
+      input.value = '';
+      this.pendingSectionGroupId.set(null);
+    }
+  }
+
+  protected commitNewSection(groupId: string, name: string): void {
+    if (this.pendingSectionGroupId() !== groupId) return;
+    this.pendingSectionGroupId.set(null);
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    this.mutate(d => ({
+      ...d,
+      sections: [...d.sections, { id: `s${Date.now()}`, groupId, name: trimmed, target: null }],
+    }));
+    this.toast.flash(this.i18n.t('toast.section.added', { name: trimmed }));
+  }
+
+  protected renameSection(id: string, name: string): void {
+    // No rename pin here, unlike groups: sections keep the order they were
+    // arranged in, so a row cannot move out from under the cursor.
+    this.mutate(d => ({
+      ...d,
+      sections: d.sections.map(s => (s.id === id ? { ...s, name } : s)),
+    }));
+  }
+
+  /** Same "blank means unset" rule as a group's target. */
+  protected setSectionTarget(id: string, raw: string): void {
+    const parsed = Number.parseInt(raw.trim(), 10);
+    const target = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    this.mutate(d => ({
+      ...d,
+      sections: d.sections.map(s => (s.id === id ? { ...s, target } : s)),
+    }));
+  }
+
+  /**
+   * Removes a divider. Unlike a group this never refuses: a section holds
+   * nothing, it only labels, so its items simply fall into the unsectioned run
+   * of the same group. Their `sectionId` is cleared rather than left dangling —
+   * it would resolve to "no section" either way, but a stored reference to
+   * something deleted is a thing to explain later.
+   */
+  protected removeSection(id: string): void {
+    this.mutate(d => ({
+      ...d,
+      sections: d.sections.filter(s => s.id !== id),
+      items: d.items.map(item => (item.sectionId === id ? { ...item, sectionId: '' } : item)),
+    }));
+    this.toast.flash(this.i18n.t('toast.section.removed'));
+  }
+
+  /** Moves a section within its group; the array order is the display order. */
+  protected moveSection(groupId: string, from: number, to: number): void {
+    this.mutate(d => {
+      const mine = sectionsOf(d.sections, groupId);
+      const reordered = moveInList(mine, from, to);
+      if (reordered === mine) return d;
+      // Rebuilt by walking the original array and handing back the reordered
+      // ones in place, so sections of other groups keep their positions.
+      const queue = [...reordered];
+      return {
+        ...d,
+        sections: d.sections.map(s => (s.groupId === groupId ? queue.shift()! : s)),
+      };
+    });
+  }
+
+  /**
+   * Turns every sub-group of `groupId` into a divider of it.
+   *
+   * This is the migration for a tree that used sub-groups as separators, which
+   * is what they were reached for before there was anything else. Each child
+   * becomes a section carrying its name and its target, its items move up to
+   * the parent under that section, and the child group is deleted. Order starts
+   * alphabetical — the order those children were already displayed in — and is
+   * then the user's to arrange, which is the whole point.
+   */
+  protected convertChildrenToSections(groupId: string): void {
+    const draft = this.draft();
+    if (!draft) return;
+    const children = childrenOf(draft.groups, groupId);
+    if (!children.length) return;
+
+    const sections: Section[] = children.map((child, index) => ({
+      id: `s${Date.now()}${index}`,
+      groupId,
+      name: child.name,
+      target: child.target,
+    }));
+    const sectionByGroup = new Map(children.map((child, index) => [child.id, sections[index].id]));
+
+    this.mutate(d => ({
+      ...d,
+      groups: d.groups.filter(g => !sectionByGroup.has(g.id)),
+      sections: [...d.sections, ...sections],
+      items: d.items.map(item => {
+        const sectionId = sectionByGroup.get(item.groupId);
+        return sectionId ? { ...item, groupId, sectionId } : item;
+      }),
+    }));
+    this.toast.flash(this.i18n.t('toast.section.converted', { n: children.length }));
   }
 
   // --- sharing ---

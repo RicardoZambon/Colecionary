@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decisões técnicas · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="decisions">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">11 · Referência</p>
+<h1>Registro de decisões técnicas</h1>
+<p class="lede">
+  Trinta e oito decisões que dão forma a esta aplicação, no formato contexto →
+  decisão → consequência → onde é imposta. Elas foram extraídas do código e das
+  suas justificativas escritas; nenhuma é aspiracional. Clique para abrir.
+</p>
+
+<div class="callout plain">
+  <span class="label">Como ler</span>
+  <p>
+    “Onde é imposta” é o que impede a decisão de ser revertida por acidente — um
+    teste, uma verificação de build, uma validação de startup. Uma decisão sem
+    isso depende só de revisão humana, e está marcada
+    <span class="tag warn">só por convenção</span>.
+  </p>
+</div>
+
+<h2 id="dados">Dados e tenancy</h2>
+
+<details class="adr" open>
+  <summary><span class="id">ADR-01</span> Isolamento de tenant é do banco, não dos serviços</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um filtro escrito à mão funciona nas queries em que alguém lembrou, e vaza na primeira em que alguém esqueceu — sem erro nenhum.</dd>
+    <dt>Decisão</dt><dd>Toda entidade que pertence a um tenant implementa <code>ITenantOwned</code>; <code>VaultDbContext</code> aplica <code>e.TenantId == CurrentTenantId</code> por convenção em <code>OnModelCreating</code>, e <code>TenantStampingInterceptor</code> carimba na inserção e recusa qualquer escrita com tenant estrangeiro.</dd>
+    <dt>Consequência</dt><dd>Uma entidade nova entra no esquema implementando uma interface. Ninguém escreve <code>WHERE TenantId = …</code>. As poucas leituras sem filtro são nominais e justificadas no código.</dd>
+    <dt>Imposta por</dt><dd><code>TenantIsolationTests</code> (integração — única cobertura)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-02</span> Chaves primárias compostas por tenant</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Ids públicos de coleção, grupo e item são gerados pelo cliente ou copiados de um listing do store, portanto não são globalmente únicos.</dd>
+    <dt>Decisão</dt><dd><code>(TenantId, Id)</code> para coleções e <code>(TenantId, CollectionId, Id)</code> para os filhos.</dd>
+    <dt>Consequência</dt><dd>Referência entre tenants é impossível no nível do banco, e dois tenants podem possuir o mesmo id público — ambos importando <code>store_ps1</code>.</dd>
+    <dt>Imposta por</dt><dd><code>BothTenantsCanImportTheSameStoreListing</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-03</span> Um repositório por raiz de agregado, nunca genérico</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um repositório genérico empurra mecânica de EF para dentro de serviços, e faz “carregar o grafo” virar responsabilidade de quem chama.</dd>
+    <dt>Decisão</dt><dd>Controllers finos; comportamento em Application; mecânica de EF em Infrastructure, com um repositório por raiz.</dd>
+    <dt>Consequência</dt><dd><code>ReplaceGraph</code> e <code>MergeByKey</code> vivem num lugar só, o que é exatamente o que torna o PUT de documento inteiro auditável.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span> (regra de CLAUDE.md)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-04</span> A coleção é salva como documento inteiro; não há endpoints de grupo</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Grupos, itens e membros são um grafo que o cliente edita como uma unidade.</dd>
+    <dt>Decisão</dt><dd><code>PUT /api/collections/{id}</code> substitui tudo; <code>ReplaceGraph</code>/<code>MergeByKey</code> apagam o que o payload não carrega. Itens ganham um upsert próprio por conveniência, guardado pela mesma versão.</dd>
+    <dt>Consequência</dt><dd>Simples e previsível — e perigoso: é justamente o que torna a precondição obrigatória (ADR-05) e a coleta em carência (ADR-14) necessárias.</dd>
+    <dt>Imposta por</dt><dd><code>ContractTests</code> (PUT três vezes, o terceiro limpando campos de volta a null)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-32</span> Schemas explícitos e nomes PascalCase</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Objeto que resolve pelo schema padrão de quem chama é uma superfície de erro silenciosa, e um banco de schema único impede <code>GRANT</code> por área.</dd>
+    <dt>Decisão</dt><dd>Schemas declarados só em <code>VaultSchemas</code> (<code>Identity</code>, <code>Catalog</code>, <code>Store</code>, <code>Storage</code>); toda configuração chama <code>ToTable("Nome", VaultSchemas.X)</code>; colunas em PascalCase, colunas JSON incluídas.</dd>
+    <dt>Consequência</dt><dd><code>dbo.__EFMigrationsHistory</code> fica onde está (o EF a lê antes de poder migrar), e migrations anteriores ao rename citam os nomes antigos — corretamente.</dd>
+    <dt>Imposta por</dt><dd><code>TableNamingConventionTests</code> (quebra o build)</dd>
+  </dl></div>
+</details>
+
+<h2 id="concorrencia-adr">Concorrência</h2>
+
+<details class="adr">
+  <summary><span class="id">ADR-05</span> A precondição <code>If-Match</code> é obrigatória</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Uma precondição opcional protege apenas os clientes que já lembravam de enviá-la — que é exatamente o conjunto de clientes que nunca iam perder o trabalho de ninguém.</dd>
+    <dt>Decisão</dt><dd>Escrita sem precondição utilizável responde <strong>428</strong>; com tag superada, <strong>412</strong>. Ambos não escrevem nada. <code>*</code> sozinho e tags fracas também são 428.</dd>
+    <dt>Consequência</dt><dd>Mudança quebradora para qualquer cliente existente — havia exatamente um, neste repositório, atualizado na mesma alteração.</dd>
+    <dt>Imposta por</dt><dd><code>APutWithNoIfMatch_IsRefused_AndWritesNothing</code>, <code>AnItemWrite_NeedsItsCollectionsVersion</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-06</span> <code>Version</code> é um contador do agregado, não um <code>rowversion</code></summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Uma edição de item não escreve coluna nenhuma em <code>Collections</code>, e um <code>rowversion</code> só se move quando a própria linha é atualizada — precisamente o caso que uma edição de item não é.</dd>
+    <dt>Decisão</dt><dd>Contador <code>int</code> com <code>IsConcurrencyToken()</code>, avançado por <code>CollectionVersionInterceptor</code> sempre que <em>qualquer</em> entidade sob a coleção muda. O interceptor <strong>lança</strong> se um filho for escrito sem a coleção em escopo.</dd>
+    <dt>Consequência</dt><dd>Granularidade de coleção: duas pessoas editando itens diferentes da mesma coleção — uma é recusada. Recusar demais custa um reload; recusar de menos custa o trabalho.</dd>
+    <dt>Imposta por</dt><dd><code>WhenBothWritersPassTheirPrecondition_TheDatabaseStillLetsOnlyOneThrough</code> (o único teste que falha se o token for removido), <code>RewritingOnlyAnItemsJsonColumn_StillMovesTheVersion</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-07</span> A versão viaja fora do DTO</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd><code>CollectionDto</code> é byte a byte o que um arquivo exportado guarda.</dd>
+    <dt>Decisão</dt><dd>A versão chega pelo header <code>ETag</code> e por um envelope <code>{ version, collection }</code> na listagem. Nunca como campo do DTO. <code>CollectionVersions.ToETag</code> formata num lugar só, e nada fora dele lê os dígitos.</dd>
+    <dt>Consequência</dt><dd>Token de concorrência não entra num backup, e trocar por <code>rowversion</code> depois não tocaria uma linha do frontend. Custo: <code>ETag</code> precisa estar em <code>WithExposedHeaders</code> do CORS, senão toda gravação após a primeira é recusada em deploy cross-origin.</dd>
+    <dt>Imposta por</dt><dd><code>EveryCollectionInTheListCarriesTheVersionAWriteMustQuote</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-08</span> Os deletes não exigem precondição, mas honram a que recebem</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um delete é intenção sobre a identidade de um recurso, não sobre um documento derivado de uma leitura. Recusar um ato destrutivo deliberado e confirmado porque um item não relacionado se moveu custaria um reload e não compraria nada.</dd>
+    <dt>Decisão</dt><dd><code>IfMatch.Optional</code>: nada é exigido, mas um <code>If-Match</code> enviado é avaliado (RFC 9110 §13.1.1). Ambos os deletes ainda movem a versão.</dd>
+    <dt>Consequência</dt><dd>Como <code>Version</code> é token de concorrência, um delete que corre com escrita concorrente é recusado com 412 mesmo sem precondição. Corrida rara, segura e retentável.</dd>
+    <dt>Imposta por</dt><dd><code>ADeleteOffersNoPrecondition_ButIsHeldToOneItSends</code></dd>
+  </dl></div>
+</details>
+
+<h2 id="imagens-adr">Imagens</h2>
+
+<details class="adr">
+  <summary><span class="id">ADR-09</span> Bytes fora do banco, um diretório por tenant</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Blobs em SQL tornam backup, cota e cópia por tenant impossíveis de oferecer honestamente.</dd>
+    <dt>Decisão</dt><dd><code>IImageStore</code>; <code>FileSystemImageStore</code> grava <code>{Root}/{tenantId}/{imageId}.{ext}</code>. A linha em <code>Storage.Images</code> é só metadado. Upload grava o arquivo antes da linha.</dd>
+    <dt>Consequência</dt><dd>As imagens de um tenant são uma unidade que se copia, se limita ou se apaga. <strong>E passam a precisar de volume próprio no deploy</strong> — que a imagem não declara.</dd>
+    <dt>Imposta por</dt><dd><code>FileSystemImageStoreTests</code>, <code>ImageStorageAndExportTests</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-10</span> A leitura de imagem é anônima; o GUID é a capacidade</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um <code>&lt;img&gt;</code> não anexa <code>Authorization</code>.</dd>
+    <dt>Decisão</dt><dd><code>GET /api/images/{id}</code> é <code>[AllowAnonymous]</code>, e o tenant é resolvido <strong>da própria linha da imagem</strong> antes de tocar o storage. A escrita de enquadramento é o oposto: filtrada por tenant.</dd>
+    <dt>Consequência</dt><dd>Um GUID adivinhado só resolve dentro do tenant que o possui. Quem tem o link vê a foto — follow-up: URL assinada.</dd>
+    <dt>Imposta por</dt><dd><code>ImageFocalTests</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-11</span> Enquadramento é ponto focal, nunca corte</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A UI recorta a mesma foto em proporções de 1:1 a ~9:1. Gerar um arquivo por superfície multiplica armazenamento e invalida ao primeiro ajuste.</dd>
+    <dt>Decisão</dt><dd><code>FocalX</code>/<code>FocalY</code> (0–1) na linha da imagem; toda superfície renderiza com <code>background-size: cover</code> e um <code>background-position</code>. Null = nunca enquadrada. Os bytes nunca mudam.</dd>
+    <dt>Consequência</dt><dd>Um ajuste corrige card, galeria e banner de uma vez; o id e sua URL <code>immutable</code> seguem válidos; uma superfície que ainda não existe já está enquadrada.</dd>
+    <dt>Imposta por</dt><dd><code>ImageFocalMappingTests</code>, <code>focal.util.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-12</span> Upload e enquadramento são atos separados</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Já foram um passo só. Isso fazia fechar o editor destruir o upload, e tornava o primeiro arquivo de um lote o único enquadrável — ou escolhível como capa.</dd>
+    <dt>Decisão</dt><dd><code>PhotoUploadService</code> envia assim que os arquivos são escolhidos, um por vez, com progresso. <code>ImageFocusService.frame(id, usage)</code> abre o editor sobre uma foto já armazenada.</dd>
+    <dt>Consequência</dt><dd>O overlay é sempre seguro de dispensar. Nunca reintroduza um passo de enquadramento que bloqueie um upload.</dd>
+    <dt>Imposta por</dt><dd><code>photo-upload.service.spec.ts</code>, <code>image-focus.service.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-13</span> Variantes nomeadas pelo cliente; WebP; GIF nunca derivado</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um card de 215×116 baixando uma foto de celular de 4 MB.</dd>
+    <dt>Decisão</dt><dd>Três variantes (<code>thumb</code> 400 px, <code>display</code> 1400 px, <code>full</code>), como query parameter. Derivadas em WebP q82 no upload, sob demanda para o que é mais antigo. GIF é excluído da derivação.</dd>
+    <dt>Consequência</dt><dd>Deixar a variante para o padrão do servidor dá duas URLs — e duas entradas de cache — para a mesma foto. Uma derivação que falha cai para o original: foto lenta, não foto ausente.</dd>
+    <dt>Imposta por</dt><dd><code>ImageVariantTests</code>, <code>ImageDerivationTests</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-14</span> Coleta mark-and-sweep, com carência, inerte por padrão</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Apagar no instante da desreferência acopla destruição irreversível ao PUT de documento inteiro. Não há backup em lugar nenhum do sistema.</dd>
+    <dt>Decisão</dt><dd>A varredura marca <code>UnreferencedSinceUtc</code>, qualquer escrita limpa a marca, e só depois da carência inteira (padrão 30 dias) os bytes são destruídos. Padrões: <code>Enabled: false</code> e <code>DryRun: true</code>; carência abaixo de 1 h <strong>falha no startup</strong>.</dd>
+    <dt>Consequência</dt><dd>Enquanto a marca existe a imagem não é degradada em nada. Uma desreferência acidental percebida dentro da janela custa zero e não precisa de restore.</dd>
+    <dt>Imposta por</dt><dd><code>ImageGarbageCollectorTests</code> (19 casos), validação de opções no startup</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-15</span> Alcançabilidade é calculada em todos os tenants</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Fora de uma requisição o filtro global resolve contra nenhum tenant, e calcularia um conjunto de referências <strong>vazio</strong> — isto é, “colete tudo”.</dd>
+    <dt>Decisão</dt><dd><code>ListReferencedImageIdsAcrossAllTenantsAsync</code> usa <code>IgnoreQueryFilters()</code> em toda query. Além disso: coletar referências demais é a direção segura, e uma referência cross-tenant é uma que de fato renderiza.</dd>
+    <dt>Consequência</dt><dd>É a linha mais perigosa da aplicação. Uma limpeza de aparência plausível que a remova é perda total de dados.</dd>
+    <dt>Imposta por</dt><dd><code>ImageGarbageCollectionTests</code> — <strong>apenas</strong> na suíte de Testcontainers</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-16</span> O coletor não tem endpoint nem CLI</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>O contrato da API espelha <code>VaultApi</code> um a um.</dd>
+    <dt>Decisão</dt><dd>Só um <code>BackgroundService</code>, registrado apenas com <code>ImageGc:Enabled=true</code>.</dd>
+    <dt>Consequência</dt><dd>Uma rota que nenhum usuário chama seria mudança de contrato dos dois lados, e um endpoint autenticado que apaga dados permanentemente é superfície de ataque comprada por nada.</dd>
+    <dt>Imposta por</dt><dd>Registro condicional em <code>Program.cs</code></dd>
+  </dl></div>
+</details>
+
+<h2 id="modelo-adr">Modelo de domínio</h2>
+
+<details class="adr">
+  <summary><span class="id">ADR-17</span> Posse é derivada de <code>copies</code></summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um item pode ter vários exemplares, cada um com condição, preço e status próprios.</dd>
+    <dt>Decisão</dt><dd>Sem flag <code>owned</code> e sem condição/preço no item. Pelo menos uma cópia = possuído; nenhuma = lista de desejos. Tudo passa por <code>core/utils/copies.util.ts</code>.</dd>
+    <dt>Consequência</dt><dd><code>ItemDto</code> faz round-trip GET → PUT, e um valor que o servidor calcula mas ignora na entrada dessincronizaria em silêncio.</dd>
+    <dt>Imposta por</dt><dd><code>copies.util.spec.ts</code>, <code>DtoMapperTests</code>, migration <code>AddItemCopies</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-18</span> Um item não estimado vale o que custou — e diz isso</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd><code>item.value === 0</code> é a única forma de dizer “nunca estimado”, e manter estimativa de mercado atualizada é trabalho que ninguém faz. Ler isso como “vale zero” esvaziava o total e fazia o painel reportar −100% por item.</dd>
+    <dt>Decisão</dt><dd>Cadeia <code>copy.value ?? item.value ?? copy.price</code>, resolvida <strong>só</strong> em <code>copyValue</code>. <code>valueIsPaid</code> sinaliza, e o pipe <code>itemValue</code> renderiza <code>≈ $85</code>; ausência genuína vira <code>—</code>.</dd>
+    <dt>Consequência</dt><dd>Card, tabela, página do item, totais de grupo e ordenação por valor não podem discordar, e a substituição nunca é silenciosa.</dd>
+    <dt>Imposta por</dt><dd><code>copies.util.spec.ts</code>, <code>item-value.pipe.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-19</span> Grupos listam alfabeticamente; ordem manual é só dos itens</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Nada persiste posição para um grupo. A ordem do array é só a ordem em que foram criados, o que não diz nada ao leitor.</dd>
+    <dt>Decisão</dt><dd><code>childrenOf</code> ordena por nome com colator numérico e acento-insensível; <code>flattenTree</code>/<code>visibleTree</code> se apoiam nele. Ordem manual de <em>itens</em> é a ordem do array, persistida por índice — não há <code>sortOrder</code> no DTO de item.</dd>
+    <dt>Consequência</dt><dd>Sidebar, dashboard, seletor do formulário e lista de configurações não podem discordar. A exceção é o rename inline, que congela a ordem enquanto o campo tem foco — reordenar moveria o input no DOM e o desfocaria.</dd>
+    <dt>Imposta por</dt><dd><code>groups.util.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-20</span> Nulls que significam herança sobrevivem ao round-trip</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A coleção é salva como documento inteiro. Um campo <code>undefined</code> volta como deleção.</dd>
+    <dt>Decisão</dt><dd><code>currency</code>, <code>sort</code>, <code>target</code>, <code>focal</code> e <code>copy.value</code> são obrigatórios-e-anuláveis, nunca opcionais, e nunca resolvidos na escrita. <code>ReplaceGraph</code> copia por atribuição simples, jamais por coalesce.</dd>
+    <dt>Consequência</dt><dd>Um coalesce esquecido torna impossível limpar um campo de volta; uma atribuição esquecida faz o campo salvar na criação e nunca mais mudar, em silêncio.</dd>
+    <dt>Imposta por</dt><dd><code>ContractTests</code> (três PUTs, o terceiro limpando)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-21</span> <code>target</code> abaixo do já catalogado é aceito</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Grupos e itens chegam no mesmo documento.</dd>
+    <dt>Decisão</dt><dd>O validador aceita null ou <code>1..100_000</code> e não cruza com a contagem de itens.</dd>
+    <dt>Consequência</dt><dd>Cruzar tornaria impossível declarar um target antes de catalogar, e travaria a coleção inteira até o usuário apagar itens. O excedente é um problema de exibição.</dd>
+    <dt>Imposta por</dt><dd><code>ValidatorTests</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-22</span> Moeda é um código, herda por null, e nunca é somada entre moedas</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>“R$” e “$” são renderizações de um código num locale, e quem renderiza é o <code>Intl.NumberFormat</code>. Guardar o símbolo congelaria uma grafia no banco e ainda deixaria os separadores para adivinhar.</dd>
+    <dt>Decisão</dt><dd>ISO 4217 em <code>Tenant.DefaultCurrency</code>, com override anulável na coleção. Lista curada nos dois lados (<code>Money.SupportedCurrencies</code> ↔ <code>SUPPORTED_CURRENCIES</code>). Duas decimais, arredondando <strong>para cima</strong> ao centavo (<code>ceilToCents</code>). <code>ownedValueByCurrency</code> devolve uma linha por moeda.</dd>
+    <dt>Consequência</dt><dd>O idioma move separadores e a grafia do símbolo, nunca a moeda: pt-BR escreve USD como <code>US$ 4.200,00</code>. Somar BRL com USD não é uma quantidade de dinheiro em nenhuma das duas.</dd>
+    <dt>Imposta por</dt><dd><code>CurrencyTests</code>, <code>CurrencySettingsTests</code>, <code>currency.util.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+
+<details class="adr">
+  <summary><span class="id">ADR-39</span> Separador é uma entidade própria (<code>Section</code>), não mais um nível da árvore</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Sem outra ferramenta, sub-grupos viravam separadores: “Bonecos ▸ Diecast ▸ 1987–1991 ▸ Original Bandai ▸ <strong>Espanha</strong>” terminava a taxonomia, e “Cavaleiros de Bronze / Prata / Ouro” eram só categorias para arrumar os itens de Espanha. Como grupos, elas custavam caro — <code>defaultView(hasChildren)</code> abria Espanha num painel de cards, nunca numa lista com os três lado a lado; a listagem era alfabética, e <strong>Bronze → Prata → Ouro é uma progressão de casta</strong> que o alfabeto lê Bronze, Ouro, Prata; e cada uma podia declarar campos e ordenação, fragmentando justamente a lista que ela dividia.</dd>
+    <dt>Alternativas</dt><dd><strong>(a)</strong> Um flag <code>Group.IsSection</code>: resolveria a migração de graça, mas obrigaria todo caminhamento de árvore a filtrar por tipo, e o primeiro filtro esquecido põe um separador no breadcrumb — o tipo tem que tornar isso irrepresentável. <strong>(b)</strong> Agrupar por um campo customizado (<code>Casta: Bronze</code>): zero entidade nova e reaproveita a herança de campos, mas não tem ordem manual — o mesmo Bronze/Ouro/Prata de novo — nem meta por faixa, e renomear significa reescrever todos os itens. Continua sendo uma boa <em>visão</em> futura, ao lado das seções.</dd>
+    <dt>Decisão</dt><dd>Uma tabela <code>Catalog.Sections</code> e <code>Item.SectionId</code>. A seção tem nome, <code>Target</code> e <strong><code>SortOrder</code></strong>; deliberadamente não tem <code>ParentId</code>, <code>Fields</code> nem <code>Sort</code>. No frontend ela <strong>ordena, não escopa</strong>: é a chave primária de <code>sortItems</code>, e <code>chunkBySection</code> só corta a lista já ordenada.</dd>
+    <dt>Consequência</dt><dd>Espanha volta a abrir na grade, com as três faixas visíveis e na ordem que o usuário arrumou. As setas ← → da página do item, <code>scopeItems</code>, <code>subtreeIds</code>, a árvore e o breadcrumb não mudaram nada — andam pela mesma lista plana. O preço é uma quarta entidade no agregado, que <code>ReplaceGraph</code> e <code>CollectionVersionInterceptor</code> precisam conhecer; um bloco <code>MergeByKey</code> esquecido lá é update perdido em silêncio.</dd>
+    <dt>Imposta por</dt><dd><code>ContractTests</code>, <code>ValidatorTests</code>, <code>ArchiveTests</code>, <code>sections.util.spec.ts</code>, <code>sort.util.spec.ts</code>, <code>browse.util.spec.ts</code>, <code>group-stats.util.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-40</span> <code>?s=</code> é um filtro, e a conversão de sub-grupos é do usuário</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Uma seção longa merece poder ser isolada, e as árvores que já usam sub-grupos como separadores precisam de um caminho de volta.</dd>
+    <dt>Decisão</dt><dd><code>?s=</code> entra em <code>BrowseCriteria</code> ao lado de <code>?cond=</code> e <code>?own=</code>, e o cabeçalho da faixa é um <code>&lt;button aria-pressed&gt;</code> que alterna — não um destino de breadcrumb. <code>groupLinkParams</code> descarta <code>?s=</code> ao trocar de grupo. A conversão “sub-grupos → seções” é uma ação explícita nas configurações e só aparece quando <strong>todos</strong> os filhos são convertíveis (sem filhos, sem campos, sem sort).</dd>
+    <dt>Consequência</dt><dd>Como filtro, a seção não custa nada às setas do item nem ao breadcrumb. A conversão parcial é recusada de propósito: deixaria o grupo com filhos <em>e</em> seções, e ele continuaria abrindo num painel de cards — exatamente o que se estava consertando. Remover uma seção nunca é recusado (ao contrário de um grupo com itens): ela rotula, não contém, então os itens só caem na faixa “sem seção”.</dd>
+    <dt>Imposta por</dt><dd><code>browse-params.spec.ts</code>, <code>collection-settings-page.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<h2 id="seguranca-adr">Segurança</h2>
+
+<details class="adr">
+  <summary><span class="id">ADR-23</span> Throttle de login em duas dimensões, com estado em memória</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Só o endereço é fraco contra botnet e pune quem está atrás de um NAT. Só a conta entrega negação de serviço contra um usuário nomeado.</dd>
+    <dt>Decisão</dt><dd>Conta (10/5 min, penalidade dobrando até 30 min) <em>e</em> endereço (30/5 min, 8 em voo, penalidade fixa). Senha correta nunca é limitada. A conta é cobrada dentro do mesmo lock que verifica.</dd>
+    <dt>Consequência</dt><dd>Um deploy zera os contadores e uma implantação escalada limita por nó. A forma durável é uma tabela <code>Identity.LoginAttempts</code>, deliberadamente não tenant-owned.</dd>
+    <dt>Imposta por</dt><dd><code>LoginThrottleTests</code> (21 unitários + 9 de integração, com casos concorrentes)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-24</span> Chaves de conta normalizadas, com trim por último</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Se a chave do usuário conhecido e a do desconhecido divergirem, 429-vs-401 responde se uma conta existe.</dd>
+    <dt>Decisão</dt><dd>Chave = e-mail armazenado quando o usuário existe; senão, a mesma normalização do digitado — limitada, sem caracteres que a colação pesa como nada, dobrada em largura, minúscula, e <strong>trimada por último</strong>. <code>FindForLoginAsync</code> nomeia <code>Latin1_General_CI_AS</code>.</dd>
+    <dt>Consequência</dt><dd>Sobredobrar só faz duas grafias estranhas compartilharem orçamento, o que é inofensivo. Subdobrar reabre o oráculo.</dd>
+    <dt>Imposta por</dt><dd><code>LoginThrottleTests</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-25</span> <code>UseForwardedHeaders</code> é opt-in</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Confiar no header incondicionalmente deixaria qualquer chamador nomear o próprio endereço e cunhar um orçamento por palpite — pior do que não ter a dimensão de endereço.</dd>
+    <dt>Decisão</dt><dd>Só roda com <code>ForwardedHeaders:KnownProxies</code> preenchido. Apenas <code>XForwardedFor</code>, <code>ForwardLimit = 1</code>, e <strong>as duas</strong> listas de confiança limpas antes de popular. Valor não-IP impede o boot.</dd>
+    <dt>Consequência</dt><dd>Sem configurar, atrás de proxy todos caem num bucket e 30 falhas de qualquer um respondem 429 para a implantação inteira.</dd>
+    <dt>Imposta por</dt><dd>Validação no boot</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-26</span> Autorização deny-by-default</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Endpoint novo esquecido é a forma clássica de vazamento.</dd>
+    <dt>Decisão</dt><dd><code>FallbackPolicy = DefaultPolicy</code>. Anônimo exige <code>[AllowAnonymous]</code> explícito — e o fallback do SPA precisa dele, senão o shell devolveria 401.</dd>
+    <dt>Consequência</dt><dd>A lista de rotas anônimas é curta e auditável.</dd>
+    <dt>Imposta por</dt><dd>Configuração em <code>Program.cs</code></dd>
+  </dl></div>
+</details>
+
+<h2 id="arquivos-adr">Arquivos e localização</h2>
+
+<details class="adr">
+  <summary><span class="id">ADR-27</span> Sobrescrever é decisão do usuário: 409 + plano, e um segundo upload</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Sobrescrever passa pelo mesmo <code>ReplaceGraph</code> do PUT: um item que o arquivo não tem é um item que a coleção perde.</dd>
+    <dt>Decisão</dt><dd>Colisão por nome (trim, case-insensitive) responde 409 com <code>ImportPlan</code> e não escreve nada. O cliente reenvia o mesmo arquivo com <code>?confirmed=true&amp;replace=…&amp;replaceVersion=…</code>, duas listas paralelas.</dd>
+    <dt>Consequência</dt><dd>Parquear o primeiro upload no servidor custaria um stash com tempo de vida, expiração e limpeza; um retry sem estado não tem nada disso — e um arquivo sem nada a perguntar nunca paga esse preço.</dd>
+    <dt>Imposta por</dt><dd><code>Import_RefusesAnOverwriteDecidedAgainstAVersionThatHasMovedOn</code>, <code>CollectionArchiveTests</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-28</span> Versionamento de arquivo é unidirecional</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um layout mais novo pode ter movido ou re-escopado um campo. Lê-lo sob as formas de hoje não falharia: teria sucesso em silêncio.</dd>
+    <dt>Decisão</dt><dd>Mais antigo é legível; mais novo é recusado. Manifest ausente = v1. O bump só é devido quando um leitor que não conhece a mudança leria errado.</dd>
+    <dt>Consequência</dt><dd>Adicionar campo opcional é grátis; renomear, mudar significado ou mudar unidade custa uma versão. A verificação roda antes do primeiro byte escrito.</dd>
+    <dt>Imposta por</dt><dd><code>ArchiveTests</code> (<code>ArchiveCompatibility</code> é puro e unitário)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-29</span> Imagens de arquivo são copiadas, nunca referenciadas</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um id num arquivo pertence a quem exportou.</dd>
+    <dt>Decisão</dt><dd>Cada foto é gravada de novo sob um id novo no tenant que importa, e cada referência é remapeada. O enquadramento vem em <code>images.json</code>.</dd>
+    <dt>Consequência</dt><dd>Sem <code>images.json</code>, um arquivo restauraria toda foto centralizada e o enquadramento seria perdido em silêncio.</dd>
+    <dt>Imposta por</dt><dd><code>CollectionArchiveTests</code>, <code>CollectionImagesTests</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-30</span> Localização no servidor, e a ordem do middleware é carga estrutural</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>O handler de exceção monta o título enquanto a exceção <em>sobe</em> o pipeline.</dd>
+    <dt>Decisão</dt><dd><code>UseRequestLocalization</code> antes de <code>UseExceptionHandler</code>, nos dois hosts. Generalizando: <strong>qualquer coisa que produza texto localizado roda a jusante dele</strong> — o 429 do throttle inclusive, o que é por que a verificação vive dentro da action.</dd>
+    <dt>Consequência</dt><dd>Nenhum teste asserta literal visível ao usuário; todos vão por <code>Messages.In(name, culture)</code>.</dd>
+    <dt>Imposta por</dt><dd><code>LocalizationTests</code> (ordem), <code>MessageResourceTests</code> (paridade)</dd>
+  </dl></div>
+</details>
+
+<h2 id="frontend-adr">Frontend e entrega</h2>
+
+<details class="adr">
+  <summary><span class="id">ADR-31</span> Tokens de design apenas, e uma única biblioteca de elementos</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Sete temas trocáveis, e uma reconciliação de marca pendente.</dd>
+    <dt>Decisão</dt><dd>Toda cor, fonte, raio, borda e sombra vem de custom properties em <code>styles/_themes.scss</code>. Botões, inputs, chips etc. são sempre os componentes <code>ui-*</code>; precisa de variante, estenda o componente.</dd>
+    <dt>Consequência</dt><dd>Um rebrand inteiro é uma mudança em um arquivo. Um hex literal quebra 6 dos 7 temas — e só aparece nos escuros, que é por que a verificação exige exercitar em um tema escuro.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span> + orçamento de 6 kB por componente no build</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-33</span> A URL é o estado, e query string é entrada não confiável</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Uma página de item precisa reconstruir exatamente a lista que a grade mostrava para oferecer os vizinhos.</dd>
+    <dt>Decisão</dt><dd>Grupo, visualização, filtros e ordenação vivem em query params, parseados em <code>browse-params.ts</code>; a lista visível vem só de <code>browse.util.ts</code>. Navegação interna preserva a query; <code>groupLinkParams</code> mantém filtros e descarta a ordem ad-hoc.</dd>
+    <dt>Consequência</dt><dd>Uma condição desconhecida lê como “sem filtro”, nunca como “filtra tudo fora”. Filtros navegam com <code>replaceUrl</code>, então voltar não desfaz seis cliques.</dd>
+    <dt>Imposta por</dt><dd><code>browse-params.spec.ts</code>, <code>browse.util.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-34</span> <code>en.ts</code> declara as chaves; os pipes de tradução são impuros</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um pipe puro é memoizado pelos argumentos.</dd>
+    <dt>Decisão</dt><dd><code>MessageKey = keyof typeof en</code>, e <code>pt-BR.ts</code> é <code>Record&lt;MessageKey, string&gt;</code> — chave faltando ou sobrando é erro de compilação. <code>t</code> e <code>money</code> são <code>pure: false</code>.</dd>
+    <dt>Consequência</dt><dd>Trocar de idioma repinta tudo. Um pipe puro congelaria toda a tela no idioma antigo. <strong>Não “otimize” isso.</strong></dd>
+    <dt>Imposta por</dt><dd>Tipagem (build), <code>t.pipe.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-35</span> Tudo passa pelo <code>VaultApi</code> abstrato; não há dados mockados</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um mock no frontend vira uma segunda definição do contrato, que diverge.</dd>
+    <dt>Decisão</dt><dd><code>VaultApi</code> é classe abstrata usada como token de DI; <code>HttpVaultApi</code> é a única implementação. Dados de demonstração vivem no seeder do backend.</dd>
+    <dt>Consequência</dt><dd>Uma segunda implementação seria troca de uma linha em <code>app.config.ts</code>. <code>ImagesApi</code> e <code>ArchiveApi</code> ficam <em>ao lado</em>, porque lidam com binário e não com o grafo de DTOs.</dd>
+    <dt>Imposta por</dt><dd><code>http-vault-api.spec.ts</code>, <code>ContractTests</code> do outro lado</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-36</span> Uma imagem única serve API e SPA</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Auto-hospedagem por quem não quer orquestrar dois serviços.</dd>
+    <dt>Decisão</dt><dd>Build em três estágios; o SPA vai para <code>wwwroot</code>. Estáticos antes de auth; <code>index.html</code> nunca cacheado; <code>/api/{**path}</code> não casado responde 404 JSON antes do fallback do SPA.</dd>
+    <dt>Consequência</dt><dd>Um processo, uma porta, amd64 apenas. Em desenvolvimento os dois rodam separados, o que é por que o CORS precisa expor headers de resposta explicitamente.</dd>
+    <dt>Imposta por</dt><dd><code>Dockerfile</code>, job <code>image-check</code> nos PRs</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-37</span> Wizard de primeiro uso com laço de host e token no log</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A senha do admin e a chave JWT gerada não podem tocar o disco antes de o bootstrap do banco dar certo.</dd>
+    <dt>Decisão</dt><dd>Um laço em volta da construção da aplicação, no mesmo processo do SO. Autenticação do wizard = um token de uso único impresso no log do contêiner. Falha no boot encenado volta ao modo setup exibindo o erro.</dd>
+    <dt>Consequência</dt><dd>Configurar exige acesso ao log — que é o mesmo nível de acesso de quem opera o contêiner. Depois de configurado, as rotas nem são mapeadas, e o 404 é o sinal de “pronto”.</dd>
+    <dt>Imposta por</dt><dd><code>SetupCoordinator</code>, guards do SPA</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-38</span> Todos os portões num único job de CI</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Proteção de branch exige um check por nome, e só um admin adiciona nomes àquela lista.</dd>
+    <dt>Decisão</dt><dd>Build, format, unitários, frontend e integração são <em>passos</em> do job “Build validation”. O job também verifica que os projetos de teste da solução são exatamente os que ele roda.</dd>
+    <dt>Consequência</dt><dd>Um portão movido para um job próprio deixaria de ser obrigatório em silêncio. O custo é rodar em série. Pague.</dd>
+    <dt>Imposta por</dt><dd>A guarda que compara com <code>Vault.slnx</code>, e <code>TreatNoTestsAsError=true</code> nas duas suítes</dd>
+  </dl></div>
+</details>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../../core/api/images-api';
 import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
+import { VaultConflictError } from '../../../core/api/vault-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CopyStatus, Item } from '../../../core/models';
@@ -71,6 +72,7 @@ export class ItemPage {
    * list rather than to whatever happens to come next in the collection.
    */
   readonly g = input<string | undefined>(undefined);
+  readonly s = input<string | undefined>(undefined);
   readonly cond = input<string | undefined>(undefined);
   readonly own = input<string | undefined>(undefined);
   readonly sort = input<string | undefined>(undefined);
@@ -131,10 +133,18 @@ export class ItemPage {
       collection.items,
       collection.groups,
       readCriteria(
-        { cond: this.cond(), own: this.own(), sort: this.sort(), dir: this.dir() },
+        {
+          s: this.s(),
+          cond: this.cond(),
+          own: this.own(),
+          sort: this.sort(),
+          dir: this.dir(),
+        },
         this.g() ?? null,
         this.store.query(),
+        collection.sections,
       ),
+      collection.sections,
     );
   });
 
@@ -151,10 +161,15 @@ export class ItemPage {
 
     const collection = this.collection();
     if (!collection) return inList;
-    const canonical = visibleItems(collection.items, collection.groups, {
-      groupId: this.g() ?? null,
-      ...NO_FILTERS,
-    });
+    const canonical = visibleItems(
+      collection.items,
+      collection.groups,
+      { groupId: this.g() ?? null, ...NO_FILTERS },
+      // The sections still apply: dropping the filters must not also reshuffle
+      // the fallback order, or the arrows would step through a sequence the
+      // grid never showed.
+      collection.sections,
+    );
     return { ...neighbours(canonical, this.itemId()), position: 0 };
   });
 
@@ -327,6 +342,11 @@ export class ItemPage {
         this.selectedPhoto.set(item.photoIds.length);
         this.toast.flash(this.i18n.t('toast.photo.added'));
       } catch (err) {
+        // A conflict already has the shell's notice; a second, vanishing
+        // message on top of it would only muddle what happened. The photo's
+        // bytes are safely uploaded either way — it is the item that did not
+        // save, and re-adding it after a reload costs no second upload.
+        if (err instanceof VaultConflictError) return;
         this.toast.flash(
           err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),
         );
@@ -344,17 +364,35 @@ export class ItemPage {
     const item = this.item();
     if (!item) return;
     // Owning something means having a copy of it — so add one.
-    await this.store.upsertItem(
-      this.collectionId(),
-      syncWantedTag({ ...item, copies: [...item.copies, newCopy()] }),
-    );
+    try {
+      await this.store.upsertItem(
+        this.collectionId(),
+        syncWantedTag({ ...item, copies: [...item.copies, newCopy()] }),
+      );
+    } catch (err) {
+      if (!(err instanceof VaultConflictError)) {
+        this.toast.flash(
+          err instanceof Error ? err.message : this.i18n.t('toast.item.saveFailed'),
+        );
+      }
+      return;
+    }
     this.toast.flash(this.i18n.t('toast.copy.added'));
   }
 
   protected async deleteItem(): Promise<void> {
     const item = this.item();
     if (!item) return;
-    await this.store.deleteItem(this.collectionId(), item.id);
+    try {
+      await this.store.deleteItem(this.collectionId(), item.id);
+    } catch (err) {
+      // Not navigating on a failed delete: leaving for a list that still shows
+      // the item would read as "it worked, but it is still there".
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.item.deleteFailed'),
+      );
+      return;
+    }
     this.toast.flash(this.i18n.t('toast.item.deleted'));
     void this.router.navigate(['/c', this.collectionId()], { queryParamsHandling: 'preserve' });
   }

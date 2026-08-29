@@ -79,6 +79,18 @@
   <data name="ProblemUnexpected" xml:space="preserve">
     <value>Algo deu errado</value>
   </data>
+  <data name="ProblemPreconditionRequired" xml:space="preserve">
+    <value>Pré-condição obrigatória</value>
+  </data>
+  <data name="ProblemPreconditionFailed" xml:space="preserve">
+    <value>Isto mudou em outro lugar</value>
+  </data>
+  <data name="IfMatchRequired" xml:space="preserve">
+    <value>Esta requisição precisa dizer qual versão da coleção está alterando. Recarregue a coleção e tente de novo.</value>
+  </data>
+  <data name="CollectionChangedElsewhere" xml:space="preserve">
+    <value>Esta coleção foi alterada em outro lugar depois que você a carregou, então salvar teria apagado essas alterações. Nada foi salvo.</value>
+  </data>
   <data name="FieldNamesMustBeUnique" xml:space="preserve">
     <value>Os nomes dos campos precisam ser únicos dentro de um grupo.</value>
   </data>
@@ -102,6 +114,9 @@
   </data>
   <data name="CopyIdsMustBeUnique" xml:space="preserve">
     <value>Os ids dos exemplares precisam ser únicos dentro de um item.</value>
+  </data>
+  <data name="SectionIdsMustBeUnique" xml:space="preserve">
+    <value>Os ids das seções precisam ser únicos dentro de uma coleção.</value>
   </data>
   <data name="ConditionInvalid" xml:space="preserve">
     <value>O estado precisa ser Mint, Good ou Fair.</value>
@@ -132,6 +147,9 @@
   </data>
   <data name="ArchiveUnreadable" xml:space="preserve">
     <value>Esse arquivo não é um backup do Vault.</value>
+  </data>
+  <data name="ReplaceDecisionsMalformed" xml:space="preserve">
+    <value>Cada coleção escolhida para ser substituída precisa ser enviada com a versão em que estava. Tente a importação de novo.</value>
   </data>
   <data name="ArchiveHasNoCollections" xml:space="preserve">
     <value>Este backup não tem nenhuma coleção para importar.</value>
@@ -180,6 +198,9 @@
   </data>
   <data name="InvalidCredentials" xml:space="preserve">
     <value>E-mail ou senha inválidos</value>
+  </data>
+  <data name="TooManyLoginAttempts" xml:space="preserve">
+    <value>Tentativas de entrada demais. Espere alguns minutos e tente de novo.</value>
   </data>
   <data name="UnknownGroupFieldType" xml:space="preserve">
     <value>Tipo de campo de grupo desconhecido: '{0}'.</value>

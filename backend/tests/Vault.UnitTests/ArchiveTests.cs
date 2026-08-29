@@ -157,13 +157,67 @@ public class ArchiveTests
         Assert.Equal("g-deleted", repaired.Groups[0].ParentId);
     }
 
-    private static CollectionDto Collection(List<GroupNodeDto> groups, List<ItemDto> items) =>
-        new("c1", "Test", string.Empty, groups, items, [], LinkShare: true);
+
+    [Fact]
+    public void IdRepair_RepointsAnItemAtItsSection_AndTheSectionAtItsGroup()
+    {
+        // The same story as groups, one level down: a section id the API would
+        // refuse is replaced, and both references to it have to follow — the
+        // section's own group, and every item filed under it.
+        var source = Collection(
+            groups: [Group("Espanha", "Espanha", null)],
+            items: [Item("first item", "Espanha", "copy one", sectionId: "Cavaleiros de Bronze")],
+            sections: [Section("Cavaleiros de Bronze", "Espanha", "Cavaleiros de Bronze")]);
+
+        var repaired = PublicIdRepair.Apply(source);
+
+        var group = repaired.Groups[0];
+        var section = repaired.Sections[0];
+        Assert.NotEqual("Cavaleiros de Bronze", section.Id);
+        Assert.Equal(group.Id, section.GroupId);
+        Assert.Equal(section.Id, repaired.Items[0].SectionId);
+
+        // Only the handle moved; the label is what the user sees.
+        Assert.Equal("Cavaleiros de Bronze", section.Name);
+    }
+
+    [Fact]
+    public void IdRepair_KeepsAnUnsectionedItemUnsectioned()
+    {
+        var repaired = PublicIdRepair.Apply(Collection(
+            groups: [Group("g1", "Espanha", null)],
+            items: [Item("i1", "g1", "c1")],
+            sections: [Section("s1", "g1", "Bronze")]));
+
+        // "" is the absence of a section, not a key — rewriting it would file
+        // every loose item under whichever divider happened to be first.
+        Assert.Equal(string.Empty, repaired.Items[0].SectionId);
+    }
+
+    [Fact]
+    public void Archive_WrittenBeforeSectionsExisted_ReadsAsACollectionWithNone()
+    {
+        // The DTO is the archive format, so the field has to be optional on the
+        // wire and normalise to empty: an old export must restore, not fail.
+        var old = new CollectionDto("c1", "Test", string.Empty, [], [], [], LinkShare: true);
+
+        Assert.Empty(old.Sections);
+        Assert.Empty(PublicIdRepair.Apply(old).Sections);
+    }
+
+    private static CollectionDto Collection(
+        List<GroupNodeDto> groups,
+        List<ItemDto> items,
+        List<SectionDto>? sections = null) =>
+        new("c1", "Test", string.Empty, groups, items, [], LinkShare: true, Sections: sections);
 
     private static GroupNodeDto Group(string id, string name, string? parentId) =>
         new(id, name, parentId, []);
 
-    private static ItemDto Item(string id, string groupId, string copyId) =>
+    private static SectionDto Section(string id, string groupId, string name) =>
+        new(id, groupId, name);
+
+    private static ItemDto Item(string id, string groupId, string copyId, string? sectionId = null) =>
         new(
             id,
             "Item",
@@ -174,5 +228,6 @@ public class ArchiveTests
             [],
             string.Empty,
             [],
-            [new ItemCopyDto(copyId, "Mint", 5m)]);
+            [new ItemCopyDto(copyId, "Mint", 5m)],
+            SectionId: sectionId);
 }

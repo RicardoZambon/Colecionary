@@ -195,7 +195,7 @@ public class ValidatorTests
             true);
 
         var validator = new CollectionDtoValidator(
-            new GroupNodeDtoValidator(), new ItemDtoValidator(), new MemberDtoValidator());
+            new GroupNodeDtoValidator(), new SectionDtoValidator(), new ItemDtoValidator(), new MemberDtoValidator());
 
         Assert.True(validator.Validate(collection).IsValid);
     }
@@ -208,4 +208,74 @@ public class ValidatorTests
         Assert.False(validator.Validate(new MemberDto("Ana", "not-an-email", "AP", "Editor")).IsValid);
         Assert.False(validator.Validate(new MemberDto("Ana", "ana@example.com", "AP", "Admin")).IsValid);
     }
+
+    // --- sections ---
+
+    [Fact]
+    public void Section_NeedsAGroupToDivide()
+    {
+        var validator = new SectionDtoValidator();
+
+        Assert.True(validator.Validate(new SectionDto("s1", "g1", "Bronze")).IsValid);
+        // Unlike an item's GroupId, a section's is required: a divider that
+        // belongs to nothing has nothing to divide.
+        Assert.False(validator.Validate(new SectionDto("s1", string.Empty, "Bronze")).IsValid);
+        Assert.False(validator.Validate(new SectionDto("s1", "g1", string.Empty)).IsValid);
+        Assert.False(validator.Validate(new SectionDto("not an id", "g1", "Bronze")).IsValid);
+    }
+
+    [Fact]
+    public void Section_TakesTheSameTargetRangeAsAGroup()
+    {
+        var validator = new SectionDtoValidator();
+
+        Assert.True(validator.Validate(new SectionDto("s1", "g1", "Bronze", Target: null)).IsValid);
+        Assert.True(validator.Validate(new SectionDto("s1", "g1", "Bronze", Target: 10)).IsValid);
+        // Zero is not a series; null is already the single way to say "unset".
+        Assert.False(validator.Validate(new SectionDto("s1", "g1", "Bronze", Target: 0)).IsValid);
+    }
+
+    [Fact]
+    public void Section_ReferencingAGroupNotInThePayload_IsStillAccepted()
+    {
+        // Groups, sections and items all arrive in one document, so a reference
+        // that dangles mid-edit is legal. It resolves to "no section" on read;
+        // refusing it here would make ordinary intermediate states unsaveable.
+        var collection = new CollectionDto(
+            "c1",
+            "Saint Seiya",
+            string.Empty,
+            [],
+            [],
+            [],
+            LinkShare: true,
+            Sections: [new SectionDto("s1", "gone", "Bronze")]);
+
+        Assert.True(CollectionValidator().Validate(collection).IsValid);
+    }
+
+    [Fact]
+    public void Section_IdsMustBeUniqueWithinACollection()
+    {
+        // The graph merge keys its replacement list by id, so a duplicate would
+        // surface deep in persistence as a 500 instead of as the 400 it is.
+        var collection = new CollectionDto(
+            "c1",
+            "Saint Seiya",
+            string.Empty,
+            [],
+            [],
+            [],
+            LinkShare: true,
+            Sections: [new SectionDto("s1", "g1", "Bronze"), new SectionDto("s1", "g1", "Prata")]);
+
+        Assert.False(CollectionValidator().Validate(collection).IsValid);
+    }
+
+    private static CollectionDtoValidator CollectionValidator() =>
+        new(
+            new GroupNodeDtoValidator(),
+            new SectionDtoValidator(),
+            new ItemDtoValidator(),
+            new MemberDtoValidator());
 }

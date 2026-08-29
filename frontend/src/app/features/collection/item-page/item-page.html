@@ -73,6 +73,8 @@
             <button
               type="button"
               class="thumb thumb--photo"
+              [attr.aria-label]="'item.showPhoto' | t: { n: $index + 1 }"
+              [attr.aria-pressed]="$index === selectedPhoto()"
               [class.thumb--active]="$index === selectedPhoto()"
               [class.wanted]="!owned()"
               [style.background-image]="'url(' + photo.thumb + ')'"
@@ -81,7 +83,13 @@
             ></button>
           }
           @if (it.photoIds.length < 8) {
-            <button type="button" class="thumb thumb--add" (click)="addPhoto()" [title]="'item.addPhoto' | t">+</button>
+            <button
+              type="button"
+              class="thumb thumb--add"
+              [attr.aria-label]="'item.addPhoto' | t"
+              [title]="'item.addPhoto' | t"
+              (click)="addPhoto()"
+            >+</button>
           }
         </div>
         @if (mainPhoto(); as photo) {

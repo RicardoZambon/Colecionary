@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manter este manual · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="maintaining">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">12 · Referência</p>
+<h1>Manter este manual</h1>
+<p class="lede">
+  Documentação divergente é pior do que documentação ausente: ela custa a mesma
+  leitura e devolve uma resposta errada com a mesma confiança. Esta página diz
+  qual arquivo tocar para cada tipo de mudança, e qual é o checklist antes de
+  fechar uma feature.
+</p>
+
+<div class="callout danger">
+  <span class="label">A regra</span>
+  <p>
+    <strong>Uma feature não está pronta enquanto a documentação não reflete o que
+    ela fez.</strong> Isso está em <a href="../../CLAUDE.md">CLAUDE.md</a> como
+    regra do repositório, não como sugestão. Se a mudança alterou comportamento,
+    contrato, configuração, esquema ou uma decisão registrada, ela alterou este
+    manual.
+  </p>
+</div>
+
+<h2 id="quem-decide">Quem documenta o quê</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Arquivo</th><th>Responde</th><th>Registro</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><a href="../../CLAUDE.md">CLAUDE.md</a></td>
+      <td><strong>O que é permitido escrever.</strong> Regras não negociáveis,
+          curtas e imperativas</td>
+      <td>Normativo</td>
+    </tr>
+    <tr>
+      <td><a href="../frontend-standards.md">docs/frontend-standards.md</a></td>
+      <td><strong>Como o frontend deve evoluir.</strong> Catálogo de componentes,
+          regras de token, i18n, dados</td>
+      <td>Normativo</td>
+    </tr>
+    <tr>
+      <td><a href="../../backend/README.md">backend/README.md</a></td>
+      <td><strong>O racional longo do backend.</strong> A argumentação completa
+          por trás de cada mecanismo</td>
+      <td>Narrativo</td>
+    </tr>
+    <tr>
+      <td><strong>docs/manual/ (aqui)</strong></td>
+      <td><strong>Como o sistema funciona hoje.</strong> Mecanismo, fluxos,
+          referência operacional, matriz de testes, registro de decisões</td>
+      <td>Descritivo</td>
+    </tr>
+    <tr>
+      <td><a href="../../README.md">README.md</a>, <a href="../deployment.md">docs/deployment.md</a></td>
+      <td>Como rodar e publicar</td>
+      <td>Instrucional</td>
+    </tr>
+    <tr>
+      <td><a href="../brand-identity.md">brand-identity.md</a> e afins</td>
+      <td>Identidade de marca — ainda <em>não</em> a linguagem visual do app</td>
+      <td>Referência de marca</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  A distinção que evita duplicação: <strong>CLAUDE.md manda, este manual
+  explica.</strong> Uma regra nova entra em CLAUDE.md em uma ou duas frases; o
+  mecanismo, o diagrama e a consequência entram aqui. Nunca copie a regra inteira
+  para os dois lugares — copie o link.
+</p>
+
+<h2 id="roteamento">O que atualizar, por tipo de mudança</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Você mudou…</th><th>Atualize</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Entidade, coluna, migration, chave, coluna JSON</td>
+      <td><a href="domain-model.html">Modelo e banco</a> (tabela de tabelas, de
+          migrations, e os nulls se aplicável) + o diagrama ER</td>
+    </tr>
+    <tr>
+      <td>Endpoint novo, rota, status code, header, precondição</td>
+      <td><a href="api-reference.html">Contrato HTTP</a> +
+          <code>VaultApi</code> no frontend + <code>ContractTests</code></td>
+    </tr>
+    <tr>
+      <td>Regra de autenticação, papel, filtro, throttle</td>
+      <td><a href="security.html">Tenancy e segurança</a> (incluindo a lista de
+          rotas anônimas) + <a href="testing.html">matriz de testes</a></td>
+    </tr>
+    <tr>
+      <td>Qualquer coisa em imagens: variante, derivação, focal, coletor</td>
+      <td><a href="images.html">Imagens e coletor</a> +
+          <a href="operations.html#config">referência de configuração</a></td>
+    </tr>
+    <tr>
+      <td>Página, rota do SPA, componente <code>ui-*</code>, store, util puro</td>
+      <td><a href="frontend.html">App Angular</a> <strong>e</strong>
+          <code>docs/frontend-standards.md</code> (o catálogo é normativo lá)</td>
+    </tr>
+    <tr>
+      <td>Chave de configuração, variável de ambiente, volume, passo de CI</td>
+      <td><a href="operations.html">Deploy e suporte</a> +
+          <code>docs/deployment.md</code></td>
+    </tr>
+    <tr>
+      <td>Um caminho ponta a ponta (login, save, upload, import…)</td>
+      <td><a href="flows.html">Fluxos ponta a ponta</a></td>
+    </tr>
+    <tr>
+      <td>Teste novo que prende uma invariante</td>
+      <td><a href="testing.html">Testes e garantias</a> — a matriz, não a
+          contagem</td>
+    </tr>
+    <tr>
+      <td><strong>Um trade-off deliberado</strong>, de qualquer natureza</td>
+      <td><a href="decisions.html">Decisões técnicas</a>: um ADR novo, com o
+          próximo número livre. Nunca renumere os existentes</td>
+    </tr>
+    <tr>
+      <td>Uma limitação conhecida apareceu ou foi resolvida</td>
+      <td><a href="index.html#limites">Visão geral → limites</a> +
+          <a href="security.html#lacunas">lacunas</a></td>
+    </tr>
+    <tr>
+      <td>Um sintoma novo que suporte vai receber</td>
+      <td><a href="operations.html#troubleshooting">Sintomas e causas</a></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="checklist">Checklist para colar no PR</h2>
+
+<pre><code>## Documentação
+- [ ] CLAUDE.md: regra nova ou alterada? (imperativa, 1–2 frases)
+- [ ] docs/manual/: página(s) afetada(s) atualizada(s)
+- [ ] docs/manual/decisions.html: ADR novo para cada trade-off deliberado
+- [ ] docs/manual/testing.html: matriz atualizada se um teste prende algo novo
+- [ ] docs/manual/operations.html: chave de config, volume ou sintoma novo
+- [ ] Diagrama afetado redesenhado (ou removido, se virou mentira)
+- [ ] Nenhuma afirmação aspiracional: só o que o código faz hoje</code></pre>
+
+<h2 id="convencoes">Convenções deste manual</h2>
+
+<ul>
+  <li>
+    <strong>Descreva o que existe, nunca o que deveria existir.</strong> Se um
+    comportamento está pela metade, diga isso e marque com um callout — como o
+    aviso sobre <code>Section</code> em
+    <a href="domain-model.html#em-andamento">Modelo e banco</a>. Uma feature
+    incompleta documentada como pronta é pior do que não documentada.
+  </li>
+  <li>
+    <strong>Prosa em pt-BR; identificadores em inglês.</strong> Nomes de arquivo,
+    classes, chaves de configuração, headers HTTP e trechos de código ficam como
+    estão no código. Não traduza <code>If-Match</code>, <code>ETag</code>,
+    <code>ImageGc:GracePeriod</code> nem nomes de teste.
+  </li>
+  <li>
+    <strong>Diga a consequência, não só o mecanismo.</strong> “Existe um
+    interceptor” não ajuda ninguém. “Sem o bump, um PUT desatualizado desfaz a
+    edição de outra pessoa em silêncio” ajuda.
+  </li>
+  <li>
+    <strong>Todo diagrama usa os tokens de tema</strong> (classes
+    <code>.box</code>, <code>.t</code>, <code>.ln</code> em
+    <code>assets/manual.css</code>), nunca cores fixas — o manual tem tema claro e
+    escuro. Todo <code>&lt;svg&gt;</code> carrega <code>&lt;title&gt;</code> e,
+    quando o conteúdo não é óbvio, <code>&lt;desc&gt;</code>.
+  </li>
+  <li>
+    <strong>Tabela larga vive dentro de <code>.table-wrap</code></strong>, que
+    rola horizontalmente. O corpo da página nunca rola na horizontal.
+  </li>
+  <li>
+    <strong>Nada de dependência externa.</strong> O manual abre direto do disco
+    (<code>file://</code>): sem CDN, sem fonte remota, sem <code>fetch</code>.
+  </li>
+</ul>
+
+<h2 id="nova-pagina">Adicionar uma página</h2>
+
+<ol class="steps">
+  <li>
+    Copie o esqueleto de qualquer página existente e troque
+    <code>data-page</code> no <code>&lt;body&gt;</code> por um id novo.
+  </li>
+  <li>
+    Adicione uma entrada em <code>PAGES</code> no topo de
+    <code>assets/manual.js</code>. <strong>É a única lista</strong>: a barra
+    lateral, a numeração e os links anterior/próxima de todas as páginas saem
+    dela.
+  </li>
+  <li>
+    Adicione um card em <a href="index.html#mapa">Visão geral → mapa do
+    manual</a>.
+  </li>
+  <li>
+    Dê <code>id</code> a cada <code>&lt;h2&gt;</code>: o script transforma em
+    âncora clicável, e outras páginas linkam para seções.
+  </li>
+</ol>
+
+<h2 id="revisao">Revisão periódica</h2>
+
+<p>
+  Duas verificações que valem uma passada trimestral, ou depois de qualquer
+  release grande:
+</p>
+
+<ol class="steps">
+  <li>
+    <strong>Os caminhos ainda existem?</strong> Toda referência a arquivo neste
+    manual é <code>caminho/relativo.ts</code>. Um <code>grep</code> pelos nomes
+    citados encontra os que sumiram.
+    <span class="where">Foi assim que a divergência do ExportApi/ArchiveApi apareceu</span>
+  </li>
+  <li>
+    <strong>Os padrões ainda batem?</strong> Compare a tabela de configuração de
+    <a href="operations.html#config">Deploy e suporte</a> com
+    <code>backend/src/Vault.Api/appsettings.json</code>. Um padrão errado num
+    manual de operação é a forma mais cara de erro que este documento pode
+    conter.
+  </li>
+</ol>
+
+<h2 id="divergencias">Divergências registradas</h2>
+
+<p>
+  Quando você encontra uma divergência e não pode corrigi-la na hora,
+  <strong>registre-a</strong> em vez de deixar quieto. Um leitor avisado perde
+  minutos; um leitor não avisado toma a decisão errada.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Onde</th><th>Diz</th><th>Realidade</th><th>Desde</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>docs/frontend-standards.md</code> §5</td>
+      <td><code>ExportApi</code> em <code>core/api/export-api.ts</code></td>
+      <td>É <code>ArchiveApi</code> em <code>core/api/archive-api.ts</code>, e
+          também faz import</td>
+      <td>2026-08-28</td>
+    </tr>
+    <tr>
+      <td><code>docs/frontend-standards.md</code> §5</td>
+      <td><code>ImageFocusService.uploadAndFrame(file, usage)</code></td>
+      <td>Não existe. Upload e enquadramento foram separados:
+          <code>PhotoUploadService.add(...)</code> e
+          <code>ImageFocusService.frame(id, usage)</code>. A seção “Images” no fim
+          do mesmo arquivo já está correta</td>
+      <td>2026-08-28</td>
+    </tr>
+    <tr>
+      <td><code>Dockerfile</code></td>
+      <td>Declara volume só para <code>/data/config</code></td>
+      <td>As imagens também precisam de volume; o padrão
+          <code>App_Data/images</code> fica na camada de escrita do contêiner</td>
+      <td>2026-08-28</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

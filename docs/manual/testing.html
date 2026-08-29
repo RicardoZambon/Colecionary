@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testes e garantias · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="testing">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">10 · Operação</p>
+<h1>Testes e as garantias que eles prendem</h1>
+<p class="lede">
+  254 testes no backend (240 <code>[Fact]</code> + 14 <code>[Theory]</code>) em
+  duas suítes, e 335 asserções em 38 specs no frontend. O que importa aqui não é
+  a contagem: é <strong>qual invariante cada teste prende</strong> — porque quase
+  toda regressão perigosa deste sistema deixa a outra suíte inteiramente verde.
+</p>
+
+<h2 id="rodar">Como rodar</h2>
+
+<pre><code><span class="c"># backend/</span>
+dotnet test                                   <span class="c"># tudo</span>
+dotnet test tests/Vault.UnitTests             <span class="c"># rápido, sem Docker</span>
+dotnet test tests/Vault.IntegrationTests      <span class="c"># SQL Server real via Testcontainers</span>
+dotnet format --verify-no-changes
+
+<span class="c"># frontend/</span>
+npm test -- --watch=false</code></pre>
+
+<div class="callout">
+  <span class="label">Neste dev container</span>
+  <p>
+    Os testes de integração funcionam, mas o Docker daqui alcança o SQL Server
+    pelo host. Rode-os com
+    <code>TESTCONTAINERS_RYUK_DISABLED=true</code> e
+    <code>TESTCONTAINERS_HOST_OVERRIDE=umbrel.local</code>.
+    <strong>Essas variáveis nunca entram no CI</strong>: lá elas desligariam o
+    reaper que limpa contêineres depois de uma execução cancelada.
+  </p>
+</div>
+
+<h2 id="suites">As duas suítes, e o que só uma delas vê</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Suíte</th><th>Roda contra</th><th>É a única cobertura de</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>Vault.UnitTests</code></td>
+      <td>Modelo EF construído em memória, funções puras</td>
+      <td>Convenção de nomes de tabela, formas de JSON fixadas, cobertura de
+          referências de imagem, paridade de recursos de mensagem, política do
+          coletor</td>
+    </tr>
+    <tr>
+      <td><code>Vault.IntegrationTests</code></td>
+      <td><strong>SQL Server real</strong>, via Testcontainers +
+          <code>WebApplicationFactory</code></td>
+      <td>Isolamento de tenant, ordem do pipeline de localização, o contrato da
+          API, a leitura de alcançabilidade cross-tenant do coletor, e o token de
+          concorrência no nível do banco</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout danger">
+  <span class="label">Não enfraqueça o passo de integração no CI</span>
+  <p>
+    Cada item da coluna da direita tem uma regressão documentada que deixa a
+    suíte unitária <strong>inteiramente verde</strong>. Transformar esse passo em
+    aviso, ou torná-lo condicional, remove a única rede que existe para as cinco
+    coisas mais perigosas do sistema.
+  </p>
+</div>
+
+<h2 id="matriz">Matriz: invariante → teste</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Invariante</th><th>Prendida por</th><th>Se o teste sumir</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Uma consulta só vê o próprio tenant</td>
+      <td><code>TenantIsolationTests.ListCollections_OnlyReturnsOwnTenantsRows</code>,
+          <code>CrossTenantReadsAndWrites_Are404</code></td>
+      <td>Vazamento entre contas, sem erro nenhum</td>
+    </tr>
+    <tr>
+      <td>Escrita cross-tenant é recusada mesmo com id forjado</td>
+      <td><code>Interceptor_RejectsForeignTenantWrites</code>,
+          <code>CreatedCollections_AreStampedWithCallersTenant</code></td>
+      <td>Um payload malicioso escreve na conta de outro</td>
+    </tr>
+    <tr>
+      <td>Dois tenants podem importar o mesmo listing</td>
+      <td><code>BothTenantsCanImportTheSameStoreListing</code></td>
+      <td>Chave composta virou chave simples e o segundo tenant colide</td>
+    </tr>
+    <tr>
+      <td>Dois escritores na mesma versão: só um passa</td>
+      <td><code>TwoWritersAtTheSameVersion_OnlyOneWins_AndTheLoserIsTold</code></td>
+      <td>Atualização perdida silenciosa</td>
+    </tr>
+    <tr>
+      <td>O banco ainda barra quando <em>ambos</em> passam a precondição</td>
+      <td><span class="tag danger">crítico</span>
+          <code>WhenBothWritersPassTheirPrecondition_TheDatabaseStillLetsOnlyOneThrough</code></td>
+      <td><strong>O único teste que falha se <code>IsConcurrencyToken()</code> for
+          removido.</strong> Construído à mão porque a intercalação não se provoca
+          de forma confiável por HTTP</td>
+    </tr>
+    <tr>
+      <td>Uma seção volta na ordem em que foi arrumada, e um target limpa para null</td>
+      <td><code>ContractTests.Collection_Sections_RoundTripInOrder_AndMergeLikeGroups</code></td>
+      <td>Um <code>MergeByKey</code> faltando ou coalescido: Bronze/Prata/Ouro
+          reordena sozinho, ou o target salva na criação e nunca mais muda</td>
+    </tr>
+    <tr>
+      <td>Uma seção precisa de um grupo; uma referência solta não</td>
+      <td><code>ContractTests.Collection_Section_ReferencingNothing_IsRefused</code>,
+          <code>ValidatorTests.Section_ReferencingAGroupNotInThePayload_IsStillAccepted</code></td>
+      <td>Ou separadores órfãos, ou 400 em estados intermediários legítimos do
+          mesmo documento</td>
+    </tr>
+    <tr>
+      <td>Arquivo escrito antes das seções ainda restaura</td>
+      <td><code>ArchiveTests.Archive_WrittenBeforeSectionsExisted_ReadsAsACollectionWithNone</code></td>
+      <td>Todo backup antigo passa a falhar na importação</td>
+    </tr>
+    <tr>
+      <td>PUT sem <code>If-Match</code> é recusado e não escreve</td>
+      <td><code>APutWithNoIfMatch_IsRefused_AndWritesNothing</code></td>
+      <td>A precondição vira opcional — que é o mesmo que não existir</td>
+    </tr>
+    <tr>
+      <td>PUT rejeitado deixa o documento byte a byte igual</td>
+      <td><code>ARejectedPut_LeavesTheStoredDocumentByteIdentical</code></td>
+      <td>Escrita parcial: o pior dos dois mundos</td>
+    </tr>
+    <tr>
+      <td>PUT rejeitado <strong>não limpa</strong> a marca de coleta de imagem</td>
+      <td><code>ARejectedPut_DoesNotClearAnImagesCollectionMark</code>,
+          <code>ARejectedItemWrite_DoesNotClearAnImagesCollectionMark</code></td>
+      <td>Um cliente desatualizado passa a reiniciar relógios de armazenamento
+          que não deveria</td>
+    </tr>
+    <tr>
+      <td>Edição de item move a versão da coleção</td>
+      <td><code>AnItemWrite_MovesTheCollectionsVersion_SoAStalePutCannotUndoIt</code>,
+          <code>DeletingAnItem_MovesTheVersion_…</code></td>
+      <td>Um PUT desatualizado desfaz ou ressuscita item</td>
+    </tr>
+    <tr>
+      <td>Reescrever só a coluna JSON de um item ainda move a versão</td>
+      <td><span class="tag danger">sutil</span>
+          <code>RewritingOnlyAnItemsJsonColumn_StillMovesTheVersion</code></td>
+      <td>É exatamente o caso em que casar por tipo de entidade não via nada: sem
+          bump e <strong>sem UPDATE da raiz</strong>, ou seja, sem consultar o
+          token</td>
+    </tr>
+    <tr>
+      <td>Delete não exige precondição, mas honra a que recebe</td>
+      <td><code>ADeleteOffersNoPrecondition_ButIsHeldToOneItSends</code></td>
+      <td>A coisa mais segura que um cliente pode fazer vira indistinguível da
+          menos segura</td>
+    </tr>
+    <tr>
+      <td>A listagem entrega a versão que uma escrita deve citar</td>
+      <td><code>EveryCollectionInTheListCarriesTheVersionAWriteMustQuote</code>,
+          <code>ANewCollection_ArrivesWithAVersionItCanBeSavedWith</code></td>
+      <td>Cliente sem versão para citar; toda escrita é recusada</td>
+    </tr>
+    <tr>
+      <td><code>UseRequestLocalization</code> roda fora do handler de exceção</td>
+      <td><span class="tag danger">ordem</span>
+          <code>LocalizationTests.ProblemDetailsTitle_IsLocalized_WhichMeansTheMiddlewareRunsOutsideTheHandler</code></td>
+      <td>Erros voltam em inglês para quem pediu português</td>
+    </tr>
+    <tr>
+      <td>Sem <code>Accept-Language</code>, ou com idioma desconhecido, cai no inglês</td>
+      <td><code>NoAcceptLanguage_FallsBackToEnglish</code>,
+          <code>AnUnsupportedLanguage_FallsBackToEnglish</code></td>
+      <td>Mensagem vazia ou exceção de cultura</td>
+    </tr>
+    <tr>
+      <td>Sort e target salvam <em>e</em> voltam a null</td>
+      <td><code>ContractTests</code> — faz PUT da mesma coleção <strong>três
+          vezes</strong>, e o terceiro limpa os dois</td>
+      <td>Um coalesce esquecido no <code>ReplaceGraph</code>: salva na criação e
+          nunca mais muda, em silêncio</td>
+    </tr>
+    <tr>
+      <td>Nomes de tabela PascalCase e schema explícito</td>
+      <td><code>TableNamingConventionTests</code></td>
+      <td>Tabela minúscula perdida em <code>dbo</code></td>
+    </tr>
+    <tr>
+      <td>Nomes de propriedade e conversões nas colunas JSON</td>
+      <td><code>ItemCopyJsonShapeTests</code>, <code>GroupFieldJsonShapeTests</code></td>
+      <td>Enum vira inteiro, ou um rename órfã dados existentes sem erro</td>
+    </tr>
+    <tr>
+      <td>Toda coluna com forma de GUID é classificada</td>
+      <td><span class="tag danger">build</span>
+          <code>ImageReferenceCoverageTests</code></td>
+      <td>Um ponto de referência novo é adicionado e esquecido — e o coletor
+          apaga fotos que estão em uso</td>
+    </tr>
+    <tr>
+      <td>Alcançabilidade cross-tenant do coletor</td>
+      <td><code>ImageGarbageCollectionTests</code> (integração)</td>
+      <td>Coberta <strong>só</strong> por Testcontainers. Sem ela, o conjunto de
+          referências vazio significa “colete tudo”</td>
+    </tr>
+    <tr>
+      <td>Política do coletor: marca, limpeza, carência, lotes, órfãos</td>
+      <td><code>ImageGarbageCollectorTests</code> (19 casos, unitário)</td>
+      <td>Mark-and-sweep regride para delete-on-dereference</td>
+    </tr>
+    <tr>
+      <td>Enquadramento é filtrado por tenant, ao contrário da leitura</td>
+      <td><code>ImageFocalTests</code></td>
+      <td>Um tenant reenquadra a imagem de outro</td>
+    </tr>
+    <tr>
+      <td>Paridade de nomes e placeholders nos dois <code>.resx</code></td>
+      <td><code>MessageResourceTests</code></td>
+      <td>Chave sem tradução, ou placeholder que só existe num idioma</td>
+    </tr>
+    <tr>
+      <td>Throttle: as duas dimensões, concorrência, reembolso, chaves equivalentes</td>
+      <td><code>LoginThrottleTests</code> (21 unitários + 9 de integração,
+          incluindo testes concorrentes)</td>
+      <td>Rajada paralela ultrapassa o portão; ou 429-vs-401 vira oráculo de
+          existência</td>
+    </tr>
+    <tr>
+      <td>Compatibilidade de versão de arquivo é unidirecional</td>
+      <td><code>ArchiveTests</code>, <code>CollectionArchiveTests</code></td>
+      <td>Um arquivo mais novo é lido sob as formas de hoje e escreve besteira em
+          silêncio</td>
+    </tr>
+    <tr>
+      <td>Import recusa sobrescrita decidida contra versão que se moveu</td>
+      <td><code>Import_RefusesAnOverwriteDecidedAgainstAVersionThatHasMovedOn</code></td>
+      <td>O endpoint volta a ser um replace last-writer-wins sem precondição
+          disponível ao cliente</td>
+    </tr>
+    <tr>
+      <td>Arredondamento e não-soma de moedas</td>
+      <td><code>CurrencyTests</code>, <code>CurrencySettingsTests</code></td>
+      <td><code>0.07</code> cobrado como oito centavos; BRL somado com USD</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="frontend-testes">Frontend</h2>
+
+<ul>
+  <li>
+    Lógica pura ganha spec ao lado do fonte (<code>*.spec.ts</code>, Vitest).
+    <code>core/utils/</code> é quase inteiramente coberto — é onde vive tudo que
+    duas telas poderiam implementar de formas divergentes.
+  </li>
+  <li>
+    A ordenação por seção é prendida em três níveis, porque um erro em qualquer
+    um deles é invisível: <code>sort.util.spec.ts</code> (a faixa é a chave
+    primária, e a direção inverte itens e não faixas),
+    <code>sections.util.spec.ts</code> (o corte preserva os índices <em>da
+    lista</em>) e <code>browse.util.spec.ts</code> (com zero seções, a lista é
+    idêntica à de antes).
+  </li>
+  <li>
+    Um spec que asserta texto visível <strong>tem que fixar o idioma</strong>
+    (<code>TestBed.inject(I18nService).apply('en')</code>), em vez de depender do
+    <code>navigator.language</code> do runner.
+  </li>
+  <li>
+    Specs de helpers puros passam um <code>t</code> falso que ecoa a chave. Assim
+    a asserção prende <em>qual mensagem</em> foi escolhida, e não a redação em
+    inglês — que muda sem quebrar nada.
+  </li>
+  <li>
+    <code>npm run build</code> é um portão de verdade: o orçamento de 6 kB de
+    estilo por componente e o aviso de 500 kB no bundle inicial estão em
+    <code>angular.json</code>, e <strong>avisos contam</strong>.
+  </li>
+</ul>
+
+<h2 id="escrever">Ao escrever um teste novo</h2>
+
+<ul>
+  <li>
+    <strong>Nunca asserte um literal visível ao usuário.</strong> Vá por
+    <code>Messages.In(name, culture)</code> no backend e pelo <code>t</code> falso
+    no frontend. Um literal vira uma segunda cópia da tradução, que passa a
+    divergir em silêncio.
+  </li>
+  <li>
+    Nomeie o teste pela <strong>consequência</strong>, não pelo método. Os nomes
+    desta base descrevem o que se perde:
+    <code>ARejectedPut_LeavesTheStoredDocumentByteIdentical</code>.
+  </li>
+  <li>
+    Projeto de teste novo → adicione o passo no workflow <em>e</em> atualize a
+    guarda que compara com <code>Vault.slnx</code>, senão o build falha com a
+    correção escrita na mensagem.
+  </li>
+  <li>
+    Regra nova que só o banco pode provar (filtro, token, ordem de middleware) →
+    o teste é <strong>de integração</strong>. Uma unidade não vê nada disso.
+  </li>
+</ul>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

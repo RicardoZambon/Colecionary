@@ -73,8 +73,13 @@
     <div class="value-box">
       {{ 'hero.estimate' | t }} <span class="value">{{ scope().value | money: currency() }}</span>
     </div>
-    <a [routerLink]="['/c', collection().id, 'settings']" [queryParams]="{ tab: 'sharing' }" [title]="'hero.manageSharing' | t">
-      <ui-avatar-stack [members]="members()" />
+    <a
+      [routerLink]="['/c', collection().id, 'settings']"
+      [queryParams]="{ tab: 'sharing' }"
+      [attr.aria-label]="'hero.manageSharing' | t"
+      [title]="'hero.manageSharing' | t"
+    >
+      <ui-avatar-stack aria-hidden="true" [members]="members()" />
     </a>
     <ui-button variant="ghost" size="sm" [routerLink]="['/c', collection().id, 'settings']" [title]="'hero.manageTitle' | t">{{ 'hero.manage' | t }}</ui-button>
     <ui-button size="sm" [routerLink]="['/c', collection().id, 'items', 'new']" queryParamsHandling="preserve">{{ 'hero.addItem' | t }}</ui-button>

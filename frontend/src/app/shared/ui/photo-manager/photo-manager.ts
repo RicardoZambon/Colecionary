@@ -49,7 +49,7 @@ import { UiReorder } from '../reorder/reorder';
       <div class="upload" [class.upload--failed]="upload.status === 'failed'">
         <span class="upload__name">{{ upload.name }}</span>
         @if (upload.status === 'failed') {
-          <span class="upload__error">{{ upload.error }}</span>
+          <span class="upload__error" role="alert">{{ upload.error }}</span>
           <button
             type="button"
             class="upload__dismiss"
@@ -96,7 +96,12 @@ import { UiReorder } from '../reorder/reorder';
                   {{ 'photos.makeCover' | t }}
                 </button>
               }
-              <button type="button" [title]="'photos.frame' | t" (click)="framed.emit(id)">⌖</button>
+              <button
+                type="button"
+                [attr.aria-label]="'photos.frame' | t"
+                [title]="'photos.frame' | t"
+                (click)="framed.emit(id)"
+              >⌖</button>
               <button
                 type="button"
                 class="danger"

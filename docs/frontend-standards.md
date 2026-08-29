@@ -65,7 +65,8 @@ a core service's state).
 5. **URL is state.** Anything the user would want restored on refresh,
    back-navigation, or a shared link lives in the route: selected group is
    `?g=<groupId>`, the chosen view is `?v=`, the item filters and order are
-   `?cond=` / `?own=` / `?sort=` + `?dir=`, settings tabs are `?tab=<id>`,
+   `?cond=` / `?own=` / `?sort=` + `?dir=`, the open section is `?s=`,
+   settings tabs are `?tab=<id>`,
    entity ids are path params (`/c/:collectionId/items/:itemId`). Route/query
    params bind to component inputs via `withComponentInputBinding()`.
    Navigations within a collection preserve the query string
@@ -135,13 +136,13 @@ All are exported from `shared/ui/index.ts`.
 | --- | --- | --- |
 | Button | `ui-button` | `variant: 'primary' \| 'ghost' \| 'danger' \| 'link' \| 'icon'`, `size: 'md' \| 'sm'`, `block`, `disabled`, `muted`, `type`, `ariaLabel` (required when the label is a bare glyph; also becomes the tooltip) — content-projected label. `link` is a text action inside a dense row, `icon` a bare glyph (the ✕ that removes a copy, a field, a member). `muted` reads as unavailable but still fires: `disabled` would be the obvious choice and is the wrong one, because a dead control cannot say *why* it is dead — removing the tenant's owner has an explanation the click is what surfaces. An action that navigates stays a real `<a>`; see the `a.link` note in `collection-settings-page.scss` |
 | Field | `ui-field` | `label` (required) — wraps any control with the mono uppercase label |
-| Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`; outputs `keydown`, `blurred` |
+| Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`, `ariaLabel`; outputs `keydown`, `blurred` |
 | Textarea | `ui-textarea` | `value` (model), `rows`, `placeholder` |
-| Select | `ui-select` | `value` (model), `options: SelectOption[]`, `disabled`; add class `compact` for dense rows |
+| Select | `ui-select` | `value` (model), `options: SelectOption[]`, `disabled`, `ariaLabel`; add class `compact` for dense rows |
 | Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count`, `link` (router commands), `queryParams` — content-projected label. Renders a `<button>` by default (attach `(click)` at the usage site); with `link` it renders a real `<a>` instead, because a chip that navigates must survive middle-click and a button nested in an anchor is invalid |
 | Card | `ui-card` | `interactive` (hover affordance), `dashed` — the panel surface |
 | Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone(condition)` for one copy, `itemTone(item)` for an item, `conditionLabelKey(condition)` for its message key, and `itemBadgeLabel(item, t)` for the rendered label ("Wanted", "Mint", "Mint ×3" — uppercased by CSS). The `t` argument is `I18nService.t`: the helper is pure and has no injector |
-| Toggle | `ui-toggle` | `on` (model) — rendered as `role="switch"` |
+| Toggle | `ui-toggle` | `on` (model), `ariaLabel` — rendered as `role="switch"` |
 | Tabs | `ui-tabs` | `tabs: TabDef[]`, `active` (model, required) |
 | Avatar | `ui-avatar` | `initials` (required), `size: 'sm' \| 'md' \| 'lg'` |
 | Avatar stack | `ui-avatar-stack` | `members: Member[]` (shows first 4, overlapped) |
@@ -154,6 +155,7 @@ All are exported from `shared/ui/index.ts`.
 | Image slot | `ui-image-slot` | `src`, `focal` (CSS `background-position`), `placeholder`, `reframable`; outputs `fileSelected(File)`, `reframeRequested()` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
 | Image focus | `ui-image-focus` | none — global outlet in the shell, driven by `ImageFocusService`; the focal-point editor (drag or arrow keys, live previews of the surfaces that match the image's `usage`) |
 | Toast | `ui-toast` | none — global outlet in the shell, driven by `ToastService.flash()` |
+| Conflict notice | `app-conflict-notice` | none — global outlet in the shell, driven by `ConflictService`. Lives in `layout/`, not `shared/ui`: it is one app-specific outlet, not a reusable element. Raised when a write is refused because someone else changed the collection first; it never discards what the user typed |
 | Money pipe | `\| money: currency()` | formats numbers as `$1,234.57`, always two decimals, always rounded **up**. Takes the collection's currency; omitted, the account default. Impure — see §6 |
 | Photo manager | `<ui-photo-manager>` | add / reorder / cover / frame / remove an item's photos. Owns the dropzone and the upload queue; emits the whole list back |
 | Lightbox | `<ui-lightbox>` | full-screen photo viewer, arrow-key paging, links the original |
@@ -173,6 +175,14 @@ style the same raw element the same way, that's the signal to promote it here.
   ProblemDetails errors into plain `Error`s so toast paths keep working.
   There is no mocked data in the frontend — demo data lives in the backend
   seeder (`backend/src/Vault.Infrastructure/Persistence/Seeding/`).
+- **Collection writes carry a version.** Every write to a collection or its
+  items sends an `If-Match` with the version the client last synchronised with;
+  the server refuses a missing precondition outright, so there is no path that
+  quietly opts out of the guard. `VaultStore` owns the version map and
+  `HttpVaultApi` reads versions off the list envelope and the `ETag` header —
+  **never off `Collection` itself**, because the same shape is the archive
+  format and a concurrency token has no business in a backup. A refused write
+  raises `ConflictService`; it never discards what the user typed.
 - **Images** go through `ImagesApi` (`core/api/images-api.ts`): authenticated
   multipart upload returning an id; reads are plain `<img>`-compatible URLs
   (`/api/images/{id}`). `ui-image-slot` is presentational — it renders `src`
@@ -284,6 +294,33 @@ style the same raw element the same way, that's the signal to promote it here.
   keystroke, and moving the focused input in the DOM blurs it, so the page
   freezes the row order for the duration of a rename and releases it on
   `(blurred)`.
+- **A section is a separator inside one group, never a level.** A `Section`
+  (`{ id, groupId, name, target }`) labels a run of a group's items;
+  `item.sectionId` points at it and `''` means none. It deliberately has **no
+  `parentId`** (the recursion already lives on `GroupNode` — a nesting section
+  is that tree under another name), **no `fields`** (they are taxonomy: a
+  divider that changes the item form's field set is the defect this fixes) and
+  **no `sort`** (it is a run inside *one* ordered list, so per-run ordering
+  would make the group's declared order meaningless). What it has and a group
+  does not is a persisted position: order is the array order of
+  `collection.sections`, because Bronze → Prata → Ouro is a progression the
+  alphabet reads Bronze, Ouro, Prata. Read them only through `sectionsOf()` in
+  `core/utils/sections.util.ts` — never sort them by name.
+  **A section orders, it does not scope.** `sortItems` takes the open group's
+  `sectionRank` as its **primary** key and the chosen order only breaks ties
+  inside a run; `chunkBySection` then merely *cuts* the already-ordered list
+  into runs, each entry carrying its index **in the list**, not in the chunk.
+  That is what leaves `scopeItems`, `subtreeIds`, the breadcrumb, the group
+  tree and the item page's `←`/`→` untouched. A sort direction reverses the
+  items inside each run, never the runs. Ownership resolution is free: the rank
+  only holds the open group's sections, so an item pointing at another group's
+  section — or one deleted since — ranks as unsectioned rather than erroring,
+  and any remembered id passes through `resolveSectionId` first. Narrowing to
+  one run is a **filter** (`?s=`, beside `?cond=` / `?own=`), so the heading is
+  a `<button aria-pressed>` that toggles, and `groupLinkParams` drops it when
+  the group changes. Per-section progress comes from `sectionStatsIndex` in
+  `group-stats.util.ts`, and a section's `target` rolls up into its group
+  exactly like a child group's.
 - **Which group an item is filed in is inherited from context, and "no group" is
   `''`.** Every "add item" link preserves `?g=`, so `ItemFormPage` takes it as a
   `g` input and a new item lands in the group you were looking at — never in

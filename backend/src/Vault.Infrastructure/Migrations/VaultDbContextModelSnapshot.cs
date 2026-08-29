@@ -57,6 +57,10 @@ namespace Vault.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
                     b.HasKey("TenantId", "Id");
 
                     b.ToTable("Collections", "Catalog");
@@ -176,6 +180,11 @@ namespace Vault.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SectionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
@@ -193,6 +202,40 @@ namespace Vault.Infrastructure.Migrations
                     b.HasKey("TenantId", "CollectionId", "Id");
 
                     b.ToTable("Items", "Catalog");
+                });
+
+            modelBuilder.Entity("Vault.Domain.Entities.Section", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CollectionId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("GroupId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Target")
+                        .HasColumnType("int");
+
+                    b.HasKey("TenantId", "CollectionId", "Id");
+
+                    b.ToTable("Sections", "Catalog");
                 });
 
             modelBuilder.Entity("Vault.Domain.Entities.StoreListing", b =>
@@ -250,6 +293,9 @@ namespace Vault.Infrastructure.Migrations
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("UnreferencedSinceUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<int?>("Width")
                         .HasColumnType("int");
@@ -490,6 +536,15 @@ namespace Vault.Infrastructure.Migrations
                     b.Navigation("Custom");
                 });
 
+            modelBuilder.Entity("Vault.Domain.Entities.Section", b =>
+                {
+                    b.HasOne("Vault.Domain.Entities.Collection", null)
+                        .WithMany("Sections")
+                        .HasForeignKey("TenantId", "CollectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Vault.Domain.Entities.StoreListing", b =>
                 {
                     b.OwnsMany("Vault.Domain.ValueObjects.StoreListingItem", "Items", b1 =>
@@ -554,6 +609,8 @@ namespace Vault.Infrastructure.Migrations
                     b.Navigation("Items");
 
                     b.Navigation("Members");
+
+                    b.Navigation("Sections");
                 });
 #pragma warning restore 612, 618
         }

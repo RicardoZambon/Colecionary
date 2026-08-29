@@ -27,6 +27,13 @@ public sealed record GroupNodeDto(
     GroupSortDto? Sort = null,
     int? Target = null);
 
+/// <summary>
+/// A divider inside one group's item list. No parent, no fields, no sort — see
+/// <c>Section</c> for why each of those absences is deliberate. A null Target
+/// means no run size was declared, exactly as on <see cref="GroupNodeDto"/>.
+/// </summary>
+public sealed record SectionDto(string Id, string GroupId, string Name, int? Target = null);
+
 /// <summary>One physical copy. A null Value means "use the item's Value".</summary>
 public sealed record ItemCopyDto(
     string Id,
@@ -60,11 +67,19 @@ public sealed record ItemDto(
     IReadOnlyList<CustomFieldValueDto> Custom,
     IReadOnlyList<ItemCopyDto>? Copies = null,
     IReadOnlyList<Guid>? PhotoIds = null,
-    DateTimeOffset? CreatedAt = null)
+    DateTimeOffset? CreatedAt = null,
+    string? SectionId = null)
 {
     public IReadOnlyList<ItemCopyDto> Copies { get; init; } = Copies ?? [];
 
     public IReadOnlyList<Guid> PhotoIds { get; init; } = PhotoIds ?? [];
+
+    /// <summary>
+    /// Optional on the wire and normalised to "" so an archive written before
+    /// sections existed still round-trips: absent has to mean "no section", not
+    /// null. Same bargain as <see cref="Copies"/> and <see cref="PhotoIds"/>.
+    /// </summary>
+    public string SectionId { get; init; } = SectionId ?? string.Empty;
 }
 
 public sealed record MemberDto(string Name, string Email, string Initials, string Role);
@@ -84,6 +99,51 @@ public sealed record CollectionDto(
     bool LinkShare,
     Guid? BannerImageId = null,
     Guid? IconImageId = null,
-    string? Currency = null);
+    string? Currency = null,
+    IReadOnlyList<SectionDto>? Sections = null)
+{
+    /// <summary>
+    /// Item-level dividers, in the order they are shown. Optional on the wire
+    /// and normalised to empty, for the reason on <see cref="ItemDto.SectionId"/>:
+    /// this DTO is also the archive format, and an export taken before sections
+    /// existed has to import as a collection with none rather than fail.
+    /// </summary>
+    public IReadOnlyList<SectionDto> Sections { get; init; } = Sections ?? [];
+}
 
 public sealed record CreateCollectionRequest(string Name, string Description);
+
+/// <summary>
+/// A collection paired with the version token a write of it must quote back.
+/// </summary>
+/// <param name="Version">
+/// The collection's current HTTP entity-tag, quotes included — exactly the value
+/// to put in an <c>If-Match</c> header. Opaque: the client never parses it.
+/// </param>
+/// <param name="Collection">The document itself, unchanged.</param>
+/// <remarks>
+/// <para>
+/// The version rides in an envelope beside <see cref="CollectionDto"/> rather
+/// than inside it, for two reasons that both matter. <see cref="CollectionDto"/>
+/// <em>is</em> the archive format — an entry in an export is byte-for-byte what
+/// <c>GET /api/collections</c> returns — and a concurrency token has no business
+/// in a backup. And the frontend's <c>Collection</c> model stays untouched,
+/// which is what the "the API contract mirrors VaultApi" rule protects.
+/// </para>
+/// <para>
+/// It exists at all because a single-resource <c>ETag</c> header cannot carry a
+/// version <em>per element</em> of a list, and the list is where this client
+/// synchronises: a token fetched at any other moment would describe a document
+/// the payload was not derived from, which is the one thing a precondition must
+/// never do.
+/// </para>
+/// </remarks>
+public sealed record VersionedCollectionDto(string Version, CollectionDto Collection);
+
+/// <summary>An item and the version its collection is now at.</summary>
+/// <remarks>
+/// An item write moves the whole aggregate's version (see
+/// <c>CollectionVersionInterceptor</c>), so the caller has to be told the new
+/// one or its next write would quote a token that is already stale.
+/// </remarks>
+public sealed record VersionedItemDto(string Version, ItemDto Item);

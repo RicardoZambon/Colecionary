@@ -12,11 +12,12 @@
         <button
           type="button"
           class="sort-option"
+          [attr.aria-current]="activeSortId() === option.id ? 'true' : null"
           [class.active]="activeSortId() === option.id"
           (click)="pickSort(option); sortMenu.close()"
         >
           <span>{{ option.label }}</span>
-          <span class="check">@if (activeSortId() === option.id) { ✓ }</span>
+          <span class="check" aria-hidden="true">@if (activeSortId() === option.id) { ✓ }</span>
         </button>
       }
     </ng-container>

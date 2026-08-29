@@ -1,13 +1,14 @@
 import { Params } from '@angular/router';
 
-import { CONDITIONS, Condition, GroupSort } from '../../core/models';
+import { CONDITIONS, Condition, GroupSort, Section } from '../../core/models';
 import { BrowseCriteria, OwnFilter } from '../../core/utils/browse.util';
+import { UNSECTIONED_ID, sectionsOf } from '../../core/utils/sections.util';
 import { BUILTIN_SORTS, customFieldName } from '../../core/utils/sort.util';
 
 /**
  * The browse criteria as URL query params, and back.
  *
- * Which items are on screen and in what order is URL state (rule 9): `?g=` was
+ * Which items are on screen and in what order is URL state (rule 11): `?g=` was
  * always there, and `?cond=`, `?own=`, `?sort=` and `?dir=` join it so that
  * opening an item can rebuild the very same list — the arrows on the item page
  * are only honest if "next" means the next of the list you were looking at.
@@ -21,6 +22,7 @@ import { BUILTIN_SORTS, customFieldName } from '../../core/utils/sort.util';
 
 /** `?sort=` splits from `?dir=` so a `field:` key can hold any character. */
 export interface BrowseParamValues {
+  s?: string;
   cond?: string;
   own?: string;
   sort?: string;
@@ -29,6 +31,30 @@ export interface BrowseParamValues {
 
 export function readCondition(raw: string | undefined): Condition | null {
   return CONDITIONS.find(c => c === raw) ?? null;
+}
+
+/**
+ * `?s=` narrowed to a divider of the group actually open, the leftovers bucket,
+ * or null for "all of them".
+ *
+ * Checked against the group, unlike `?sort=`: a section belongs to exactly one
+ * group, so an id from a group you have since left does not fade quietly the
+ * way a renamed sort field does — it would hide every item on screen. The
+ * bucket sentinel needs no group of its own, since "no section" is meaningful
+ * wherever sections are.
+ */
+export function readSection(
+  raw: string | undefined,
+  sections: Section[],
+  groupId: string | null,
+): string | null {
+  if (!raw) return null;
+  if (raw === UNSECTIONED_ID) return raw;
+  return sectionsOf(sections, groupId).some(section => section.id === raw) ? raw : null;
+}
+
+export function sectionParams(sectionId: string | null): Params {
+  return { s: sectionId };
 }
 
 export function readOwn(raw: string | undefined): OwnFilter {
@@ -68,12 +94,14 @@ export function ownParams(own: OwnFilter): Params {
  * Merging is what keeps the item filters and the chosen view across a group
  * change, but the sort is deliberately dropped: every group declares its own
  * order, and a one-off pick made while browsing one group has no business
- * outliving it. Every link that changes `?g=` goes through this, so the rule
- * lives in one place instead of in each of the tree, the cards and the
- * breadcrumb.
+ * outliving it. The section goes with it, and for a stronger reason — a section
+ * belongs to one group, so carrying `?s=` into another would name a divider
+ * that group does not have and empty the screen. Every link that changes `?g=`
+ * goes through this, so the rule lives in one place instead of in each of the
+ * tree, the cards and the breadcrumb.
  */
 export function groupLinkParams(groupId: string | null): Params {
-  return { g: groupId, ...sortParams(null) };
+  return { g: groupId, ...sortParams(null), ...sectionParams(null) };
 }
 
 /** The criteria a screen is browsing under, read straight off the URL. */
@@ -81,9 +109,11 @@ export function readCriteria(
   values: BrowseParamValues,
   groupId: string | null,
   query: string,
+  sections: Section[] = [],
 ): BrowseCriteria {
   return {
     groupId,
+    sectionId: readSection(values.s, sections, groupId),
     condition: readCondition(values.cond),
     own: readOwn(values.own),
     query,

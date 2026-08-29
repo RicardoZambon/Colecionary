@@ -1,5 +1,6 @@
-import { GroupNode, Item } from '../models';
+import { GroupNode, Item, Section } from '../models';
 import { isOwned, ownedValue } from './copies.util';
+import { UNSECTIONED_ID } from './sections.util';
 
 /**
  * Per-group aggregates: how much of a group you hold, how much is still
@@ -169,7 +170,22 @@ function finalize(groupId: string | null, acc: Acc): GroupStats {
  * of cards from each paying the O(groups × items) cost of resolving a subtree
  * per node.
  */
-export function statsIndex(groups: GroupNode[], items: Item[]): ReadonlyMap<string, GroupStats> {
+export function statsIndex(
+  groups: GroupNode[],
+  items: Item[],
+  sections: Section[] = [],
+): ReadonlyMap<string, GroupStats> {
+  // Sections are here only for their targets. A group's own items are already
+  // counted whichever divider they sit under, so a section changes no count —
+  // but a group that declares no target of its own, whose sections declare
+  // 10 + 12 + 8, has declared a set of 30, exactly as a parent of sub-groups
+  // that declare theirs does.
+  const sectionTargets = new Map<string, number>();
+  for (const section of sections) {
+    if (section.target === null) continue;
+    sectionTargets.set(section.groupId, (sectionTargets.get(section.groupId) ?? 0) + section.target);
+  }
+
   const known = new Set(groups.map(g => g.id));
   const byGroup = new Map<string, { item: Item; index: number }[]>();
   const unfiled: { item: Item; index: number }[] = [];
@@ -201,6 +217,9 @@ export function statsIndex(groups: GroupNode[], items: Item[]): ReadonlyMap<stri
     acc.declaredTarget = node.target;
 
     for (const { item, index } of byGroup.get(node.id) ?? []) addItem(acc, item, index);
+
+    const declaredBySections = sectionTargets.get(node.id);
+    if (declaredBySections !== undefined) acc.childTargetSum = declaredBySections;
 
     const kids = children.get(node.id) ?? [];
     acc.childCount = kids.length;
@@ -257,6 +276,53 @@ export function scopeStats(
 ): GroupStats {
   const stats = index.get(groupId ?? COLLECTION_ID);
   return stats ?? finalize(groupId, emptyAcc());
+}
+
+/**
+ * Per-section aggregates for one group, keyed by section id, plus
+ * {@link UNSECTIONED_ID} when anything in that group falls outside them.
+ *
+ * Scoped to a single group on purpose. Only the open group's dividers are ever
+ * on screen, so this costs one pass over the collection's items instead of the
+ * O(sections × items) a per-section subtree resolve would — the same bargain
+ * {@link statsIndex} makes for the tree.
+ *
+ * It counts a group's **own** items only. An item in a sub-group is on this
+ * screen because the scope is a subtree, but it belongs to that sub-group's
+ * list, not to a divider of this one, and counting it here would make the
+ * sections add up to more than the group they divide.
+ */
+export function sectionStatsIndex(
+  sections: Section[],
+  items: Item[],
+  groupId: string | null,
+): ReadonlyMap<string, GroupStats> {
+  const out = new Map<string, GroupStats>();
+  if (!groupId) return out;
+
+  const mine = sections.filter(section => section.groupId === groupId);
+  const known = new Map(mine.map(section => [section.id, section]));
+  const accs = new Map<string, Acc>();
+
+  const accFor = (id: string, target: number | null): Acc => {
+    const existing = accs.get(id);
+    if (existing) return existing;
+    const acc = emptyAcc();
+    acc.declaredTarget = target;
+    accs.set(id, acc);
+    return acc;
+  };
+
+  for (const section of mine) accFor(section.id, section.target);
+
+  items.forEach((item, index) => {
+    if (item.groupId !== groupId) return;
+    const section = known.get(item.sectionId);
+    addItem(accFor(section?.id ?? UNSECTIONED_ID, section?.target ?? null), item, index);
+  });
+
+  for (const [id, acc] of accs) out.set(id, finalize(id, acc));
+  return out;
 }
 
 /** Items with no usable group, in collection order. */

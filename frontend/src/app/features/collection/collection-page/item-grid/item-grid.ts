@@ -6,12 +6,15 @@ import { I18nService } from '../../../../core/i18n';
 import { Item } from '../../../../core/models';
 import { ImageFocusService } from '../../../../core/state/image-focus.service';
 import { isOwned, valueIsPaid } from '../../../../core/utils/copies.util';
+import { GroupStats } from '../../../../core/utils/group-stats.util';
+import { SectionChunk } from '../../../../core/utils/sections.util';
 import { fieldValue } from '../../../../core/utils/sort.util';
 import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiBadge, UiCard, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
+import { SectionHeader } from '../section-header/section-header';
 import { VaultStore } from '../../../../core/state/vault.store';
 
 /**
@@ -22,7 +25,7 @@ import { VaultStore } from '../../../../core/state/vault.store';
 @Component({
   selector: 'app-item-grid',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, ItemValuePipe, TPipe, UiBadge, UiCard, UiReorder],
+  imports: [RouterLink, ItemValuePipe, TPipe, SectionHeader, UiBadge, UiCard, UiReorder],
   templateUrl: './item-grid.html',
   styleUrl: './item-grid.scss',
 })
@@ -33,6 +36,17 @@ export class ItemGrid {
   private readonly store = inject(VaultStore);
 
   readonly items = input.required<Item[]>();
+  /**
+   * The same items, cut into the runs their group's dividers describe. One
+   * chunk with a null section is a group that declares none, which renders
+   * exactly as the flat grid always did. Every entry carries its index in
+   * `items`, so dragging and the keyboard move buttons keep working in list
+   * coordinates rather than in chunk coordinates.
+   */
+  readonly chunks = input.required<SectionChunk[]>();
+  readonly sectionStats = input<ReadonlyMap<string, GroupStats>>(new Map());
+  /** The section the list is narrowed to, if any. */
+  readonly activeSection = input<string | null>(null);
   readonly collectionId = input.required<string>();
 
   /**
@@ -48,6 +62,7 @@ export class ItemGrid {
   readonly groupNames = input.required<ReadonlyMap<string, string>>();
 
   readonly moved = output<{ from: number; to: number }>();
+  readonly sectionToggled = output<string>();
 
   protected readonly drag = new DragOrder(() => this.manual());
 

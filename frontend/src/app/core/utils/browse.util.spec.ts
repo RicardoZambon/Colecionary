@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { Condition, GroupNode, Item, ItemCopy } from '../models';
+import { Condition, GroupNode, Item, ItemCopy, Section } from '../models';
 import { NO_FILTERS, neighbours, scopeItems, visibleItems } from './browse.util';
 import { UNGROUPED_ID } from './group-stats.util';
+import { UNSECTIONED_ID } from './sections.util';
 
 function group(id: string, parentId: string | null = null): GroupNode {
   return { id, name: id, parentId, fields: [], sort: null, target: null };
@@ -20,7 +21,7 @@ function copy(condition: Condition = 'Good'): ItemCopy {
   };
 }
 
-function item(id: string, groupId: string, copies: ItemCopy[] = []): Item {
+function item(id: string, groupId: string, copies: ItemCopy[] = [], sectionId = ''): Item {
   return {
     id,
     name: id,
@@ -28,6 +29,7 @@ function item(id: string, groupId: string, copies: ItemCopy[] = []): Item {
     year: 2000,
     value: 10,
     groupId,
+    sectionId,
     tags: [],
     img: '',
     custom: [],
@@ -149,6 +151,66 @@ describe('browse.util', () => {
 
     it('reports a lone item as 1 of 1 with nowhere to step', () => {
       expect(neighbours([list[0]], 'a')).toMatchObject({ position: 1, total: 1, next: null });
+    });
+  });
+
+  // --- sections (rule: they order and filter, they never scope) ---
+
+  describe('sections', () => {
+    const SECTIONS: Section[] = [
+      { id: 'bronze', groupId: 'cards', name: 'Bronze', target: null },
+      { id: 'prata', groupId: 'cards', name: 'Prata', target: null },
+      { id: 'outra', groupId: 'games', name: 'Outra', target: null },
+    ];
+
+    const ITEMS = [
+      item('p1', 'cards', [], 'prata'),
+      item('b1', 'cards', [], 'bronze'),
+      item('loose', 'cards'),
+      item('stray', 'cards', [], 'outra'),
+    ];
+
+    const criteria = (over: Partial<Parameters<typeof visibleItems>[2]> = {}) => ({
+      groupId: 'cards',
+      ...NO_FILTERS,
+      ...over,
+    });
+
+    it('orders by the arranged runs, leftovers last', () => {
+      expect(
+        visibleItems(ITEMS, GROUPS, criteria(), SECTIONS).map(i => i.id),
+      ).toEqual(['b1', 'p1', 'loose', 'stray']);
+    });
+
+    it('narrows to one run without changing the scope', () => {
+      expect(
+        visibleItems(ITEMS, GROUPS, criteria({ sectionId: 'bronze' }), SECTIONS).map(i => i.id),
+      ).toEqual(['b1']);
+    });
+
+    it('answers the leftovers filter with everything no run claims', () => {
+      // Including the item pointing at another group's section: on this screen
+      // it is unsectioned, so it has to answer as such rather than by its id.
+      expect(
+        visibleItems(ITEMS, GROUPS, criteria({ sectionId: UNSECTIONED_ID }), SECTIONS).map(
+          i => i.id,
+        ),
+      ).toEqual(['loose', 'stray']);
+    });
+
+    it('ignores sections at the collection root, where no group is open', () => {
+      // A section divides one group's list; at the root there is no group, so
+      // the order has to be exactly what it was before sections existed.
+      const root = { groupId: null, ...NO_FILTERS };
+      expect(visibleItems(ITEMS, GROUPS, root, SECTIONS).map(i => i.id)).toEqual(
+        visibleItems(ITEMS, GROUPS, root).map(i => i.id),
+      );
+    });
+
+    it('leaves the list identical to before when a collection has none', () => {
+      expect(visibleItems(ITEMS, GROUPS, criteria(), []).map(i => i.id)).toEqual(
+        visibleItems(ITEMS, GROUPS, criteria()).map(i => i.id),
+      );
     });
   });
 });

@@ -32,19 +32,22 @@ public static class Messages
     [
         nameof(ProblemNotFound), nameof(ProblemConflict), nameof(ProblemInvalidOperation),
         nameof(ProblemValidationFailed), nameof(ProblemUnexpected),
+        nameof(ProblemPreconditionRequired), nameof(ProblemPreconditionFailed),
+        nameof(IfMatchRequired), nameof(CollectionChangedElsewhere),
         nameof(FieldNamesMustBeUnique), nameof(FieldTypeInvalid), nameof(TargetOutOfRange),
         nameof(SortDirectionInvalid), nameof(SortKeyInvalid), nameof(TooManyPhotos),
-        nameof(TooManyCopies), nameof(CopyIdsMustBeUnique), nameof(ConditionInvalid),
+        nameof(TooManyCopies), nameof(CopyIdsMustBeUnique), nameof(SectionIdsMustBeUnique),
+        nameof(ConditionInvalid),
         nameof(CopyStatusInvalid), nameof(AcquiredOnImplausible), nameof(RoleInvalid),
         nameof(PlanInvalid), nameof(CurrencyInvalid),
         nameof(CollectionNotFound), nameof(StoreListingNotFound), nameof(AlreadyInYourVault),
         nameof(ArchiveUnreadable), nameof(ArchiveHasNoCollections), nameof(ImportedCollectionName),
-        nameof(ArchiveFromNewerVersion),
+        nameof(ArchiveFromNewerVersion), nameof(ReplaceDecisionsMalformed),
         nameof(ImageFileEmpty), nameof(ImageTooLarge), nameof(ImageTypeUnsupported),
         nameof(ImageNotFound), nameof(ImageHasNoBytes), nameof(NoFileUploaded),
         nameof(TenantNeedsAnOwner), nameof(OwnerCannotBeRemoved), nameof(CannotRemoveYourself),
         nameof(CurrentUserNotFound), nameof(TenantNotFound), nameof(EmailCannotBeChanged),
-        nameof(InvalidCredentials),
+        nameof(InvalidCredentials), nameof(TooManyLoginAttempts),
         nameof(UnknownGroupFieldType), nameof(UnknownCondition), nameof(UnknownCopyStatus),
         nameof(UnknownRole), nameof(UnknownPlan),
         nameof(SetupFieldsRequired), nameof(SetupPasswordTooShort), nameof(SetupDatabaseNotUsable),
@@ -63,6 +66,20 @@ public static class Messages
     public static string ProblemInvalidOperation => Get(nameof(ProblemInvalidOperation));
     public static string ProblemValidationFailed => Get(nameof(ProblemValidationFailed));
     public static string ProblemUnexpected => Get(nameof(ProblemUnexpected));
+    public static string ProblemPreconditionRequired => Get(nameof(ProblemPreconditionRequired));
+    public static string ProblemPreconditionFailed => Get(nameof(ProblemPreconditionFailed));
+
+    // --- optimistic concurrency ---
+
+    /// <summary>Detail of the 428 a write with no <c>If-Match</c> is refused with.</summary>
+    public static string IfMatchRequired => Get(nameof(IfMatchRequired));
+
+    /// <summary>
+    /// Detail of the 412 a write built on a superseded version is refused with.
+    /// Says plainly that nothing was saved: the client keeps the user's typed
+    /// work on screen, and the message is what tells them it is still theirs.
+    /// </summary>
+    public static string CollectionChangedElsewhere => Get(nameof(CollectionChangedElsewhere));
 
     // --- validation ---
     public static string FieldNamesMustBeUnique => Get(nameof(FieldNamesMustBeUnique));
@@ -73,6 +90,7 @@ public static class Messages
     public static string TooManyPhotos => Get(nameof(TooManyPhotos));
     public static string TooManyCopies => Get(nameof(TooManyCopies));
     public static string CopyIdsMustBeUnique => Get(nameof(CopyIdsMustBeUnique));
+    public static string SectionIdsMustBeUnique => Get(nameof(SectionIdsMustBeUnique));
     public static string ConditionInvalid => Get(nameof(ConditionInvalid));
     public static string CopyStatusInvalid => Get(nameof(CopyStatusInvalid));
     public static string AcquiredOnImplausible => Get(nameof(AcquiredOnImplausible));
@@ -92,6 +110,12 @@ public static class Messages
     // --- import / export archives ---
     public static string ArchiveUnreadable => Get(nameof(ArchiveUnreadable));
     public static string ArchiveHasNoCollections => Get(nameof(ArchiveHasNoCollections));
+
+    /// <summary>
+    /// The overwrite decisions did not pair an id with a version. The client
+    /// cannot recover by guessing, so the message says to start the import over.
+    /// </summary>
+    public static string ReplaceDecisionsMalformed => Get(nameof(ReplaceDecisionsMalformed));
     public static string ImportedCollectionName => Get(nameof(ImportedCollectionName));
     /// <param name="name">The collection's name in the archive.</param>
     public static string ImportedCollectionNameFor(string name) =>
@@ -126,6 +150,13 @@ public static class Messages
     public static string TenantNotFound => Get(nameof(TenantNotFound));
     public static string EmailCannotBeChanged => Get(nameof(EmailCannotBeChanged));
     public static string InvalidCredentials => Get(nameof(InvalidCredentials));
+
+    /// <summary>
+    /// Title of the 429 the login throttle answers with. One message for both
+    /// dimensions on purpose: naming the account as the throttled one would tell
+    /// an attacker the address has an account here.
+    /// </summary>
+    public static string TooManyLoginAttempts => Get(nameof(TooManyLoginAttempts));
 
     // --- mapping ---
     public static string UnknownGroupFieldType => Get(nameof(UnknownGroupFieldType));
