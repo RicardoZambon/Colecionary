@@ -84,7 +84,7 @@ public class CollectionService(
     /// make "exactly one of them wins" true rather than likely.
     /// </para>
     /// <para>
-    /// This replace deletes every group, item and member the payload does not
+    /// This replace deletes every group, section, item and member the payload does not
     /// carry, which is the whole reason the precondition is mandatory: an
     /// unguarded PUT from a stale tab is not a partial overwrite, it is a
     /// restore to an old document.
@@ -118,6 +118,9 @@ public class CollectionService(
             IconImageId = dto.IconImageId,
             Currency = dto.Currency,
             Groups = [.. dto.Groups.Select((g, i) => g.ToEntity(id, tenantId, i))],
+            // Array order is the order they are shown in, exactly like items:
+            // a section's position is editorial, not alphabetical.
+            Sections = [.. dto.Sections.Select((sec, i) => sec.ToEntity(id, tenantId, i))],
             Items = [.. dto.Items.Select((it, i) => it.ToEntity(id, tenantId, i, now))],
             Members = [.. dto.Members.Select(m => m.ToEntity(id, tenantId))],
         };

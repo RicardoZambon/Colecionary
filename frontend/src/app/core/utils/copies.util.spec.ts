@@ -27,6 +27,7 @@ function item(copies: ItemCopy[], value = 100, tags: string[] = []): Item {
     year: 1995,
     value,
     groupId: 'g1',
+    sectionId: '',
     tags,
     img: 'ct.jpg',
     custom: [],

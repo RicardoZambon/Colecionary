@@ -56,6 +56,10 @@ Full detail in [`backend/README.md`](backend/README.md).
 3. **The API contract mirrors `VaultApi`** (frontend). JSON stays camelCase
    with string enums so the Angular models never change. Contract changes must
    update both sides plus the integration tests.
+   Sections travel in the same document (`CollectionDto.Sections`,
+   `ItemDto.SectionId`), both **optional on the wire and normalised** to `[]` /
+   `""` — that DTO is also the archive format, so an export taken before
+   sections existed has to restore rather than fail.
    **A write to a collection or any of its items requires an `If-Match`
    carrying the version the client last synchronised with**, and a missing
    precondition is refused with `428` — an optional precondition only protects
@@ -66,9 +70,16 @@ Full detail in [`backend/README.md`](backend/README.md).
    token has no business in a backup. Item writes bump the collection's version
    and are guarded by it — there is nowhere to put a per-item token, so the real
    choice was collection-wide or nothing, and nothing loses updates in silence.
-4. **Tests:** integration tests run against real SQL Server (Testcontainers);
+4. **The aggregate is Collection + Groups + Sections + Items + Members.**
+   Every one of them needs a `MergeByKey` block in
+   `CollectionRepository.ReplaceGraph` (plain assignment, never a coalesce —
+   clearing a target back to null is a legitimate edit) and needs to be
+   recognised by `CollectionVersionInterceptor`. A child written without moving
+   the root's version is a silently lost update, which is the one failure that
+   whole feature exists to prevent.
+5. **Tests:** integration tests run against real SQL Server (Testcontainers);
    tenant isolation has dedicated coverage that must stay green.
-5. **User-facing API text is localized, and the middleware order is load-bearing.**
+6. **User-facing API text is localized, and the middleware order is load-bearing.**
    Validation messages, ProblemDetails titles and service exceptions come from
    `Vault.Application/Resources/Messages.resx` (+ `.pt-BR.resx`), resolved
    against `CurrentUICulture`, which `UseRequestLocalization` sets from the
@@ -83,14 +94,14 @@ Full detail in [`backend/README.md`](backend/README.md).
    culture)`, or the test becomes a second copy of the English translation that
    drifts silently. `MessageResourceTests` pins name parity and placeholders
    across both files; `LocalizationTests` pins the pipeline order.
-6. **Tables are PascalCase and explicitly schema-qualified.** Schemas are
+7. **Tables are PascalCase and explicitly schema-qualified.** Schemas are
    declared only in `VaultSchemas` (`Identity`, `Catalog`, `Store`, `Storage`);
    every configuration calls `ToTable("Name", VaultSchemas.X)` and columns —
    JSON container columns included — are PascalCase.
    `TableNamingConventionTests` fails the build otherwise. Migrations predating
    `UseSchemaQualifiedPascalCaseNames` keep their old lowercase names; never
    retro-edit an applied migration.
-7. **Image bytes live in `IImageStore`, never in the database.** The `Images`
+8. **Image bytes live in `IImageStore`, never in the database.** The `Images`
    row is metadata only (id → tenant, content type). `FileSystemImageStore`
    writes `{ImageStorage:Root}/{tenantId}/{imageId}.{ext}` — **one directory per
    tenant**, so a tenant's images are a unit you can copy, quota or delete, and
@@ -158,7 +169,24 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    remembered group id passes through `resolveGroupId` first — blank, the
    `UNGROUPED_ID` bucket sentinel and a since-deleted group all collapse to `''`.
    `UNGROUPED_ID` is a key to read by, never a value to store.
-5. **Image framing is a focal point, never a crop.** Every surface renders with
+5. **A section is a separator inside one group, never a level.** A `Section`
+   (`{ id, groupId, name, target }`) labels a run of a group's items;
+   `item.sectionId` points at it, `''` means none. It has **no `parentId`, no
+   `fields`, no `sort`** — the recursion already lives on `GroupNode`, fields
+   are taxonomy, and a run inside one ordered list cannot declare its own
+   order. What it has and a group does not is a persisted position: order is
+   the array order of `collection.sections`, read only through `sectionsOf`
+   (`core/utils/sections.util.ts`), because Bronze → Prata → Ouro is a
+   progression the alphabet reads Bronze, Ouro, Prata. **A section orders, it
+   does not scope:** `sortItems` takes `sectionRank` as its *primary* key and
+   `chunkBySection` only cuts the already-ordered list into runs, each entry
+   keeping its index **in the list** — which is what leaves `scopeItems`,
+   `subtreeIds`, the breadcrumb and the item page's `←`/`→` untouched.
+   Narrowing to one run is a filter (`?s=`), never a destination. A reference
+   to another group's section, or to a deleted one, resolves to "no section"
+   rather than failing — groups, sections and items arrive in the same PUT, so
+   cross-checking them would refuse legitimate intermediate states.
+6. **Image framing is a focal point, never a crop.** Every surface renders with
    `background-size: cover`, so which part shows is one property:
    `background-position`. An image carries `focal: {x, y}` (0–1) on its own row,
    so one adjustment fixes the card, the gallery and the banner at once. Bind
@@ -171,7 +199,7 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    be one step, which is why closing the editor destroyed the upload and why
    only the first file of a batch could be framed. Never reintroduce a framing
    step that gates an upload — the overlay must always be safe to dismiss.
-6. **Ask for the size you are going to render.** Every image URL carries a
+7. **Ask for the size you are going to render.** Every image URL carries a
    variant: `images.url(id, 'thumb' | 'display' | 'full')`. A card or tile takes
    `thumb` (400px), a banner or gallery main image takes `display` (1400px), and
    `full` is the original, which only the lightbox's "open original" link wants.
@@ -181,7 +209,7 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    Animated GIFs are never derived, so they keep moving.
    **The cover photo is `photoIds[0]`** — there is no `coverId`, and reordering
    through `ui-photo-manager` is how it changes.
-7. **No user-facing string lives in a component.** The app ships pt-BR and en,
+8. **No user-facing string lives in a component.** The app ships pt-BR and en,
    switchable at runtime. Every string is a key in `core/i18n/messages/`,
    rendered through the `t` pipe in templates or `I18nService.t` in code;
    `en.ts` declares the keys and `pt-BR.ts` is `Record<MessageKey, string>`, so
@@ -211,15 +239,16 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    currency, because adding BRL to USD is not an amount of money in either.
    `SUPPORTED_CURRENCIES` mirrors `Money.SupportedCurrencies` on the backend
    and the two move together, like the condition and role whitelists.
-8. **All data flows through the abstract `VaultApi`**
+9. **All data flows through the abstract `VaultApi`**
    (`frontend/src/app/core/api/vault-api.ts`), fulfilled by `HttpVaultApi`
    against the .NET backend. There is no mocked data in the frontend — demo
    data lives in the backend seeder. Feature code only ever sees the abstract
    contract.
-9. **Signals + zoneless + OnPush.** State lives in signal stores
+10. **Signals + zoneless + OnPush.** State lives in signal stores
    (`core/state`); no Zone.js patterns.
-10. **URL is state.** Selected group = `?g=`, view = `?v=`, item filters and
-   order = `?cond=` / `?own=` / `?sort=` + `?dir=`, settings tabs = `?tab=`, ids
+11. **URL is state.** Selected group = `?g=`, section = `?s=`, view = `?v=`,
+   item filters and order = `?cond=` / `?own=` / `?sort=` + `?dir=`, settings
+   tabs = `?tab=`, ids
    in the path. In-collection navigation preserves the query string
    (`queryParamsHandling: 'preserve'`), which is what lets an open item rebuild
    the exact list the grid showed and step to its neighbours. Query strings are
@@ -229,10 +258,10 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    first time a filter changed. Links that open a group go through
    `groupLinkParams`, which keeps the filters and drops the ad-hoc order, since
    every group declares its own.
-11. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
+12. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
    `:focus-visible`, status never communicated by color alone. Anything
    draggable also needs a keyboard path (`ui-reorder`, `ui-image-focus`).
-12. **Verify before merging:** `npm run build` clean (warnings included — the
+13. **Verify before merging:** `npm run build` clean (warnings included — the
    6 kB per-component style budget is real), unit tests green, and the
    affected flows exercised in the browser in at least one dark theme **and in
    Portuguese** — it runs ~20% longer than English, so that is where text

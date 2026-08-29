@@ -115,6 +115,9 @@
   <data name="CopyIdsMustBeUnique" xml:space="preserve">
     <value>Os ids dos exemplares precisam ser únicos dentro de um item.</value>
   </data>
+  <data name="SectionIdsMustBeUnique" xml:space="preserve">
+    <value>Os ids das seções precisam ser únicos dentro de uma coleção.</value>
+  </data>
   <data name="ConditionInvalid" xml:space="preserve">
     <value>O estado precisa ser Mint, Good ou Fair.</value>
   </data>

@@ -117,6 +117,24 @@ npm test -- --watch=false</code></pre>
           de forma confiável por HTTP</td>
     </tr>
     <tr>
+      <td>Uma seção volta na ordem em que foi arrumada, e um target limpa para null</td>
+      <td><code>ContractTests.Collection_Sections_RoundTripInOrder_AndMergeLikeGroups</code></td>
+      <td>Um <code>MergeByKey</code> faltando ou coalescido: Bronze/Prata/Ouro
+          reordena sozinho, ou o target salva na criação e nunca mais muda</td>
+    </tr>
+    <tr>
+      <td>Uma seção precisa de um grupo; uma referência solta não</td>
+      <td><code>ContractTests.Collection_Section_ReferencingNothing_IsRefused</code>,
+          <code>ValidatorTests.Section_ReferencingAGroupNotInThePayload_IsStillAccepted</code></td>
+      <td>Ou separadores órfãos, ou 400 em estados intermediários legítimos do
+          mesmo documento</td>
+    </tr>
+    <tr>
+      <td>Arquivo escrito antes das seções ainda restaura</td>
+      <td><code>ArchiveTests.Archive_WrittenBeforeSectionsExisted_ReadsAsACollectionWithNone</code></td>
+      <td>Todo backup antigo passa a falhar na importação</td>
+    </tr>
+    <tr>
       <td>PUT sem <code>If-Match</code> é recusado e não escreve</td>
       <td><code>APutWithNoIfMatch_IsRefused_AndWritesNothing</code></td>
       <td>A precondição vira opcional — que é o mesmo que não existir</td>
@@ -251,6 +269,14 @@ npm test -- --watch=false</code></pre>
     Lógica pura ganha spec ao lado do fonte (<code>*.spec.ts</code>, Vitest).
     <code>core/utils/</code> é quase inteiramente coberto — é onde vive tudo que
     duas telas poderiam implementar de formas divergentes.
+  </li>
+  <li>
+    A ordenação por seção é prendida em três níveis, porque um erro em qualquer
+    um deles é invisível: <code>sort.util.spec.ts</code> (a faixa é a chave
+    primária, e a direção inverte itens e não faixas),
+    <code>sections.util.spec.ts</code> (o corte preserva os índices <em>da
+    lista</em>) e <code>browse.util.spec.ts</code> (com zero seções, a lista é
+    idêntica à de antes).
   </li>
   <li>
     Um spec que asserta texto visível <strong>tem que fixar o idioma</strong>

@@ -269,6 +269,28 @@
   </dl></div>
 </details>
 
+
+<details class="adr">
+  <summary><span class="id">ADR-39</span> Separador é uma entidade própria (<code>Section</code>), não mais um nível da árvore</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Sem outra ferramenta, sub-grupos viravam separadores: “Bonecos ▸ Diecast ▸ 1987–1991 ▸ Original Bandai ▸ <strong>Espanha</strong>” terminava a taxonomia, e “Cavaleiros de Bronze / Prata / Ouro” eram só categorias para arrumar os itens de Espanha. Como grupos, elas custavam caro — <code>defaultView(hasChildren)</code> abria Espanha num painel de cards, nunca numa lista com os três lado a lado; a listagem era alfabética, e <strong>Bronze → Prata → Ouro é uma progressão de casta</strong> que o alfabeto lê Bronze, Ouro, Prata; e cada uma podia declarar campos e ordenação, fragmentando justamente a lista que ela dividia.</dd>
+    <dt>Alternativas</dt><dd><strong>(a)</strong> Um flag <code>Group.IsSection</code>: resolveria a migração de graça, mas obrigaria todo caminhamento de árvore a filtrar por tipo, e o primeiro filtro esquecido põe um separador no breadcrumb — o tipo tem que tornar isso irrepresentável. <strong>(b)</strong> Agrupar por um campo customizado (<code>Casta: Bronze</code>): zero entidade nova e reaproveita a herança de campos, mas não tem ordem manual — o mesmo Bronze/Ouro/Prata de novo — nem meta por faixa, e renomear significa reescrever todos os itens. Continua sendo uma boa <em>visão</em> futura, ao lado das seções.</dd>
+    <dt>Decisão</dt><dd>Uma tabela <code>Catalog.Sections</code> e <code>Item.SectionId</code>. A seção tem nome, <code>Target</code> e <strong><code>SortOrder</code></strong>; deliberadamente não tem <code>ParentId</code>, <code>Fields</code> nem <code>Sort</code>. No frontend ela <strong>ordena, não escopa</strong>: é a chave primária de <code>sortItems</code>, e <code>chunkBySection</code> só corta a lista já ordenada.</dd>
+    <dt>Consequência</dt><dd>Espanha volta a abrir na grade, com as três faixas visíveis e na ordem que o usuário arrumou. As setas ← → da página do item, <code>scopeItems</code>, <code>subtreeIds</code>, a árvore e o breadcrumb não mudaram nada — andam pela mesma lista plana. O preço é uma quarta entidade no agregado, que <code>ReplaceGraph</code> e <code>CollectionVersionInterceptor</code> precisam conhecer; um bloco <code>MergeByKey</code> esquecido lá é update perdido em silêncio.</dd>
+    <dt>Imposta por</dt><dd><code>ContractTests</code>, <code>ValidatorTests</code>, <code>ArchiveTests</code>, <code>sections.util.spec.ts</code>, <code>sort.util.spec.ts</code>, <code>browse.util.spec.ts</code>, <code>group-stats.util.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-40</span> <code>?s=</code> é um filtro, e a conversão de sub-grupos é do usuário</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Uma seção longa merece poder ser isolada, e as árvores que já usam sub-grupos como separadores precisam de um caminho de volta.</dd>
+    <dt>Decisão</dt><dd><code>?s=</code> entra em <code>BrowseCriteria</code> ao lado de <code>?cond=</code> e <code>?own=</code>, e o cabeçalho da faixa é um <code>&lt;button aria-pressed&gt;</code> que alterna — não um destino de breadcrumb. <code>groupLinkParams</code> descarta <code>?s=</code> ao trocar de grupo. A conversão “sub-grupos → seções” é uma ação explícita nas configurações e só aparece quando <strong>todos</strong> os filhos são convertíveis (sem filhos, sem campos, sem sort).</dd>
+    <dt>Consequência</dt><dd>Como filtro, a seção não custa nada às setas do item nem ao breadcrumb. A conversão parcial é recusada de propósito: deixaria o grupo com filhos <em>e</em> seções, e ele continuaria abrindo num painel de cards — exatamente o que se estava consertando. Remover uma seção nunca é recusado (ao contrário de um grupo com itens): ela rotula, não contém, então os itens só caem na faixa “sem seção”.</dd>
+    <dt>Imposta por</dt><dd><code>browse-params.spec.ts</code>, <code>collection-settings-page.spec.ts</code></dd>
+  </dl></div>
+</details>
+
 <h2 id="seguranca-adr">Segurança</h2>
 
 <details class="adr">

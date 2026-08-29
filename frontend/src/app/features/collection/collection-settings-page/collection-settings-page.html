@@ -82,6 +82,75 @@
               <ui-button variant="link" size="sm" (click)="pendingFieldGroupId.set(row.node.id)">{{ 'collSettings.groups.addField' | t }}</ui-button>
             </div>
 
+            <div class="group-row__sections">
+              <span class="fields-label">{{ 'collSettings.sections.label' | t }}</span>
+              @for (row2 of row.sections; track row2.section.id; let i = $index) {
+                <span class="section-chip">
+                  <ui-text-input
+                    class="rename"
+                    variant="subtle"
+                    [ariaLabel]="'collSettings.sections.renameAria' | t: { name: row2.section.name }"
+                    [value]="row2.section.name"
+                    (valueChange)="renameSection(row2.section.id, $event)"
+                  />
+                  <span class="count">{{ 'collSettings.sections.itemCount' | t: { n: row2.count } }}</span>
+                  <ui-text-input
+                    class="target"
+                    type="number"
+                    variant="subtle"
+                    placeholder="—"
+                    [ariaLabel]="'collSettings.sections.targetAria' | t: { name: row2.section.name }"
+                    [value]="row2.target"
+                    (valueChange)="setSectionTarget(row2.section.id, $event)"
+                  />
+                  <!-- Sections are the one thing here with a hand-arranged
+                       order, so they need move controls. Plain buttons rather
+                       than `ui-reorder`: that one is absolutely positioned to
+                       overlay a draggable card, and this is an inline row. -->
+                  <ui-button
+                    variant="icon"
+                    size="sm"
+                    [disabled]="i === 0"
+                    [ariaLabel]="'ui.reorder.earlier' | t: { name: row2.section.name }"
+                    (click)="moveSection(row.node.id, i, i - 1)"
+                  >↑</ui-button>
+                  <ui-button
+                    variant="icon"
+                    size="sm"
+                    [disabled]="i === row.sections.length - 1"
+                    [ariaLabel]="'ui.reorder.later' | t: { name: row2.section.name }"
+                    (click)="moveSection(row.node.id, i, i + 1)"
+                  >↓</ui-button>
+                  <ui-button
+                    variant="icon"
+                    size="sm"
+                    [ariaLabel]="'collSettings.sections.remove' | t: { name: row2.section.name }"
+                    (click)="removeSection(row2.section.id)"
+                  >✕</ui-button>
+                </span>
+              }
+              @if (pendingSectionGroupId() === row.node.id) {
+                <span class="section-chip section-chip--new">
+                  <input
+                    class="field-input"
+                    [placeholder]="'collSettings.sections.placeholder' | t"
+                    [attr.aria-label]="'collSettings.sections.newAria' | t"
+                    autofocus
+                    (keydown)="newSectionKeydown($event, row.node.id)"
+                    (blur)="commitNewSection(row.node.id, $any($event.target).value)"
+                  />
+                </span>
+              }
+              <ui-button variant="link" size="sm" (click)="pendingSectionGroupId.set(row.node.id)">{{ 'collSettings.sections.add' | t }}</ui-button>
+              @if (row.convertible) {
+                <ui-button
+                  variant="link"
+                  size="sm"
+                  (click)="convertChildrenToSections(row.node.id)"
+                >{{ 'collSettings.sections.convert' | t }}</ui-button>
+              }
+            </div>
+
             <div class="group-row__order">
               <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
               <ui-select
@@ -135,6 +204,8 @@
           {{ 'collSettings.groups.finePrint2' | t }}
           <strong>{{ 'collSettings.groups.finePrintTarget' | t }}</strong>
           {{ 'collSettings.groups.finePrint3' | t }}
+          <br />
+          {{ 'collSettings.sections.finePrint' | t }}
         </div>
       </ui-card>
     }

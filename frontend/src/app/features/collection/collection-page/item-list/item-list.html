@@ -1,41 +1,55 @@
 <ui-card>
+  <!-- Once, at the top: the columns do not change between sections, and
+       repeating them under every heading would double the chrome. -->
   <div class="list-head" [class.list--manual]="manual()">
     <span>{{ 'itemList.name' | t }}</span><span>{{ 'itemList.group' | t }}</span><span>{{ 'itemList.year' | t }}</span><span class="right">{{ 'itemList.copies' | t }}</span><span>{{ 'itemList.condition' | t }}</span><span class="right">{{ 'itemList.value' | t }}</span>
   </div>
-  @for (item of items(); track item.id; let i = $index) {
-    <div
-      class="list-line"
-      [class.dragging]="drag.index() === i"
-      [attr.draggable]="manual() ? true : null"
-      (dragstart)="drag.start($event, i)"
-      (dragover)="drag.over($event)"
-      (drop)="onDrop($event, i)"
-      (dragend)="drag.end()"
-    >
-      <a
-        class="list-row"
-        [class.list--manual]="manual()"
-        [routerLink]="['/c', collectionId(), 'items', item.id]"
-        queryParamsHandling="preserve"
+
+  @for (chunk of chunks(); track chunk.id) {
+    @if (chunk.section || chunks().length > 1) {
+      <app-section-header
+        [name]="chunk.section?.name ?? ('section.none' | t)"
+        [stats]="sectionStats().get(chunk.id) ?? null"
+        [active]="activeSection() === chunk.id"
+        (toggle)="sectionToggled.emit(chunk.id)"
+      />
+    }
+
+    @for (entry of chunk.entries; track entry.item.id) {
+      <div
+        class="list-line"
+        [class.dragging]="drag.index() === entry.index"
+        [attr.draggable]="manual() ? true : null"
+        (dragstart)="drag.start($event, entry.index)"
+        (dragover)="drag.over($event)"
+        (drop)="onDrop($event, entry.index)"
+        (dragend)="drag.end()"
       >
-        <span class="name">
-          @if (fieldChip(item); as chip) { <span class="field">{{ chip }}</span> }
-          {{ item.name }}
-        </span>
-        <span class="group">{{ groupName(item) }}</span>
-        <span class="year">{{ item.year }}</span>
-        <span class="right copies" [class.copies--many]="item.copies.length > 1">{{ item.copies.length }}</span>
-        <span class="cond" [class]="'tone-' + badgeTone(item)">{{ badgeLabel(item) }}</span>
-        <span class="right value" [attr.title]="valueHint(item)">{{ item | itemValue: currency() }}</span>
-      </a>
-      @if (manual()) {
-        <ui-reorder
-          [label]="item.name"
-          [first]="i === 0"
-          [last]="i === items().length - 1"
-          (moved)="moved.emit({ from: i, to: i + $event })"
-        />
-      }
-    </div>
+        <a
+          class="list-row"
+          [class.list--manual]="manual()"
+          [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
+          queryParamsHandling="preserve"
+        >
+          <span class="name">
+            @if (fieldChip(entry.item); as chip) { <span class="field">{{ chip }}</span> }
+            {{ entry.item.name }}
+          </span>
+          <span class="group">{{ groupName(entry.item) }}</span>
+          <span class="year">{{ entry.item.year }}</span>
+          <span class="right copies" [class.copies--many]="entry.item.copies.length > 1">{{ entry.item.copies.length }}</span>
+          <span class="cond" [class]="'tone-' + badgeTone(entry.item)">{{ badgeLabel(entry.item) }}</span>
+          <span class="right value" [attr.title]="valueHint(entry.item)">{{ entry.item | itemValue: currency() }}</span>
+        </a>
+        @if (manual()) {
+          <ui-reorder
+            [label]="entry.item.name"
+            [first]="entry.index === 0"
+            [last]="entry.index === items().length - 1"
+            (moved)="moved.emit({ from: entry.index, to: entry.index + $event })"
+          />
+        }
+      </div>
+    }
   }
 </ui-card>

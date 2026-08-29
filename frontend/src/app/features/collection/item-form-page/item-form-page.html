@@ -28,8 +28,17 @@
 
       <div class="pair">
         <ui-field [label]="'itemForm.group' | t">
-          <ui-select [options]="groupOptions()" [value]="groupId()" (valueChange)="groupId.set($event)" />
+          <ui-select [options]="groupOptions()" [value]="groupId()" (valueChange)="setGroupId($event)" />
         </ui-field>
+        @if (sectionOptions().length) {
+          <ui-field [label]="'itemForm.section' | t">
+            <ui-select
+              [options]="sectionOptions()"
+              [value]="sectionId()"
+              (valueChange)="sectionId.set($event)"
+            />
+          </ui-field>
+        }
         <ui-field [label]="'itemForm.year' | t">
           <ui-text-input [value]="year()" (valueChange)="year.set($event)" />
         </ui-field>

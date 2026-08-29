@@ -21,7 +21,8 @@ public static class DtoMapper
         collection.LinkShare,
         collection.BannerImageId,
         collection.IconImageId,
-        collection.Currency);
+        collection.Currency,
+        [.. collection.Sections.OrderBy(s => s.SortOrder).Select(ToDto)]);
 
     public static GroupNodeDto ToDto(this Group group) => new(
         group.Id,
@@ -31,6 +32,9 @@ public static class DtoMapper
         // Both columns travel together; half a configuration is no configuration.
         group.SortBy is null ? null : new GroupSortDto(group.SortBy, group.SortDirection ?? "asc"),
         group.Target);
+
+    public static SectionDto ToDto(this Section section) =>
+        new(section.Id, section.GroupId, section.Name, section.Target);
 
     public static ItemDto ToDto(this Item item) => new(
         item.Id,
@@ -44,7 +48,8 @@ public static class DtoMapper
         [.. item.Custom.Select(c => new CustomFieldValueDto(c.Key, c.Value))],
         [.. item.Copies.Select(ToDto)],
         item.PhotoIds,
-        item.CreatedAtUtc);
+        item.CreatedAtUtc,
+        item.SectionId);
 
     public static ItemCopyDto ToDto(this ItemCopy copy) => new(
         copy.Id,
@@ -88,6 +93,17 @@ public static class DtoMapper
         SortOrder = sortOrder,
     };
 
+    public static Section ToEntity(this SectionDto dto, string collectionId, Guid tenantId, int sortOrder) => new()
+    {
+        TenantId = tenantId,
+        CollectionId = collectionId,
+        Id = dto.Id,
+        GroupId = dto.GroupId,
+        Name = dto.Name,
+        Target = dto.Target,
+        SortOrder = sortOrder,
+    };
+
     public static Item ToEntity(this ItemDto dto, string collectionId, Guid tenantId, int sortOrder, DateTimeOffset createdAtUtc) => new()
     {
         TenantId = tenantId,
@@ -98,6 +114,7 @@ public static class DtoMapper
         Year = dto.Year,
         Value = dto.Value,
         GroupId = dto.GroupId,
+        SectionId = dto.SectionId,
         Tags = [.. dto.Tags],
         Img = dto.Img,
         Custom = [.. dto.Custom.Select(c => new CustomFieldValue { Key = c.Key, Value = c.Value })],
@@ -136,6 +153,7 @@ public static class DtoMapper
         item.Year = dto.Year;
         item.Value = dto.Value;
         item.GroupId = dto.GroupId;
+        item.SectionId = dto.SectionId;
         item.Tags = [.. dto.Tags];
         item.Img = dto.Img;
         item.Custom = [.. dto.Custom.Select(c => new CustomFieldValue { Key = c.Key, Value = c.Value })];

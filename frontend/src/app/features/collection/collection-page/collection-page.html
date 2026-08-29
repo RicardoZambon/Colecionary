@@ -77,21 +77,29 @@
         @case ('list') {
           <app-item-list
             [items]="items()"
+            [chunks]="chunks()"
+            [sectionStats]="sectionStats()"
+            [activeSection]="sectionFilter()"
             [collectionId]="coll.id"
             [manual]="manual()"
             [sortFieldName]="sortFieldName()"
             [groupNames]="groupNames()"
             (moved)="moveItem($event.from, $event.to)"
+            (sectionToggled)="toggleSection($event)"
           />
         }
         @default {
           <app-item-grid
             [items]="items()"
+            [chunks]="chunks()"
+            [sectionStats]="sectionStats()"
+            [activeSection]="sectionFilter()"
             [collectionId]="coll.id"
             [manual]="manual()"
             [sortFieldName]="sortFieldName()"
             [groupNames]="groupNames()"
             (moved)="moveItem($event.from, $event.to)"
+            (sectionToggled)="toggleSection($event)"
           />
         }
       }

@@ -72,6 +72,7 @@ export class ItemPage {
    * list rather than to whatever happens to come next in the collection.
    */
   readonly g = input<string | undefined>(undefined);
+  readonly s = input<string | undefined>(undefined);
   readonly cond = input<string | undefined>(undefined);
   readonly own = input<string | undefined>(undefined);
   readonly sort = input<string | undefined>(undefined);
@@ -132,10 +133,18 @@ export class ItemPage {
       collection.items,
       collection.groups,
       readCriteria(
-        { cond: this.cond(), own: this.own(), sort: this.sort(), dir: this.dir() },
+        {
+          s: this.s(),
+          cond: this.cond(),
+          own: this.own(),
+          sort: this.sort(),
+          dir: this.dir(),
+        },
         this.g() ?? null,
         this.store.query(),
+        collection.sections,
       ),
+      collection.sections,
     );
   });
 
@@ -152,10 +161,15 @@ export class ItemPage {
 
     const collection = this.collection();
     if (!collection) return inList;
-    const canonical = visibleItems(collection.items, collection.groups, {
-      groupId: this.g() ?? null,
-      ...NO_FILTERS,
-    });
+    const canonical = visibleItems(
+      collection.items,
+      collection.groups,
+      { groupId: this.g() ?? null, ...NO_FILTERS },
+      // The sections still apply: dropping the filters must not also reshuffle
+      // the fallback order, or the arrows would step through a sequence the
+      // grid never showed.
+      collection.sections,
+    );
     return { ...neighbours(canonical, this.itemId()), position: 0 };
   });
 

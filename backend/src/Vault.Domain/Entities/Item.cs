@@ -27,6 +27,13 @@ public class Item : ITenantOwned
 
     public string GroupId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The divider this item sits under inside its group, or empty for none.
+    /// Only honoured when the section belongs to <see cref="GroupId"/>; a
+    /// mismatch reads as "no section" rather than failing a write.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+
     public List<string> Tags { get; set; } = [];
 
     public string Img { get; set; } = string.Empty;

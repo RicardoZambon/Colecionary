@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import { UNSECTIONED_ID } from '../../core/utils/sections.util';
 import {
   groupLinkParams,
   readCondition,
   readCriteria,
   readOwn,
+  readSection,
   readSort,
+  sectionParams,
   sortParams,
 } from './browse-params';
 
@@ -46,6 +49,7 @@ describe('browse-params', () => {
         readCriteria({ cond: 'Good', own: 'owned', sort: 'year', dir: 'desc' }, 'cards', 'holo'),
       ).toEqual({
         groupId: 'cards',
+        sectionId: null,
         condition: 'Good',
         own: 'owned',
         query: 'holo',
@@ -66,11 +70,41 @@ describe('browse-params', () => {
       expect(readSort(params['sort'], params['dir'])).toEqual(sort);
     });
 
-    it('drops the ad-hoc order when opening a group, keeping everything else', () => {
+    it('drops the ad-hoc order and the section when opening a group', () => {
       // Each group declares its own order; a pick made in one must not outlive
-      // it. The filters survive because the link merges.
-      expect(groupLinkParams('cards')).toEqual({ g: 'cards', sort: null, dir: null });
-      expect(groupLinkParams(null)).toEqual({ g: null, sort: null, dir: null });
+      // it. The section goes for a stronger reason — it belongs to exactly one
+      // group, so carrying it across would name a divider the new group does
+      // not have and empty the screen. The filters survive: the link merges.
+      expect(groupLinkParams('cards')).toEqual({ g: 'cards', sort: null, dir: null, s: null });
+      expect(groupLinkParams(null)).toEqual({ g: null, sort: null, dir: null, s: null });
+    });
+  });
+
+  describe('sections', () => {
+    const SECTIONS = [
+      { id: 'bronze', groupId: 'cards', name: 'Bronze', target: null },
+      { id: 'outra', groupId: 'games', name: 'Outra', target: null },
+    ];
+
+    it('accepts a divider the open group actually has', () => {
+      expect(readSection('bronze', SECTIONS, 'cards')).toBe('bronze');
+    });
+
+    it('refuses one belonging to another group', () => {
+      // Unlike a renamed sort field, this does not fade quietly: a section id
+      // from a group you have left would match nothing and empty the screen.
+      expect(readSection('outra', SECTIONS, 'cards')).toBeNull();
+      expect(readSection('gone', SECTIONS, 'cards')).toBeNull();
+      expect(readSection('bronze', SECTIONS, null)).toBeNull();
+    });
+
+    it('lets the leftovers bucket through without a group of its own', () => {
+      expect(readSection(UNSECTIONED_ID, SECTIONS, 'cards')).toBe(UNSECTIONED_ID);
+    });
+
+    it('round-trips through the URL, and clears with null', () => {
+      expect(sectionParams('bronze')).toEqual({ s: 'bronze' });
+      expect(sectionParams(null)).toEqual({ s: null });
     });
   });
 });

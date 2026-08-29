@@ -180,7 +180,7 @@ describe('SettingsPage', () => {
     TestBed.resetTestingModule();
   });
 
-  // --- the tab is URL state (rule 10) ---
+  // --- the tab is URL state (rule 11) ---
 
   it('opens on the tab the query string names', async () => {
     const page = await mount({ tab: 'account' });
@@ -197,7 +197,7 @@ describe('SettingsPage', () => {
     );
   });
 
-  // --- the account currency (rule 7) ---
+  // --- the account currency (rule 8) ---
 
   it('applies a saved account currency to everything that renders an amount', async () => {
     // The picker writes through the store, which is the only writer of the

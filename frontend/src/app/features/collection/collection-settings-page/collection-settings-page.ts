@@ -13,9 +13,12 @@ import {
   GroupFieldType,
   GroupNode,
   MemberRole,
+  Section,
   SortDirection,
 } from '../../../core/models';
-import { fieldsFor, flattenTree, pathOf, sortFor, subtreeIds } from '../../../core/utils/groups.util';
+import { childrenOf, fieldsFor, flattenTree, pathOf, sortFor, subtreeIds } from '../../../core/utils/groups.util';
+import { sectionsOf } from '../../../core/utils/sections.util';
+import { moveInList } from '../../../core/utils/sort.util';
 import { SUPPORTED_CURRENCIES, currencyLabel, isCurrencyCode } from '../../../core/utils/money.util';
 import { fieldSortKey, sortByOptions, sortLabel } from '../../../core/utils/sort.util';
 import { TPipe } from '../../../shared/pipes/t.pipe';
@@ -131,6 +134,7 @@ export class CollectionSettingsPage {
   protected readonly draft = signal<Collection | null>(null);
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
   protected readonly pendingFieldGroupId = signal<string | null>(null);
+  protected readonly pendingSectionGroupId = signal<string | null>(null);
   protected readonly pendingFieldType = signal<GroupFieldType>('text');
   protected readonly inviteEmail = signal('');
   protected readonly inviteRole = signal<string>('Viewer');
@@ -192,11 +196,34 @@ export class CollectionSettingsPage {
         // parent declared is exactly what a sub-group usually wants.
         const fields = fieldsFor(draft.groups, node.id);
         const parentSort = node.parentId ? sortFor(draft.groups, node.parentId) : null;
+        const own = draft.items.filter(i => i.groupId === node.id);
+        const children = childrenOf(draft.groups, node.id);
         return {
           node,
           depth: depth - offset,
           count: draft.items.filter(i => new Set(subtreeIds(draft.groups, node.id)).has(i.groupId))
             .length,
+          sections: sectionsOf(draft.sections, node.id).map(section => ({
+            section,
+            count: own.filter(i => i.sectionId === section.id).length,
+            // Blank, not '0', for the same reason a group's target is blank:
+            // blank is what writes the null back.
+            target: section.target === null ? '' : String(section.target),
+          })),
+          /**
+           * Offered only when every sub-group could become a divider. A partial
+           * conversion would leave the group with children *and* sections — it
+           * would still open as a board of cards, which is the very thing the
+           * user was trying to stop.
+           */
+          convertible:
+            children.length > 0 &&
+            children.every(
+              child =>
+                childrenOf(draft.groups, child.id).length === 0 &&
+                child.fields.length === 0 &&
+                child.sort === null,
+            ),
           sortBy: node.sort?.by ?? INHERIT,
           sortDirection: node.sort?.direction ?? 'asc',
           // Empty string, not '0': the input must read as blank when no target
@@ -450,6 +477,121 @@ export class CollectionSettingsPage {
     const parsed = Number.parseInt(raw.trim(), 10);
     const target = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     this.mutateGroup(groupId, g => ({ ...g, target }));
+  }
+
+  // --- sections ---
+
+  /**
+   * Sections are edited here and nowhere else, which is deliberate: unlike a
+   * group there is no tree to drop one into, and the only thing that needs
+   * arranging — their order — is a property of the group they belong to.
+   */
+  protected newSectionKeydown(event: KeyboardEvent, groupId: string): void {
+    const input = event.target as HTMLInputElement;
+    if (event.key === 'Enter') this.commitNewSection(groupId, input.value);
+    else if (event.key === 'Escape') {
+      input.value = '';
+      this.pendingSectionGroupId.set(null);
+    }
+  }
+
+  protected commitNewSection(groupId: string, name: string): void {
+    if (this.pendingSectionGroupId() !== groupId) return;
+    this.pendingSectionGroupId.set(null);
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    this.mutate(d => ({
+      ...d,
+      sections: [...d.sections, { id: `s${Date.now()}`, groupId, name: trimmed, target: null }],
+    }));
+    this.toast.flash(this.i18n.t('toast.section.added', { name: trimmed }));
+  }
+
+  protected renameSection(id: string, name: string): void {
+    // No rename pin here, unlike groups: sections keep the order they were
+    // arranged in, so a row cannot move out from under the cursor.
+    this.mutate(d => ({
+      ...d,
+      sections: d.sections.map(s => (s.id === id ? { ...s, name } : s)),
+    }));
+  }
+
+  /** Same "blank means unset" rule as a group's target. */
+  protected setSectionTarget(id: string, raw: string): void {
+    const parsed = Number.parseInt(raw.trim(), 10);
+    const target = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    this.mutate(d => ({
+      ...d,
+      sections: d.sections.map(s => (s.id === id ? { ...s, target } : s)),
+    }));
+  }
+
+  /**
+   * Removes a divider. Unlike a group this never refuses: a section holds
+   * nothing, it only labels, so its items simply fall into the unsectioned run
+   * of the same group. Their `sectionId` is cleared rather than left dangling —
+   * it would resolve to "no section" either way, but a stored reference to
+   * something deleted is a thing to explain later.
+   */
+  protected removeSection(id: string): void {
+    this.mutate(d => ({
+      ...d,
+      sections: d.sections.filter(s => s.id !== id),
+      items: d.items.map(item => (item.sectionId === id ? { ...item, sectionId: '' } : item)),
+    }));
+    this.toast.flash(this.i18n.t('toast.section.removed'));
+  }
+
+  /** Moves a section within its group; the array order is the display order. */
+  protected moveSection(groupId: string, from: number, to: number): void {
+    this.mutate(d => {
+      const mine = sectionsOf(d.sections, groupId);
+      const reordered = moveInList(mine, from, to);
+      if (reordered === mine) return d;
+      // Rebuilt by walking the original array and handing back the reordered
+      // ones in place, so sections of other groups keep their positions.
+      const queue = [...reordered];
+      return {
+        ...d,
+        sections: d.sections.map(s => (s.groupId === groupId ? queue.shift()! : s)),
+      };
+    });
+  }
+
+  /**
+   * Turns every sub-group of `groupId` into a divider of it.
+   *
+   * This is the migration for a tree that used sub-groups as separators, which
+   * is what they were reached for before there was anything else. Each child
+   * becomes a section carrying its name and its target, its items move up to
+   * the parent under that section, and the child group is deleted. Order starts
+   * alphabetical — the order those children were already displayed in — and is
+   * then the user's to arrange, which is the whole point.
+   */
+  protected convertChildrenToSections(groupId: string): void {
+    const draft = this.draft();
+    if (!draft) return;
+    const children = childrenOf(draft.groups, groupId);
+    if (!children.length) return;
+
+    const sections: Section[] = children.map((child, index) => ({
+      id: `s${Date.now()}${index}`,
+      groupId,
+      name: child.name,
+      target: child.target,
+    }));
+    const sectionByGroup = new Map(children.map((child, index) => [child.id, sections[index].id]));
+
+    this.mutate(d => ({
+      ...d,
+      groups: d.groups.filter(g => !sectionByGroup.has(g.id)),
+      sections: [...d.sections, ...sections],
+      items: d.items.map(item => {
+        const sectionId = sectionByGroup.get(item.groupId);
+        return sectionId ? { ...item, groupId, sectionId } : item;
+      }),
+    }));
+    this.toast.flash(this.i18n.t('toast.section.converted', { n: children.length }));
   }
 
   // --- sharing ---

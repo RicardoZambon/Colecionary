@@ -60,6 +60,7 @@ public class ImageReferenceCoverageTests
         "Collection.TenantId",
         "CollectionMember.TenantId",
         "Group.TenantId",
+        "Section.TenantId",     // Tenancy; a section carries no image of its own.
         "Item.TenantId",
         "StoredImage.TenantId",     // Which partition an image's own bytes live in.
         "StoredImage.Id",           // The image itself, not a reference to one.

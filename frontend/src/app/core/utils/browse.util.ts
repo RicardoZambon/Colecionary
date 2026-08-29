@@ -1,7 +1,8 @@
-import { Condition, GroupNode, GroupSort, Item } from '../models';
+import { Condition, GroupNode, GroupSort, Item, Section } from '../models';
 import { isOwned } from './copies.util';
 import { UNGROUPED_ID } from './group-stats.util';
 import { fieldsFor, sortFor, subtreeIds } from './groups.util';
+import { UNSECTIONED_ID, sectionRank } from './sections.util';
 import { DEFAULT_SORT, sortItems } from './sort.util';
 
 /**
@@ -20,13 +21,20 @@ export type OwnFilter = 'owned' | 'wanted' | null;
 
 /**
  * Everything that decides which items are on screen, and in what order. All of
- * it lives in the URL (`?g=`, `?cond=`, `?own=`, `?sort=`/`?dir=`) except the
+ * it lives in the URL (`?g=`, `?s=`, `?cond=`, `?own=`, `?sort=`/`?dir=`) except the
  * search, which is global to the app — so an open item can rebuild the exact
  * list the grid showed without the grid handing it anything.
  */
 export interface BrowseCriteria {
   /** `?g=` — a group id, {@link UNGROUPED_ID}, or null for the whole collection. */
   groupId: string | null;
+  /**
+   * `?s=` — narrows to one divider of the open group, or {@link UNSECTIONED_ID}
+   * for the leftovers. Null is "all of them", which is the normal case: a
+   * section is a heading you read past, not a place you go, so this is a filter
+   * alongside `condition` and `own` rather than a second kind of scope.
+   */
+  sectionId: string | null;
   condition: Condition | null;
   own: OwnFilter;
   /** The global search box. Blank means no search. */
@@ -36,6 +44,7 @@ export interface BrowseCriteria {
 }
 
 export const NO_FILTERS: Omit<BrowseCriteria, 'groupId'> = {
+  sectionId: null,
   condition: null,
   own: null,
   query: '',
@@ -56,24 +65,48 @@ export function scopeItems(items: Item[], groups: GroupNode[], groupId: string |
   return items.filter(item => subtree.has(item.groupId));
 }
 
-/** The list a screen shows: scoped, filtered, then ordered. */
+/**
+ * The list a screen shows: scoped, filtered, then ordered.
+ *
+ * `sections` is the whole collection's; only the open group's apply, and
+ * `sectionRank` is what decides that — an item pointing at another group's
+ * section, or at one deleted since, ranks as unsectioned instead of being an
+ * error. At the collection root and in the unfiled bucket no group is open, so
+ * no section applies and the list behaves exactly as it did before sections
+ * existed.
+ */
 export function visibleItems(
   items: Item[],
   groups: GroupNode[],
   criteria: BrowseCriteria,
+  sections: Section[] = [],
 ): Item[] {
   const query = criteria.query.trim().toLowerCase();
+  const rank = sectionRank(sections, criteria.groupId);
 
   const filtered = scopeItems(items, groups, criteria.groupId).filter(
     item =>
       // An item matches a condition when any of its copies is in it.
       (!criteria.condition || item.copies.some(c => c.condition === criteria.condition)) &&
       (!criteria.own || (criteria.own === 'owned' ? isOwned(item) : !isOwned(item))) &&
+      (!criteria.sectionId || inSection(item, criteria.sectionId, rank)) &&
       (!query || item.name.toLowerCase().includes(query)),
   );
 
   const sort = criteria.sort ?? sortFor(groups, criteria.groupId) ?? DEFAULT_SORT;
-  return sortItems(filtered, sort, fieldsFor(groups, criteria.groupId));
+  return sortItems(filtered, sort, fieldsFor(groups, criteria.groupId), rank);
+}
+
+/**
+ * Whether an item belongs to the section being filtered on. Membership goes
+ * through the rank map rather than comparing ids, so "this section" and "the
+ * leftovers" agree with what the headings show: an item whose `sectionId`
+ * names a section of some other group is unsectioned on this screen, and has
+ * to answer the {@link UNSECTIONED_ID} filter rather than its own stale id.
+ */
+function inSection(item: Item, sectionId: string, rank: ReadonlyMap<string, number>): boolean {
+  const applies = rank.has(item.sectionId);
+  return sectionId === UNSECTIONED_ID ? !applies : applies && item.sectionId === sectionId;
 }
 
 /** Where an item sits in a list and what it can step to. */

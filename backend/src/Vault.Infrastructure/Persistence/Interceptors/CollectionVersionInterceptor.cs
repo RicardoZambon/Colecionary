@@ -131,6 +131,7 @@ public sealed class CollectionVersionInterceptor : SaveChangesInterceptor
 
         if (root.ClrType != typeof(Collection)
             && root.ClrType != typeof(Group)
+            && root.ClrType != typeof(Section)
             && root.ClrType != typeof(Item)
             && root.ClrType != typeof(CollectionMember))
         {
@@ -141,7 +142,7 @@ public sealed class CollectionVersionInterceptor : SaveChangesInterceptor
             root.ClrType == typeof(Collection) ? nameof(Collection.Id) : nameof(Item.CollectionId);
 
         // Null here would mean "not part of a collection", which for one of the
-        // four aggregate types is not true — it would mean the ids could not be
+        // five aggregate types is not true — it would mean the ids could not be
         // read, and the entry would then be skipped in silence. Everything this
         // class exists to prevent happens in silence, so it refuses instead.
         return Read(entry, NameOnEntry(nameof(ITenantOwned.TenantId), hops)) is Guid tenantId

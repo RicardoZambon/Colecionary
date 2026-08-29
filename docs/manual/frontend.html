@@ -37,7 +37,7 @@
     <tr><td class="nowrap"><code>/settings</code></td><td><code>SettingsPage</code></td><td>Perfil, membros, tema, idioma, moeda, planos, export/import</td></tr>
     <tr><td class="nowrap"><code>/c/:collectionId</code></td><td><code>CollectionPage</code></td><td>Hero, toolbar, árvore de grupos, grade/lista de itens, dashboard de grupo</td></tr>
     <tr><td class="nowrap"><code>/c/:collectionId/settings</code></td><td><code>CollectionSettingsPage</code></td><td>Metadados, grupos, campos, ordenação, target, membros, moeda, banner/ícone</td></tr>
-    <tr><td class="nowrap"><code>/c/:cid/items/new</code></td><td><code>ItemFormPage</code></td><td>Novo item; <code>?g=</code> decide em que grupo ele nasce</td></tr>
+    <tr><td class="nowrap"><code>/c/:cid/items/new</code></td><td><code>ItemFormPage</code></td><td>Novo item; <code>?g=</code> e <code>?s=</code> decidem em que grupo e sob que separador ele nasce</td></tr>
     <tr><td class="nowrap"><code>/c/:cid/items/:itemId</code></td><td><code>ItemPage</code></td><td>Detalhe, galeria, cópias, navegação ←/→ entre vizinhos</td></tr>
     <tr><td class="nowrap"><code>/c/:cid/items/:itemId/edit</code></td><td><code>ItemFormPage</code></td><td>Mesmo componente, modo edição</td></tr>
   </tbody>
@@ -249,6 +249,7 @@
     <tr><td><code>groups.util.ts</code></td><td><code>childrenOf</code> (alfabético, via <code>compareNames</code>), <code>flattenTree</code>, <code>visibleTree</code>, <code>fieldsFor</code>, <code>sortFor</code>, <code>resolveGroupId</code></td></tr>
     <tr><td><code>group-stats.util.ts</code></td><td>Toda aritmética de possuído/faltante/percentual, e o rollup contra <code>target</code></td></tr>
     <tr><td><code>browse.util.ts</code></td><td><code>visibleItems</code> e <code>neighbours</code> — a lista visível e quem vem a seguir</td></tr>
+    <tr><td><code>sections.util.ts</code></td><td><code>sectionsOf</code> (ordem do array, <strong>nunca</strong> alfabética), <code>sectionRank</code>, <code>resolveSectionId</code>, <code>chunkBySection</code></td></tr>
     <tr><td><code>focal.util.ts</code></td><td><code>focalToPosition</code>, <code>clampFocal</code>, <code>focalFromPoint</code></td></tr>
     <tr><td><code>currency.util.ts</code></td><td><code>currencyOf</code> — a única leitura de moeda</td></tr>
     <tr><td><code>money.util.ts</code></td><td><code>ceilToCents</code>, <code>SUPPORTED_CURRENCIES</code> (espelho de <code>Money.SupportedCurrencies</code>)</td></tr>
@@ -290,8 +291,53 @@
   Links que abrem um grupo passam por <code>groupLinkParams</code>: mescla mantém
   filtros e visualização, e a ordenação ad-hoc é <strong>descartada de
   propósito</strong> — cada grupo declara a sua, e uma escolha pontual não tem por
-  que sobreviver ao grupo em que foi feita. Filtros e ordenação navegam com
-  <code>replaceUrl</code>.
+  que sobreviver ao grupo em que foi feita. A seção (<code>?s=</code>) é
+  descartada junto, por um motivo mais forte: ela pertence a exatamente um
+  grupo, então levá-la para outro nomearia um separador que aquele grupo não tem
+  e esvaziaria a tela. Filtros e ordenação navegam com <code>replaceUrl</code>.
+</p>
+
+<h2 id="secoes">Seções: ordenam, não escopam</h2>
+
+<p>
+  Uma seção é um separador dentro da lista de <em>um</em> grupo (o modelo está em
+  <a href="domain-model.html#secoes">Seções</a>). O que a mantém barata no
+  frontend é uma escolha só: <strong>ela é uma chave de ordenação, não um
+  escopo</strong>. <code>scopeItems</code>, <code>subtreeIds</code>, o breadcrumb
+  e a árvore de grupos não sabem que ela existe.
+</p>
+
+<ol>
+  <li>
+    <code>sortItems</code> recebe o rank das seções do grupo aberto e usa como
+    chave <strong>primária</strong>; a ordenação escolhida só desempata dentro de
+    cada faixa. Um separador cujos itens se intercalam com os da faixa seguinte
+    não é um separador. A direção do sort inverte os itens de cada faixa, nunca
+    as faixas — essa ordem o usuário arrumou à mão.
+  </li>
+  <li>
+    <code>chunkBySection</code> só <em>corta</em> a lista já ordenada em faixas
+    para renderizar. Cada entrada carrega o índice dela <strong>na lista</strong>,
+    não na faixa, então arrastar e os botões de mover continuam trabalhando em
+    coordenadas de lista.
+  </li>
+</ol>
+
+<p>
+  A consequência é que as setas ← → da página do item continuam corretas sem uma
+  linha de código novo: elas andam pela mesma lista plana, na mesma ordem que a
+  grade mostrou. O rank vem de <code>sectionRank</code>, que só conhece as seções
+  do grupo aberto — é assim que um item apontando para a seção de outro grupo cai
+  na faixa “sem seção” de graça, sem nenhuma checagem explícita.
+</p>
+
+<p>
+  <code>?s=</code> é um <strong>filtro</strong>, ao lado de <code>?cond=</code> e
+  <code>?own=</code>, e não um destino: o cabeçalho da faixa é um
+  <code>&lt;button&gt;</code> com <code>aria-pressed</code>, que alterna. Arrastar
+  um item por cima de um cabeçalho <em>é</em> como ele muda de seção — a seção de
+  destino é lida do item que ele deslocou, porque um slot pertence sem ambiguidade
+  a quem estava nele.
 </p>
 
 <h2 id="i18n">Idioma</h2>

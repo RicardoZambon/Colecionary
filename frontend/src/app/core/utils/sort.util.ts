@@ -1,6 +1,7 @@
 import { MessageKey, Translate } from '../i18n/messages/keys';
 import { GroupField, GroupSort, Item, SortDirection } from '../models';
 import { sortValue } from './copies.util';
+import { rankOf } from './sections.util';
 
 /**
  * Pure ordering helpers. Every screen that lists items goes through here, so a
@@ -177,13 +178,41 @@ function compare(a: SortKeyValue, b: SortKeyValue): number {
  * sorts. Items with no value for the key always land at the end, whichever
  * direction is asked for, and ties break by name so the list never shuffles
  * between renders.
+ *
+ * `sectionRank` — the open group's dividers, by id — is the **primary** key
+ * when given, and the chosen ordering only breaks ties inside each run. A
+ * separator whose items interleave with the next one's is not a separator, so
+ * this is the one thing sections do to the model: they order, and nothing
+ * else. Because the result stays a single flat list in the exact order the
+ * screen shows, `chunkBySection` only has to cut it, and an open item's
+ * next/previous arrows keep working untouched.
+ *
+ * Note the direction is applied to the chosen key alone: reversing a sort
+ * reverses the items within each section, never the sections themselves, whose
+ * order the user arranged by hand.
  */
-export function sortItems(items: Item[], sort: GroupSort, fields: GroupField[]): Item[] {
-  // Manual order *is* the array order the server round-trips.
-  if (sort.by === 'manual') return [...items];
+export function sortItems(
+  items: Item[],
+  sort: GroupSort,
+  fields: GroupField[],
+  sectionRank?: ReadonlyMap<string, number>,
+): Item[] {
+  const rank = sectionRank?.size ? sectionRank : null;
+
+  // Manual order *is* the array order the server round-trips, so with no
+  // sections there is nothing to do. With them, `sort` is stable, which is what
+  // lets a plain rank comparison group the runs and still keep each one in the
+  // order it was dragged into.
+  if (sort.by === 'manual') {
+    return rank ? [...items].sort((a, b) => rankOf(rank, a) - rankOf(rank, b)) : [...items];
+  }
 
   const direction = sort.direction === 'desc' ? -1 : 1;
   return [...items].sort((a, b) => {
+    if (rank) {
+      const bands = rankOf(rank, a) - rankOf(rank, b);
+      if (bands !== 0) return bands;
+    }
     const keyA = keyOf(a, sort, fields);
     const keyB = keyOf(b, sort, fields);
     if (keyA === null || keyB === null) {

@@ -35,6 +35,11 @@ public sealed class CollectionConfiguration : IEntityTypeConfiguration<Collectio
             .HasForeignKey(g => new { g.TenantId, g.CollectionId })
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasMany(c => c.Sections)
+            .WithOne()
+            .HasForeignKey(s => new { s.TenantId, s.CollectionId })
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasMany(c => c.Items)
             .WithOne()
             .HasForeignKey(i => new { i.TenantId, i.CollectionId })

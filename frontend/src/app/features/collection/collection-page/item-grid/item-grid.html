@@ -1,61 +1,85 @@
-<div class="items-grid">
-  @for (item of items(); track item.id; let i = $index) {
-    <ui-card
-      [interactive]="true"
-      class="item-card"
-      [class.item-card--wanted]="!isOwned(item)"
-      [class.dragging]="drag.index() === i"
-      [attr.draggable]="manual() ? true : null"
-      (dragstart)="drag.start($event, i)"
-      (dragover)="drag.over($event)"
-      (drop)="onDrop($event, i)"
-      (dragend)="drag.end()"
-      [routerLink]="['/c', collectionId(), 'items', item.id]"
-      queryParamsHandling="preserve"
-    >
-      <div class="item-card__img" [class.dim]="!isOwned(item)">
-        @if (fieldChip(item); as chip) {
-          <span class="item-card__chip">
-            <ui-badge
-              tone="accent"
-              [attr.title]="'itemGrid.chipTitle' | t: { field: sortFieldName() ?? '', value: chip }"
-            >{{ chip }}</ui-badge>
-          </span>
-        }
-        @if (item.photoIds.length) {
-          <div
-            class="cover"
-            [style.background-image]="'url(' + images.url(item.photoIds[0], 'thumb') + ')'"
-            [style.background-position]="focus.position(item.photoIds[0])"
-          ></div>
-        } @else {
-          img: {{ item.img }}
-        }
-      </div>
-      <div class="item-card__body">
-        <div class="item-card__name">{{ item.name }}</div>
-        <div class="item-card__meta">
-          {{ item.year }} · {{ groupName(item) }}
-          @if (item.copies.length > 1) {
-            <!-- Spelled out, not only folded into the condition badge: how many
-                 you hold is the thing you came to check. -->
-            <span class="item-card__copies">{{ 'itemGrid.copies' | t: { n: item.copies.length } }}</span>
+@for (chunk of chunks(); track chunk.id; let lastChunk = $last) {
+  <!-- The leftovers bucket has no section of its own, so it only earns a
+       heading once there is something to be left over from. A group that
+       declares no dividers renders as one unnamed chunk — the flat grid. -->
+  @if (chunk.section || chunks().length > 1) {
+    <app-section-header
+      [name]="chunk.section?.name ?? ('section.none' | t)"
+      [stats]="sectionStats().get(chunk.id) ?? null"
+      [active]="activeSection() === chunk.id"
+      (toggle)="sectionToggled.emit(chunk.id)"
+    />
+  }
+
+  <div class="items-grid">
+    @for (entry of chunk.entries; track entry.item.id) {
+      <ui-card
+        [interactive]="true"
+        class="item-card"
+        [class.item-card--wanted]="!isOwned(entry.item)"
+        [class.dragging]="drag.index() === entry.index"
+        [attr.draggable]="manual() ? true : null"
+        (dragstart)="drag.start($event, entry.index)"
+        (dragover)="drag.over($event)"
+        (drop)="onDrop($event, entry.index)"
+        (dragend)="drag.end()"
+        [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
+        queryParamsHandling="preserve"
+      >
+        <div class="item-card__img" [class.dim]="!isOwned(entry.item)">
+          @if (fieldChip(entry.item); as chip) {
+            <span class="item-card__chip">
+              <ui-badge
+                tone="accent"
+                [attr.title]="'itemGrid.chipTitle' | t: { field: sortFieldName() ?? '', value: chip }"
+              >{{ chip }}</ui-badge>
+            </span>
+          }
+          @if (entry.item.photoIds.length) {
+            <div
+              class="cover"
+              [style.background-image]="'url(' + images.url(entry.item.photoIds[0], 'thumb') + ')'"
+              [style.background-position]="focus.position(entry.item.photoIds[0])"
+            ></div>
+          } @else {
+            img: {{ entry.item.img }}
           }
         </div>
-        <div class="item-card__foot">
-          <span class="item-card__value" [attr.title]="valueHint(item)">{{ item | itemValue: currency() }}</span>
-          <ui-badge [tone]="badgeTone(item)">{{ badgeLabel(item) }}</ui-badge>
+        <div class="item-card__body">
+          <div class="item-card__name">{{ entry.item.name }}</div>
+          <div class="item-card__meta">
+            {{ entry.item.year }} · {{ groupName(entry.item) }}
+            @if (entry.item.copies.length > 1) {
+              <!-- Spelled out, not only folded into the condition badge: how many
+                   you hold is the thing you came to check. -->
+              <span class="item-card__copies">{{ 'itemGrid.copies' | t: { n: entry.item.copies.length } }}</span>
+            }
+          </div>
+          <div class="item-card__foot">
+            <span class="item-card__value" [attr.title]="valueHint(entry.item)">{{ entry.item | itemValue: currency() }}</span>
+            <ui-badge [tone]="badgeTone(entry.item)">{{ badgeLabel(entry.item) }}</ui-badge>
+          </div>
         </div>
-      </div>
-      @if (manual()) {
-        <ui-reorder
-          [label]="item.name"
-          [first]="i === 0"
-          [last]="i === items().length - 1"
-          (moved)="moved.emit({ from: i, to: i + $event })"
-        />
-      }
-    </ui-card>
-  }
-  <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">{{ 'itemGrid.addItem' | t }}</a>
-</div>
+        @if (manual()) {
+          <!-- Bounds are the whole list's, not the chunk's: a move that crosses
+               a heading is how an item changes section, so the last card of one
+               run must still offer "down". -->
+          <ui-reorder
+            [label]="entry.item.name"
+            [first]="entry.index === 0"
+            [last]="entry.index === items().length - 1"
+            (moved)="moved.emit({ from: entry.index, to: entry.index + $event })"
+          />
+        }
+      </ui-card>
+    }
+
+    @if (lastChunk) {
+      <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">{{ 'itemGrid.addItem' | t }}</a>
+    }
+  </div>
+} @empty {
+  <div class="items-grid">
+    <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">{{ 'itemGrid.addItem' | t }}</a>
+  </div>
+}

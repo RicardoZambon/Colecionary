@@ -126,6 +126,9 @@
   <data name="CopyIdsMustBeUnique" xml:space="preserve">
     <value>Copy ids must be unique within an item.</value>
   </data>
+  <data name="SectionIdsMustBeUnique" xml:space="preserve">
+    <value>Section ids must be unique within a collection.</value>
+  </data>
   <data name="ConditionInvalid" xml:space="preserve">
     <value>Condition must be Mint, Good or Fair.</value>
   </data>

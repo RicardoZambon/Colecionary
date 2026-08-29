@@ -36,7 +36,8 @@ public static class Messages
         nameof(IfMatchRequired), nameof(CollectionChangedElsewhere),
         nameof(FieldNamesMustBeUnique), nameof(FieldTypeInvalid), nameof(TargetOutOfRange),
         nameof(SortDirectionInvalid), nameof(SortKeyInvalid), nameof(TooManyPhotos),
-        nameof(TooManyCopies), nameof(CopyIdsMustBeUnique), nameof(ConditionInvalid),
+        nameof(TooManyCopies), nameof(CopyIdsMustBeUnique), nameof(SectionIdsMustBeUnique),
+        nameof(ConditionInvalid),
         nameof(CopyStatusInvalid), nameof(AcquiredOnImplausible), nameof(RoleInvalid),
         nameof(PlanInvalid), nameof(CurrencyInvalid),
         nameof(CollectionNotFound), nameof(StoreListingNotFound), nameof(AlreadyInYourVault),
@@ -89,6 +90,7 @@ public static class Messages
     public static string TooManyPhotos => Get(nameof(TooManyPhotos));
     public static string TooManyCopies => Get(nameof(TooManyCopies));
     public static string CopyIdsMustBeUnique => Get(nameof(CopyIdsMustBeUnique));
+    public static string SectionIdsMustBeUnique => Get(nameof(SectionIdsMustBeUnique));
     public static string ConditionInvalid => Get(nameof(ConditionInvalid));
     public static string CopyStatusInvalid => Get(nameof(CopyStatusInvalid));
     public static string AcquiredOnImplausible => Get(nameof(AcquiredOnImplausible));

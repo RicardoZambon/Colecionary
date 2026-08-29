@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { GroupNode, Item, ItemCopy } from '../models';
+import { GroupNode, Item, ItemCopy, Section } from '../models';
 import {
   COLLECTION_ID,
   UNGROUPED_ID,
   rootStats,
   scopeStats,
+  sectionStatsIndex,
   statsIndex,
   ungroupedItems,
 } from './group-stats.util';
+import { UNSECTIONED_ID } from './sections.util';
 
 function group(id: string, parentId: string | null = null, target: number | null = null): GroupNode {
   return { id, name: id, parentId, fields: [], sort: null, target };
@@ -30,6 +32,7 @@ interface ItemOptions {
   copies?: number;
   value?: number;
   photo?: string;
+  section?: string;
 }
 
 function item(id: string, groupId: string, options: ItemOptions = {}): Item {
@@ -40,6 +43,7 @@ function item(id: string, groupId: string, options: ItemOptions = {}): Item {
     year: 2000,
     value: options.value ?? 10,
     groupId,
+    sectionId: options.section ?? '',
     tags: [],
     img: '',
     custom: [],
@@ -287,6 +291,79 @@ describe('group-stats.util', () => {
       const first = statsIndex(groups, items).get('g')!.coverPhotoIds;
       const second = statsIndex(groups, items).get('g')!.coverPhotoIds;
       expect(first).toEqual(second);
+    });
+  });
+
+  // --- sections ---
+
+  describe('sections', () => {
+    const SECTIONS: Section[] = [
+      { id: 'bronze', groupId: 'espanha', name: 'Bronze', target: 10 },
+      { id: 'prata', groupId: 'espanha', name: 'Prata', target: 12 },
+      { id: 'ouro', groupId: 'espanha', name: 'Ouro', target: null },
+    ];
+
+    it("rolls a group's section targets up into its own", () => {
+      // The group declares nothing; its dividers declare 10 and 12, so the set
+      // it stands for is 22 — the same arithmetic a parent of sub-groups does.
+      const groups = [group('espanha')];
+      const stats = statsIndex(groups, [item('a', 'espanha', { copies: 1 })], SECTIONS);
+
+      expect(stats.get('espanha')!.target).toBe(22);
+      expect(stats.get('espanha')!.catalogued).toBe(1);
+    });
+
+    it("lets the group's own declared target win over the sum", () => {
+      const groups: GroupNode[] = [{ ...group('espanha'), target: 30 }];
+      expect(statsIndex(groups, [], SECTIONS).get('espanha')!.target).toBe(30);
+    });
+
+    it('changes no count — an item is counted whichever divider it sits under', () => {
+      const groups = [group('espanha')];
+      const items = [item('a', 'espanha', { copies: 1, section: 'bronze' }), item('b', 'espanha')];
+
+      expect(statsIndex(groups, items, SECTIONS).get('espanha')!.catalogued).toBe(
+        statsIndex(groups, items).get('espanha')!.catalogued,
+      );
+    });
+
+    describe('sectionStatsIndex', () => {
+      const ITEMS = [
+        item('s1', 'espanha', { copies: 1, section: 'bronze' }),
+        item('s2', 'espanha', { section: 'bronze' }),
+        item('s3', 'espanha', { copies: 1 }),
+        // In a sub-group: on screen because the scope is a subtree, but it
+        // belongs to that group's list, not to a divider of this one.
+        item('s4', 'filho', { copies: 1 }),
+      ];
+
+      it('counts each run against its own declared size', () => {
+        const stats = sectionStatsIndex(SECTIONS, ITEMS, 'espanha');
+        expect(stats.get('bronze')).toMatchObject({ owned: 1, catalogued: 2, denominator: 10 });
+      });
+
+      it('keeps a section nobody filled, so its target can still be read', () => {
+        expect(sectionStatsIndex(SECTIONS, ITEMS, 'espanha').get('prata')).toMatchObject({
+          catalogued: 0,
+          target: 12,
+        });
+      });
+
+      it("files the group's own unsectioned items in the leftovers bucket", () => {
+        const stats = sectionStatsIndex(SECTIONS, ITEMS, 'espanha');
+        expect(stats.get(UNSECTIONED_ID)).toMatchObject({ catalogued: 1, owned: 1 });
+      });
+
+      it('never counts an item belonging to a sub-group', () => {
+        // Otherwise the runs would add up to more than the group they divide.
+        const stats = sectionStatsIndex(SECTIONS, ITEMS, 'espanha');
+        const counted = [...stats.values()].reduce((sum, s) => sum + s.catalogued, 0);
+        expect(counted).toBe(3);
+      });
+
+      it('is empty where no group is open', () => {
+        expect(sectionStatsIndex(SECTIONS, ITEMS, null).size).toBe(0);
+      });
     });
   });
 });

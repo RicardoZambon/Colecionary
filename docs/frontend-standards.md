@@ -65,7 +65,8 @@ a core service's state).
 5. **URL is state.** Anything the user would want restored on refresh,
    back-navigation, or a shared link lives in the route: selected group is
    `?g=<groupId>`, the chosen view is `?v=`, the item filters and order are
-   `?cond=` / `?own=` / `?sort=` + `?dir=`, settings tabs are `?tab=<id>`,
+   `?cond=` / `?own=` / `?sort=` + `?dir=`, the open section is `?s=`,
+   settings tabs are `?tab=<id>`,
    entity ids are path params (`/c/:collectionId/items/:itemId`). Route/query
    params bind to component inputs via `withComponentInputBinding()`.
    Navigations within a collection preserve the query string
@@ -293,6 +294,33 @@ style the same raw element the same way, that's the signal to promote it here.
   keystroke, and moving the focused input in the DOM blurs it, so the page
   freezes the row order for the duration of a rename and releases it on
   `(blurred)`.
+- **A section is a separator inside one group, never a level.** A `Section`
+  (`{ id, groupId, name, target }`) labels a run of a group's items;
+  `item.sectionId` points at it and `''` means none. It deliberately has **no
+  `parentId`** (the recursion already lives on `GroupNode` — a nesting section
+  is that tree under another name), **no `fields`** (they are taxonomy: a
+  divider that changes the item form's field set is the defect this fixes) and
+  **no `sort`** (it is a run inside *one* ordered list, so per-run ordering
+  would make the group's declared order meaningless). What it has and a group
+  does not is a persisted position: order is the array order of
+  `collection.sections`, because Bronze → Prata → Ouro is a progression the
+  alphabet reads Bronze, Ouro, Prata. Read them only through `sectionsOf()` in
+  `core/utils/sections.util.ts` — never sort them by name.
+  **A section orders, it does not scope.** `sortItems` takes the open group's
+  `sectionRank` as its **primary** key and the chosen order only breaks ties
+  inside a run; `chunkBySection` then merely *cuts* the already-ordered list
+  into runs, each entry carrying its index **in the list**, not in the chunk.
+  That is what leaves `scopeItems`, `subtreeIds`, the breadcrumb, the group
+  tree and the item page's `←`/`→` untouched. A sort direction reverses the
+  items inside each run, never the runs. Ownership resolution is free: the rank
+  only holds the open group's sections, so an item pointing at another group's
+  section — or one deleted since — ranks as unsectioned rather than erroring,
+  and any remembered id passes through `resolveSectionId` first. Narrowing to
+  one run is a **filter** (`?s=`, beside `?cond=` / `?own=`), so the heading is
+  a `<button aria-pressed>` that toggles, and `groupLinkParams` drops it when
+  the group changes. Per-section progress comes from `sectionStatsIndex` in
+  `group-stats.util.ts`, and a section's `target` rolls up into its group
+  exactly like a child group's.
 - **Which group an item is filed in is inherited from context, and "no group" is
   `''`.** Every "add item" link preserves `?g=`, so `ItemFormPage` takes it as a
   `g` input and a new item lands in the group you were looking at — never in

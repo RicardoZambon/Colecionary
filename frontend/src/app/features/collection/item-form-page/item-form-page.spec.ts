@@ -31,7 +31,7 @@ import { ItemFormPage } from './item-form-page';
  * The backend contract answered from memory. Only `listCollections` and
  * `upsertItem` carry the assertions; the rest exist because `VaultStore.load()`
  * asks for them at startup, and because the abstract class is the DI token —
- * there is no mock API in the app itself (rule 8).
+ * there is no mock API in the app itself (rule 9).
  */
 class FakeVaultApi extends VaultApi {
   collections: Collection[] = [];
@@ -132,6 +132,7 @@ function item(patch: Partial<Item> = {}): Item {
     year: 1965,
     value: 0,
     groupId: '',
+    sectionId: '',
     tags: [],
     img: 'rubber_soul.jpg',
     custom: [],
@@ -147,6 +148,7 @@ function collection(items: Item[]): Collection {
     name: 'Vinyl',
     description: '',
     groups: structuredClone(GROUPS),
+    sections: [],
     items,
     members: [],
     linkShare: false,
@@ -288,7 +290,7 @@ describe('ItemFormPage', () => {
     // because every group declares its own.
     expect(page.navigate).toHaveBeenCalledWith(
       ['/c', 'c1'],
-      expect.objectContaining({ queryParams: { g: 'marvel', sort: null, dir: null } }),
+      expect.objectContaining({ queryParams: { g: 'marvel', sort: null, dir: null, s: null } }),
     );
   });
 
@@ -301,7 +303,7 @@ describe('ItemFormPage', () => {
     expect(page.lastSaved().groupId).toBe('');
     expect(page.navigate).toHaveBeenCalledWith(
       ['/c', 'c1'],
-      expect.objectContaining({ queryParams: { g: null, sort: null, dir: null } }),
+      expect.objectContaining({ queryParams: { g: null, sort: null, dir: null, s: null } }),
     );
   });
 
@@ -375,7 +377,7 @@ describe('ItemFormPage', () => {
     expect(page.lastSaved().custom).toEqual([{ key: 'Series', value: 'Original trilogy' }]);
   });
 
-  // --- photos (rule 6) ---
+  // --- photos (rule 7) ---
 
   it('persists the photo order, so the cover is whichever id ends up first', async () => {
     const page = await mount({ itemId: 'i1', items: [item({ photoIds: ['p1', 'p2'] })] });

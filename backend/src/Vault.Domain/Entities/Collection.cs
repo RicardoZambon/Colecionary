@@ -67,6 +67,9 @@ public class Collection : ITenantOwned
 
     public List<Group> Groups { get; set; } = [];
 
+    /// <summary>Item-level dividers, each belonging to one of <see cref="Groups"/>.</summary>
+    public List<Section> Sections { get; set; } = [];
+
     public List<Item> Items { get; set; } = [];
 
     public List<CollectionMember> Members { get; set; } = [];

@@ -124,6 +124,8 @@
         <td>Raiz de agregado. <code>Version</code> é token de concorrência</td></tr>
     <tr><td class="nowrap"><code>Catalog</code></td><td><code>Groups</code></td><td><code>(TenantId, CollectionId, Id)</code></td>
         <td><code>ParentId</code> é string simples, sem FK — a árvore é substituída por inteiro</td></tr>
+    <tr><td class="nowrap"><code>Catalog</code></td><td><code>Sections</code></td><td><code>(TenantId, CollectionId, Id)</code></td>
+        <td><code>GroupId</code> é string simples, sem FK, como <code>Items.GroupId</code>. <code>SortOrder</code> é a ordem exibida</td></tr>
     <tr><td class="nowrap"><code>Catalog</code></td><td><code>Items</code></td><td><code>(TenantId, CollectionId, Id)</code></td>
         <td><code>Value</code> com precisão <code>(12,2)</code>; <code>Copies</code>/<code>Custom</code> em JSON</td></tr>
     <tr><td class="nowrap"><code>Catalog</code></td><td><code>CollectionMembers</code></td><td><code>(TenantId, CollectionId, Email)</code></td>
@@ -331,10 +333,94 @@
   </p>
 </div>
 
+<h2 id="secoes">Seções: separadores dentro de um grupo</h2>
+
+<p>
+  Uma <strong>seção</strong> é uma faixa rotulada de itens dentro de <em>um</em>
+  grupo. Ela existe porque um grupo cobra coisas que um separador não quer: um
+  grupo é um destino — aparece na árvore e no breadcrumb, transforma a visão do
+  pai num painel de cards, pode declarar campos e ordenação, e lista em ordem
+  alfabética porque nada guarda posição para ele. Quebrar “Espanha” em
+  “Cavaleiros de Bronze / Prata / Ouro” com sub-grupos comprava três destinos
+  que ninguém queria visitar e perdia justamente o que importava: vê-los lado a
+  lado, nessa ordem, numa lista só.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Tem</th><th>Não tem</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>SortOrder</code> — posição arrumada à mão</td>
+      <td><code>ParentId</code></td>
+      <td>A recursão já existe em <code>Group</code>. Seção que aninha é a
+          árvore com outro nome — quem precisa de nível precisa de grupo</td>
+    </tr>
+    <tr>
+      <td><code>Name</code></td>
+      <td><code>Fields</code></td>
+      <td>Campo é taxonomia. Um separador que muda o conjunto de campos do
+          formulário do item é exatamente o defeito que a seção conserta</td>
+    </tr>
+    <tr>
+      <td><code>Target</code> (<code>int?</code>)</td>
+      <td><code>Sort</code></td>
+      <td>A seção é uma faixa de <em>uma</em> lista ordenada. Ordenação por
+          faixa faria a ordem declarada pelo grupo não significar nada</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>SortOrder</code> é a diferença que justifica a entidade:
+  <strong>Bronze → Prata → Ouro é uma progressão de casta</strong>, e em ordem
+  alfabética isso vira Bronze, Ouro, Prata. Um grupo é um lugar que você procura
+  (alfabético = achável); uma seção é um cabeçalho dentro de uma lista, e a
+  ordem dela é a do conteúdo.
+</p>
+
+<div class="callout plain">
+  <span class="label">Referência solta degrada, não dá 400</span>
+  <p>
+    <code>Item.SectionId</code> só vale quando a seção pertence ao
+    <code>GroupId</code> do próprio item; qualquer outra coisa — seção de outro
+    grupo, seção apagada, string vazia — <strong>lê como “sem seção”</strong>.
+    Grupos, seções e itens chegam no <em>mesmo</em> PUT de documento inteiro,
+    então cross-checá-los na validação recusaria estados intermediários
+    legítimos, pela mesma razão que <code>Group.Target</code> aceita um número
+    abaixo do que já está catalogado. O que o validador <em>exige</em> é
+    <code>Section.GroupId</code> não vazio: um separador que não pertence a nada
+    não tem nada para separar.
+  </p>
+</div>
+
+<p>
+  <code>Section.Target</code> sobe para o grupo do mesmo jeito que o target de um
+  sub-grupo: um grupo que não declara nada, cujas seções declaram 10 e 12,
+  declarou um conjunto de 22. Um target no próprio grupo continua vencendo a
+  soma. As seções <strong>não mudam contagem nenhuma</strong> — um item é
+  contado esteja sob qual separador estiver.
+</p>
+
+<div class="callout plain">
+  <span class="label">Também não existem endpoints de seção</span>
+  <p>
+    Como grupos, elas só mudam pelo PUT da coleção, então
+    <code>ReplaceGraph</code> tem um quarto bloco <code>MergeByKey</code> que
+    copia <code>Name</code>, <code>GroupId</code>, <code>Target</code> e
+    <code>SortOrder</code> por atribuição simples. <code>SortOrder</code> é
+    reatribuído a partir da ordem do array a cada PUT, que é como uma
+    reordenação chega ao banco. <code>CollectionVersionInterceptor</code>
+    reconhece <code>Section</code> como parte do agregado: uma escrita que não
+    movesse a versão seria um lost update silencioso.
+  </p>
+</div>
+
 <h2 id="nulls">Os nulls que significam algo</h2>
 
 <p>
-  Cinco campos em que <code>null</code> não é “vazio”, é uma afirmação. Resolver
+  Seis campos em que <code>null</code> não é “vazio”, é uma afirmação. Resolver
   qualquer um deles na escrita congela a herança que ele existe para expressar.
 </p>
 
@@ -358,6 +444,12 @@
       <td>Nenhum tamanho de conjunto declarado</td>
       <td>Um <code>int</code> não-anulável cairia em <code>0</code> e declararia
           todo grupo existente uma série vazia</td>
+    </tr>
+    <tr>
+      <td><code>Section.Target</code></td>
+      <td>Nenhum tamanho declarado para a faixa</td>
+      <td>O mesmo de <code>Group.Target</code>: <code>0</code> declararia toda
+          seção existente uma série vazia</td>
     </tr>
     <tr>
       <td><code>StoredImage.FocalX/Y</code></td>
@@ -478,6 +570,7 @@
     <tr><td>10</td><td class="nowrap"><code>AddImageDimensions</code></td><td><code>Width</code>/<code>Height</code></td></tr>
     <tr><td>11</td><td class="nowrap"><code>AddImageUnreferencedSince</code></td><td><code>UnreferencedSinceUtc</code> — o relógio da carência do coletor</td></tr>
     <tr><td>12</td><td class="nowrap"><code>AddCollectionVersion</code></td><td><code>Collections.Version</code>, começando em 1 nas linhas existentes</td></tr>
+    <tr><td>13</td><td class="nowrap"><code>AddSections</code></td><td><code>Catalog.Sections</code> e <code>Items.SectionId</code> (<code>nvarchar(64)</code>, default <code>''</code>)</td></tr>
   </tbody>
 </table>
 </div>

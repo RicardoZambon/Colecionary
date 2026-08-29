@@ -15,7 +15,7 @@ public class CurrencyTests
         new("c1", "Consoles", "desc", [], [], [], LinkShare: true);
 
     private static CollectionDtoValidator CollectionValidator() =>
-        new(new GroupNodeDtoValidator(), new ItemDtoValidator(), new MemberDtoValidator());
+        new(new GroupNodeDtoValidator(), new SectionDtoValidator(), new ItemDtoValidator(), new MemberDtoValidator());
 
     [Fact]
     public void Collection_WithoutAnOverride_IsValid()

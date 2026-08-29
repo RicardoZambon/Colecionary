@@ -37,6 +37,11 @@ public static class PublicIdRepair
             .Distinct(StringComparer.Ordinal)
             .ToDictionary(id => id, id => Usable(id, "g"), StringComparer.Ordinal);
 
+        var sectionIds = source.Sections
+            .Select(section => section.Id)
+            .Distinct(StringComparer.Ordinal)
+            .ToDictionary(id => id, id => Usable(id, "s"), StringComparer.Ordinal);
+
         return source with
         {
             Groups = [.. source.Groups.Select(group => group with
@@ -52,12 +57,25 @@ public static class PublicIdRepair
                         ? parent
                         : IdRules.PublicId().IsMatch(group.ParentId) ? group.ParentId : null,
             })],
+            Sections = [.. source.Sections.Select(section => section with
+            {
+                Id = sectionIds[section.Id],
+                // Required and validated, so unlike a group's ParentId there is
+                // no "keep it if it merely looks like an id" fallback: a section
+                // pointing at a group that is not in the archive would be
+                // rejected outright, so it is left as-is only when it is
+                // already shaped like an id and dropped onto its own name
+                // otherwise — which is what the group repair produced for it.
+                GroupId = groupIds.GetValueOrDefault(section.GroupId, section.GroupId),
+            })],
             Items = [.. source.Items.Select(item => item with
             {
                 Id = Usable(item.Id, "i"),
                 // Not an id but a reference to one, and unconstrained in its own
                 // right: "" is the ungrouped bucket and must survive untouched.
                 GroupId = groupIds.GetValueOrDefault(item.GroupId, item.GroupId),
+                // Same as GroupId: a reference, and "" (no section) survives.
+                SectionId = sectionIds.GetValueOrDefault(item.SectionId, item.SectionId),
                 Copies = [.. item.Copies.Select(copy => copy with { Id = Usable(copy.Id, "k") })],
             })],
         };

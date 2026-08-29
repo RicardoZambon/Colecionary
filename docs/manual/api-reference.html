@@ -415,9 +415,39 @@ POST /api/import?confirmed=true&amp;replace=&lt;id&gt;&amp;replaceVersion=&lt;et
     <tr><td><code>coverId</code></td><td><code>ItemDto</code></td><td>A capa é <code>photoIds[0]</code> — uma segunda fonte de verdade pode apontar para foto removida</td></tr>
     <tr><td><code>version</code></td><td><code>CollectionDto</code></td><td>O DTO é o formato do backup</td></tr>
     <tr><td>posição de grupo</td><td><code>GroupNodeDto</code></td><td>Grupos listam alfabeticamente; nada persiste posição para um grupo</td></tr>
+    <tr><td><code>parentId</code>, <code>fields</code>, <code>sort</code></td><td><code>SectionDto</code></td><td>Uma seção separa, não é um nível: veja <a href="domain-model.html#secoes">Seções</a></td></tr>
   </tbody>
 </table>
 </div>
+
+<h3 id="secoes-wire">Seções no fio</h3>
+
+<p>
+  <code>CollectionDto.Sections</code> e <code>ItemDto.SectionId</code> são
+  <strong>opcionais na entrada e normalizados</strong> para <code>[]</code> e
+  <code>""</code> — o mesmo arranjo de <code>copies</code> e
+  <code>photoIds</code>. Isso não é conveniência: <code>CollectionDto</code>
+  <em>é</em> o formato do arquivo de backup, então um export tirado antes das
+  seções existirem tem que restaurar como uma coleção sem nenhuma, e não
+  falhar. Na saída os dois campos vêm sempre preenchidos.
+</p>
+
+<p>
+  <code>SectionDto</code> é <code>{ id, groupId, name, target }</code>.
+  <code>groupId</code> é obrigatório e precisa ter forma de id, mas
+  <strong>não</strong> é checado contra os grupos do payload — grupos, seções e
+  itens chegam juntos, e uma referência solta lê como “sem seção”. Ids de seção
+  precisam ser únicos na coleção: o merge do grafo indexa a lista por id, então
+  um duplicado viraria um 500 lá no fundo em vez do 400 que ele é
+  (<code>SectionIdsMustBeUnique</code>).
+</p>
+
+<p>
+  A ordem do array <strong>é</strong> a ordem exibida, como nos itens e ao
+  contrário dos grupos. <code>PublicIdRepair</code> reescreve ids de seção na
+  importação e reaponta as duas referências a eles: o
+  <code>groupId</code> da própria seção e o <code>sectionId</code> de cada item.
+</p>
 
 <div class="pagenav"></div>
 </main>

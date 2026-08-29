@@ -28,6 +28,8 @@ public class VaultDbContext(DbContextOptions<VaultDbContext> options, ICurrentTe
 
     public DbSet<Group> Groups => Set<Group>();
 
+    public DbSet<Section> Sections => Set<Section>();
+
     public DbSet<Item> Items => Set<Item>();
 
     public DbSet<CollectionMember> CollectionMembers => Set<CollectionMember>();

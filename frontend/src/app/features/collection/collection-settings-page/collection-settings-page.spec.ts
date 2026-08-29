@@ -96,6 +96,7 @@ function item(id: string, groupId: string): Item {
     year: 1997,
     value: 0,
     groupId,
+    sectionId: '',
     tags: [],
     img: `${id}.jpg`,
     custom: [],
@@ -110,6 +111,7 @@ function collection(patch: Partial<Collection> = {}): Collection {
     name: 'Vinyl',
     description: '',
     groups: [group('zeta'), group('beta')],
+    sections: [],
     items: [],
     members: [],
     linkShare: false,
@@ -198,7 +200,7 @@ describe('CollectionSettingsPage', () => {
     TestBed.resetTestingModule();
   });
 
-  // --- currency override (rule 7) ---
+  // --- currency override (rule 8) ---
 
   it('spells "follow the account" as null, and can get back to it', async () => {
     // Null is the only way the model says "no override", and the collection is
@@ -322,6 +324,7 @@ describe('CollectionSettingsPage', () => {
     const page = await mount({
       collection: collection({
         groups: [group('zeta'), group('child', { parentId: 'zeta' })],
+        sections: [],
         items: [item('i1', 'child')],
       }),
       tab: 'groups',
@@ -331,5 +334,109 @@ describe('CollectionSettingsPage', () => {
     await page.done();
 
     expect(page.lastPut().groups.map(g => g.id)).toEqual(['zeta', 'child']);
+  });
+
+  // --- sections ---
+
+  it('turns sub-groups into sections, moving their items up under them', async () => {
+    // The migration for a tree that used sub-groups as separators. "Espanha" is
+    // where the taxonomy actually ends; Bronze and Prata were only ever labels
+    // for its items, and as groups they turned Espanha into a board of cards.
+    const page = await mount({
+      collection: collection({
+        groups: [
+          group('espanha'),
+          group('bronze', { parentId: 'espanha', target: 10 }),
+          group('prata', { parentId: 'espanha' }),
+        ],
+        sections: [],
+        items: [item('seiya', 'bronze'), item('marin', 'prata')],
+      }),
+      tab: 'groups',
+      g: 'espanha',
+    });
+
+    const convert = [...page.el.querySelectorAll('.group-row__sections button')].find(b =>
+      b.textContent?.includes('Turn sub-groups into sections'),
+    )!;
+    page.click(convert);
+    await page.done();
+
+    const saved = page.lastPut();
+    expect(saved.groups.map(g => g.id)).toEqual(['espanha']);
+    expect(saved.sections.map(s => s.name)).toEqual(['bronze', 'prata']);
+    // The declared set size travels with the label it belonged to.
+    expect(saved.sections[0].target).toBe(10);
+    // Every item now belongs to the surviving group, under its divider.
+    expect(saved.items.every(i => i.groupId === 'espanha')).toBe(true);
+    expect(saved.items.map(i => i.sectionId)).toEqual([
+      saved.sections[0].id,
+      saved.sections[1].id,
+    ]);
+  });
+
+  it('does not offer the conversion when a sub-group carries fields of its own', async () => {
+    // A partial conversion would leave the group with children *and* sections,
+    // so it would still open as a board of cards — the very thing being fixed.
+    const page = await mount({
+      collection: collection({
+        groups: [
+          group('espanha'),
+          group('bronze', { parentId: 'espanha' }),
+          group('prata', { parentId: 'espanha', fields: [{ name: 'Casta', type: 'text' }] }),
+        ],
+        sections: [],
+      }),
+      tab: 'groups',
+      g: 'espanha',
+    });
+
+    const espanha = page.rows()[0];
+    expect(espanha.querySelectorAll('.group-row__sections ui-button')).toHaveLength(1);
+  });
+
+  it('removing a section unfiles its items instead of refusing', async () => {
+    // Unlike a group, a section holds nothing — it labels. So there is nothing
+    // to orphan: the items fall into the unsectioned run of the same group.
+    const page = await mount({
+      collection: collection({
+        groups: [group('espanha')],
+        sections: [{ id: 'bronze', groupId: 'espanha', name: 'Bronze', target: null }],
+        items: [{ ...item('seiya', 'espanha'), sectionId: 'bronze' }],
+      }),
+      tab: 'groups',
+      g: 'espanha',
+    });
+
+    page.click(page.el.querySelector('[aria-label="Remove section Bronze"]')!);
+    await page.done();
+
+    expect(page.lastPut().sections).toEqual([]);
+    expect(page.lastPut().items[0].sectionId).toBe('');
+  });
+
+  it('moves a section within its group, leaving other groups alone', async () => {
+    const page = await mount({
+      collection: collection({
+        groups: [group('espanha'), group('brasil')],
+        sections: [
+          { id: 'bronze', groupId: 'espanha', name: 'Bronze', target: null },
+          { id: 'outra', groupId: 'brasil', name: 'Outra', target: null },
+          { id: 'prata', groupId: 'espanha', name: 'Prata', target: null },
+        ],
+      }),
+      tab: 'groups',
+      g: 'espanha',
+    });
+
+    page.click(page.el.querySelector('[aria-label="Move Prata earlier"]')!);
+    await page.done();
+
+    const saved = page.lastPut();
+    expect(saved.sections.filter(s => s.groupId === 'espanha').map(s => s.id)).toEqual([
+      'prata',
+      'bronze',
+    ]);
+    expect(saved.sections.find(s => s.groupId === 'brasil')!.id).toBe('outra');
   });
 });

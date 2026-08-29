@@ -7,7 +7,19 @@ import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { Condition, GroupNode, GroupSort, Item } from '../../../core/models';
 import { BrowseCriteria, OwnFilter, visibleItems } from '../../../core/utils/browse.util';
-import { UNGROUPED_ID, scopeStats, statsIndex } from '../../../core/utils/group-stats.util';
+import {
+  UNGROUPED_ID,
+  scopeStats,
+  sectionStatsIndex,
+  statsIndex,
+} from '../../../core/utils/group-stats.util';
+import {
+  SectionChunk,
+  UNSECTIONED_ID,
+  chunkBySection,
+  resolveSectionId,
+  sectionsOf,
+} from '../../../core/utils/sections.util';
 import {
   childrenOf,
   fieldsFor,
@@ -27,7 +39,9 @@ import {
   ownParams,
   readCondition,
   readOwn,
+  readSection,
   readSort,
+  sectionParams,
   sortParams,
 } from '../browse-params';
 import { CollectionHero } from './collection-hero/collection-hero';
@@ -91,12 +105,17 @@ export class CollectionPage {
    * back from one restore the filters instead of clearing them. Parsed in
    * `browse-params.ts`, never trusted raw.
    */
+  /** `?s=` — the divider the list is narrowed to, if any. */
+  readonly s = input<string | undefined>(undefined);
   readonly cond = input<string | undefined>(undefined);
   readonly own = input<string | undefined>(undefined);
   readonly sort = input<string | undefined>(undefined);
   readonly dir = input<string | undefined>(undefined);
 
   protected readonly condition = computed(() => readCondition(this.cond()));
+  protected readonly sectionFilter = computed(() =>
+    readSection(this.s(), this.sections(), this.g() ?? null),
+  );
   protected readonly ownFilter = computed<OwnFilter>(() => readOwn(this.own()));
   /** Null means "use the selected group's configured order". */
   protected readonly sortOverride = computed(() => readSort(this.sort(), this.dir()));
@@ -148,6 +167,11 @@ export class CollectionPage {
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
   protected readonly groups = computed(() => this.collection()?.groups ?? []);
+  protected readonly sections = computed(() => this.collection()?.sections ?? []);
+  /** The dividers of the group actually open — the only ones that ever apply. */
+  protected readonly groupSections = computed(() =>
+    sectionsOf(this.sections(), this.g() === UNGROUPED_ID ? null : this.g() ?? null),
+  );
   protected readonly selectedGroup = computed(() => groupById(this.groups(), this.g() ?? null));
   protected readonly selectedPath = computed(() =>
     this.g() ? pathOf(this.groups(), this.g()!) : [],
@@ -173,7 +197,22 @@ export class CollectionPage {
    * dashboard both want per-node numbers; resolving a subtree per node instead
    * would make the whole page O(groups × items).
    */
-  protected readonly stats = computed(() => statsIndex(this.groups(), this.sourceItems()));
+  protected readonly stats = computed(() =>
+    statsIndex(this.groups(), this.sourceItems(), this.sections()),
+  );
+
+  /**
+   * Per-section aggregates for the open group only — the sections on screen are
+   * the only ones anything asks about, so this stays one pass rather than a
+   * whole second index.
+   */
+  protected readonly sectionStats = computed(() =>
+    sectionStatsIndex(
+      this.sections(),
+      this.sourceItems(),
+      this.g() === UNGROUPED_ID ? null : this.g() ?? null,
+    ),
+  );
 
   /** What the header describes: the open group, or the whole collection. */
   protected readonly scope = computed(() => scopeStats(this.stats(), this.g() ?? null));
@@ -263,6 +302,7 @@ export class CollectionPage {
    */
   protected readonly criteria = computed<BrowseCriteria>(() => ({
     groupId: this.g() ?? null,
+    sectionId: this.sectionFilter(),
     condition: this.condition(),
     own: this.ownFilter(),
     query: this.store.query(),
@@ -270,7 +310,30 @@ export class CollectionPage {
   }));
 
   protected readonly items = computed(() =>
-    visibleItems(this.sourceItems(), this.groups(), this.criteria()),
+    visibleItems(this.sourceItems(), this.groups(), this.criteria(), this.sections()),
+  );
+
+  /**
+   * The visible list, cut into runs. Only a cut — `visibleItems` already put
+   * the list in section order — so the grid, the table and an open item's
+   * next/previous arrows are all walking the same sequence.
+   *
+   * A section nothing landed in keeps its heading while the list is unfiltered,
+   * so one just created can be filled and a declared target can be read; under
+   * any filter it does not, or narrowing to "wanted" answers with a page of
+   * headings saying nothing matched.
+   */
+  protected readonly chunks = computed<SectionChunk[]>(() =>
+    chunkBySection(this.items(), this.groupSections(), !this.filtering()),
+  );
+
+  /** Whether anything is narrowing the list beyond the group itself. */
+  private readonly filtering = computed(
+    () =>
+      !!this.condition() ||
+      !!this.ownFilter() ||
+      !!this.sectionFilter() ||
+      this.searching(),
   );
 
   // --- ordering ---
@@ -283,14 +346,44 @@ export class CollectionPage {
     const reordered = moveInList(visible, from, to);
     if (reordered === visible) return;
 
-    const next = applyManualOrder(
-      this.sourceItems(),
-      visible.map(i => i.id),
-      reordered.map(i => i.id),
+    const next = this.withSectionOfDrop(
+      applyManualOrder(
+        this.sourceItems(),
+        visible.map(i => i.id),
+        reordered.map(i => i.id),
+      ),
+      visible[from],
+      visible[to],
     );
     this.pendingOrder.set({ id: collection.id, items: next });
     clearTimeout(this.orderTimer);
     this.orderTimer = setTimeout(() => void this.persistOrder(), ORDER_DEBOUNCE_MS);
+  }
+
+  /**
+   * The reordered list with the dragged item's section set to the one it was
+   * dropped into.
+   *
+   * Dragging past a heading *is* how an item changes section — there is no
+   * separate gesture, and inventing one would leave the obvious one silently
+   * doing nothing. Which section it lands in is read from the item it displaced
+   * rather than from a neighbour, because a slot unambiguously belongs to
+   * whatever was sitting in it; asking "who is above me now?" cannot express
+   * joining a run at its top.
+   *
+   * A no-op wherever no section applies — the collection root, the unfiled
+   * bucket, a group that declares none. Without that guard a plain reorder at
+   * the root would resolve every id to "" and quietly unfile the item from a
+   * section belonging to a group not even on screen.
+   */
+  private withSectionOfDrop(items: Item[], moved: Item, displaced: Item | undefined): Item[] {
+    const sections = this.groupSections();
+    if (!sections.length || !moved || !displaced) return items;
+
+    const groupId = this.g() ?? '';
+    const target = resolveSectionId(this.sections(), groupId, displaced.sectionId);
+    if (target === moved.sectionId) return items;
+    return items.map(item => (item.id === moved.id ? { ...item, sectionId: target } : item));
   }
 
   private async persistOrder(): Promise<void> {
@@ -334,6 +427,15 @@ export class CollectionPage {
 
   protected setSortOverride(next: GroupSort | null): void {
     this.narrow(sortParams(next));
+  }
+
+  /**
+   * Clicking a heading narrows to that run; clicking the active one widens
+   * back. A toggle rather than a link, because a section is a filter and not a
+   * destination — and because the heading is the only affordance there is.
+   */
+  protected toggleSection(sectionId: string): void {
+    this.narrow(sectionParams(this.sectionFilter() === sectionId ? null : sectionId));
   }
 
   /**

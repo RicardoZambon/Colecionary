@@ -65,6 +65,20 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
             });
 
         MergeByKey(
+            tracked.Sections,
+            replacement.Sections,
+            s => s.Id,
+            (current, incoming) =>
+            {
+                current.Name = incoming.Name;
+                current.GroupId = incoming.GroupId;
+                // Plain assignment for the same reason as a group's target:
+                // clearing one back to null is a legitimate edit.
+                current.Target = incoming.Target;
+                current.SortOrder = incoming.SortOrder;
+            });
+
+        MergeByKey(
             tracked.Items,
             replacement.Items,
             i => i.Id,
@@ -75,6 +89,7 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
                 current.Year = incoming.Year;
                 current.Value = incoming.Value;
                 current.GroupId = incoming.GroupId;
+                current.SectionId = incoming.SectionId;
                 current.Tags = incoming.Tags;
                 current.Img = incoming.Img;
                 current.Custom = incoming.Custom;
@@ -173,6 +188,7 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
     private IQueryable<Collection> WithGraph() =>
         db.Collections
             .Include(c => c.Groups)
+            .Include(c => c.Sections)
             .Include(c => c.Items)
             .Include(c => c.Members)
             .AsSplitQuery();
