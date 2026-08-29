@@ -352,3 +352,77 @@ a.link {
   }
 
 }
+
+/* Master–detail. 240px is enough for four levels of indent plus a name before
+   it truncates; below 900px the two stack, because a 240px column beside a
+   detail pane on a phone leaves neither of them usable. */
+.groups-split {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .groups-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.groups-split__tree app-group-picker {
+  display: block;
+  margin-top: 4px;
+}
+
+.detail__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail__path {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail__here {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.detail__sep {
+  margin: 0 4px;
+}
+
+.detail__empty {
+  padding: 28px 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* The name sits on its own line, indented like the blocks below it, so the
+   group's own field lines up with the fields and sections it declares. */
+.group-row__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 0 22px;
+
+  .fields-label {
+    @include mono-label(9px, 0.1em);
+    text-transform: uppercase;
+  }
+
+  .rename {
+    flex: 1;
+    min-width: 0;
+  }
+}

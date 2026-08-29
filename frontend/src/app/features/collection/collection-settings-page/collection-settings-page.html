@@ -6,56 +6,85 @@
 
   @switch (activeTab()) {
     @case ('groups') {
-      <ui-card class="groups-card">
-        <div class="groups-card__head">
-          @if (scopeGroup(); as scope) {
-            <span class="heading">{{ 'collSettings.groups.scopedHeading' | t: { name: scope.name } }}</span>
-            <a class="link" [routerLink]="[]" [queryParams]="{ tab: 'groups', g: null }">{{ 'collSettings.groups.showAll' | t }}</a>
-          } @else {
+      <!-- Master–detail. A collection five levels deep with dividers at the
+           bottom is unreadable as one column of editors, and the branch you
+           came to fix is somewhere in the middle of it. -->
+      <div class="groups-split">
+        <ui-card class="groups-split__tree">
+          <div class="groups-card__head">
             <span class="heading">{{ 'collSettings.groups.heading' | t }}</span>
-          }
-          <ui-button
-            variant="link"
-            (click)="pendingGroupParent.set({ parentId: scopeGroup()?.id ?? null })"
-          >{{ 'collSettings.groups.add' | t }}</ui-button>
-        </div>
+            <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: null })"
+              >{{ 'collSettings.groups.add' | t }}</ui-button>
+          </div>
 
-        @for (row of groupRows(); track row.node.id) {
-          <div class="group-row" [style.margin-left.px]="row.depth * 22">
-            <div class="group-row__main">
-              <span class="tick">{{ row.depth ? '↳' : '●' }}</span>
+          <app-group-picker
+            [groups]="d.groups"
+            [counts]="subtreeCounts()"
+            [selectedId]="g() ?? null"
+            [(expanded)]="pickerExpanded"
+          />
+
+          @if (pendingGroupParent()) {
+            <div class="new-group">
+              <span class="context">{{ newGroupContext() }}</span>
+              <input
+                class="new-group__input"
+                [placeholder]="'collSettings.groups.newPlaceholder' | t"
+                [attr.aria-label]="'collSettings.groups.newGroupAria' | t"
+                autofocus
+                (keydown)="newGroupKeydown($event)"
+                (blur)="commitNewGroup($any($event.target).value)"
+              />
+            </div>
+          }
+        </ui-card>
+
+        <ui-card class="groups-split__detail">
+          @if (detail(); as sel) {
+            <div class="detail__head">
+              <span class="detail__path">
+                @for (crumb of selectedPath(); track crumb.id; let last = $last) {
+                  <span [class.detail__here]="last">{{ crumb.name }}</span>
+                  @if (!last) { <span class="detail__sep" aria-hidden="true">›</span> }
+                }
+              </span>
+              <span class="count">{{ 'collSettings.groups.itemCount' | t: { n: sel.count } }}</span>
+              <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: sel.node.id })"
+                >{{ 'collSettings.groups.addSub' | t }}</ui-button>
+              <ui-button
+                variant="icon"
+                [ariaLabel]="'collSettings.groups.remove' | t: { name: sel.node.name }"
+                (click)="removeGroup(sel.node.id)"
+              >✕</ui-button>
+            </div>
+
+            <div class="group-row__name">
+              <span class="fields-label">{{ 'collSettings.groups.nameLabel' | t }}</span>
               <ui-text-input
                 class="rename"
                 variant="subtle"
-                [ariaLabel]="'collSettings.groups.renameAria' | t: { name: row.node.name }"
-                [value]="row.node.name"
-                (valueChange)="renameGroup(row.node.id, $event)"
-                (blurred)="endRename()"
+                [ariaLabel]="'collSettings.groups.renameAria' | t: { name: sel.node.name }"
+                [value]="sel.node.name"
+                (valueChange)="renameGroup(sel.node.id, $event)"
               />
-              <span class="count">{{ 'collSettings.groups.itemCount' | t: { n: row.count } }}</span>
-              <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: row.node.id })">{{ 'collSettings.groups.addSub' | t }}</ui-button>
-              <ui-button
-                variant="icon"
-                [ariaLabel]="'collSettings.groups.remove' | t: { name: row.node.name }"
-                (click)="removeGroup(row.node.id)"
-              >✕</ui-button>
             </div>
+
             <div class="group-row__order">
               <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
               <ui-select
                 class="compact order-by"
-                [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: row.node.name }"
-                [options]="row.sortByOptions"
-                [value]="row.sortBy"
-                (valueChange)="setGroupSortBy(row.node.id, $event)"
+                [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: sel.node.name }"
+                [options]="sel.sortByOptions"
+                [value]="sel.sortBy"
+                (valueChange)="setGroupSortBy(sel.node.id, $event)"
               />
-              @if (row.showDirection) {
+              @if (sel.showDirection) {
                 <ui-select
                   class="compact direction"
-                  [ariaLabel]="'collSettings.groups.orderDirectionAria' | t: { name: row.node.name }"
+                  [ariaLabel]="'collSettings.groups.orderDirectionAria' | t: { name: sel.node.name }"
                   [options]="directionOptions()"
-                  [value]="row.sortDirection"
-                  (valueChange)="setGroupSortDirection(row.node.id, $event)"
+                  [value]="sel.sortDirection"
+                  (valueChange)="setGroupSortDirection(sel.node.id, $event)"
                 />
               }
 
@@ -65,15 +94,15 @@
                 type="number"
                 variant="subtle"
                 placeholder="—"
-                [ariaLabel]="'collSettings.groups.targetAria' | t: { name: row.node.name }"
-                [value]="row.target"
-                (valueChange)="setGroupTarget(row.node.id, $event)"
+                [ariaLabel]="'collSettings.groups.targetAria' | t: { name: sel.node.name }"
+                [value]="sel.target"
+                (valueChange)="setGroupTarget(sel.node.id, $event)"
               />
             </div>
 
             <div class="group-row__fields">
               <span class="fields-label">{{ 'collSettings.groups.fields' | t }}</span>
-              @for (field of row.node.fields; track field.name) {
+              @for (field of sel.node.fields; track field.name) {
                 <span class="field-chip">
                   <span class="name">{{ field.name }}</span>
                   <ui-select
@@ -81,25 +110,25 @@
                     [ariaLabel]="'collSettings.groups.fieldTypeAria' | t: { name: field.name }"
                     [options]="fieldTypeOptions()"
                     [value]="field.type"
-                    (valueChange)="setFieldType(row.node.id, field.name, $event)"
+                    (valueChange)="setFieldType(sel.node.id, field.name, $event)"
                   />
                   <ui-button
                     variant="icon"
                     size="sm"
                     [ariaLabel]="'collSettings.groups.removeField' | t: { name: field.name }"
-                    (click)="removeField(row.node.id, field.name)"
+                    (click)="removeField(sel.node.id, field.name)"
                   >✕</ui-button>
                 </span>
               }
-              @if (pendingFieldGroupId() === row.node.id) {
+              @if (pendingFieldGroupId() === sel.node.id) {
                 <span class="field-chip field-chip--new">
                   <input
                     class="field-input"
                     [placeholder]="'collSettings.groups.fieldPlaceholder' | t"
                     [attr.aria-label]="'collSettings.groups.fieldAria' | t"
                     autofocus
-                    (keydown)="newFieldKeydown($event, row.node.id)"
-                    (blur)="commitNewField(row.node.id, $any($event.target).value)"
+                    (keydown)="newFieldKeydown($event, sel.node.id)"
+                    (blur)="commitNewField(sel.node.id, $any($event.target).value)"
                   />
                   <ui-select
                     class="compact type"
@@ -110,29 +139,30 @@
                   />
                 </span>
               }
-              <ui-button variant="link" size="sm" (click)="pendingFieldGroupId.set(row.node.id)">{{ 'collSettings.groups.addField' | t }}</ui-button>
+              <ui-button variant="link" size="sm" (click)="pendingFieldGroupId.set(sel.node.id)"
+                >{{ 'collSettings.groups.addField' | t }}</ui-button>
             </div>
 
             <div class="group-row__sections">
               <span class="fields-label">{{ 'collSettings.sections.label' | t }}</span>
-              @for (row2 of row.sections; track row2.section.id; let i = $index) {
+              @for (row of sel.sections; track row.section.id; let i = $index) {
                 <span class="section-chip">
                   <ui-text-input
                     class="rename"
                     variant="subtle"
-                    [ariaLabel]="'collSettings.sections.renameAria' | t: { name: row2.section.name }"
-                    [value]="row2.section.name"
-                    (valueChange)="renameSection(row2.section.id, $event)"
+                    [ariaLabel]="'collSettings.sections.renameAria' | t: { name: row.section.name }"
+                    [value]="row.section.name"
+                    (valueChange)="renameSection(row.section.id, $event)"
                   />
-                  <span class="count">{{ 'collSettings.sections.itemCount' | t: { n: row2.count } }}</span>
+                  <span class="count">{{ 'collSettings.sections.itemCount' | t: { n: row.count } }}</span>
                   <ui-text-input
                     class="target"
                     type="number"
                     variant="subtle"
                     placeholder="—"
-                    [ariaLabel]="'collSettings.sections.targetAria' | t: { name: row2.section.name }"
-                    [value]="row2.target"
-                    (valueChange)="setSectionTarget(row2.section.id, $event)"
+                    [ariaLabel]="'collSettings.sections.targetAria' | t: { name: row.section.name }"
+                    [value]="row.target"
+                    (valueChange)="setSectionTarget(row.section.id, $event)"
                   />
                   <!-- Sections are the one thing here with a hand-arranged
                        order, so they need move controls. Plain buttons rather
@@ -142,74 +172,63 @@
                     variant="icon"
                     size="sm"
                     [disabled]="i === 0"
-                    [ariaLabel]="'ui.reorder.earlier' | t: { name: row2.section.name }"
-                    (click)="moveSection(row.node.id, i, i - 1)"
+                    [ariaLabel]="'ui.reorder.earlier' | t: { name: row.section.name }"
+                    (click)="moveSection(sel.node.id, i, i - 1)"
                   >↑</ui-button>
                   <ui-button
                     variant="icon"
                     size="sm"
-                    [disabled]="i === row.sections.length - 1"
-                    [ariaLabel]="'ui.reorder.later' | t: { name: row2.section.name }"
-                    (click)="moveSection(row.node.id, i, i + 1)"
+                    [disabled]="i === sel.sections.length - 1"
+                    [ariaLabel]="'ui.reorder.later' | t: { name: row.section.name }"
+                    (click)="moveSection(sel.node.id, i, i + 1)"
                   >↓</ui-button>
                   <ui-button
                     variant="icon"
                     size="sm"
-                    [ariaLabel]="'collSettings.sections.remove' | t: { name: row2.section.name }"
-                    (click)="removeSection(row2.section.id)"
+                    [ariaLabel]="'collSettings.sections.remove' | t: { name: row.section.name }"
+                    (click)="removeSection(row.section.id)"
                   >✕</ui-button>
                 </span>
               }
-              @if (pendingSectionGroupId() === row.node.id) {
+              @if (pendingSectionGroupId() === sel.node.id) {
                 <span class="section-chip section-chip--new">
                   <input
                     class="field-input"
                     [placeholder]="'collSettings.sections.placeholder' | t"
                     [attr.aria-label]="'collSettings.sections.newAria' | t"
                     autofocus
-                    (keydown)="newSectionKeydown($event, row.node.id)"
-                    (blur)="commitNewSection(row.node.id, $any($event.target).value)"
+                    (keydown)="newSectionKeydown($event, sel.node.id)"
+                    (blur)="commitNewSection(sel.node.id, $any($event.target).value)"
                   />
                 </span>
               }
-              <ui-button variant="link" size="sm" (click)="pendingSectionGroupId.set(row.node.id)">{{ 'collSettings.sections.add' | t }}</ui-button>
-              @if (row.convertible) {
+              <ui-button variant="link" size="sm" (click)="pendingSectionGroupId.set(sel.node.id)"
+                >{{ 'collSettings.sections.add' | t }}</ui-button>
+              @if (sel.convertible) {
                 <ui-button
                   variant="link"
                   size="sm"
-                  (click)="convertChildrenToSections(row.node.id)"
+                  (click)="convertChildrenToSections(sel.node.id)"
                 >{{ 'collSettings.sections.convert' | t }}</ui-button>
               }
             </div>
 
-          </div>
-        }
-
-        @if (pendingGroupParent()) {
-          <div class="new-group">
-            <span class="context">{{ newGroupContext() }}</span>
-            <input
-              class="new-group__input"
-              [placeholder]="'collSettings.groups.newPlaceholder' | t"
-              [attr.aria-label]="'collSettings.groups.newGroupAria' | t"
-              autofocus
-              (keydown)="newGroupKeydown($event)"
-              (blur)="commitNewGroup($any($event.target).value)"
-            />
-          </div>
-        }
-
-        <div class="fine-print">
-          {{ 'collSettings.groups.finePrint1' | t }}
-          <strong>{{ 'collSettings.groups.finePrintOrderBy' | t }}</strong>
-          {{ 'collSettings.groups.finePrint2' | t }}
-          <strong>{{ 'collSettings.groups.finePrintTarget' | t }}</strong>
-          {{ 'collSettings.groups.finePrint3' | t }}
-          <br />
-          {{ 'collSettings.sections.finePrint' | t }}
-        </div>
-      </ui-card>
+            <div class="fine-print">
+              {{ 'collSettings.groups.finePrint1' | t }}
+              <strong>{{ 'collSettings.groups.finePrintOrderBy' | t }}</strong>
+              {{ 'collSettings.groups.finePrint2' | t }}
+              <strong>{{ 'collSettings.groups.finePrintTarget' | t }}</strong>
+              {{ 'collSettings.groups.finePrint3' | t }}
+              <br />
+              {{ 'collSettings.sections.finePrint' | t }}
+            </div>
+          } @else {
+            <div class="detail__empty">{{ 'collSettings.groups.pickOne' | t }}</div>
+          }
+        </ui-card>
+      </div>
     }
+
     @case ('sharing') {
       <div class="sharing">
         <div class="invite-row">

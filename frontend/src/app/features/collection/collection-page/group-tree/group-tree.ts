@@ -15,6 +15,7 @@ import { GroupNode } from '../../../../core/models';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
 import { visibleTree } from '../../../../core/utils/groups.util';
 import { groupLinkParams } from '../../browse-params';
+import { TreeKeyboard } from '../../tree-keyboard';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
 import { UiProgress, UiSectionLabel } from '../../../../shared/ui';
 
@@ -90,15 +91,17 @@ export class GroupTree {
   });
 
   /**
-   * Exactly one row is tabbable, the rest are reachable by arrow keys. Without
-   * a roving tabindex a hundred-group tree becomes a hundred tab stops.
+   * Arrow keys, Home/End and the roving tabindex, shared with the settings
+   * page's group picker so the two trees can never navigate differently.
    */
-  protected readonly focusedId = computed(() => {
-    const rows = this.rows();
-    const selected = this.selectedId();
-    if (selected && rows.some(r => r.node.id === selected)) return selected;
-    return rows[0]?.node.id ?? null;
-  });
+  private readonly keys = new TreeKeyboard(
+    this.host,
+    () => this.rows().map(row => ({ ...row, id: row.node.id })),
+    (id, open) => this.setExpanded(id, open),
+    '.row__link',
+  );
+
+  protected readonly focusedId = computed(() => this.keys.tabbableId(this.selectedId()));
 
   protected toggle(event: Event, id: string): void {
     // The disclosure sits beside the anchor, not inside it, but a click here
@@ -111,42 +114,7 @@ export class GroupTree {
   }
 
   protected onKeydown(event: KeyboardEvent, index: number): void {
-    const rows = this.rows();
-    const row = rows[index];
-    if (!row) return;
-
-    switch (event.key) {
-      case 'ArrowDown':
-        this.focusRow(index + 1);
-        break;
-      case 'ArrowUp':
-        this.focusRow(index - 1);
-        break;
-      case 'ArrowRight':
-        // Open first, then descend — two presses to reach a child, which is
-        // what the WAI-ARIA tree pattern specifies.
-        if (row.hasChildren && !row.expanded) this.setExpanded(row.node.id, true);
-        else if (row.hasChildren) this.focusRow(index + 1);
-        else return;
-        break;
-      case 'ArrowLeft':
-        if (row.hasChildren && row.expanded) this.setExpanded(row.node.id, false);
-        else this.focusParent(rows, index);
-        break;
-      case 'Home':
-        this.focusRow(0);
-        break;
-      case 'End':
-        this.focusRow(rows.length - 1);
-        break;
-      case ' ':
-        // Anchors ignore Space; the tree pattern expects it to activate.
-        (event.target as HTMLElement).click();
-        break;
-      default:
-        return;
-    }
-    event.preventDefault();
+    this.keys.handle(event, index);
   }
 
   private setExpanded(id: string, open: boolean): void {
@@ -154,20 +122,5 @@ export class GroupTree {
     if (open) next.add(id);
     else next.delete(id);
     this.expanded.set(next);
-  }
-
-  private focusParent(rows: TreeRowView[], index: number): void {
-    const depth = rows[index].depth;
-    for (let i = index - 1; i >= 0; i--) {
-      if (rows[i].depth < depth) {
-        this.focusRow(i);
-        return;
-      }
-    }
-  }
-
-  private focusRow(index: number): void {
-    const links = this.host.nativeElement.querySelectorAll<HTMLElement>('.row__link');
-    links.item(index)?.focus();
   }
 }

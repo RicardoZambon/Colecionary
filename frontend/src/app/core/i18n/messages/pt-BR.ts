@@ -389,10 +389,7 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.tab.general': 'Geral',
   'collSettings.tab.groups': 'Grupos e campos',
   'collSettings.tab.sharing': 'Compartilhamento',
-
-  'collSettings.groups.scopedHeading': '{name} e subgrupos',
   'collSettings.groups.heading': 'Grupos e subgrupos',
-  'collSettings.groups.showAll': 'Ver todos os grupos',
   'collSettings.groups.add': '+ Adicionar grupo',
   'collSettings.groups.itemCount': '{n} itens',
   'collSettings.groups.addSub': '+ Sub',
@@ -627,4 +624,8 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.section.added': 'Seção "{name}" adicionada',
   'toast.section.removed': 'Seção removida — os itens dela ficaram sem seção',
   'toast.section.converted': '{n} sub-grupos agora são seções',
+  'collSettings.groups.pickerAria': 'Grupos desta coleção',
+  'collSettings.groups.noneYet': 'Nenhum grupo ainda',
+  'collSettings.groups.nameLabel': 'Nome',
+  'collSettings.groups.pickOne': 'Escolha um grupo à esquerda para editar o nome, a ordenação, os campos e as seções.',
 };

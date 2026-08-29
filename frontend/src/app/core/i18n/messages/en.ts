@@ -389,10 +389,7 @@ export const en = {
   'collSettings.tab.general': 'General',
   'collSettings.tab.groups': 'Groups & fields',
   'collSettings.tab.sharing': 'Sharing',
-
-  'collSettings.groups.scopedHeading': '{name} & sub-groups',
   'collSettings.groups.heading': 'Groups & sub-groups',
-  'collSettings.groups.showAll': 'Show all groups',
   'collSettings.groups.add': '+ Add group',
   'collSettings.groups.itemCount': '{n} items',
   'collSettings.groups.addSub': '+ Sub',
@@ -632,4 +629,8 @@ export const en = {
   'toast.section.added': 'Section "{name}" added',
   'toast.section.removed': 'Section removed — its items moved to no section',
   'toast.section.converted': '{n} sub-groups are now sections',
+  'collSettings.groups.pickerAria': 'Groups in this collection',
+  'collSettings.groups.noneYet': 'No groups yet',
+  'collSettings.groups.nameLabel': 'Name',
+  'collSettings.groups.pickOne': 'Pick a group on the left to edit its name, its ordering, its fields and its sections.',
 } as const;

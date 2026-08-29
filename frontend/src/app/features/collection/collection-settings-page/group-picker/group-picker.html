@@ -1,0 +1,41 @@
+<ul role="tree" [attr.aria-label]="'collSettings.groups.pickerAria' | t">
+  @for (row of rows(); track row.node.id; let i = $index) {
+    <li
+      role="treeitem"
+      [attr.aria-level]="row.depth + 1"
+      [attr.aria-expanded]="row.hasChildren ? row.expanded : null"
+      [attr.aria-selected]="row.selected"
+      class="pick"
+      [class.pick--selected]="row.selected"
+      [style.padding-left.px]="row.depth * 14"
+    >
+      @if (row.hasChildren) {
+        <button
+          type="button"
+          class="pick__twisty"
+          tabindex="-1"
+          [attr.aria-label]="
+            (row.expanded ? 'groupTree.collapseGroup' : 'groupTree.expandGroup')
+              | t: { name: row.node.name }
+          "
+          (click)="toggle($event, row.node.id)"
+        >{{ row.expanded ? '▾' : '▸' }}</button>
+      } @else {
+        <span class="pick__twisty pick__twisty--leaf" aria-hidden="true"></span>
+      }
+
+      <a
+        class="pick__link"
+        [routerLink]="[]"
+        [queryParams]="{ tab: 'groups', g: row.node.id }"
+        [tabindex]="focusedId() === row.node.id ? 0 : -1"
+        (keydown)="onKeydown($event, i)"
+      >
+        <span class="pick__name">{{ row.node.name }}</span>
+        <span class="pick__count">{{ row.count }}</span>
+      </a>
+    </li>
+  } @empty {
+    <li class="pick__empty">{{ 'collSettings.groups.noneYet' | t }}</li>
+  }
+</ul>

@@ -171,9 +171,11 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
     fixture.detectChanges();
   };
 
-  const rows = () => [...el.querySelectorAll('.group-row')] as HTMLElement[];
-  const rowNames = () =>
-    rows().map(row => (row.querySelector('.rename input') as HTMLInputElement).value);
+  /** The tree on the left: one row per group, at any depth. */
+  const rows = () => [...el.querySelectorAll('.pick')] as HTMLElement[];
+  const rowNames = () => rows().map(row => (row.textContent ?? '').replace(/\d+$/, '').trim());
+  /** The editor on the right, for whatever the tree has selected. */
+  const detail = () => el.querySelector('.groups-split__detail') as HTMLElement;
   const byLabel = (aria: string) =>
     el.querySelector(`[aria-label="${aria}"]`) as HTMLInputElement & HTMLSelectElement;
 
@@ -188,6 +190,7 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
     done,
     rows,
     rowNames,
+    detail,
     byLabel,
     /** The document the last save sent to the API. */
     lastPut: () => api.puts[api.puts.length - 1],
@@ -229,6 +232,7 @@ describe('CollectionSettingsPage', () => {
     const page = await mount({
       collection: collection({ groups: [group('zeta', { target: 120 })] }),
       tab: 'groups',
+      g: 'zeta',
     });
     const target = page.byLabel('Target for zeta');
     expect(target.value).toBe('120');
@@ -267,6 +271,7 @@ describe('CollectionSettingsPage', () => {
     const page = await mount({
       collection: collection({ groups: [group('zeta', { sort: { by: 'name', direction: 'asc' } })] }),
       tab: 'groups',
+      g: 'zeta',
     });
     const orderBy = page.byLabel('Order the items in zeta by');
     expect(orderBy.value).toBe('name');
@@ -289,6 +294,7 @@ describe('CollectionSettingsPage', () => {
         ],
       }),
       tab: 'groups',
+      g: 'zeta',
     });
 
     page.click(page.el.querySelector('[aria-label="Remove field Issue"]')!);
@@ -305,19 +311,20 @@ describe('CollectionSettingsPage', () => {
     expect(page.rowNames()).toEqual(['beta', 'zeta']);
   });
 
-  it('freezes the row order while a rename is being typed, and releases it on blur', async () => {
-    // An alphabetical list re-sorts on every keystroke, and moving the focused
-    // input in the DOM blurs it — renaming "zeta" to "alpha" would end after
-    // the first letter.
-    const page = await mount({ tab: 'groups' });
-    const zeta = page.el.querySelectorAll('.rename input')[1] as HTMLInputElement;
+  it('renames without the tree taking the focused field with it', async () => {
+    // This used to need a frozen row order: the name lived inside the same
+    // alphabetical list it sorted, so every keystroke moved the focused input
+    // in the DOM and blurred it — renaming "zeta" to "alpha" ended after the
+    // first letter. The split is what removed the need, so the field must
+    // survive the tree re-sorting under it.
+    const page = await mount({ tab: 'groups', g: 'zeta' });
+    const name = page.detail().querySelector('.rename input') as HTMLInputElement;
 
-    page.type(zeta, 'alpha');
-    expect(page.rowNames()).toEqual(['beta', 'alpha']);
+    page.type(name, 'alpha');
 
-    zeta.dispatchEvent(new Event('blur'));
-    page.fixture.detectChanges();
     expect(page.rowNames()).toEqual(['alpha', 'beta']);
+    expect(page.detail().querySelector('.rename input')).toBe(name);
+    expect((page.detail().querySelector('.rename input') as HTMLInputElement).value).toBe('alpha');
   });
 
   it('will not remove a group that still holds items, anywhere in its subtree', async () => {
@@ -328,6 +335,7 @@ describe('CollectionSettingsPage', () => {
         items: [item('i1', 'child')],
       }),
       tab: 'groups',
+      g: 'zeta',
     });
 
     page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
@@ -391,8 +399,7 @@ describe('CollectionSettingsPage', () => {
       g: 'espanha',
     });
 
-    const espanha = page.rows()[0];
-    expect(espanha.querySelectorAll('.group-row__sections ui-button')).toHaveLength(1);
+    expect(page.detail().querySelectorAll('.group-row__sections ui-button')).toHaveLength(1);
   });
 
   it('removing a section unfiles its items instead of refusing', async () => {
@@ -438,5 +445,71 @@ describe('CollectionSettingsPage', () => {
       'bronze',
     ]);
     expect(saved.sections.find(s => s.groupId === 'brasil')!.id).toBe('outra');
+  });
+
+  // --- master–detail (the tree on the left, one editor on the right) ---
+
+  it('edits nothing until a group is picked', async () => {
+    // The whole point of the split: no editor is open, so a deep collection
+    // opens as a map rather than as a column of forms.
+    const page = await mount({ tab: 'groups' });
+
+    expect(page.detail().querySelector('.detail__empty')).not.toBeNull();
+    expect(page.detail().querySelector('.rename input')).toBeNull();
+    expect(page.rowNames()).toEqual(['beta', 'zeta']);
+  });
+
+  it('opens the editor for the group the URL names', async () => {
+    const page = await mount({ tab: 'groups', g: 'zeta' });
+
+    expect((page.detail().querySelector('.rename input') as HTMLInputElement).value).toBe('zeta');
+    expect(page.detail().querySelector('.detail__empty')).toBeNull();
+  });
+
+  it('shows a branch by the items in its whole subtree, never just its own', async () => {
+    // A parent shown as empty because everything sits in its children is a
+    // lie, and this is the number you look at before deleting a branch.
+    const page = await mount({
+      collection: collection({
+        groups: [group('zeta'), group('child', { parentId: 'zeta' })],
+        items: [item('i1', 'child')],
+      }),
+      tab: 'groups',
+      g: 'zeta',
+    });
+
+    const counts = [...page.el.querySelectorAll('.pick__count')].map(n => n.textContent);
+    expect(counts).toContain('1');
+  });
+
+  it('lands on the editor of a group it just created', async () => {
+    // You create a group in order to configure it, and a new row appearing
+    // somewhere alphabetical is no answer to "where did it go?".
+    const page = await mount({ tab: 'groups' });
+    page.click(page.el.querySelector('.groups-card__head ui-button button')!);
+    const input = page.el.querySelector('.new-group__input') as HTMLInputElement;
+    page.type(input, 'Alpha');
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    page.fixture.detectChanges();
+
+    expect(page.navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: expect.objectContaining({ tab: 'groups', g: expect.any(String) }),
+      }),
+    );
+  });
+
+  it('clears the selection when the selected group is deleted', async () => {
+    // Leaving ?g= on a group that no longer exists renders the empty state
+    // anyway, but the URL would go on claiming a selection that is gone.
+    const page = await mount({ tab: 'groups', g: 'zeta' });
+
+    page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+
+    expect(page.navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({ queryParams: expect.objectContaining({ g: null }) }),
+    );
   });
 });
