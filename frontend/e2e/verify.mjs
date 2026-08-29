@@ -130,6 +130,46 @@ for (const width of [390, 768, 900]) {
   await sized.close();
 }
 
+// The two panels of the collection page's list view share one grid row, so an
+// inset that differs between them reads as a misalignment rather than a choice.
+// Neither jsdom nor any unit test can see this: it is pure layout.
+if (collection) {
+  await page.goto(`${BASE}${collection}?v=list`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1200);
+  const panels = await page.evaluate(() => {
+    const R = Math.round;
+    const box = s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; };
+    const tree = box('app-group-tree');
+    const card = box('app-item-list ui-card');
+    if (!tree || !card) return null;
+    const treeFirst = box('app-group-tree .head') || box('app-group-tree .row');
+    const cols = [...document.querySelectorAll('.list-head .col')];
+    const scroll = document.querySelector('.list-scroll');
+    return {
+      topDelta: R(card.top - tree.top),
+      treeInsetL: treeFirst ? R(treeFirst.left - tree.left) : null,
+      listInsetR: cols.length ? R(card.right - cols[cols.length - 1].getBoundingClientRect().right) : null,
+      // The table must never overflow its own scroller at this width.
+      overflow: scroll ? R(scroll.scrollWidth - scroll.clientWidth) : 0,
+    };
+  });
+  if (panels) {
+    // A tolerance of 2px, not 0: the checkbox column is centred rather than
+    // padded, so the two insets are optically equal without being identical.
+    check(
+      'the group panel and the item list start at the same height',
+      panels.topDelta === 0,
+      `${panels.topDelta}px apart`,
+    );
+    check(
+      'the item list is inset like the group panel beside it',
+      Math.abs(panels.listInsetR - panels.treeInsetL) <= 2,
+      `tree ${panels.treeInsetL}px vs list ${panels.listInsetR}px`,
+    );
+    check('the item table does not overflow its scroller', panels.overflow === 0, `${panels.overflow}px`);
+  }
+}
+
 // The nav drawer's focus contract. A drawer that traps focus, or loses it, is
 // worse than no drawer — and none of this is observable without a viewport.
 const phone = await browser.newContext({

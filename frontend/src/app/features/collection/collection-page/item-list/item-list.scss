@@ -16,12 +16,24 @@
  * name decide how wide the whole table is.
  */
 .list-table {
+  /*
+   * The row's horizontal inset, on the spacing scale and the same on both
+   * sides. It matches the group panel beside it, because two panels in one
+   * grid row with different insets read as a misalignment rather than as a
+   * choice.
+   */
+  --row-pad-x: var(--sp-3);
   --check-w: 34px;
 
-  /* No checkbox column for a reader, rather than an empty 34px gutter beside
-     every row. One custom property, so the head and the rows cannot disagree. */
+  /*
+   * No checkbox column for a reader — but the track collapses to the gutter,
+   * not to zero. Collapsing it to zero left the name flush against the card's
+   * border while the group panel inset its own rows, and it is also what keeps
+   * the sticky `left: var(--check-w)` on the name cell correct: the offset and
+   * the inset are the same number by construction.
+   */
   &.list-table--readonly {
-    --check-w: 0px;
+    --check-w: var(--row-pad-x);
   }
   --field-w: 104px;
   /* One row background, read by the row itself and by the two sticky cells
@@ -53,6 +65,14 @@
  * their own, or the cells they cover show through.
  */
 .pick {
+  /*
+   * Explicit, and so is the cells track below. Auto-placement was putting the
+   * only child into the first track whenever the checkbox was absent, so a
+   * reader's whole table sat in the 12px gutter and overflowed it — which is
+   * also why collapsing that track to 0 previously looked merely flush rather
+   * than obviously broken.
+   */
+  grid-column: 1;
   position: sticky;
   left: 0;
   z-index: 1;
@@ -65,12 +85,14 @@
 
 .list-cells,
 .list-row {
+  grid-column: 2;
   display: grid;
   /* Name · Group · Year · Copies · Cond · Value. The left padding lives on the
      sticky checkbox cell instead, so the two line up when scrolled. */
   grid-template-columns: minmax(150px, 2fr) 100px 56px 48px 80px 88px;
   gap: var(--sp-2);
-  padding: 9px var(--sp-4) 9px 0;
+  /* Left is 0 because the checkbox track supplies that side; see --row-pad-x. */
+  padding: 9px var(--row-pad-x) 9px 0;
   align-items: center;
 }
 

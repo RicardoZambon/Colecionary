@@ -52,6 +52,21 @@ export type NoticeScope = 'edit' | 'administer';
     }
   `,
   styles: `
+    /*
+     * The host generates no box of its own, so a session that can write is not
+     * charged for this component being in the tree.
+     *
+     * It is placed as the first child of the collection page's main column,
+     * which is a flex column with a 16px gap. Without this the empty host was
+     * still a flex item, so every Owner and Editor got 16px of dead space at
+     * the top of the right-hand panel and the list card sat lower than the
+     * group panel beside it. display: contents makes .notice the flex item
+     * when there is one, and nothing at all when there is not.
+     */
+    :host {
+      display: contents;
+    }
+
     .notice {
       display: flex;
       align-items: flex-start;
