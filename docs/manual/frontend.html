@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App Angular · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="frontend">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">08 · Frontend</p>
+<h1>O app Angular</h1>
+<p class="lede">
+  Angular 21, TypeScript estrito, zoneless, signals, <code>OnPush</code> em todo
+  lugar. Quatro regras carregam o peso: tokens de design apenas, a biblioteca
+  <code>ui-*</code> como fonte única de elementos, a URL como estado, e nenhuma
+  string visível dentro de componente. As regras normativas completas estão em
+  <a href="../frontend-standards.md">docs/frontend-standards.md</a>; aqui está
+  como o código está organizado hoje.
+</p>
+
+<h2 id="paginas">Páginas e rotas</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Rota</th><th>Componente</th><th>Faz</th></tr></thead>
+  <tbody>
+    <tr><td class="nowrap"><code>/setup</code></td><td><code>SetupPage</code></td><td>Wizard de primeiro uso. Guardado por <code>setupCompletedGuard</code></td></tr>
+    <tr><td class="nowrap"><code>/login</code></td><td><code>LoginPage</code></td><td>Único ponto anônimo do SPA</td></tr>
+    <tr><td class="nowrap"><code>/dashboard</code></td><td><code>DashboardPage</code></td><td>Agregados da conta, adições recentes, valor por moeda</td></tr>
+    <tr><td class="nowrap"><code>/store</code></td><td><code>StorePage</code></td><td>Checklists curados; “já está no seu vault” desabilitado</td></tr>
+    <tr><td class="nowrap"><code>/settings</code></td><td><code>SettingsPage</code></td><td>Perfil, membros, tema, idioma, moeda, planos, export/import</td></tr>
+    <tr><td class="nowrap"><code>/c/:collectionId</code></td><td><code>CollectionPage</code></td><td>Hero, toolbar, árvore de grupos, grade/lista de itens, dashboard de grupo</td></tr>
+    <tr><td class="nowrap"><code>/c/:collectionId/settings</code></td><td><code>CollectionSettingsPage</code></td><td>Metadados, grupos, campos, ordenação, target, membros, moeda, banner/ícone</td></tr>
+    <tr><td class="nowrap"><code>/c/:cid/items/new</code></td><td><code>ItemFormPage</code></td><td>Novo item; <code>?g=</code> decide em que grupo ele nasce</td></tr>
+    <tr><td class="nowrap"><code>/c/:cid/items/:itemId</code></td><td><code>ItemPage</code></td><td>Detalhe, galeria, cópias, navegação ←/→ entre vizinhos</td></tr>
+    <tr><td class="nowrap"><code>/c/:cid/items/:itemId/edit</code></td><td><code>ItemFormPage</code></td><td>Mesmo componente, modo edição</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Todas são <code>loadComponent</code> (lazy). Params de rota e query chegam como
+  inputs via <code>withComponentInputBinding()</code>. O <code>Shell</code>
+  hospeda topbar, sidebar e os três outlets globais:
+  <code>ui-toast</code>, <code>ui-image-focus</code> e
+  <code>app-conflict-notice</code>.
+</p>
+
+<h2 id="estado">Estado: signal stores</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Serviço</th><th>Guarda</th><th>Nota</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>VaultStore</code></td>
+      <td>Coleções, listings, membros, perfil, settings + <strong>o mapa de versões</strong></td>
+      <td>Signals privados, views <code>asReadonly()</code>, <code>computed()</code>
+          para agregados. Toda mutação chama a API primeiro e atualiza o estado
+          local a partir da resposta</td>
+    </tr>
+    <tr>
+      <td><code>AuthService</code></td>
+      <td>Sessão JWT em <code>localStorage['vault.auth']</code></td>
+      <td>Interceptor anexa o bearer e desloga em 401 no meio da sessão</td>
+    </tr>
+    <tr>
+      <td><code>ThemeService</code></td>
+      <td>Tema ativo</td>
+      <td>Aplica <code>data-theme</code> no <code>&lt;html&gt;</code>, persiste, expõe o catálogo</td>
+    </tr>
+    <tr>
+      <td><code>I18nService</code></td>
+      <td>Idioma ativo</td>
+      <td>Espelha exatamente a forma do <code>ThemeService</code>:
+          <code>localStorage['vault.lang']</code>, primeira visita de
+          <code>navigator.language</code></td>
+    </tr>
+    <tr>
+      <td><code>CurrencyService</code></td>
+      <td>Moeda padrão da conta</td>
+      <td>Signal sem dependências, de propósito: um pipe nunca deve arrastar
+          <code>HttpClient</code> para o TestBed de todo componente que renderiza
+          um valor</td>
+    </tr>
+    <tr>
+      <td><code>ImageFocusService</code></td>
+      <td>Mapa id → focal; a requisição de enquadramento em aberto</td>
+      <td><code>load()</code> uma vez no bootstrap; <code>position(id)</code> nas
+          superfícies; <code>frame(id, usage)</code> abre o editor</td>
+    </tr>
+    <tr>
+      <td><code>PhotoUploadService</code></td>
+      <td>Fila sequencial de uploads com progresso</td>
+      <td>Limite de 5 MB, espelhando <code>ImageService.MaxBytes</code></td>
+    </tr>
+    <tr>
+      <td><code>ConflictService</code></td>
+      <td>A recusa de escrita mais recente</td>
+      <td>Levantado por <code>VaultStore.guard</code> em <em>um</em> lugar: sete
+          pontos salvam coleção ou item, e um conflito que um deles esquecesse de
+          exibir é um save que o usuário acredita ter acontecido</td>
+    </tr>
+    <tr>
+      <td><code>ToastService</code></td>
+      <td>Mensagem efêmera</td>
+      <td><code>flash()</code>, renderizado pelo outlet global</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="dados">Camada de dados</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Classe</th><th>Papel</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>VaultApi</code> (abstrata)</td>
+      <td>O contrato, usado como token de DI. Código de feature <strong>só vê
+          isto</strong>; uma segunda implementação seria uma troca de uma linha
+          em <code>app.config.ts</code></td>
+    </tr>
+    <tr>
+      <td><code>HttpVaultApi</code></td>
+      <td>Única implementação. Envia <code>If-Match</code>, lê <code>ETag</code>,
+          desembrulha ProblemDetails em <code>Error</code> simples, levanta
+          <code>VaultConflictError</code> em 409/412/428</td>
+    </tr>
+    <tr>
+      <td><code>ImagesApi</code></td>
+      <td>Upload multipart autenticado (com e sem progresso) e
+          <code>url(id, variant)</code>. Fica <em>ao lado</em> de
+          <code>VaultApi</code>, não dentro: é metadado sobre uma foto, não parte
+          do grafo da coleção</td>
+    </tr>
+    <tr>
+      <td><code>ArchiveApi</code></td>
+      <td>Export (<code>Blob</code> + âncora de download, nome vindo de
+          <code>Content-Disposition</code>) e import, incluindo
+          <code>ImportNeedsConfirmation</code> com o <code>ImportPlan</code></td>
+    </tr>
+    <tr>
+      <td><code>SetupService</code></td>
+      <td>Só o wizard: status, teste de conexão, apply</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout danger">
+  <span class="label">Versões nunca saem de dentro de Collection</span>
+  <p>
+    <code>VaultStore</code> guarda o mapa de versões, e <code>HttpVaultApi</code>
+    lê versão do envelope da listagem e do header <code>ETag</code>. Se algum dia
+    a versão passar a ser um campo de <code>Collection</code>, ela entra no
+    arquivo de backup — e o <code>Collection</code> é literalmente o formato do
+    arquivo.
+  </p>
+</div>
+
+<h2 id="ui">Biblioteca <code>shared/ui</code></h2>
+
+<p>
+  Standalone, <code>OnPush</code>, arquivo único com template e estilo inline,
+  seletor prefixado <code>ui-</code>, todos exportados do barril
+  <code>shared/ui/index.ts</code>. <strong>Uma página nunca reestiliza HTML
+  cru.</strong> Precisa de uma variante? Estenda o componente com um
+  <code>input()</code> novo.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Componente</th><th>Seletor</th><th>Para que serve</th></tr></thead>
+  <tbody>
+    <tr><td>Button</td><td class="nowrap"><code>ui-button</code></td><td><code>primary|ghost|danger|link|icon</code>, <code>size</code>, <code>block</code>, <code>muted</code>. <code>muted</code> lê como indisponível mas <em>dispara</em>: um controle morto não consegue dizer por que está morto</td></tr>
+    <tr><td>Field</td><td class="nowrap"><code>ui-field</code></td><td>Envolve qualquer controle com o rótulo mono maiúsculo</td></tr>
+    <tr><td>Text input</td><td class="nowrap"><code>ui-text-input</code></td><td><code>value</code> como <code>model()</code>, variantes <code>panel|subtle</code></td></tr>
+    <tr><td>Textarea</td><td class="nowrap"><code>ui-textarea</code></td><td>—</td></tr>
+    <tr><td>Select</td><td class="nowrap"><code>ui-select</code></td><td><code>options: SelectOption[]</code>; classe <code>compact</code> para linhas densas</td></tr>
+    <tr><td>Chip</td><td class="nowrap"><code>ui-chip</code></td><td><code>&lt;button&gt;</code> por padrão; com <code>link</code> vira <code>&lt;a&gt;</code> real — um chip que navega precisa sobreviver ao clique do meio</td></tr>
+    <tr><td>Card</td><td class="nowrap"><code>ui-card</code></td><td>A superfície painel; <code>interactive</code>, <code>dashed</code></td></tr>
+    <tr><td>Badge</td><td class="nowrap"><code>ui-badge</code></td><td><code>good|warn|accent|neutral</code> + helpers puros de condição e rótulo</td></tr>
+    <tr><td>Toggle</td><td class="nowrap"><code>ui-toggle</code></td><td><code>role="switch"</code></td></tr>
+    <tr><td>Tabs</td><td class="nowrap"><code>ui-tabs</code></td><td><code>tabs: TabDef[]</code>, <code>active</code> como model</td></tr>
+    <tr><td>Avatar / stack</td><td class="nowrap"><code>ui-avatar</code>, <code>ui-avatar-stack</code></td><td>Iniciais; stack mostra os 4 primeiros sobrepostos</td></tr>
+    <tr><td>Progress</td><td class="nowrap"><code>ui-progress</code></td><td><code>pct</code> + <code>secondaryPct</code> (faixa hachurada atrás: possuído vs. catalogado num denominador só). <strong>Duas tonalidades de um matiz é distinção só por cor</strong> — sempre imprima os números ao lado</td></tr>
+    <tr><td>Mosaic</td><td class="nowrap"><code>ui-mosaic</code></td><td>Capa montada com até 4 fotos; <code>aria-hidden</code>, o nome pertence ao link que o envolve</td></tr>
+    <tr><td>Icon</td><td class="nowrap"><code>ui-icon</code></td><td>SVG inline estilo Feather</td></tr>
+    <tr><td>Flag</td><td class="nowrap"><code>ui-flag</code></td><td>Bandeira do idioma no seletor</td></tr>
+    <tr><td>Reorder</td><td class="nowrap"><code>ui-reorder</code></td><td>A metade-teclado de uma lista arrastável; <code>moved(-1|1)</code></td></tr>
+    <tr><td>Section label</td><td class="nowrap"><code>ui-section-label</code></td><td>Micro-título mono maiúsculo (maiúscula é CSS)</td></tr>
+    <tr><td>Dropdown</td><td class="nowrap"><code>ui-dropdown</code></td><td><code>[ddTrigger]</code> / <code>[ddPanel]</code></td></tr>
+    <tr><td>Image slot</td><td class="nowrap"><code>ui-image-slot</code></td><td>Apresentacional: renderiza <code>src</code> + <code>focal</code>, emite o arquivo escolhido</td></tr>
+    <tr><td>Image focus</td><td class="nowrap"><code>ui-image-focus</code></td><td>Outlet global; o editor de ponto focal (arrastar ou setas, prévias por <code>usage</code>)</td></tr>
+    <tr><td>Photo manager</td><td class="nowrap"><code>ui-photo-manager</code></td><td>Adicionar / reordenar / capa / enquadrar / remover fotos de um item</td></tr>
+    <tr><td>Lightbox</td><td class="nowrap"><code>ui-lightbox</code></td><td>Visualizador cheio, paginação por setas, link do original</td></tr>
+    <tr><td>Toast</td><td class="nowrap"><code>ui-toast</code></td><td>Outlet global do <code>ToastService</code></td></tr>
+    <tr><td>Conflict notice</td><td class="nowrap"><code>app-conflict-notice</code></td><td>Vive em <code>layout/</code>, não em <code>shared/ui</code>: é um outlet específico do app, não um elemento reutilizável</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Pipes</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Pipe</th><th>Uso</th><th>Nota</th></tr></thead>
+  <tbody>
+    <tr><td><code>| t</code></td><td><code>{{ 'settings.title' | t }}</code>, com placeholders <code>| t: { name }</code></td><td><strong><code>pure: false</code> de propósito</strong></td></tr>
+    <tr><td><code>| money: currency()</code></td><td><code>$1.234,57</code>, sempre duas decimais, sempre arredondado para cima</td><td>Idem</td></tr>
+    <tr><td><code>| itemValue</code></td><td>Marca <code>≈</code> quando o número é um recibo e não uma estimativa; ausência vira <code>—</code></td><td>Passe o <code>Item</code> inteiro para figura por unidade</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout warn">
+  <span class="label">Não “otimize” os pipes para puros</span>
+  <p>
+    Um pipe puro é memoizado pelos argumentos: quando o idioma muda,
+    <code>transform</code> recebe a mesma chave e o Angular devolve a string
+    cacheada, <strong>congelando todo rótulo da tela no idioma antigo</strong>. A
+    versão impura custa uma busca em dicionário em views que já estavam sendo
+    verificadas.
+  </p>
+</div>
+
+<h2 id="utils">Utilitários puros</h2>
+
+<p>
+  Toda lógica que duas telas poderiam implementar de formas divergentes vive numa
+  função pura, com spec ao lado. A regra prática: <strong>se duas superfícies
+  poderiam discordar, existe um util que decide</strong>.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Arquivo</th><th>Dono de</th></tr></thead>
+  <tbody>
+    <tr><td><code>copies.util.ts</code></td><td>Posse derivada, melhor condição, <code>copyValue</code> (a cadeia de estimativa), totais pagos, <code>syncWantedTag</code></td></tr>
+    <tr><td><code>sort.util.ts</code></td><td>Toda comparação de itens. <code>Intl.Collator</code> numérico, então <code>1 · 2 · 10 · 12A</code> ordena certo mesmo em campo de texto livre; sem valor sempre afunda</td></tr>
+    <tr><td><code>groups.util.ts</code></td><td><code>childrenOf</code> (alfabético, via <code>compareNames</code>), <code>flattenTree</code>, <code>visibleTree</code>, <code>fieldsFor</code>, <code>sortFor</code>, <code>resolveGroupId</code></td></tr>
+    <tr><td><code>group-stats.util.ts</code></td><td>Toda aritmética de possuído/faltante/percentual, e o rollup contra <code>target</code></td></tr>
+    <tr><td><code>browse.util.ts</code></td><td><code>visibleItems</code> e <code>neighbours</code> — a lista visível e quem vem a seguir</td></tr>
+    <tr><td><code>focal.util.ts</code></td><td><code>focalToPosition</code>, <code>clampFocal</code>, <code>focalFromPoint</code></td></tr>
+    <tr><td><code>currency.util.ts</code></td><td><code>currencyOf</code> — a única leitura de moeda</td></tr>
+    <tr><td><code>money.util.ts</code></td><td><code>ceilToCents</code>, <code>SUPPORTED_CURRENCIES</code> (espelho de <code>Money.SupportedCurrencies</code>)</td></tr>
+    <tr><td><code>date.util.ts</code></td><td>Parseia ISO só-data como <strong>meia-noite local</strong> — <code>new Date('2026-08-13')</code> é UTC e mostraria o dia anterior no Brasil</td></tr>
+    <tr><td><code>download.util.ts</code></td><td>Âncora de download do arquivo</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Helpers puros que precisam produzir rótulo recebem o tradutor como argumento
+  (<code>t: Translate</code>): eles não têm injector. Os specs deles passam um
+  <code>t</code> falso que ecoa a chave, o que faz a asserção fixar
+  <em>qual mensagem</em> foi escolhida, e não a redação em inglês.
+</p>
+
+<h2 id="url">URL como estado</h2>
+
+<p>
+  Qualquer coisa que o usuário gostaria de ver restaurada num refresh, num voltar
+  ou num link compartilhado vive na rota. Duas regras mantêm isso honesto:
+</p>
+
+<ol>
+  <li>
+    <strong>Query string é entrada não confiável</strong>, parseada em
+    <code>features/collection/browse-params.ts</code> — condição desconhecida ou
+    chave de ordenação não declarada lê como “sem filtro”, nunca como “filtra tudo
+    fora”.
+  </li>
+  <li>
+    <strong>A lista vem só de <code>browse.util.ts</code></strong>. A grade e a
+    página do item consumirem uma função é o que impede as duas de discordarem
+    sobre quem vem a seguir.
+  </li>
+</ol>
+
+<p>
+  Links que abrem um grupo passam por <code>groupLinkParams</code>: mescla mantém
+  filtros e visualização, e a ordenação ad-hoc é <strong>descartada de
+  propósito</strong> — cada grupo declara a sua, e uma escolha pontual não tem por
+  que sobreviver ao grupo em que foi feita. Filtros e ordenação navegam com
+  <code>replaceUrl</code>.
+</p>
+
+<h2 id="i18n">Idioma</h2>
+
+<p>
+  O app ship em <strong>pt-BR e en</strong>, trocáveis em runtime. Português é o
+  idioma-fonte da marca. <code>en.ts</code> <strong>declara</strong> as chaves
+  (~480 hoje) e <code>pt-BR.ts</code> é <code>Record&lt;MessageKey, string&gt;</code>
+  — tradução faltando ou sobrando é <strong>erro de compilação</strong>.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Regra</th><th>Detalhe</th></tr></thead>
+  <tbody>
+    <tr><td>Nenhuma string visível em componente</td><td>Template usa <code>| t</code>; <code>.ts</code> usa <code>I18nService.t</code>. Ambos só aceitam <code>MessageKey</code>, então chave inventada quebra o build</td></tr>
+    <tr><td>Tabelas de rótulo são <code>computed</code></td><td>Um <code>const TABS = […]</code> captura um idioma para sempre</td></tr>
+    <tr><td>Nunca concatene string traduzida</td><td>Ordem de palavras muda entre idiomas: <code>'Collapse ' + name</code> vira <code>'groupTree.collapseGroup' | t: { name }</code></td></tr>
+    <tr><td>Plural são duas chaves</td><td><code>.one</code> / <code>.other</code> via <code>I18nService.plural</code>. Português e inglês concordam em um-vs-resto, então ICU não compraria nada</td></tr>
+    <tr><td>Maiúscula é CSS</td><td>Dicionário em caixa de frase; <code>text-transform</code> faz o resto — tradutor recebe texto legível</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <strong>Não são traduzidos</strong>, porque são dados: valores de enum na
+  transmissão (<code>Mint</code>/<code>Good</code>/<code>Fair</code>,
+  <code>Keep</code>/<code>ForTrade</code>/<code>ForSale</code>,
+  <code>Owner</code>/<code>Editor</code>/<code>Viewer</code>,
+  <code>text</code>/<code>number</code>/<code>date</code>,
+  <code>free</code>/<code>pro</code>) — eles são simultaneamente a representação
+  SQL <em>e</em> a whitelist do validador do servidor; a tag <code>'wanted'</code>;
+  nomes próprios (“Vault”, nomes de tema, nomes de plano); e qualquer coisa que o
+  usuário digitou.
+</p>
+
+<h2 id="temas">Temas e tokens</h2>
+
+<p>
+  Um tema é um conjunto de custom properties CSS escopado em
+  <code>[data-theme='&lt;id&gt;']</code> em <code>styles/_themes.scss</code>. O
+  padrão (Paperwhite) fica em <code>:root</code>. <strong>Componentes e páginas
+  nunca escrevem valor visual</strong> — cor, fonte, raio, borda ou sombra. Um
+  rebrand inteiro toca um arquivo.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Id</th><th>Nome</th><th>Caráter</th></tr></thead>
+  <tbody>
+    <tr><td><code>devlight</code></td><td>Paperwhite</td><td>Padrão, claro</td></tr>
+    <tr><td><code>devdark</code></td><td>Graphite</td><td>Escuro neutro</td></tr>
+    <tr><td><code>terminal</code></td><td>Phosphor</td><td>Verde de terminal, raio 0</td></tr>
+    <tr><td><code>arcade</code></td><td>Arcade</td><td>—</td></tr>
+    <tr><td><code>hud</code></td><td>Starship</td><td>—</td></tr>
+    <tr><td><code>paper</code></td><td>Zine</td><td>—</td></tr>
+    <tr><td><code>synth</code></td><td>Synthwave</td><td>—</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <strong>Adicionar um tema:</strong> um bloco em <code>_themes.scss</code>, um
+  <code>ThemeDef</code> em <code>core/state/themes.ts</code>, o id em
+  <code>ThemeId</code> e uma chave <code>theme.&lt;id&gt;.description</code> nos
+  dois dicionários. Nada mais. O <em>nome</em> do tema é nome próprio e não é
+  traduzido; a descrição é chave.
+</p>
+
+<p>
+  Mixins compartilhados em <code>_mixins.scss</code>: <code>panel</code>,
+  <code>mono-label</code>, <code>display-heading</code>, <code>stripes</code> e
+  <code>wanted-photo</code> — o par cinza+fade que toda foto de item não possuído
+  usa, no card, na página do item e na capa.
+</p>
+
+<h2 id="a11y">Acessibilidade</h2>
+
+<ul>
+  <li><code>&lt;a&gt;</code>/<code>&lt;button&gt;</code> reais para qualquer coisa
+      clicável; <code>:focus-visible</code> visível, definido globalmente.</li>
+  <li>Status nunca só por cor — badges combinam cor e texto, e a barra de progresso
+      imprime os números.</li>
+  <li>Um atalho de seta é <strong>adição a um controle real, nunca
+      substituição</strong>: o ←/→ da página do item anda entre itens, mas cada
+      passo também é uma âncora com <code>href</code>. O atalho se cala dentro de
+      um campo que precisa do cursor e dentro da faixa de fotos, onde as setas
+      movem fotos.</li>
+  <li>Uma extremidade de sequência renderiza como <code>&lt;span&gt;</code>, e não
+      como link que recebe foco e se recusa a ir a lugar nenhum.</li>
+  <li>Tudo arrastável tem caminho por teclado (<code>ui-reorder</code>,
+      <code>ui-image-focus</code>).</li>
+</ul>
+
+<h2 id="verificar">Verificar antes do merge</h2>
+
+<ol class="steps">
+  <li>
+    <code>npm run build</code> limpo — <strong>avisos incluídos</strong>. O
+    orçamento de 6 kB de estilo por componente é real, e o inicial tem aviso em
+    500 kB (<code>angular.json</code>).
+  </li>
+  <li>
+    <code>npm test -- --watch=false</code> verde. Um spec que asserta texto
+    visível <strong>tem que fixar o idioma</strong>
+    (<code>TestBed.inject(I18nService).apply('en')</code>) em vez de depender do
+    <code>navigator.language</code> do runner.
+  </li>
+  <li>
+    Os fluxos afetados exercitados no navegador (<code>npm start</code>), em pelo
+    menos <strong>um tema escuro</strong> — regressões de token quase só aparecem
+    lá — <strong>e em português</strong>, que roda ~20% mais longo que o inglês e
+    é onde estouro de texto aparece primeiro.
+  </li>
+</ol>
+
+<h2 id="desvios">Desvios deliberados do arquivo de design</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Onde</th><th>No design</th><th>Implementado</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr><td>Card do store, já adicionado</td><td>Botão clicável com toast</td><td>Botão desabilitado “✓ In your vault”</td><td>Estado desabilitado é mais claro e evita ação nula</td></tr>
+    <tr><td>Rodapé da sidebar</td><td><code>● synced · v0.1 prototype</code></td><td>Reflete a realidade</td><td>—</td></tr>
+    <tr><td>Excluir item / exportar</td><td>Decorativo no design</td><td>Totalmente ligado</td><td>O app é funcional, não uma maquete</td></tr>
+    <tr><td>Contagem de backup</td><td>“25 items” fixo</td><td>Calculado ao vivo</td><td>Idem</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

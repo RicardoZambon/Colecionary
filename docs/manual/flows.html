@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluxos ponta a ponta · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="flows">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">03 · Fluxos</p>
+<h1>Fluxos ponta a ponta</h1>
+<p class="lede">
+  Nove caminhos que atravessam a aplicação inteira, do clique ao disco. Cada
+  passo nomeia o arquivo responsável — é o que transforma um relato de suporte
+  (“não salvou”) em um ponto único onde olhar.
+</p>
+
+<h2 id="setup">1 · Primeiro boot e wizard de configuração</h2>
+
+<ol class="steps">
+  <li>
+    O contêiner sobe sem connection string. <code>Program.cs</code> monta o
+    <strong>host de setup</strong>: SPA + <code>/api/setup/*</code>, sem
+    DbContext e sem auth.
+    <span class="where">Vault.Api/Program.cs → BuildSetupApplication</span>
+  </li>
+  <li>
+    Um token de uso único é gerado e <strong>escrito no log</strong>:
+    <code>SETUP MODE — … token …</code>. Ele não aparece na tela; quem configura
+    precisa de acesso ao log do contêiner. É essa a autenticação do wizard.
+    <span class="where">SetupCoordinator.EnsureToken()</span>
+  </li>
+  <li>
+    O SPA chama <code>GET /api/setup/status</code> no bootstrap. O
+    <code>setupGuard</code> redireciona para <code>/setup</code> enquanto
+    <code>configured</code> for <code>false</code>; o
+    <code>setupCompletedGuard</code> faz o inverso, tirando quem tenta abrir
+    <code>/setup</code> num app já configurado.
+    <span class="where">frontend: core/setup/setup.guards.ts, setup.service.ts</span>
+  </li>
+  <li>
+    <code>POST /api/setup/test-connection</code> sonda o SQL Server e devolve um
+    diagnóstico nomeado: <code>Success</code>,
+    <code>DatabaseMissingButCanBeCreated</code>,
+    <code>DatabaseMissingAndCannotCreate</code>, <code>LoginRejected</code>,
+    <code>HostUnreachable</code> ou <code>Unknown</code>. O wizard mostra a causa
+    em vez de “erro de conexão”.
+    <span class="where">Vault.Infrastructure/Setup/DatabaseConnectionTester.cs</span>
+  </li>
+  <li>
+    <code>POST /api/setup/apply</code> valida os campos (senha do owner ≥ 8),
+    sonda o banco de novo, <strong>encena</strong> a configuração em memória e
+    pede reinício do host.
+  </li>
+  <li>
+    O laço reconstrói a aplicação. Agora existe connection string, então sobe o
+    host completo: <code>LegacyImageBlobExporter</code> →
+    <code>ISetupBootstrapper.BootstrapAsync</code> (cria tenant + owner) →
+    <code>CommitPendingConfiguration()</code>, que grava
+    <code>colecionary.json</code> com a connection string e uma chave JWT gerada.
+  </li>
+  <li>
+    <strong>Se esse boot falhar</strong>, a mensagem é guardada, a configuração
+    encenada é descartada e o app volta ao modo setup exibindo o erro. Nenhuma
+    senha chega ao disco antes do sucesso.
+  </li>
+</ol>
+
+<div class="callout">
+  <span class="label">Reconfigurar depois</span>
+  <p>
+    Apague <code>colecionary.json</code> do volume <code>/data/config</code>. Sem
+    o volume montado, o wizard roda de novo a cada recriação do contêiner — que é
+    exatamente o sintoma relatado quando alguém esquece o <code>-v</code>.
+  </p>
+</div>
+
+<h2 id="login">2 · Login</h2>
+
+<ol class="steps">
+  <li>
+    <code>LoginPage</code> chama <code>AuthService.login(email, password)</code>
+    → <code>POST /api/auth/login</code> (anônimo). O
+    <code>languageInterceptor</code> já anexa <code>Accept-Language</code>, então
+    até a recusa volta traduzida.
+    <span class="where">frontend: features/auth/login-page.ts, core/auth/auth.service.ts</span>
+  </li>
+  <li>
+    <code>LoginRequestValidator</code> limita o tamanho dos dois campos.
+    Não é higiene: era o único e-mail sem limite no app, no único endpoint
+    anônimo, e o throttle retém a chave por uma hora — um e-mail de 30 MB é
+    exaustão de memória e uma senha de 30 MB é um PBKDF2 sob demanda.
+  </li>
+  <li>
+    <strong>Pré-portão somente leitura</strong>:
+    <code>attempts.CheckAccount(chave)</code> antes de qualquer ida ao banco.
+    <code>Identity.Users</code> não tem índice em <code>Email</code> sozinho, então
+    deixar uma tentativa recusada chegar ao SQL daria varreduras de tabela de
+    graça ao atacante.
+    <span class="where">Vault.Application/Auth/AuthService.cs</span>
+  </li>
+  <li>
+    <code>BeginClientAttempt(ip)</code> <em>ocupa uma vaga em voo</em> e checa o
+    resfriamento do endereço. Só checar seria ultrapassável por concorrência:
+    mil palpites paralelos passam por uma verificação que nenhum deles pagou
+    ainda.
+  </li>
+  <li>
+    <code>FindForLoginAsync(email)</code> — a única query que atravessa o filtro
+    de tenant, porque login precede qualquer claim de tenant. A colação é
+    nomeada explicitamente (<code>Latin1_General_CI_AS</code>): um banco
+    restaurado com colação acento-insensível começaria a unir grafias que a chave
+    do throttle não une.
+  </li>
+  <li>
+    <code>BeginAccountAttempt(chave)</code> — <strong>cobra dentro do mesmo
+    lock que verifica</strong>. A chave é o e-mail <em>armazenado</em> quando o
+    usuário existe, e a mesma normalização do que foi digitado quando não existe;
+    as duas derivações precisam concordar, senão 429-vs-401 responde se a conta
+    existe.
+  </li>
+  <li>
+    Verificação PBKDF2 (<code>PasswordHasher</code> do ASP.NET Identity — a única
+    peça do Identity usada). Falha: <code>RecordFailure(ip)</code> e
+    <code>401</code>. Sucesso: <code>RecordSuccess(conta)</code>
+    <strong>devolve o orçamento da conta</strong> e emite o JWT.
+  </li>
+  <li>
+    JWT HS256 com <code>sub</code>, <code>tenant_id</code>, <code>role</code> e
+    <code>plan</code>, vida de 8 h. O SPA guarda a sessão em
+    <code>localStorage['vault.auth']</code>; o <code>authInterceptor</code> anexa
+    o bearer e desloga em 401 no meio da sessão.
+    <span class="where">Vault.Infrastructure/Auth/JwtTokenService.cs</span>
+  </li>
+</ol>
+
+<div class="callout plain">
+  <span class="label">Uma senha correta nunca é limitada</span>
+  <p>
+    O orçamento da conta é cobrado no início e devolvido no sucesso; o endereço é
+    cobrado só quando a tentativa falha. Assim quem finalmente lembrou a senha
+    não é punido, e um escritório atrás de um IP não gasta orçamento com gente
+    que está entrando normalmente. O sucesso deliberadamente <em>não</em> mexe no
+    registro do <em>endereço</em> — senão cada rodada de credential stuffing
+    estacionaria um login válido entre os lotes.
+  </p>
+</div>
+
+<h2 id="bootstrap">3 · Carregar o app</h2>
+
+<ol class="steps">
+  <li>
+    <code>authGuard</code> libera a rota. O <code>Shell</code> monta topbar,
+    sidebar e os outlets globais (<code>ui-toast</code>,
+    <code>ui-image-focus</code>, <code>app-conflict-notice</code>).
+  </li>
+  <li>
+    <code>VaultStore.load()</code> dispara cinco chamadas em paralelo:
+    coleções, listings do store, membros do tenant, perfil e configurações do
+    tenant.
+    <span class="where">frontend: core/state/vault.store.ts</span>
+  </li>
+  <li>
+    O mapa de versões é <strong>limpo e reconstruído</strong>, nunca mesclado:
+    uma versão sobrevivente de antes de um reload descreve um documento que
+    ninguém está mais segurando.
+  </li>
+  <li>
+    <code>CurrencyService.apply(settings.defaultCurrency)</code> — o padrão da
+    conta fica num signal sem dependências, para que o pipe
+    <code>money</code> não arraste <code>HttpClient</code> para o TestBed de todo
+    componente que renderiza um valor.
+  </li>
+  <li>
+    <code>ImageFocusService.load()</code> busca <code>GET /api/images/meta</code>
+    uma vez e expõe <code>position(id)</code>. Nenhuma superfície calcula
+    porcentagem inline.
+  </li>
+</ol>
+
+<h2 id="navegar">4 · Abrir uma coleção e navegar</h2>
+
+<p>
+  Tudo que o usuário gostaria de ver restaurado num refresh, num voltar ou num
+  link compartilhado está na URL — e isso é o que permite a página do item
+  reconstruir <em>exatamente</em> a lista que a grade mostrava e oferecer os
+  vizinhos.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Estado</th><th>Na URL</th><th>Lido por</th></tr></thead>
+  <tbody>
+    <tr><td>Grupo selecionado</td><td><code>?g=</code></td><td><code>browse-params.ts</code></td></tr>
+    <tr><td>Modo de visualização</td><td><code>?v=</code></td><td><code>view-mode.ts</code></td></tr>
+    <tr><td>Filtro de condição / posse</td><td><code>?cond=</code>, <code>?own=</code></td><td><code>collection-filters.ts</code></td></tr>
+    <tr><td>Ordenação ad-hoc</td><td><code>?sort=</code>, <code>?dir=</code></td><td><code>browse-params.ts</code></td></tr>
+    <tr><td>Aba de configurações</td><td><code>?tab=</code></td><td><code>settings-page.ts</code></td></tr>
+    <tr><td>Ids de entidade</td><td>path: <code>/c/:collectionId/items/:itemId</code></td><td><code>withComponentInputBinding()</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<ol class="steps">
+  <li>
+    Query string é <strong>entrada não confiável</strong>. Ela passa por
+    <code>features/collection/browse-params.ts</code>, onde uma condição
+    desconhecida ou uma chave de ordenação que ninguém declarou lê como “sem
+    filtro” — e não como “filtra tudo fora”.
+  </li>
+  <li>
+    A lista visível e os vizinhos de um item saem <strong>só</strong> de
+    <code>core/utils/browse.util.ts</code> (<code>visibleItems</code>,
+    <code>neighbours</code>). Duas telas filtrando inline discordariam na
+    primeira vez que um filtro mudasse.
+  </li>
+  <li>
+    Navegações dentro da coleção usam
+    <code>queryParamsHandling: 'preserve'</code>. Links que abrem um grupo passam
+    por <code>groupLinkParams</code>: mantêm filtros e visualização, e
+    <strong>descartam a ordenação ad-hoc</strong> — cada grupo declara a sua.
+  </li>
+  <li>
+    Filtros e ordenação navegam com <code>replaceUrl</code>, então “voltar”
+    significa “de onde eu vim”, e não desfazer seis cliques em chips.
+  </li>
+</ol>
+
+<h2 id="salvar">5 · Salvar um item — o caminho da concorrência</h2>
+
+<p>
+  Este é o fluxo com mais peças, e o que mais aparece em suporte
+  (“ele disse que alguém alterou antes”). O ponto central: uma escrita sem
+  precondição é <strong>recusada</strong>, não tolerada.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 720 330" role="img" aria-labelledby="cc-t">
+      <title id="cc-t">Sequência de uma escrita guardada por versão</title>
+
+      <text class="t b mid" x="80" y="16">SPA</text>
+      <text class="t b mid" x="280" y="16">Controller</text>
+      <text class="t b mid" x="470" y="16">Service</text>
+      <text class="t b mid" x="646" y="16">SQL Server</text>
+      <path class="ln dashed" d="M80 24 V310"/>
+      <path class="ln dashed" d="M280 24 V310"/>
+      <path class="ln dashed" d="M470 24 V310"/>
+      <path class="ln dashed" d="M646 24 V310"/>
+
+      <path class="ln accent" d="M80 52 H278"/><polygon class="fill-accent" points="278,52 270,48 270,56"/>
+      <text class="t s" x="90" y="44">PUT …/items/{id} + If-Match: "7"</text>
+
+      <path class="ln accent" d="M280 88 H468"/><polygon class="fill-accent" points="468,88 460,84 460,92"/>
+      <text class="t s" x="290" y="80">IfMatch.Require → tags fortes</text>
+
+      <path class="ln" d="M470 122 H644"/><polygon class="fill-border" points="644,122 636,118 636,126"/>
+      <text class="t s" x="480" y="114">carrega a coleção (Version = 7)</text>
+
+      <rect class="box goodbox" x="392" y="140" width="200" height="30" rx="6"/>
+      <text class="t s mid" x="492" y="159">guarda 1: 7 == 7 → segue</text>
+
+      <path class="ln" d="M470 196 H644"/><polygon class="fill-border" points="644,196 636,192 636,200"/>
+      <text class="t s" x="480" y="188">UPDATE … WHERE Version = 7</text>
+
+      <rect class="box goodbox" x="392" y="212" width="230" height="30" rx="6"/>
+      <text class="t s mid" x="507" y="231">guarda 2: token na cláusula WHERE</text>
+
+      <path class="ln accent" d="M468 268 H82"/><polygon class="fill-accent" points="82,268 90,264 90,272"/>
+      <text class="t s" x="120" y="260">200 + ETag: "8" + item salvo</text>
+
+      <rect class="box dangerbox" x="60" y="286" width="600" height="30" rx="6"/>
+      <text class="t s mid" x="360" y="305">falha na guarda 1 → 412 · sem If-Match → 428 · ambos escrevem nada</text>
+    </svg>
+  </div>
+</figure>
+
+<ol class="steps">
+  <li>
+    A página chama <code>VaultStore.upsertItem(collectionId, item)</code>. O
+    store lê a versão <strong>sincronamente, antes do primeiro await</strong> —
+    é o mais próximo que existe de “a versão da qual este payload derivou”. Ler
+    depois de um await citaria uma versão que outra escrita já moveu, e a guarda
+    passaria justamente quando não deveria.
+  </li>
+  <li>
+    Versão ausente = este app nunca sincronizou com a coleção que está sendo
+    pedido para sobrescrever. Não há token para inventar, então
+    <code>versionFor</code> levanta o mesmo aviso de conflito: a resposta honesta
+    é “recarregue”.
+  </li>
+  <li>
+    <code>HttpVaultApi</code> envia <code>If-Match: &lt;version&gt;</code> e lê a
+    nova versão do cabeçalho <code>ETag</code> — <strong>nunca de dentro de
+    <code>Collection</code></strong>, porque a mesma forma é o formato do
+    arquivo de backup, e token de concorrência não tem lugar num backup.
+  </li>
+  <li>
+    <code>IfMatch.Require</code> recusa três formas com <code>428</code>:
+    ausente, apenas <code>*</code> (que significa “se o recurso existe”, um
+    opt-out disfarçado) e tag fraca (<code>If-Match</code> compara forte por
+    definição).
+  </li>
+  <li>
+    <strong>Guarda 1</strong> — <code>CollectionService</code> compara a versão
+    carregada com a precondição e recusa <em>antes de escrever nada</em>. É o
+    caso comum da aba velha, e recusar cedo é o que impede um PUT rejeitado de
+    limpar a marca de coleta de uma imagem.
+  </li>
+  <li>
+    <strong>Guarda 2</strong> — <code>IsConcurrencyToken()</code> põe
+    <code>AND Version = @original</code> no UPDATE. Pega os dois escritores que
+    leram a mesma versão no mesmo instante, o que a guarda 1 não consegue. A
+    transação do EF leva de volta as escritas-filhas do perdedor.
+  </li>
+  <li>
+    <code>CollectionVersionInterceptor</code> sobe <code>Version</code> porque
+    <em>qualquer</em> entidade sob a coleção mudou — e <strong>lança</strong> se
+    um filho for escrito sem a coleção em escopo, porque uma escrita que chegasse
+    ao SQL sem o bump seria uma atualização perdida em silêncio.
+  </li>
+  <li>
+    Conflito no cliente vira <code>VaultConflictError</code>, tipo próprio (não
+    string): a página precisa distinguir “alguém chegou antes” — onde a resposta
+    certa é manter o formulário como está e explicar — de “a rede caiu”, onde a
+    resposta certa é tentar de novo. <code>ConflictService</code> exibe o aviso e
+    <strong>nada do que o usuário digitou é descartado</strong>.
+  </li>
+</ol>
+
+<h2 id="foto">6 · Subir uma foto e enquadrá-la</h2>
+
+<div class="callout warn">
+  <span class="label">São dois atos separados — e precisam continuar sendo</span>
+  <p>
+    Já foram um só passo, e é por isso que fechar o editor destruía o upload e
+    apenas o primeiro arquivo de um lote podia ser enquadrado (ou escolhido como
+    capa). O overlay tem que continuar seguro de dispensar: nunca reintroduza um
+    passo de enquadramento que bloqueie um upload.
+  </p>
+</div>
+
+<ol class="steps">
+  <li>
+    <code>ui-photo-manager</code> recebe os arquivos (dropzone ou seletor) e
+    chama <code>PhotoUploadService.add(files, remaining)</code>: fila
+    <strong>sequencial</strong>, com progresso por arquivo, limite de 5 MB
+    (<code>MAX_UPLOAD_BYTES</code>, espelhando <code>ImageService.MaxBytes</code>).
+  </li>
+  <li>
+    <code>POST /api/images</code> multipart, autenticado.
+    <code>ImageService.UploadAsync</code> valida o content type
+    (<code>image/*</code>), grava <strong>o arquivo antes da linha</strong> e
+    devolve <code>{ id }</code>. A assimetria é deliberada: arquivo sem linha é
+    lixo inalcançável, linha sem arquivo é imagem quebrada na tela.
+  </li>
+  <li>
+    O id entra em <code>item.photoIds</code>. <strong>A capa é
+    <code>photoIds[0]</code></strong> — não existe <code>coverId</code>, e
+    “tornar capa” é exatamente “mover para o início”.
+  </li>
+  <li>
+    Enquadrar é opcional e posterior:
+    <code>ImageFocusService.frame(id, usage)</code> abre o editor sobre uma foto
+    <em>já armazenada</em>. <code>usage</code>
+    (<code>'item' | 'banner' | 'icon'</code>) decide quais superfícies são
+    pré-visualizadas — mostrar as outras inventaria um trade-off que o usuário
+    não tem.
+  </li>
+  <li>
+    Confirmar chama <code>PUT /api/images/{id}/focal</code>. Essa escrita é
+    <strong>filtrada por tenant</strong> (<code>GetForCurrentTenantAsync</code>),
+    ao contrário da leitura anônima: um id estrangeiro simplesmente não existe e
+    responde 404.
+  </li>
+  <li>
+    Os bytes nunca mudam, então o id e sua URL com cache
+    <code>immutable</code> continuam válidos, e o ajuste é reversível. Toda
+    superfície renderiza com <code>background-size: cover</code>, então “que
+    parte aparece” é uma única propriedade: <code>background-position</code>.
+  </li>
+  <li>
+    Ao renderizar, sempre nomeie a variante:
+    <code>images.url(id, 'thumb' | 'display' | 'full')</code>. Deixar para o
+    padrão do servidor dá duas URLs — e duas entradas de cache — para a mesma
+    foto.
+  </li>
+</ol>
+
+<h2 id="store">7 · Instanciar um checklist do Store</h2>
+
+<ol class="steps">
+  <li>
+    <code>StorePage</code> lista <code>GET /api/store/listings</code> — catálogo
+    global, deliberadamente <em>fora</em> do filtro de tenant e nunca modificado
+    por um tenant.
+  </li>
+  <li>
+    <code>POST /api/collections/import/{listingId}</code> cria uma coleção nova,
+    só com itens desejados (nenhuma cópia). Reimportar responde
+    <code>409</code> “Already in your vault”.
+  </li>
+  <li>
+    Chaves compostas <code>(TenantId, Id)</code> permitem que dois tenants
+    possuam o mesmo id público — ambos importando o checklist
+    <code>store_ps1</code>, por exemplo — sem colidir.
+  </li>
+  <li>
+    <code>ImportStoreListingAsync</code> deriva <code>target</code> de cada grupo
+    a partir da contagem de itens do listing: um checklist curado
+    <em>é</em> o conjunto declarado.
+  </li>
+  <li>
+    A resposta traz <code>ETag</code>, então o cliente já sai sincronizado e a
+    primeira edição não é recusada.
+  </li>
+</ol>
+
+<h2 id="arquivo">8 · Exportar e reimportar um arquivo</h2>
+
+<pre><code>manifest.json             <span class="c"># o que é este arquivo, e qual versão de layout o escreveu</span>
+collections.json          <span class="c"># mesma forma de GET /api/collections</span>
+images.json               <span class="c"># id, content type e ponto focal de cada imagem</span>
+images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui</span></code></pre>
+
+<p>
+  <code>GET /api/export/collections/{id}</code> escreve o mesmo formato num
+  escopo menor: <code>collection.json</code> (um objeto, não um array) e
+  <strong>apenas</strong> as imagens que aquela coleção referencia — uma coleção
+  é algo autossuficiente para entregar a alguém, e empacotar as fotos alheias
+  vazaria todo o resto.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 700 250" role="img" aria-labelledby="imp-t">
+      <title id="imp-t">Import com confirmação de sobrescrita</title>
+
+      <rect class="box accent" x="8" y="16" width="150" height="46" rx="8"/>
+      <text class="t b mid" x="83" y="38">POST /api/import</text>
+      <text class="t s mid" x="83" y="54">zip no corpo cru</text>
+
+      <path class="ln accent" d="M162 39 H236"/><polygon class="fill-accent" points="236,39 228,35 228,43"/>
+
+      <rect class="box" x="242" y="8" width="200" height="62" rx="8"/>
+      <text class="t s mid" x="342" y="28">ArchiveCompatibility:</text>
+      <text class="t s mid" x="342" y="44">mais antigo lê, mais novo</text>
+      <text class="t s mid" x="342" y="60">é recusado</text>
+
+      <path class="ln accent" d="M446 39 H520"/><polygon class="fill-accent" points="520,39 512,35 512,43"/>
+
+      <rect class="box" x="526" y="8" width="166" height="62" rx="8"/>
+      <text class="t s mid" x="609" y="32">colide por nome</text>
+      <text class="t s mid" x="609" y="50">(trim, case-insensitive)?</text>
+
+      <path class="ln" d="M609 74 V104"/><polygon class="fill-border" points="609,104 605,96 613,96"/>
+      <text class="t s" x="616" y="94">sim</text>
+
+      <rect class="box warnbox" x="440" y="110" width="252" height="56" rx="8"/>
+      <text class="t b mid" x="566" y="132">409 + ImportPlan</text>
+      <text class="t s mid" x="566" y="150">nada é escrito; cada entrada traz a versão</text>
+
+      <path class="ln accent dashed" d="M440 138 H140 V70"/>
+      <polygon class="fill-accent" points="140,70 136,78 144,78"/>
+      <text class="t s" x="152" y="158">o usuário decide, e reenvia o mesmo arquivo com</text>
+      <text class="t s mono" x="152" y="176">?confirmed=true&amp;replace=&lt;id&gt;&amp;replaceVersion=&lt;tag&gt;</text>
+
+      <path class="ln" d="M692 39 H698" />
+      <rect class="box goodbox" x="240" y="196" width="300" height="44" rx="8"/>
+      <text class="t b mid" x="390" y="216">200 + { version, collection } por coleção</text>
+      <text class="t s mid" x="390" y="232">imagens copiadas sob novos ids, referências remapeadas</text>
+      <path class="ln" d="M566 170 V196"/><polygon class="fill-border" points="566,196 562,188 570,188"/>
+    </svg>
+  </div>
+</figure>
+
+<ol class="steps">
+  <li>
+    A entrada <strong>presente</strong> decide qual arquivo é
+    (<code>collection.json</code> ou <code>collections.json</code>) — um manifest
+    editado à mão pode mentir; uma entrada não.
+  </li>
+  <li>
+    <strong>Imagens são copiadas, nunca referenciadas.</strong> Um id no arquivo
+    pertence a quem exportou, então cada foto é gravada de novo sob um id novo no
+    storage do tenant que importa, e cada referência é remapeada. O
+    enquadramento vem junto por <code>images.json</code> — sem ele, um arquivo
+    restauraria toda foto centralizada e o enquadramento seria perdido em
+    silêncio.
+  </li>
+  <li>
+    <strong>Sobrescrever é decisão do usuário, nunca padrão.</strong> Colisão por
+    nome responde <code>409</code> com um <code>ImportPlan</code> e não escreve
+    nada. O cliente pergunta e reenvia o arquivo com as decisões.
+  </li>
+  <li>
+    Sobrescrever <strong>substitui, nunca mescla</strong>: passa pelo mesmo
+    <code>ReplaceGraph</code> do PUT de documento inteiro, então um item que o
+    arquivo não tem é um item que a coleção perde. A coleção mantém o id, então
+    os links continuam funcionando.
+  </li>
+  <li>
+    Criar em vez de sobrescrever mantém o id do arquivo quando ele está livre
+    (restaurar algo que você apagou traz os links de volta) e renomeia quando o
+    nome está ocupado.
+  </li>
+  <li>
+    O plano carrega a <strong>versão</strong> de cada coleção alvo, e o cliente a
+    devolve. Se algo se moveu no meio, o import responde 409 com um plano novo —
+    mesmo canal da primeira pergunta.
+  </li>
+</ol>
+
+<h2 id="gc">9 · Coleta de imagens (background)</h2>
+
+<p>
+  Detalhado em <a href="images.html#coletor">Imagens e coletor</a>. Em resumo, e
+  <strong>desligado por padrão</strong>:
+</p>
+
+<ol class="steps">
+  <li>
+    <code>ImageGarbageCollectionService</code> (um <code>BackgroundService</code>,
+    registrado só com <code>ImageGc:Enabled=true</code>) chama
+    <code>ImageGarbageCollector</code> num timer.
+  </li>
+  <li>
+    A varredura calcula alcançabilidade <strong>em todos os tenants</strong>, com
+    <code>IgnoreQueryFilters()</code>. Fora de uma requisição o filtro resolve
+    contra nenhum tenant e calcularia um conjunto de referências
+    <strong>vazio</strong> — isto é, “colete tudo”.
+  </li>
+  <li>
+    Primeira observação de “ninguém aponta para isso” grava
+    <code>UnreferencedSinceUtc</code>. Qualquer escrita que volte a referenciar
+    <strong>limpa a marca</strong>. Enquanto ela existe, a imagem não é degradada
+    em nada: continua sendo servida, exportada e enquadrável.
+  </li>
+  <li>
+    Só depois da carência inteira (padrão 30 dias) os bytes são destruídos — e o
+    lote condenado é reconferido contra um conjunto de referências
+    <strong>lido de novo</strong> imediatamente antes. A linha é apagada antes dos
+    bytes, espelhando como a imagem foi criada.
+  </li>
+</ol>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

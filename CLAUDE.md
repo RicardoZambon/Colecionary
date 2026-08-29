@@ -17,6 +17,7 @@ collections. The current implementation ships under the working name
 | `backend/` | **The API.** .NET 10 clean-architecture solution (Domain / Application / Infrastructure / Api), SQL Server + EF Core, JWT auth, multi-tenancy via global query filters. See `backend/README.md`. |
 | `prototype/` | Frozen dependency-free HTML/JS port of the design file. Reference only — do not add features here. |
 | `docs/frontend-standards.md` | **The frontend rulebook.** Architecture, component catalog, theming, data layer. Read it before touching `frontend/`. |
+| `docs/manual/` | **The technical manual (HTML).** How the system actually works: architecture, end-to-end flows, the HTTP contract, tenancy, images, the frontend, operations, the test matrix and the decision record. Open `docs/manual/index.html`. Descriptive, not normative — and **every feature updates it** (see below). |
 | `docs/` (rest) | Colecionary brand manual (identity, design system, brand tokens, voice). Brand reference — not yet the app's visual language (see governance below). |
 
 ## Commands
@@ -236,6 +237,54 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    affected flows exercised in the browser in at least one dark theme **and in
    Portuguese** — it runs ~20% longer than English, so that is where text
    overflow shows up first.
+
+## Documentation is part of the change
+
+The technical manual lives in [`docs/manual/`](docs/manual/index.html) — 12
+self-contained HTML pages, no build step, no external dependency (it must keep
+opening straight off disk over `file://`). It is where the *mechanism* is
+written down: how a request travels, why a null is meaningful, what breaks if a
+guard is removed. **A feature is not finished until the manual describes what it
+did.**
+
+The division of labour is what stops the two from duplicating each other:
+**this file commands, the manual explains.** A new rule lands here in one or two
+imperative sentences; the diagram, the flow and the consequence land in the
+manual. Copy the link, never the whole rule.
+
+Route the update by what you changed:
+
+| Changed | Update |
+| --- | --- |
+| Entity, column, migration, key, JSON column | `domain-model.html` (tables, migrations, the meaningful-nulls list) and the ER diagram |
+| Endpoint, route, status code, header, precondition | `api-reference.html` — plus `VaultApi` on the frontend and `ContractTests` |
+| Auth rule, role, query filter, throttle | `security.html` (including the anonymous-route list) and `testing.html` |
+| Anything about images: variants, derivation, focal, the collector | `images.html` and the config reference in `operations.html` |
+| Page, SPA route, `ui-*` component, store, pure util | `frontend.html` **and** `docs/frontend-standards.md` (the catalog is normative there) |
+| Config key, env var, volume, CI step | `operations.html` and `docs/deployment.md` |
+| An end-to-end path (login, save, upload, import…) | `flows.html` |
+| A test that pins an invariant | the matrix in `testing.html` — the matrix, not the count |
+| **Any deliberate trade-off** | a new ADR in `decisions.html`, next free number. Never renumber existing ones |
+| A known limitation appeared or was closed | `index.html` (limits) and `security.html` (gaps) |
+| A new symptom support will receive | the symptom table in `operations.html` |
+
+Three rules for writing in it, spelled out in
+[`docs/manual/maintaining.html`](docs/manual/maintaining.html):
+
+1. **Describe what exists, never what should exist.** Half-finished behaviour is
+   documented as half-finished, in a marked callout — a feature documented as
+   done when it is not is worse than one that is undocumented.
+2. **Prose is pt-BR; identifiers stay in English.** Never translate `If-Match`,
+   `ETag`, `ImageGc:GracePeriod`, a file path, or a test name.
+3. **State the consequence, not just the mechanism.** "There is an interceptor"
+   helps nobody; "without the bump, a stale PUT silently undoes somebody else's
+   edit" is the sentence worth writing.
+
+A new page goes in one list — `PAGES` at the top of
+`docs/manual/assets/manual.js` — which drives the sidebar, the numbering and the
+prev/next links on every page. Diagrams use the theme tokens
+(`.box`/`.t`/`.ln` in `assets/manual.css`), never fixed colours: the manual has a
+light and a dark theme, like the app.
 
 ## ⚠️ Brand governance (pending)
 

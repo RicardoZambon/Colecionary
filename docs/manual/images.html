@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imagens e coletor · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="images">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">07 · Backend</p>
+<h1>Imagens: armazenamento, variantes, enquadramento e coleta</h1>
+<p class="lede">
+  Bytes ficam em disco, particionados por tenant; o banco guarda só metadado. O
+  servidor redimensiona para WebP no upload e cacheia; o enquadramento é um ponto
+  focal que nunca reescreve bytes. E existe um coletor de lixo — o único código
+  desta aplicação que destrói dados de usuário permanentemente, e por isso o mais
+  cuidadosamente inerte por padrão.
+</p>
+
+<h2 id="armazenamento">Armazenamento</h2>
+
+<pre><code>{ImageStorage:Root}/{tenantId}/{imageId}.{ext}              <span class="c"># original</span>
+{ImageStorage:Root}/{tenantId}/derived/{imageId}_thumb.webp
+{ImageStorage:Root}/{tenantId}/derived/{imageId}_display.webp</code></pre>
+
+<p>
+  <strong>Um diretório por tenant</strong>, para que as imagens de um tenant sejam
+  uma unidade que se copia, se limita por cota ou se apaga — e para que nenhuma
+  busca consiga atravessar para outro tenant. Os dois segmentos do caminho são
+  GUIDs que nós mesmos formatamos, nunca strings vindas do chamador, então nada
+  escapa da própria pasta. A extensão vem do content type, que é
+  <strong>imutável</strong> depois de escrito: retipar uma imagem orfanaria o
+  arquivo que ela nomeia.
+</p>
+
+<p>
+  <code>Storage.Images</code> é só metadado: id → tenant, content type, quando foi
+  enviada, dimensões intrínsecas, ponto focal e o relógio de carência do coletor.
+</p>
+
+<div class="callout warn">
+  <span class="label">Upload grava o arquivo antes da linha</span>
+  <p>
+    Os modos de falha não são simétricos: arquivo sem linha é lixo inalcançável;
+    linha sem arquivo é imagem quebrada na tela do usuário. Tanto esse resíduo
+    quanto imagens que ninguém mais referencia são recuperados pelo coletor, numa
+    carência.
+  </p>
+</div>
+
+<h2 id="variantes">Variantes</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Variante</th><th>Maior lado</th><th>Onde usar</th></tr></thead>
+  <tbody>
+    <tr><td><code>thumb</code></td><td>400 px</td><td>Cards de item, tiles da grade, miniaturas da galeria, tiles do mosaico</td></tr>
+    <tr><td><code>display</code></td><td>1400 px</td><td>Imagem principal da galeria, banner da coleção, palco do editor de enquadramento. <strong>É o padrão do servidor</strong></td></tr>
+    <tr><td><code>full</code></td><td>—</td><td>Os bytes como enviados. Só o “abrir original” do lightbox e o arquivo de export</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Elas chegam como <code>?size=thumb</code>, e o frontend espelha os mesmos três
+  nomes: renomear uma é mudança de API. A variante viaja como query parameter e
+  não como segmento de rota, para que um id continue sendo <em>um</em> recurso
+  canônico com renditions, e para que a rota existente siga casando.
+  <code>Vary</code> não é necessário: a URL difere por variante, então caches as
+  separam sozinhos.
+</p>
+
+<div class="callout danger">
+  <span class="label">Sempre nomeie a variante no cliente</span>
+  <p>
+    <code>images.url(id, 'thumb' | 'display' | 'full')</code>. Deixar para o
+    padrão do servidor dá <strong>duas URLs para a mesma foto</strong> — e duas
+    entradas de cache em toda parte. Um card baixando uma foto de celular de 4 MB
+    para um espaço de 215×116 é a diferença entre 4 MB e ~20 kB.
+  </p>
+</div>
+
+<h3>Como a derivação funciona</h3>
+
+<ol class="steps">
+  <li>
+    No upload, <code>TryDeriveAllAsync</code> produz todas as variantes
+    redimensionadas e engole falhas: uma foto que não redimensiona ainda tem
+    bytes originais utilizáveis.
+  </li>
+  <li>
+    Na leitura, <code>OpenAsync</code> serve o derivado cacheado; se não existir,
+    deriva agora e cacheia na saída. É assim que imagens anteriores às variantes
+    — ou vindas de um import de arquivo — entram no esquema.
+  </li>
+  <li>
+    Se a derivação falhar, cai para o original. <strong>Uma derivação que não
+    pode ser produzida é uma foto lenta, não uma foto ausente</strong> — e tentar
+    de novo a cada requisição transformaria um upload ruim num custo permanente
+    de CPU.
+  </li>
+  <li>
+    Formato derivado: <strong>WebP com qualidade 82</strong>
+    (<code>SkiaImageDeriver</code>). Teto de decodificação de 50 megapixels.
+  </li>
+  <li>
+    <strong>GIF nunca é derivado.</strong> Redimensionar decodifica o primeiro
+    quadro e derrubaria a animação, e uma imagem parada substituindo em silêncio
+    uma em movimento é pior do que servir os bytes originais em todo tamanho.
+  </li>
+</ol>
+
+<p>
+  <code>ImageMeta</code> carrega <code>width</code>/<code>height</code> para uma
+  superfície reservar a forma certa antes de os bytes chegarem — sem isso a
+  galeria diagrama numa proporção chutada e salta a cada foto que carrega, e o
+  salto é pior justamente onde é mais visível: conexão lenta, foto grande. Ambos
+  ou nenhum: uma dimensão sozinha não descreve nada. Linhas antigas são
+  preenchidas na primeira derivação.
+</p>
+
+<h2 id="enquadramento">Enquadramento é ponto focal, nunca corte</h2>
+
+<p>
+  Toda superfície renderiza com <code>background-size: cover</code>, então qual
+  parte aparece é <strong>uma propriedade</strong>:
+  <code>background-position</code>. A imagem carrega <code>FocalX</code>/<code>FocalY</code>
+  — frações de 0 a 1 — na sua própria linha, então um ponto serve toda proporção
+  que a UI recorta (de ícone 1:1 a banner ~9:1) sem gerar um único arquivo
+  derivado a mais. Um ajuste corrige o card, a galeria e o banner de uma vez.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Propriedade</th><th>Consequência</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Nunca toca os bytes</td>
+      <td>O id e sua URL com cache <code>immutable</code> seguem válidos; o ajuste
+          é reversível</td>
+    </tr>
+    <tr>
+      <td>Null significa “nunca enquadrada”</td>
+      <td>Renderiza centralizada, e continua distinguível de um centro deliberado
+          — para que uma futura detecção de assunto preencha sem sobrescrever
+          escolha humana</td>
+    </tr>
+    <tr>
+      <td>Os dois eixos ou nenhum</td>
+      <td>Uma linha meio escrita degrada para “não enquadrada”</td>
+    </tr>
+    <tr>
+      <td>A escrita é filtrada por tenant</td>
+      <td>Ao contrário da leitura anônima. Um id estrangeiro responde 404 e não
+          ensina nada</td>
+    </tr>
+    <tr>
+      <td><code>usage</code> é obrigatório no editor</td>
+      <td>Decide quais superfícies são pré-visualizadas: foto de item nunca
+          aparece em banner, e prever esse recorte inventaria um trade-off que o
+          usuário não tem</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  No cliente, a conversão para porcentagem vive em
+  <code>core/utils/focal.util.ts</code> e a leitura em
+  <code>ImageFocusService.position(id)</code> — nenhuma superfície calcula
+  inline. Uma superfície nova adiciona sua proporção ao mapa <code>SURFACES</code>
+  de <code>ui-image-focus</code>, sob o <code>usage</code> que a renderiza.
+</p>
+
+<h2 id="coletor">O coletor: mark and sweep</h2>
+
+<p>
+  Remover uma foto de um item vazava: o id saía de <code>photoIds</code>, a linha
+  ficava em <code>Storage.Images</code> para sempre e os bytes ficavam no disco
+  para sempre. Isso agora é coletado — <strong>numa carência, nunca na
+  desreferência</strong>.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 720 268" role="img" aria-labelledby="gc-t">
+      <title id="gc-t">Máquina de estados do coletor de imagens</title>
+
+      <rect class="box goodbox" x="20" y="30" width="180" height="62" rx="8"/>
+      <text class="t b mid" x="110" y="54">Referenciada</text>
+      <text class="t s mid" x="110" y="72">UnreferencedSinceUtc = null</text>
+
+      <path class="ln accent" d="M204 48 H316"/><polygon class="fill-accent" points="316,48 308,44 308,52"/>
+      <text class="t s mid" x="260" y="40">varredura não acha</text>
+      <text class="t s mid" x="260" y="66">referência alguma</text>
+
+      <rect class="box warnbox" x="320" y="18" width="200" height="86" rx="8"/>
+      <text class="t b mid" x="420" y="42">Marcada</text>
+      <text class="t s mid" x="420" y="60">UnreferencedSinceUtc = agora</text>
+      <text class="t s mid" x="420" y="78">servida · exportada</text>
+      <text class="t s mid" x="420" y="94">enquadrável — nada degrada</text>
+
+      <path class="ln accent" d="M370 108 V150 H150 V96"/>
+      <polygon class="fill-accent" points="150,96 146,104 154,104"/>
+      <text class="t s" x="180" y="146">qualquer escrita volta a referenciar → marca limpa (undo grátis)</text>
+
+      <path class="ln danger" style="stroke: var(--danger)" d="M524 60 H600"/>
+      <polygon points="600,60 592,56 592,64" style="fill: var(--danger)"/>
+      <text class="t s mid" x="562" y="52">carência</text>
+      <text class="t s mid" x="562" y="78">inteira</text>
+
+      <rect class="box dangerbox" x="604" y="30" width="104" height="62" rx="8"/>
+      <text class="t b mid" x="656" y="54">Destruída</text>
+      <text class="t s mid" x="656" y="72">linha, depois bytes</text>
+
+      <rect class="box dashed" x="20" y="180" width="688" height="76" rx="8"/>
+      <text class="t s" x="34" y="202">Antes de destruir: o lote condenado é reconferido contra um conjunto de referências LIDO DE NOVO,</text>
+      <text class="t s" x="34" y="220">então um PUT que chegou durante a varredura ainda vence. A linha é apagada antes dos bytes —</text>
+      <text class="t s" x="34" y="238">espelho de como a imagem foi criada — para que uma interrupção deixe arquivo sem nome, e não</text>
+      <text class="t s" x="34" y="252">uma linha cuja foto sumiu.</text>
+    </svg>
+  </div>
+</figure>
+
+<h3>Por que a marca, e não a exclusão direta</h3>
+
+<p>
+  Apagar no instante em que uma referência desaparece acoplaria destruição
+  irreversível ao PUT de documento inteiro da coleção — que é
+  last-writer-wins — então duas abas abertas, um payload parcial de cliente ou um
+  merge ruim levariam fotografias junto, permanentemente,
+  <strong>sem backup em lugar nenhum do sistema</strong>.
+</p>
+
+<p>
+  A marca é uma quarentena melhor do que mover os bytes de lado seria: enquanto
+  ela existe a imagem <strong>não é degradada em nada</strong> — continua servida,
+  exportada e enquadrável. Uma desreferência acidental percebida dentro da janela
+  não custa nada e não precisa de procedimento de restauração: a marca é
+  simplesmente limpa. E como é uma coluna, e não estado em processo, ela sobrevive
+  a restart e deploy — o que um contador em memória de “já vi isto sem referência
+  há N dias” não faria (esse design só é seguro sendo inútil: um processo que
+  reinicia toda semana nunca termina uma observação de 30 dias).
+</p>
+
+<h3>Salvar uma coleção limpa a marca na hora</h3>
+
+<p>
+  E não deixa para a próxima varredura. Uma varredura só aprende o que ela olha,
+  então uma referência que apareceu e desapareceu entre duas delas nunca seria
+  observada, e a imagem seria destruída num relógio iniciado antes de ela ter sido
+  usada — a janela real de undo seria o intervalo entre varreduras, não a
+  carência.
+</p>
+
+<p>
+  Essa limpeza no caminho de escrita é <strong>filtrada por tenant</strong>,
+  deliberadamente ao contrário da varredura: os ids vêm de um corpo de
+  requisição, e apontar para a fotografia de outra pessoa não pode reiniciar o
+  relógio de armazenamento dela. Uma referência entre tenants mantém a garantia
+  mais fraca, observada pela varredura.
+</p>
+
+<h3>Por que <code>CreatedAtUtc</code> não serve de relógio</h3>
+
+<p>
+  Data de criação responde “quantos anos tem esta foto” — uma foto enviada há um
+  ano e retirada de um item hoje de manhã é mais velha que qualquer carência na
+  primeira varredura. Ela ainda é consultada como <strong>segunda condição
+  independente</strong>, porque é o que cobre a janela entre os bytes subirem do
+  seletor e o item que vai carregá-los ser salvo. Essa janela não tem limite
+  superior: o formulário pode ficar aberto indefinidamente.
+</p>
+
+<h3 id="alcancabilidade">Alcançabilidade é global — e é a linha mais perigosa</h3>
+
+<div class="callout danger">
+  <span class="label">Não remova o IgnoreQueryFilters</span>
+  <p>
+    <code>ListReferencedImageIdsAcrossAllTenantsAsync</code> lê banners, ícones e
+    <code>photoIds</code> de itens com <code>IgnoreQueryFilters()</code> em toda
+    query. Sem isso, o filtro resolve <code>CurrentTenantId</code> contra o tenant
+    em escopo — fora de uma requisição, nenhum — e a varredura calcularia um
+    conjunto de referências <strong>vazio</strong> enquanto lê todas as linhas de
+    imagem da instalação. Ou seja: “colete tudo”. Uma limpeza de aparência
+    plausível que remova essa chamada é <strong>perda total de dados</strong>. A
+    cobertura é <em>apenas</em> pela suíte de Testcontainers.
+  </p>
+</div>
+
+<p>
+  Global também é a resposta correta pelos próprios méritos: nada valida que um
+  banner ou um id de foto pertence ao tenant que o escreveu, e a leitura anônima
+  resolve um id pela linha da própria imagem — então uma referência entre tenants
+  é uma que de fato renderiza. Coletar referências <em>demais</em> é a direção
+  segura; coletar de menos destrói fotografias. <code>photoIds[0]</code> não
+  precisa de caso especial: a capa é uma posição na lista, não uma coluna.
+</p>
+
+<p>
+  A exclusão sempre endereça <strong>o tenant da própria linha da imagem</strong>,
+  nunca um ambiente — exatamente como a leitura anônima. Renditions vão junto com
+  o original, encontradas pelo prefixo do próprio id (<code>{id}_</code>) e não
+  reconstruindo o nome de cada variante: as cópias cacheadas de um JPEG são
+  <code>.webp</code>, então reconstruir a partir do content type da linha não
+  apagaria nada — apenas moveria o vazamento.
+</p>
+
+<h3>A passagem dos arquivos órfãos</h3>
+
+<p>
+  Uma passagem separada recupera <strong>bytes que nenhuma linha de metadado
+  jamais nomeou</strong>: upload e import gravam o arquivo antes da linha, então
+  um crash no meio deixa algo que nenhuma query enxerga. É guardada de três
+  formas: só arquivos mais velhos que a carência inteira; só ids sem linha em
+  lugar nenhum; e um arquivo cujo id pertence à linha de <em>outro</em> tenant é
+  <strong>reportado e deixado em paz</strong>, e não resolvido para um lado ou
+  outro. Qualquer coisa que o store não consegue classificar é pulada: um nome
+  irreconhecível é arquivo de outra pessoa.
+</p>
+
+<h2 id="config-gc">Configuração — os padrões são inertes</h2>
+
+<pre><code>"ImageGc": {
+  "Enabled": false,          <span class="c">// desligado: o BackgroundService nem é registrado</span>
+  "DryRun": true,            <span class="c">// relata exatamente o que removeria; não escreve nada</span>
+  "GracePeriod": "30.00:00:00",
+  "Interval": "06:00:00",
+  "InitialDelay": "00:05:00",
+  "BatchSize": 200,          <span class="c">// limita o raio de uma varredura</span>
+  "CollectOrphanFiles": true
+}</code></pre>
+
+<p>
+  <strong>Dois atos deliberados e separados</strong> ficam entre uma implantação e
+  um byte perdido: ligar <code>Enabled</code> e desligar <code>DryRun</code>. Uma
+  carência abaixo de <strong>uma hora falha no startup</strong>, em vez de ser
+  arredondada para algo plausível — ela transformaria mark-and-sweep de volta em
+  delete-on-dereference, que é a única forma que este design existe para evitar.
+  <code>Interval</code> e <code>InitialDelay</code> têm teto de 45 dias.
+</p>
+
+<div class="callout danger">
+  <span class="label">Desligue antes de restaurar um backup</span>
+  <p>
+    A varredura acredita no banco sobre o que existe e no storage sobre o que está
+    em disco. Restaure um sem o outro — um banco mais antigo ao lado de um
+    diretório de imagens atual, ou o inverso — e todo arquivo que o banco
+    restaurado esqueceu lê como lixo mais velho que a carência, porque
+    <code>rsync -a</code> e afins preservam a data de modificação. Coloque
+    <code>Enabled</code> em <code>false</code> (ou <code>DryRun</code> de volta em
+    <code>true</code>) até saber que os dois concordam.
+  </p>
+</div>
+
+<h3>Guardas estruturais fora da configuração</h3>
+
+<ul>
+  <li>
+    <strong>Não existe endpoint nem CLI</strong> para o coletor. O contrato da
+    API espelha <code>VaultApi</code> um a um, então uma rota que nenhum usuário
+    chama seria mudança de contrato dos dois lados — e um endpoint autenticado que
+    apaga dados permanentemente é superfície de ataque comprada por nada.
+  </li>
+  <li>
+    <code>ImageReferenceCoverageTests</code> <strong>quebra o build</strong> se
+    aparecer no modelo uma coluna com forma de GUID que ninguém classificou como
+    referência de imagem ou como outra coisa. Assim um novo ponto de referência
+    não pode ser adicionado e esquecido. O ponto cego dela é uma referência
+    guardada como string — e é por isso que <code>Item.Img</code> (texto livre com
+    nome de imagem, guardando um slug do próprio nome do item) carrega o
+    argumento escrito em <code>CollectionRepository</code>.
+  </li>
+</ul>
+
+<h3>Limites conhecidos</h3>
+
+<ul>
+  <li>Um relógio de servidor que salta para frente amadurece tudo que já está
+      marcado de uma vez, limitado só pelo <code>BatchSize</code> por varredura.</li>
+  <li>Duas instâncias varrem independentemente — inofensivo: toda operação é
+      idempotente e ambas calculam a mesma resposta.</li>
+  <li>A reconferência estreita a janela entre decidir e apagar, mas não a fecha;
+      fechá-la exigiria um lock sobre o catálogo inteiro.</li>
+  <li>Uma linha de <code>Storage.Images</code> cujo arquivo sumiu é deixada em
+      paz, e não arrumada: “os bytes sumiram” é problema de restore, não evidência
+      sobre referência.</li>
+</ul>
+
+<h2 id="export">Como o export lida com isso</h2>
+
+<p>
+  O export do vault inteiro empacota deliberadamente <strong>todas</strong> as
+  imagens que o tenant possui, e não só as referenciadas, “já que uma imagem que
+  não está num item agora ainda é do usuário”. Isso é uma afirmação sobre uma foto
+  no meio de um fluxo — estado que este app alcança em todo upload. Trinta dias
+  mantêm essa promessa. O que ela deixa de manter é a promessa de que uma foto que
+  ninguém aponta desde o mês passado vale ser armazenada para sempre, que é
+  justamente a promessa que torna impossível oferecer cota honestamente.
+</p>
+
+<p>
+  O export de uma coleção só empacota as imagens que ela referencia — uma coleção
+  é algo autossuficiente para entregar a alguém, e as fotos alheias vazariam tudo
+  o mais que a conta possui.
+</p>
+
+<div class="callout plain">
+  <span class="label">Detalhe de implementação do zip</span>
+  <p>
+    O arquivo é montado num arquivo temporário e só então enviado, em vez de
+    escrito direto na resposta: <code>ZipArchive</code> emite o diretório central
+    com uma escrita <strong>síncrona</strong> no dispose, que o Kestrel rejeita no
+    corpo da resposta. A alternativa, <code>AllowSynchronousIO</code>, bloquearia
+    uma thread de requisição durante o download inteiro.
+  </p>
+</div>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

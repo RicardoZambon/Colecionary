@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contrato HTTP · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="api-reference">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">05 · Backend</p>
+<h1>Contrato HTTP</h1>
+<p class="lede">
+  A API espelha <code>VaultApi</code> — a classe abstrata do frontend — um para
+  um. JSON é camelCase com enums como string, byte-compatível com os modelos
+  Angular em <code>core/models/</code>. Mudar o contrato significa mudar
+  <strong>os dois lados mais os testes de integração</strong>, na mesma
+  alteração.
+</p>
+
+<div class="callout plain">
+  <span class="label">Referência viva</span>
+  <p>
+    Em desenvolvimento, <code>MapOpenApi</code> + Scalar publicam a superfície em
+    <a href="http://localhost:5100/scalar">http://localhost:5100/scalar</a>
+    (anônimo, só em Development). Esta página cobre o que o OpenAPI não diz: as
+    precondições, os códigos de recusa e por que eles são o que são.
+  </p>
+</div>
+
+<h2 id="endpoints">Endpoints</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Método</th><th>Rota</th><th>Auth</th><th>Notas</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="nowrap">POST</td><td class="nowrap"><code>/api/auth/login</code></td>
+      <td><span class="tag warn">anônimo</span></td>
+      <td>Throttle por conta e por endereço; 429 com <code>Retry-After</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET</td><td class="nowrap"><code>/api/collections</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Grafos completos, cada um num envelope <code>{ version, collection }</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap">POST</td><td class="nowrap"><code>/api/collections</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>201 + <code>ETag</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap">PUT</td><td class="nowrap"><code>/api/collections/{id}</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td><span class="tag danger">If-Match obrigatório</span> substitui o documento inteiro → <code>ETag</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap">DELETE</td><td class="nowrap"><code>/api/collections/{id}</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Sem precondição exigida; honra a que for enviada. 204</td>
+    </tr>
+    <tr>
+      <td class="nowrap">POST</td><td class="nowrap"><code>/api/collections/import/{listingId}</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>409 “Already in your vault” ao reimportar; 201 + <code>ETag</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap">PUT</td><td class="nowrap"><code>/api/collections/{cid}/items/{itemId}</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td><span class="tag danger">If-Match obrigatório</span> upsert por id gerado pelo cliente. 200 ou 201, sempre com <code>ETag</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap">DELETE</td><td class="nowrap"><code>/api/collections/{cid}/items/{itemId}</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Idempotente, sem precondição exigida. 204 <strong>com <code>ETag</code></strong> — a versão se moveu</td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET</td><td class="nowrap"><code>/api/store/listings</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Catálogo global, fora do filtro de tenant</td>
+    </tr>
+    <tr>
+      <td class="nowrap">POST</td><td class="nowrap"><code>/api/images</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Multipart, ≤ 5 MB, só <code>image/*</code> → <code>{ id }</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET</td><td class="nowrap"><code>/api/images/{id}?size=</code></td>
+      <td><span class="tag warn">anônimo</span></td>
+      <td>Por design: <code>&lt;img&gt;</code> não manda header de auth. O GUID é a capacidade</td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET</td><td class="nowrap"><code>/api/images/meta</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Metadados das imagens do próprio tenant — isto <em>enumera</em>, então nunca sai do tenant</td>
+    </tr>
+    <tr>
+      <td class="nowrap">PUT</td><td class="nowrap"><code>/api/images/{id}/focal</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Filtrado por tenant: id estrangeiro responde 404. Corpo com focal null reseta</td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET / PUT</td><td class="nowrap"><code>/api/tenant/members</code></td>
+      <td><span class="tag accent">PUT: Owner</span></td>
+      <td>Não-Owner recebe 403</td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET / PUT</td><td class="nowrap"><code>/api/tenant/settings</code></td>
+      <td><span class="tag accent">PUT: Owner</span></td>
+      <td><code>defaultCurrency</code> da conta</td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET / PUT</td><td class="nowrap"><code>/api/profile</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>E-mail imutável na v1</td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET</td><td class="nowrap"><code>/api/export</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Zip do tenant inteiro; <code>Content-Disposition</code> nomeia o arquivo</td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET</td><td class="nowrap"><code>/api/export/collections/{id}</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Zip de uma coleção e só das imagens que ela referencia</td>
+    </tr>
+    <tr>
+      <td class="nowrap">POST</td><td class="nowrap"><code>/api/import</code></td>
+      <td><span class="tag">bearer</span></td>
+      <td>Zip no corpo cru, ≤ 2 GB. 409 + <code>ImportPlan</code> em colisão de nome</td>
+    </tr>
+    <tr>
+      <td class="nowrap">GET</td><td class="nowrap"><code>/api/setup/status</code></td>
+      <td><span class="tag warn">só no modo setup</span></td>
+      <td>Depois de configurado a rota não é mapeada, e o 404 é o sinal de “pronto”</td>
+    </tr>
+    <tr>
+      <td class="nowrap">POST</td><td class="nowrap"><code>/api/setup/test-connection</code>, <code>/api/setup/apply</code></td>
+      <td><span class="tag warn">token do log</span></td>
+      <td>Só no modo setup</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Qualquer <code>/api/*</code> não casado responde <strong>404 JSON</strong> — o
+  fallback do SPA nunca sequestra rota de API. Toda rota não-API cai em
+  <code>index.html</code> para o roteamento no cliente.
+</p>
+
+<h2 id="concorrencia">Concorrência otimista</h2>
+
+<p>
+  <code>PUT /api/collections/{id}</code> substitui o <strong>documento
+  inteiro</strong>: <code>ReplaceGraph</code>/<code>MergeByKey</code> apagam todo
+  grupo, item e membro que o payload não carregar. Um cliente trabalhando de uma
+  versão que alguém já substituiu não sobrescreve parte do trabalho do outro —
+  ele restaura um documento velho por cima de tudo, sem erro e sem rastro.
+  <code>Version</code> é o que impede isso.
+</p>
+
+<h3>A precondição é obrigatória</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Situação</th><th>Resposta</th><th>Escreveu algo?</th><th>O que o cliente faz</th></tr></thead>
+  <tbody>
+    <tr><td>Sem <code>If-Match</code></td><td><span class="tag danger">428</span> Precondition Required</td><td>Não</td><td>Envie uma precondição</td></tr>
+    <tr><td><code>If-Match: *</code> sozinho</td><td><span class="tag danger">428</span></td><td>Não</td><td>“Se existe” é um opt-out disfarçado</td></tr>
+    <tr><td>Só tags fracas (<code>W/"…"</code>)</td><td><span class="tag danger">428</span></td><td>Não</td><td><code>If-Match</code> compara forte por definição</td></tr>
+    <tr><td>Header não parseável</td><td><span class="tag danger">428</span></td><td>Não</td><td>Idem</td></tr>
+    <tr><td>Tag superada</td><td><span class="tag danger">412</span> Precondition Failed</td><td>Não</td><td>Recarregue e mande a atual</td></tr>
+    <tr><td>Tag atual</td><td><span class="tag good">200/201</span> + <code>ETag</code> novo</td><td>Sim</td><td>Continue editando sem reler</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  428 e 412 são códigos separados porque a correção difere: 428 diz
+  <em>mande uma precondição</em>, 412 diz <em>mande uma atual</em>. Um
+  <code>*</code> <strong>ao lado</strong> de uma tag real é aceito — a tag real é
+  o que liga a precondição. A lista não tem limite de tamanho: já é limitada
+  pelo tamanho máximo de header, e um limite aqui recusaria uma requisição bem
+  formada que <em>de fato</em> nomeou a versão atual, com um código dizendo que
+  ela não nomeou.
+</p>
+
+<h3>Duas guardas, pegando coisas diferentes</h3>
+
+<ol class="steps">
+  <li>
+    <strong><code>CollectionService.UpdateAsync</code></strong> compara a versão
+    carregada com <code>If-Match</code> e recusa antes de escrever qualquer coisa.
+    É o caso comum da aba velha — e recusar cedo é o que impede um PUT rejeitado
+    de limpar a marca de coleta de uma imagem.
+  </li>
+  <li>
+    <strong><code>IsConcurrencyToken()</code></strong> põe o token no
+    <code>WHERE</code> do <code>UPDATE</code>. Pega os dois escritores que leram a
+    mesma versão no mesmo instante — o que a primeira guarda não consegue. A
+    transação do EF leva de volta as escritas-filhas do perdedor, então o
+    documento fica idêntico, não meio escrito.
+    <span class="where">Único teste que falha se o token for removido: WhenBothWritersPassTheirPrecondition_TheDatabaseStillLetsOnlyOneThrough</span>
+  </li>
+</ol>
+
+<h3>Os deletes não exigem, mas honram</h3>
+
+<p>
+  <code>DELETE /api/collections/{id}</code> e
+  <code>DELETE …/items/{itemId}</code> não <em>exigem</em> precondição: um delete
+  é intenção sobre a identidade de um recurso, não sobre um documento derivado de
+  uma leitura — não há nada nele que um chamador desatualizado sobrescreva sem
+  saber. Um <code>If-Match</code> que o chamador <em>escolha</em> enviar continua
+  sendo avaliado, como a RFC 9110 §13.1.1 exige: descartá-lo em silêncio tornaria
+  a coisa mais segura que um cliente pode fazer indistinguível da menos segura.
+</p>
+
+<p>
+  Ambos ainda <strong>movem</strong> a versão (o delete de item pelo interceptor),
+  senão um cliente que não viu a exclusão daria PUT no documento de volta e
+  ressuscitaria o que foi removido — e é por isso que o
+  <code>DELETE</code> de item responde <code>204</code>
+  <strong>com <code>ETag</code></strong>.
+</p>
+
+<div class="callout warn">
+  <span class="label">Consequência conhecida</span>
+  <p>
+    Como <code>Version</code> é token de concorrência, o EF o coloca no
+    <code>WHERE</code> do <code>DELETE</code> da coleção e do <code>UPDATE</code>
+    da raiz produzido pelo delete de item. Um delete que corre com uma escrita
+    concorrente na mesma coleção é <strong>recusado com 412</strong>, mesmo sem
+    ter mandado precondição. Nada parcial comita e um retry funciona: é uma
+    corrida rara, segura e retentável — não uma atualização perdida — e fica
+    assim porque desguardar aquelas duas instruções seria contornar o token.
+  </p>
+</div>
+
+<h3>Por onde a versão viaja</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Resposta</th><th>Onde está a versão</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>GET /api/collections</code></td>
+      <td>Envelope <code>{ version, collection }</code> por item</td>
+      <td>Uma resposta carrega muitos recursos; um header descreve um. E é o
+          único momento correto de entregar versão: é aqui que o cliente
+          sincroniza</td>
+    </tr>
+    <tr>
+      <td>Qualquer resposta de coleção única</td>
+      <td>Header <code>ETag</code></td>
+      <td>Um recurso, um header</td>
+    </tr>
+    <tr>
+      <td>Nunca</td>
+      <td>Dentro de <code>CollectionDto</code></td>
+      <td>Esse DTO é byte a byte o que um arquivo exportado guarda</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>ETag</code> está em <code>WithExposedHeaders</code> do CORS. Sem isso, o
+  SPA em desenvolvimento — cross-origin até o build cair no <code>wwwroot</code> —
+  não lê a versão de volta de uma escrita, e <strong>toda gravação após a
+  primeira seria recusada</strong>.
+</p>
+
+<h2 id="erros">Erros: ProblemDetails</h2>
+
+<p>
+  Todo erro sai como RFC 7807, montado por <code>GlobalExceptionHandler</code> e
+  com título traduzido a partir de <code>Messages.resx</code>.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Exceção</th><th>Status</th><th>Título</th><th>Quando</th></tr></thead>
+  <tbody>
+    <tr><td><code>NotFoundException</code></td><td>404</td><td><code>ProblemNotFound</code></td><td>Id que não resolve no tenant atual</td></tr>
+    <tr><td><code>ConflictException</code></td><td>409</td><td><code>ProblemConflict</code></td><td>Listing já importado; plano de import</td></tr>
+    <tr><td><code>DomainRuleException</code></td><td>400</td><td><code>ProblemInvalidOperation</code></td><td>Operação inválida no domínio</td></tr>
+    <tr><td><code>PreconditionFailedException</code></td><td>412</td><td><code>ProblemPreconditionFailed</code></td><td>Versão superada (nas duas guardas)</td></tr>
+    <tr><td><code>PreconditionRequiredException</code></td><td>428</td><td><code>ProblemPreconditionRequired</code></td><td>Sem precondição utilizável</td></tr>
+    <tr><td><code>ValidationException</code></td><td>400</td><td><code>ProblemValidationFailed</code></td><td>FluentValidation; mensagens concatenadas em <code>detail</code></td></tr>
+    <tr><td>qualquer outra</td><td>500</td><td><code>ProblemUnexpected</code></td><td>Sem <code>detail</code> — nada vaza</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout danger">
+  <span class="label">Nunca asserte a string em teste</span>
+  <p>
+    Toda mensagem visível ao usuário vem de
+    <code>Vault.Application/Resources/Messages.resx</code> (+ <code>.pt-BR.resx</code>),
+    resolvida contra <code>CurrentUICulture</code>. Um teste que compara com o
+    literal vira uma segunda cópia da tradução em inglês, que passa a divergir em
+    silêncio. Vá por <code>Messages.In(name, culture)</code>.
+    <code>MessageResourceTests</code> valida paridade de nomes e placeholders
+    entre os dois arquivos; <code>LocalizationTests</code> valida a ordem do
+    pipeline.
+  </p>
+</div>
+
+<h2 id="idioma">Idioma</h2>
+
+<p>
+  O <code>languageInterceptor</code> do frontend envia
+  <code>Accept-Language</code> em toda requisição.
+  <code>UseRequestLocalization</code> resolve para <code>en</code> (padrão) ou
+  <code>pt-BR</code>. <strong>Adicionar um idioma</strong> significa: um
+  <code>LangDef</code> em <code>langs.ts</code>, um membro no union
+  <code>Lang</code>, um <code>messages/&lt;id&gt;.ts</code> tipado
+  <code>Record&lt;MessageKey, string&gt;</code>, uma cultura em
+  <code>LocalizationOptions()</code> no <code>Program.cs</code>, e um
+  <code>Messages.&lt;culture&gt;.resx</code> ao lado.
+</p>
+
+<h2 id="arquivos">Formato de arquivo (export/import)</h2>
+
+<pre><code>manifest.json             <span class="c"># ArchiveManifest.CurrentVersion</span>
+collections.json          <span class="c"># vault inteiro — mesma forma de GET /api/collections</span>
+collection.json           <span class="c"># OU: uma coleção só (um objeto, não um array)</span>
+images.json               <span class="c"># id, content type e ponto focal de cada imagem</span>
+images/{imageId}.{ext}</code></pre>
+
+<p>
+  <code>images.json</code> existe porque o enquadramento vive na linha da imagem e
+  não no grafo da coleção: sem ele, um arquivo restauraria toda foto centralizada
+  e o enquadramento seria perdido em silêncio. Imagens vão
+  <strong>sem compressão</strong> no zip — todo formato aceito já é comprimido.
+</p>
+
+<h3>Versionamento do arquivo</h3>
+
+<p>
+  O portão do import é <strong>unidirecional: mais antigo lê, mais novo é
+  recusado</strong>. Toda entrada que uma versão passada escreveu é uma que este
+  build ainda entende, e um campo que ela nunca escreveu desserializa no mesmo
+  default que ausência sempre significou. O contrário não tem essa garantia — um
+  layout mais novo pode ter movido ou re-escopado um campo, e lê-lo sob as formas
+  de hoje não falharia: <em>teria sucesso em silêncio</em> e escreveria besteira
+  no vault. Manifest ausente não é erro: arquivos anteriores a ele são v1 por
+  definição.
+</p>
+
+<p>
+  Uma mudança custa um bump de versão <strong>só quando um leitor que não a
+  conhece leria o arquivo errado</strong>. Adicionar campo opcional ou entrada
+  nova, não custa. Renomear campo, mudar o que um campo significa, ou mudar uma
+  unidade, custa. A verificação vive em <code>ArchiveCompatibility</code> — puro,
+  com teste unitário — e roda antes do primeiro byte ser escrito, então uma
+  recusa não deixa nada para trás.
+</p>
+
+<h3>O protocolo de sobrescrita</h3>
+
+<pre><code>POST /api/import                                <span class="c"># 1ª tentativa</span>
+  → 200  se nenhum nome colidir
+  → 409 + ImportPlan  se colidir (nada foi escrito)
+
+POST /api/import?confirmed=true&amp;replace=&lt;id&gt;&amp;replaceVersion=&lt;etag&gt;
+  → 200 + [{ version, collection }, …]
+  → 409 + plano novo   se alguma versão escolhida se moveu</code></pre>
+
+<p>
+  <code>replace</code> e <code>replaceVersion</code> são <strong>duas listas
+  paralelas</strong>, e não um valor empacotado: um id e uma entity-tag carregam
+  pontuação, e um separador entre eles é uma regra de parsing fácil de errar sutilmente
+  — enquanto listas de tamanhos diferentes é um erro impossível de não notar. O
+  servidor recusa se não alinharem.
+</p>
+
+<p>
+  Casar por <strong>nome</strong> (trim, case-insensitive) e não por id é
+  deliberado: é o que o usuário reconhece. Uma coleção já restaurada uma vez
+  carrega outro id, e casar por id ofereceria sobrescrever nada enquanto uma
+  duplicata de mesmo nome se acumulava ao lado. Nomes não são únicos neste
+  modelo, então o plano responde com um id — que é.
+</p>
+
+<p>
+  O segundo upload é intencional. Estacionar o primeiro no servidor entre as duas
+  requisições economizaria os bytes e custaria um stash com tempo de vida,
+  expiração e rotina de limpeza; um retry sem estado não tem nada disso, e um
+  arquivo sem nada a perguntar nunca paga esse preço.
+</p>
+
+<h2 id="dtos">Formas dos DTOs</h2>
+
+<p>
+  Os DTOs de <code>Vault.Application</code> espelham as interfaces TypeScript em
+  <code>frontend/src/app/core/models/</code>. Os pontos onde eles
+  <strong>deliberadamente não</strong> carregam algo:
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Não existe</th><th>Onde caberia</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr><td><code>owned</code></td><td><code>ItemDto</code></td><td>Derivado de <code>copies</code>; round-trip GET → PUT dessincronizaria</td></tr>
+    <tr><td><code>condition</code>, <code>price</code> no item</td><td><code>ItemDto</code></td><td>Pertencem à cópia, não ao catálogo</td></tr>
+    <tr><td><code>sortOrder</code></td><td><code>ItemDto</code></td><td>Ordem manual é a ordem do array, persistida por índice</td></tr>
+    <tr><td><code>coverId</code></td><td><code>ItemDto</code></td><td>A capa é <code>photoIds[0]</code> — uma segunda fonte de verdade pode apontar para foto removida</td></tr>
+    <tr><td><code>version</code></td><td><code>CollectionDto</code></td><td>O DTO é o formato do backup</td></tr>
+    <tr><td>posição de grupo</td><td><code>GroupNodeDto</code></td><td>Grupos listam alfabeticamente; nada persiste posição para um grupo</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

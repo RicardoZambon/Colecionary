@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tenancy e segurança · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="security">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">06 · Backend</p>
+<h1>Multi-tenancy e segurança</h1>
+<p class="lede">
+  O isolamento entre contas não é imposto por serviços nem por revisão de código:
+  é imposto por três mecanismos que agem independentemente — filtro global de
+  query, interceptor de stamping e chaves compostas. Uma entidade nova entra no
+  esquema só implementando uma interface.
+</p>
+
+<h2 id="tenancy">Isolamento de tenant</h2>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 720 250" role="img" aria-labelledby="ten-t">
+      <title id="ten-t">As três camadas de isolamento</title>
+
+      <rect class="box accent" x="8" y="14" width="176" height="60" rx="8"/>
+      <text class="t b" x="22" y="36">1 · Filtro global</text>
+      <text class="t s" x="22" y="52">toda LEITURA de</text>
+      <text class="t s" x="22" y="66">ITenantOwned</text>
+
+      <rect class="box accent" x="8" y="90" width="176" height="60" rx="8"/>
+      <text class="t b" x="22" y="112">2 · Stamping</text>
+      <text class="t s" x="22" y="128">toda ESCRITA:</text>
+      <text class="t s" x="22" y="142">carimba ou recusa</text>
+
+      <rect class="box accent" x="8" y="166" width="176" height="60" rx="8"/>
+      <text class="t b" x="22" y="188">3 · Chave composta</text>
+      <text class="t s" x="22" y="204">(TenantId, …) na PK</text>
+      <text class="t s" x="22" y="218">e nas FKs</text>
+
+      <path class="ln" d="M188 44 H250"/><polygon class="fill-border" points="250,44 242,40 242,48"/>
+      <path class="ln" d="M188 120 H250"/><polygon class="fill-border" points="250,120 242,116 242,124"/>
+      <path class="ln" d="M188 196 H250"/><polygon class="fill-border" points="250,196 242,192 242,200"/>
+
+      <rect class="box" x="256" y="14" width="450" height="60" rx="8"/>
+      <text class="t s mono" x="270" y="36">e =&gt; e.TenantId == CurrentTenantId  — aplicado por convenção em</text>
+      <text class="t s mono" x="270" y="52">OnModelCreating a toda entidade que implementa ITenantOwned.</text>
+      <text class="t s" x="270" y="68">O EF captura a instância do contexto: reavalia por escopo/requisição.</text>
+
+      <rect class="box" x="256" y="90" width="450" height="60" rx="8"/>
+      <text class="t s" x="270" y="112">Added + TenantId vazio → carimba o do JWT (ou lança se não há tenant).</text>
+      <text class="t s" x="270" y="128">Added/Modified + TenantId ≠ atual → InvalidOperationException,</text>
+      <text class="t s" x="270" y="144">"Cross-tenant write rejected".</text>
+
+      <rect class="box" x="256" y="166" width="450" height="60" rx="8"/>
+      <text class="t s" x="270" y="188">Referência entre tenants é impossível no nível do banco —</text>
+      <text class="t s" x="270" y="204">e dois tenants podem possuir o mesmo id público (store_ps1),</text>
+      <text class="t s" x="270" y="220">porque o id sozinho não é a chave.</text>
+    </svg>
+  </div>
+</figure>
+
+<div class="callout danger">
+  <span class="label">Nunca escreva o filtro à mão</span>
+  <p>
+    <code>WHERE TenantId = …</code> escrito em serviço ou repositório é a forma
+    de falha que este design existe para eliminar: ela funciona nas queries em
+    que alguém lembrou, e vaza na primeira em que alguém esqueceu — sem erro
+    nenhum. Uma entidade nova só precisa implementar <code>ITenantOwned</code>;
+    o resto é automático.
+  </p>
+</div>
+
+<h3>Quem fica de fora do filtro, de propósito</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Fora do filtro</th><th>Motivo</th><th>Risco controlado por</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>Tenant</code>, <code>StoreListing</code></td>
+      <td>São globais: não implementam <code>ITenantOwned</code></td>
+      <td>Nenhum tenant escreve neles</td>
+    </tr>
+    <tr>
+      <td><code>UserRepository.FindForLoginAsync</code></td>
+      <td>Login precede qualquer claim de tenant</td>
+      <td>É a única query de leitura cross-tenant do caminho autenticado; a
+          colação é nomeada explicitamente</td>
+    </tr>
+    <tr>
+      <td>Leitura anônima de imagem</td>
+      <td><code>&lt;img&gt;</code> não manda header de auth</td>
+      <td>O tenant é resolvido <strong>da própria linha da imagem</strong> antes
+          de tocar o storage — um GUID adivinhado só resolve dentro do tenant que
+          o possui</td>
+    </tr>
+    <tr>
+      <td><code>ListReferencedImageIdsAcrossAllTenantsAsync</code></td>
+      <td>O coletor roda fora de requisição, sem tenant em escopo</td>
+      <td><span class="tag danger">a query mais perigosa do app</span> — veja
+          <a href="images.html#alcancabilidade">alcançabilidade</a></td>
+    </tr>
+    <tr>
+      <td>Seeding e bootstrap de setup</td>
+      <td>Criam o primeiro tenant</td>
+      <td>Só rodam no boot</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="auth">Autenticação e autorização</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Peça</th><th>Como é</th></tr></thead>
+  <tbody>
+    <tr><td>Hash de senha</td><td><code>PasswordHasher</code> do ASP.NET Identity (PBKDF2) — a única peça do Identity usada</td></tr>
+    <tr><td>Token</td><td>JWT HS256, 8 h (<code>Jwt:LifetimeMinutes</code> = 480), <code>ClockSkew</code> de 1 min</td></tr>
+    <tr><td>Claims</td><td><code>sub</code>, <code>tenant_id</code>, <code>email</code>, <code>name</code>, <code>role</code>, <code>plan</code>. <code>MapInboundClaims = false</code>: os nomes crus são preservados</td></tr>
+    <tr><td>Autorização</td><td><strong>Deny-by-default</strong>: <code>FallbackPolicy = DefaultPolicy</code>. Anônimo só onde há <code>[AllowAnonymous]</code> explícito</td></tr>
+    <tr><td>Papel Owner</td><td><code>PUT /api/tenant/members</code> e <code>PUT /api/tenant/settings</code></td></tr>
+    <tr><td>Onde o SPA guarda</td><td><code>localStorage['vault.auth']</code>; interceptor anexa o bearer e desloga em 401 no meio da sessão</td></tr>
+    <tr><td>Resolução do tenant</td><td><code>CurrentTenantFromHttpContext</code> lê <code>tenant_id</code> do principal. Fora de requisição, <code>IsAuthenticated</code> é falso e os acessores lançam</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout warn">
+  <span class="label">Rotas anônimas — a lista inteira</span>
+  <p>
+    <code>POST /api/auth/login</code> · <code>GET /api/images/{id}</code> ·
+    o fallback <code>/api/{**path}</code> (404) · o fallback do SPA
+    (<code>index.html</code>) · em Development, <code>/openapi</code> e
+    <code>/scalar</code> · e, no modo setup, <code>/api/setup/*</code> atrás do
+    token do log. Qualquer coisa nova fora dessa lista é autenticada
+    automaticamente.
+  </p>
+</div>
+
+<h2 id="throttle">Throttle de login</h2>
+
+<p>
+  Login é a única escrita anônima do app, então é a única porta que vale a pena
+  bater. <code>ILoginAttemptTracker</code> conta tentativas recentes em
+  <strong>duas dimensões ao mesmo tempo</strong>, porque nenhuma basta sozinha.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Dimensão</th><th>Limite</th><th>Penalidade</th><th>Por que essa forma</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Conta</strong></td>
+      <td>10 falhas / 5 min</td>
+      <td>5 min, dobrando a cada reincidência, teto de 30 min</td>
+      <td>Uma conta é de uma pessoa, então escalar é acessível</td>
+    </tr>
+    <tr>
+      <td><strong>Endereço</strong></td>
+      <td>30 falhas / 5 min e 8 tentativas em voo</td>
+      <td>5 min fixo / retry em 1 s</td>
+      <td>Um endereço é compartilhado (NAT, CGNAT, uma casa), então escalar
+          puniria quem não tem nada a ver</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Só o endereço é fraco contra um atacante espalhado por botnet e pune todo mundo
+  atrás de uma saída corporativa. Só a conta entrega a qualquer estranho uma
+  negação de serviço contra um usuário nomeado, já que falhar o login alheio é
+  grátis. <strong>Juntas</strong>, a regra do endereço custa endereços ao
+  atacante distribuído e a regra da conta custa tempo.
+</p>
+
+<h3>Seis decisões que sustentam isso</h3>
+
+<ol class="steps">
+  <li>
+    <strong>Senha correta nunca é limitada.</strong> O orçamento da conta é
+    cobrado no início e devolvido no sucesso; o endereço é cobrado só na falha.
+    O sucesso deliberadamente <em>não</em> toca o registro do endereço — senão
+    toda rodada de credential stuffing estacionaria um login válido entre os
+    lotes.
+  </li>
+  <li>
+    <strong>A penalidade escala; nunca vira bloqueio.</strong> Bloqueio duro
+    precisa de humano para desfazer, o que transforma “eu falho seus logins” em
+    “sua conta some até o suporte responder”. Um atraso que sempre expira sozinho
+    degrada esse ataque a um incômodo, e ainda corta a taxa de palpites em ordens
+    de grandeza.
+  </li>
+  <li>
+    <strong>Concorrência faz parte do limite.</strong> Um portão que só
+    <em>lê</em> estado é ultrapassável por rajada: mil palpites paralelos passam
+    por uma verificação que nenhum deles pagou ainda. A conta é cobrada dentro do
+    mesmo lock que verifica. O endereço não pode ser (uma multidão de logins
+    <em>legítimos</em> simultâneos derrubaria um identificador compartilhado), e
+    por isso ganha um teto de tentativas em voo — que custa um retry a uma
+    multidão, e não cinco minutos de indisponibilidade.
+  </li>
+  <li>
+    <strong>Toda grafia de uma conta é um orçamento só, e contas inexistentes
+    também contam.</strong> A chave é o e-mail <em>armazenado</em> quando o
+    usuário existe (o SQL Server compara sem diferenciar caixa, e chavear pelo
+    digitado criaria um orçamento novo por capitalização). A chave da conta
+    desconhecida é a mesma normalização do que foi digitado — limitada em
+    tamanho, sem caracteres que a colação pesa como nada, dobrada em largura,
+    minúscula, e <strong>com trim por último</strong>.
+  </li>
+  <li>
+    <strong>A verificação roda dentro da action, não num middleware.</strong>
+    Precisa do e-mail submetido, que só existe depois do model binding — e
+    precisa estar a jusante de <code>UseRequestLocalization</code> para o 429 sair
+    traduzido. O 429 carrega <code>Retry-After</code>, que o CORS expõe.
+  </li>
+  <li>
+    <strong>Os dois campos têm limite de tamanho</strong>
+    (<code>LoginRequestValidator</code>). Era a única regra de e-mail sem limite,
+    no único endpoint anônimo, e o throttle reteria o que chegasse como chave de
+    dicionário por uma hora: um endereço de 30 MB é exaustão de memória, uma
+    senha de 30 MB é um PBKDF2 sob demanda.
+  </li>
+</ol>
+
+<div class="callout plain">
+  <span class="label">Por que o trim vem por último</span>
+  <p>
+    Remover um caractere invisível pode expor um espaço final que estava
+    escondido atrás dele, e a normalização mapeia um espaço não-quebrável num
+    espaço comum. O SQL Server ignora espaços finais, então um trim só no começo
+    reabre o oráculo: onze requisições responderiam se uma conta existe — dez
+    numa grafia invisivelmente diferente, uma na simples, e 429-vs-401 conta se o
+    banco as juntou. <code>FindForLoginAsync</code> nomeia a colação
+    (<code>Latin1_General_CI_AS</code>) pelo mesmo motivo: um banco restaurado
+    com colação acento-insensível começaria a juntar grafias que a chave não
+    junta. As duas dimensões respondem a <strong>mesma mensagem</strong>, também
+    por isso.
+  </p>
+</div>
+
+<h3>Memória limitada</h3>
+
+<p>
+  <code>MaxTrackedRecords</code> (20 000) limita o consumo. A evicção poupa
+  registros cumprindo penalidade ativa enquanto houver qualquer outra coisa para
+  descartar; quando <em>tudo</em> está bloqueado, descarta o mais próximo de
+  expirar. Recusar-se a rastrear chaves novas — a alternativa óbvia — deixaria
+  uma enxurrada <strong>desligar a regra de conta</strong> para todo mundo que
+  ainda não estivesse na tabela.
+</p>
+
+<h2 id="proxy">Atrás de proxy reverso: diga isso</h2>
+
+<p>
+  <code>RemoteIpAddress</code> é o endereço da conexão, que atrás de
+  nginx/Traefik/Cloudflare é o <em>proxy</em> — todos os chamadores num bucket só,
+  de modo que trinta logins falhos de qualquer um responderia 429 para a
+  implantação inteira. Nomeie os proxies em que você confia:
+</p>
+
+<pre><code>"ForwardedHeaders": { "KnownProxies": ["10.0.0.2"] }</code></pre>
+
+<p>
+  É opt-in porque o modo de falha é assimétrico: confiar no header
+  incondicionalmente deixaria qualquer chamador nomear o próprio endereço e cunhar
+  um orçamento novo por palpite — o que é pior do que não ter a dimensão de
+  endereço. Detalhes que importam na implementação:
+</p>
+
+<ul>
+  <li><code>ForwardedHeaders.XForwardedFor</code> apenas — esquema e host não são
+      assunto do throttle, e reescrevê-los mudaria como URLs são geradas.</li>
+  <li><code>ForwardLimit = 1</code> — o header é uma lista, e confiar em mais dela
+      do que há proxies na frente é como um chamador forja um endereço.</li>
+  <li><code>KnownProxies</code> <strong>e</strong> <code>KnownIPNetworks</code> são
+      limpas: <code>KnownIPNetworks</code> vem com <code>127.0.0.0/8</code>, e
+      deixá-la continuaria confiando em qualquer coisa no loopback para nomear o
+      próprio endereço.</li>
+  <li>Um valor que não parseia como IP <strong>impede o boot</strong> — melhor que
+      subir com uma lista que silenciosamente não confia em ninguém.</li>
+  <li>Quando o host não consegue ver endereço nenhum, a dimensão de endereço é
+      <strong>pulada</strong>, e não compartilhada num bucket: um atacante
+      limitando a implantação inteira é pior que não ter a regra.</li>
+</ul>
+
+<h2 id="imagens-anon">A leitura anônima de imagem</h2>
+
+<p>
+  <code>GET /api/images/{id}</code> é anônimo por design: um
+  <code>&lt;img&gt;</code> não anexa <code>Authorization</code>. O GUID não
+  adivinhável é a capacidade. Continua seguro porque
+  <strong>o tenant é resolvido da própria linha da imagem antes de o storage ser
+  tocado</strong> — um GUID adivinhado só resolve dentro do tenant que o possui, e
+  os dois segmentos do caminho em disco são GUIDs que nós formatamos, nunca
+  strings vindas do chamador.
+</p>
+
+<p>
+  A <strong>escrita</strong> de enquadramento é o oposto, deliberadamente: passa
+  por <code>GetForCurrentTenantAsync</code>, nunca por
+  <code>GetUnfilteredAsync</code>. Ignorar o filtro só se defende na leitura
+  anônima; roteada pela leitura sem filtro, um tenant poderia reenquadrar a
+  imagem de outro. Pelo filtro global, um id estrangeiro simplesmente não existe:
+  o chamador recebe 404 e não aprende nada. <code>ImageFocalTests</code> prende
+  isso.
+</p>
+
+<h2 id="lacunas">Lacunas conhecidas</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Lacuna</th><th>Impacto real</th><th>Forma durável</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Estado do throttle em memória</td>
+      <td>Um deploy dá a todo atacante uma folha limpa; escalado horizontalmente,
+          o limite é por nó</td>
+      <td>Tabela <code>Identity.LoginAttempts</code> por <code>(Kind, Key)</code>,
+          <strong>deliberadamente não tenant-owned</strong> — login precede
+          qualquer claim de tenant</td>
+    </tr>
+    <tr>
+      <td>Enumeração de contas por tempo</td>
+      <td>E-mail desconhecido pula o PBKDF2 e responde em microssegundos. Status,
+          título, corpo e headers são idênticos: o tempo é o vazamento inteiro</td>
+      <td>Hash-chamariz fixo, ao custo de toda tentativa desconhecida pagar um
+          PBKDF2</td>
+    </tr>
+    <tr>
+      <td>Sem índice em <code>Email</code> sozinho</td>
+      <td>Todo login varre a tabela — é por isso que o pré-portão somente-leitura
+          existe: para a tentativa recusada nunca chegar ao SQL</td>
+      <td>Índice dedicado</td>
+    </tr>
+    <tr>
+      <td>JWT em <code>localStorage</code>, sem refresh</td>
+      <td>Exposto a XSS; sessão expira sem aviso em 8 h</td>
+      <td>Refresh token + cookie <code>HttpOnly</code></td>
+    </tr>
+    <tr>
+      <td>URL de imagem não assinada</td>
+      <td>Quem tem o link vê a foto, sem sessão e sem prazo</td>
+      <td>URL assinada com expiração</td>
+    </tr>
+    <tr>
+      <td>Membros convidados não entram</td>
+      <td><code>PasswordHash</code> nulo, sem fluxo de convite</td>
+      <td>Convite com token de definição de senha</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="checklist">Checklist ao adicionar código</h2>
+
+<ul>
+  <li>Entidade nova que pertence a um tenant → implemente <code>ITenantOwned</code>
+      e <strong>nada mais</strong>. Não escreva filtro.</li>
+  <li>Tabela nova → <code>ToTable("Nome", VaultSchemas.X)</code> com colunas
+      PascalCase, ou <code>TableNamingConventionTests</code> falha.</li>
+  <li>Coluna nova com forma de GUID → classifique-a em
+      <code>ImageReferenceCoverageTests</code>, como referência de imagem ou como
+      outra coisa, ou o build falha. É o que impede um novo ponto de referência
+      de ser esquecido pelo coletor.</li>
+  <li>Endpoint novo → é autenticado por padrão. <code>[AllowAnonymous]</code>
+      precisa de justificativa escrita no código.</li>
+  <li>Escrita nova em coleção ou item → exija <code>If-Match</code> com
+      <code>IfMatch.Require</code> e devolva o <code>ETag</code>.</li>
+  <li>Mensagem nova visível ao usuário → nos dois <code>.resx</code>, nunca
+      literal no código nem em teste.</li>
+  <li>Query nova que ignora o filtro → tem que ser impossível de rodar dentro de
+      uma requisição, e tem que ter teste de integração.</li>
+</ul>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>

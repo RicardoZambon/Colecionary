@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquitetura · Manual técnico Colecionary</title>
+<link rel="stylesheet" href="assets/manual.css">
+<script src="assets/theme-boot.js"></script>
+</head>
+<body data-page="architecture">
+<a class="skip" href="#main">Ir para o conteúdo</a>
+<div class="layout">
+<aside class="sidebar"></aside>
+<main class="content" id="main">
+
+<p class="eyebrow">02 · Arquitetura</p>
+<h1>Como as peças se encaixam</h1>
+<p class="lede">
+  Uma imagem Docker com um processo. Dentro dela, uma solução .NET em quatro
+  projetos com dependências em uma direção só, e um SPA Angular estático servido
+  do <code>wwwroot</code> do mesmo host. Esta página descreve a topologia, as
+  camadas, a ordem do pipeline HTTP — que é carga estrutural, não estética — e o
+  que acontece no boot.
+</p>
+
+<h2 id="topologia">Topologia</h2>
+
+<h3>Produção: uma imagem, uma porta</h3>
+
+<p>
+  O <code>Dockerfile</code> tem três estágios: compila o SPA com Node 22,
+  publica a API com o SDK .NET 10, e copia os dois para uma imagem
+  <code>aspnet:10.0</code> — o SPA vai para <code>./wwwroot</code>. O contêiner
+  fala HTTP puro na porta 80; TLS termina no proxy reverso de quem hospeda. Só
+  <code>linux/amd64</code>: SQL Server não tem build ARM.
+</p>
+
+<pre><code>docker run -d --name colecionary \
+  -p 8080:80 \
+  -v colecionary-config:/data/config \
+  ricardozambon/vault:latest</code></pre>
+
+<div class="callout warn">
+  <span class="label">O volume das imagens não está declarado</span>
+  <p>
+    A imagem declara <code>VOLUME ["/data/config"]</code>, mas não declara nada
+    para as imagens. O padrão de <code>ImageStorage:Root</code> é
+    <code>App_Data/images</code>, <strong>relativo ao content root do app</strong>
+    — ou seja, dentro da camada de escrita do contêiner. Recriar o contêiner sem
+    montar esse caminho perde todas as fotos enviadas. Em qualquer implantação
+    real, monte um volume e aponte
+    <code>ImageStorage__Root=/data/images</code>. Veja
+    <a href="operations.html#persistencia">Deploy → persistência</a>.
+  </p>
+</div>
+
+<h3 id="dev">Desenvolvimento: dois servidores</h3>
+
+<p>
+  Em desenvolvimento o SPA roda no dev server do Angular (<code>:4200</code>) e
+  a API em <code>:5100</code>, portanto <strong>cross-origin</strong>. Isso não é
+  um detalhe: é o motivo pelo qual a política de CORS precisa expor cabeçalhos de
+  resposta explicitamente. Sem <code>WithExposedHeaders</code>, script
+  cross-origin não lê <code>ETag</code> (e toda gravação após a primeira seria
+  recusada), nem <code>Content-Disposition</code> (o download do arquivo perde o
+  nome escolhido pelo servidor), nem <code>Retry-After</code> (o SPA não sabe
+  quanto esperar depois de um 429).
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 740 168" role="img" aria-labelledby="dev-t">
+      <title id="dev-t">Topologia de desenvolvimento</title>
+      <rect class="box" x="8" y="52" width="118" height="60" rx="8"/>
+      <text class="t b mid" x="67" y="78">Navegador</text>
+      <text class="t s mid" x="67" y="96">localhost:4200</text>
+
+      <path class="ln" d="M130 70 H206"/><polygon class="fill-border" points="206,70 198,66 198,74"/>
+      <text class="t s mid" x="168" y="62">SPA</text>
+      <path class="ln accent dashed" d="M130 96 H420 V80"/><polygon class="fill-accent" points="420,80 416,88 424,88"/>
+      <text class="t s mid" x="250" y="112">XHR cross-origin → /api</text>
+
+      <rect class="box" x="212" y="42" width="140" height="60" rx="8"/>
+      <text class="t b mid" x="282" y="66">ng serve</text>
+      <text class="t s mid" x="282" y="84">HMR, :4200</text>
+
+      <rect class="box accent" x="376" y="42" width="140" height="60" rx="8"/>
+      <text class="t b mid" x="446" y="66">dotnet run</text>
+      <text class="t s mid" x="446" y="84">Vault.Api, :5100</text>
+
+      <path class="ln" d="M520 72 H586"/><polygon class="fill-border" points="586,72 578,68 578,76"/>
+      <rect class="box" x="592" y="42" width="140" height="60" rx="8"/>
+      <text class="t b mid" x="662" y="66">SQL Server</text>
+      <text class="t s mid" x="662" y="84">docker compose</text>
+
+      <text class="t s" x="212" y="140">CORS em Development reflete qualquer origem (auth é bearer, não cookie)</text>
+    </svg>
+  </div>
+  <figcaption>
+    <code>./dev.sh</code> sobe os dois em grupos de processo separados e encerra
+    ambos com um único Ctrl+C — inclusive os filhos que <code>dotnet run</code> e
+    <code>npx</code> criam, que ficariam órfãos se só o lançador morresse.
+  </figcaption>
+</figure>
+
+<h2 id="camadas">Camadas do backend</h2>
+
+<p>
+  Clean architecture com quatro projetos. A regra é a direção das setas: nada
+  aponta para dentro do <code>Domain</code>, e <code>Domain</code> não referencia
+  nada.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 700 236" role="img" aria-labelledby="lay-t">
+      <title id="lay-t">Camadas e direção das dependências</title>
+
+      <rect class="box accent" x="8" y="16" width="150" height="204" rx="8"/>
+      <text class="t b" x="22" y="40">Vault.Api</text>
+      <text class="t s" x="22" y="62">Controllers</text>
+      <text class="t s" x="22" y="80">GlobalExceptionHandler</text>
+      <text class="t s" x="22" y="98">IfMatch</text>
+      <text class="t s" x="22" y="116">CurrentTenantFrom-</text>
+      <text class="t s" x="22" y="130">HttpContext</text>
+      <text class="t s" x="22" y="148">Setup/*</text>
+      <text class="t s" x="22" y="166">ImageGarbageCollection-</text>
+      <text class="t s" x="22" y="180">Service</text>
+      <text class="t s" x="22" y="198">Program.cs</text>
+
+      <rect class="box" x="182" y="16" width="160" height="204" rx="8"/>
+      <text class="t b" x="196" y="40">Vault.Application</text>
+      <text class="t s" x="196" y="62">Services (Collection,</text>
+      <text class="t s" x="196" y="76">Image, Import, Export…)</text>
+      <text class="t s" x="196" y="94">DTOs = interfaces TS</text>
+      <text class="t s" x="196" y="112">FluentValidation</text>
+      <text class="t s" x="196" y="130">Abstractions (I*Repo,</text>
+      <text class="t s" x="196" y="144">ICurrentTenant, IImageStore)</text>
+      <text class="t s" x="196" y="162">Resources/Messages.resx</text>
+      <text class="t s" x="196" y="180">Archives/*</text>
+      <text class="t s" x="196" y="198">ImageGarbageCollector</text>
+
+      <rect class="box" x="366" y="16" width="164" height="204" rx="8"/>
+      <text class="t b" x="380" y="40">Vault.Infrastructure</text>
+      <text class="t s" x="380" y="62">VaultDbContext</text>
+      <text class="t s" x="380" y="80">Configurations/*</text>
+      <text class="t s" x="380" y="98">Interceptors (tenant,</text>
+      <text class="t s" x="380" y="112">version)</text>
+      <text class="t s" x="380" y="130">Repositories (1 por raiz)</text>
+      <text class="t s" x="380" y="148">Migrations</text>
+      <text class="t s" x="380" y="166">Seeding</text>
+      <text class="t s" x="380" y="184">Auth (JWT, PBKDF2,</text>
+      <text class="t s" x="380" y="198">throttle) · Storage</text>
+
+      <rect class="box goodbox" x="554" y="16" width="138" height="204" rx="8"/>
+      <text class="t b" x="568" y="40">Vault.Domain</text>
+      <text class="t s" x="568" y="62">Entities</text>
+      <text class="t s" x="568" y="80">Enums</text>
+      <text class="t s" x="568" y="98">ValueObjects</text>
+      <text class="t s" x="568" y="116">ITenantOwned</text>
+      <text class="t s" x="568" y="146">referencia</text>
+      <text class="t s" x="568" y="160">nada</text>
+
+      <path class="ln accent" d="M158 118 H180"/><polygon class="fill-accent" points="180,118 172,114 172,122"/>
+      <path class="ln accent" d="M342 118 H364"/><polygon class="fill-accent" points="364,118 356,114 356,122"/>
+      <path class="ln accent" d="M530 118 H552"/><polygon class="fill-accent" points="552,118 544,114 544,122"/>
+      <path class="ln accent dashed" d="M120 12 H620 V14"/>
+      <text class="t s mid" x="370" y="8">Api → Infrastructure apenas para registrar DI</text>
+    </svg>
+  </div>
+  <figcaption>
+    Controllers são finos: leem a precondição, chamam um serviço, escrevem
+    cabeçalhos. Comportamento vive em Application. Mecânica de EF vive em
+    Infrastructure, com <strong>um repositório por raiz de agregado</strong> — não
+    existe repositório genérico.
+  </figcaption>
+</figure>
+
+<h3>O caminho de uma requisição</h3>
+
+<ol class="steps">
+  <li>
+    <strong>Controller</strong> — valida forma, lê <code>If-Match</code> via
+    <code>IfMatch.Require(Request)</code>, chama o serviço, devolve
+    <code>ETag</code>.
+    <span class="where">backend/src/Vault.Api/Controllers/</span>
+  </li>
+  <li>
+    <strong>Application service</strong> — regra de negócio, comparação de
+    versão, mapeamento DTO↔entidade, exceções de domínio traduzidas
+    (<code>NotFoundException</code>, <code>ConflictException</code>,
+    <code>PreconditionFailedException</code>…).
+    <span class="where">backend/src/Vault.Application/</span>
+  </li>
+  <li>
+    <strong>Repository</strong> — só mecânica de EF: <code>Include</code>,
+    <code>ReplaceGraph</code>, <code>MergeByKey</code>. Nunca escreve filtro de
+    tenant.
+    <span class="where">backend/src/Vault.Infrastructure/Persistence/Repositories/</span>
+  </li>
+  <li>
+    <strong>VaultDbContext</strong> — aplica o filtro global por convenção,
+    dispara os interceptors no <code>SaveChanges</code> e traduz
+    <code>DbUpdateConcurrencyException</code> em
+    <code>PreconditionFailedException</code>.
+    <span class="where">backend/src/Vault.Infrastructure/Persistence/VaultDbContext.cs</span>
+  </li>
+</ol>
+
+<h2 id="pipeline">Ordem do pipeline HTTP</h2>
+
+<p>
+  A ordem em <code>Program.cs</code> não é cosmética. Três posições têm razão
+  escrita e teste que falha se forem trocadas.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 720 348" role="img" aria-labelledby="pipe-t">
+      <title id="pipe-t">Ordem dos middlewares na aplicação configurada</title>
+
+      <rect class="box warnbox" x="150" y="8" width="420" height="34" rx="6"/>
+      <text class="t b" x="164" y="30">UseForwardedHeaders</text>
+      <text class="t s" x="410" y="30">opt-in: só com KnownProxies configurado</text>
+
+      <rect class="box accent" x="150" y="52" width="420" height="34" rx="6"/>
+      <text class="t b" x="164" y="74">UseRequestLocalization</text>
+      <text class="t s" x="410" y="74">define CurrentUICulture pelo Accept-Language</text>
+
+      <rect class="box accent" x="150" y="96" width="420" height="34" rx="6"/>
+      <text class="t b" x="164" y="118">UseExceptionHandler</text>
+      <text class="t s" x="410" y="118">monta ProblemDetails localizado</text>
+
+      <rect class="box" x="150" y="140" width="420" height="30" rx="6"/>
+      <text class="t b" x="164" y="160">UseSerilogRequestLogging</text>
+
+      <rect class="box" x="150" y="180" width="420" height="30" rx="6"/>
+      <text class="t b" x="164" y="200">UseDefaultFiles + UseStaticFiles</text>
+      <text class="t s" x="410" y="200">o shell é público</text>
+
+      <rect class="box" x="150" y="220" width="420" height="30" rx="6"/>
+      <text class="t b" x="164" y="240">UseCors</text>
+      <text class="t s" x="410" y="240">expõe ETag, Retry-After, Content-Disposition</text>
+
+      <rect class="box" x="150" y="260" width="420" height="30" rx="6"/>
+      <text class="t b" x="164" y="280">UseAuthentication + UseAuthorization</text>
+      <text class="t s" x="410" y="280">deny-by-default</text>
+
+      <rect class="box goodbox" x="150" y="300" width="420" height="40" rx="6"/>
+      <text class="t b" x="164" y="318">MapControllers</text>
+      <text class="t s" x="164" y="334">→ fallback /api/** = 404 JSON · resto = index.html</text>
+
+      <path class="ln accent" d="M130 25 V330"/>
+      <polygon class="fill-accent" points="130,330 126,322 134,322"/>
+      <text class="t s" x="16" y="170">entrada da requisição</text>
+      <text class="t s" x="590" y="70">↑ o throttle de login</text>
+      <text class="t s" x="590" y="86">responde 429 aqui</text>
+      <text class="t s" x="590" y="112">↑ localizado: precisa</text>
+      <text class="t s" x="590" y="128">da cultura em escopo</text>
+    </svg>
+  </div>
+</figure>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Posição</th><th>Por quê</th><th>Se inverter</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>UseForwardedHeaders</code> antes de tudo</td>
+      <td>Tudo abaixo que pergunta “quem é quem chamou” tem que receber a mesma
+          resposta — o throttle acima de todos.</td>
+      <td>Atrás de proxy reverso, todos os chamadores caem no mesmo bucket:
+          30 logins falhos de qualquer um responde 429 para a implantação
+          inteira.</td>
+    </tr>
+    <tr>
+      <td><code>UseRequestLocalization</code> <strong>antes</strong> de
+          <code>UseExceptionHandler</code></td>
+      <td>O handler monta o título enquanto a exceção <em>sobe</em> o pipeline;
+          a cultura precisa ainda estar em escopo.</td>
+      <td>Erro em português vira erro em inglês.
+          <code>LocalizationTests</code> falha.</td>
+    </tr>
+    <tr>
+      <td>Throttle de login <strong>dentro</strong> da action, não em middleware</td>
+      <td>Precisa do e-mail submetido, que só existe depois do model binding — e
+          precisa estar a jusante da localização para o 429 sair traduzido.</td>
+      <td>Ou não tem o e-mail, ou responde em inglês.</td>
+    </tr>
+    <tr>
+      <td>Estáticos <strong>antes</strong> de auth</td>
+      <td>O shell do SPA é público; só <code>/api</code> exige token.</td>
+      <td>A política deny-by-default devolve 401 na página de login.</td>
+    </tr>
+    <tr>
+      <td>Fallback <code>/api/{**path}</code> antes do fallback do SPA</td>
+      <td>Um segmento literal é mais específico que o catch-all, então uma rota
+          de API inexistente responde 404 JSON.</td>
+      <td>O SPA sequestra rotas de API e devolve <code>index.html</code> com
+          200 — o cliente recebe HTML onde esperava JSON.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="boot">Sequência de boot</h2>
+
+<p>
+  <code>Program.cs</code> tem um laço de host em volta da construção da
+  aplicação, porque o wizard de primeiro uso reconstrói o host no mesmo processo
+  do SO — assim a senha do admin e a chave JWT gerada só existem em memória até o
+  bootstrap do banco dar certo.
+</p>
+
+<ol class="steps">
+  <li>
+    <strong>Resolver o diretório de configuração</strong> —
+    <code>Setup:ConfigDirectory</code> (na imagem, <code>/data/config</code>).
+  </li>
+  <li>
+    <strong>Existe connection string?</strong> Provedores normais
+    (appsettings, ambiente, user-secrets) ganham. Só se nenhum fornecer, consulta
+    <code>colecionary.json</code> persistido e a configuração encenada pelo
+    wizard.
+  </li>
+  <li>
+    <strong>Não → host de setup.</strong> Host mínimo: serve o SPA e
+    <code>/api/setup/*</code>, protegido por um token de uso único que é
+    <em>logado</em> no console. Sem DbContext, sem auth. Já com
+    <code>UseRequestLocalization</code>, porque antes de existir banco ou usuário
+    o <code>Accept-Language</code> é a única pista de idioma.
+    <span class="where">Vault.Api/Setup/SetupEndpoints.cs, SetupCoordinator.cs</span>
+  </li>
+  <li>
+    <strong>Sim → host completo.</strong> Registra controllers, ProblemDetails,
+    Application, Infrastructure, JWT, autorização deny-by-default, CORS. O
+    coletor de imagens só é registrado se <code>ImageGc:Enabled</code> for
+    <code>true</code> — desligado ele não fica ocioso, ele não existe.
+  </li>
+  <li>
+    <strong><code>LegacyImageBlobExporter.ExportAsync()</code></strong> — antes
+    de qualquer migration. Copia blobs remanescentes da coluna
+    <code>varbinary(max)</code> para o <code>IImageStore</code>, para que a
+    migration <code>MoveImageBytesToFileStorage</code> possa derrubar a coluna em
+    seguida. No-op em todo boot posterior.
+  </li>
+  <li>
+    <strong>Bootstrap do banco</strong> — no caminho do wizard cria o primeiro
+    tenant + owner e persiste a configuração; senão, se <code>Seed:Enabled</code>,
+    roda o <code>DbSeeder</code> (que também migra); senão apenas
+    <code>Database.Migrate()</code>.
+  </li>
+  <li>
+    <strong>Se o host encenado falhar</strong> (banco ruim, migration quebrada),
+    a falha é registrada, a configuração pendente é descartada e o laço volta ao
+    modo setup — com a mensagem aparecendo no próximo render do wizard.
+  </li>
+</ol>
+
+<div class="callout danger">
+  <span class="label">Nunca aplique migrations com dotnet ef nesse caso</span>
+  <p>
+    <code>MoveImageBytesToFileStorage</code> derruba a coluna de bytes, e uma
+    migration não escreve arquivos. A exportação vive no startup, então
+    <code>dotnet ef database update</code> contra um banco que ainda guarda blobs
+    <strong>apaga os bytes</strong>. Suba a API: ela faz as duas coisas, na ordem
+    certa.
+  </p>
+</div>
+
+<h2 id="config-precedencia">Precedência de configuração</h2>
+
+<p>
+  Da maior para a menor prioridade. O ponto importante é o último item: a
+  configuração do wizard só é consultada quando <em>nenhum</em> provedor normal
+  fornece connection string, o que torna a implantação headless sempre
+  determinística.
+</p>
+
+<ol>
+  <li>Linha de comando (<code>--Chave=valor</code>)</li>
+  <li>Variáveis de ambiente (<code>ConnectionStrings__Vault</code>,
+      <code>Jwt__SigningKey</code>, <code>ImageStorage__Root</code>…)</li>
+  <li>User secrets (só em Development)</li>
+  <li><code>appsettings.{Environment}.json</code></li>
+  <li><code>appsettings.json</code></li>
+  <li><code>{Setup:ConfigDirectory}/colecionary.json</code> — apenas se nada
+      acima trouxer connection string</li>
+</ol>
+
+<h2 id="frontend-camadas">Camadas do frontend</h2>
+
+<p>
+  A direção é <code>features → shared → core</code>. <code>core</code> não
+  importa nada de <code>shared</code> nem de <code>features</code>; componentes
+  de <code>shared/ui</code> não falam com a API nem com stores — com duas
+  exceções deliberadas, <code>ui-image-focus</code> e <code>ui-toast</code>, que
+  existem justamente para renderizar o estado de um serviço de core.
+</p>
+
+<pre><code>frontend/src/
+├─ styles/
+│  ├─ _themes.scss     <span class="c">← TODOS os tokens visuais (7 temas)</span>
+│  └─ _mixins.scss
+└─ app/
+   ├─ core/            <span class="c">← sem UI</span>
+   │  ├─ models/       <span class="c">tipos do domínio (espelham os DTOs)</span>
+   │  ├─ api/          <span class="c">VaultApi (contrato) + HttpVaultApi, ImagesApi, ArchiveApi</span>
+   │  ├─ auth/         <span class="c">AuthService, interceptor, authGuard</span>
+   │  ├─ setup/        <span class="c">SetupService + guards do wizard</span>
+   │  ├─ i18n/         <span class="c">I18nService, dicionários, interceptor de idioma</span>
+   │  ├─ state/        <span class="c">VaultStore, Theme, Toast, ImageFocus, PhotoUpload, Conflict, Currency</span>
+   │  └─ utils/        <span class="c">funções puras, todas com spec</span>
+   ├─ shared/
+   │  ├─ ui/           <span class="c">A biblioteca de componentes (ui-*)</span>
+   │  └─ pipes/        <span class="c">t, money, itemValue</span>
+   ├─ layout/          <span class="c">shell, topbar, sidebar, conflict-notice</span>
+   ├─ features/        <span class="c">páginas roteadas, lazy, uma pasta por feature</span>
+   ├─ app.routes.ts
+   └─ app.config.ts    <span class="c">← DI: { provide: VaultApi, useClass: HttpVaultApi }</span></code></pre>
+
+<p>
+  Toda página roteada é <code>loadComponent</code> (lazy). O app é
+  <strong>zoneless</strong>: estado em signals, componentes
+  <code>OnPush</code>, sem padrões dependentes de Zone.js. Detalhes em
+  <a href="frontend.html">App Angular</a>.
+</p>
+
+<h2 id="cross-cutting">Preocupações transversais</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Preocupação</th><th>Onde é resolvida</th><th>Nota</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Isolamento de tenant</td>
+      <td><code>VaultDbContext.OnModelCreating</code> (filtro global por
+          convenção) + <code>TenantStampingInterceptor</code></td>
+      <td>Entidade nova só precisa implementar <code>ITenantOwned</code></td>
+    </tr>
+    <tr>
+      <td>Versão do agregado</td>
+      <td><code>CollectionVersionInterceptor</code> (singleton, registrado
+          <em>antes</em> do stamping)</td>
+      <td>Sobe a versão quando qualquer filho muda; lança se um filho for
+          escrito sem a coleção em escopo</td>
+    </tr>
+    <tr>
+      <td>Erros → HTTP</td>
+      <td><code>GlobalExceptionHandler</code></td>
+      <td>404, 409, 400, 412, 428, 500 em ProblemDetails RFC 7807</td>
+    </tr>
+    <tr>
+      <td>Texto localizado</td>
+      <td><code>Vault.Application/Resources/Messages.resx</code> + <code>.pt-BR.resx</code></td>
+      <td>Resolvido contra <code>CurrentUICulture</code>; nunca asserte a string
+          literal em teste</td>
+    </tr>
+    <tr>
+      <td>Logs</td>
+      <td>Serilog no console, <code>UseSerilogRequestLogging</code></td>
+      <td>Nível por namespace em <code>appsettings.json</code></td>
+    </tr>
+    <tr>
+      <td>Documentação da API em dev</td>
+      <td><code>MapOpenApi</code> + Scalar em
+          <a href="http://localhost:5100/scalar">/scalar</a></td>
+      <td>Só em Development, e anônimo</td>
+    </tr>
+    <tr>
+      <td>Trabalho em background</td>
+      <td><code>ImageGarbageCollectionService</code> (<code>BackgroundService</code>)</td>
+      <td>Registrado apenas com <code>ImageGc:Enabled=true</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="pagenav"></div>
+</main>
+</div>
+<script src="assets/manual.js"></script>
+</body>
+</html>
