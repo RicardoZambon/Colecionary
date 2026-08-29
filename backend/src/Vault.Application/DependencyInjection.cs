@@ -16,6 +16,9 @@ public static class DependencyInjection
         services.AddScoped<AuthService>();
         services.AddScoped<CollectionService>();
         services.AddScoped<Images.ImageService>();
+        // Scoped like every other service: the background sweep opens a scope of
+        // its own per run, so its DbContext is never shared with a request.
+        services.AddScoped<Images.ImageGarbageCollector>();
         services.AddScoped<Export.ExportService>();
         services.AddScoped<Import.ImportService>();
         services.AddScoped<StoreService>();

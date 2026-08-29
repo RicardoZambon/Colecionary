@@ -27,6 +27,7 @@
               <ui-text-input
                 class="rename"
                 variant="subtle"
+                [ariaLabel]="'collSettings.groups.renameAria' | t: { name: row.node.name }"
                 [value]="row.node.name"
                 (valueChange)="renameGroup(row.node.id, $event)"
                 (blurred)="endRename()"
@@ -46,6 +47,7 @@
                   {{ field.name }}
                   <ui-select
                     class="compact type"
+                    [ariaLabel]="'collSettings.groups.fieldTypeAria' | t: { name: field.name }"
                     [options]="fieldTypeOptions()"
                     [value]="field.type"
                     (valueChange)="setFieldType(row.node.id, field.name, $event)"
@@ -70,6 +72,7 @@
                   />
                   <ui-select
                     class="compact type"
+                    [ariaLabel]="'collSettings.groups.newFieldTypeAria' | t"
                     [options]="fieldTypeOptions()"
                     [value]="pendingFieldType()"
                     (valueChange)="pendingFieldType.set($any($event))"
@@ -83,6 +86,7 @@
               <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
               <ui-select
                 class="compact order-by"
+                [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: row.node.name }"
                 [options]="row.sortByOptions"
                 [value]="row.sortBy"
                 (valueChange)="setGroupSortBy(row.node.id, $event)"
@@ -90,6 +94,7 @@
               @if (row.showDirection) {
                 <ui-select
                   class="compact direction"
+                  [ariaLabel]="'collSettings.groups.orderDirectionAria' | t: { name: row.node.name }"
                   [options]="directionOptions()"
                   [value]="row.sortDirection"
                   (valueChange)="setGroupSortDirection(row.node.id, $event)"
@@ -102,7 +107,7 @@
                 type="number"
                 variant="subtle"
                 placeholder="—"
-                [attr.aria-label]="'collSettings.groups.targetAria' | t: { name: row.node.name }"
+                [ariaLabel]="'collSettings.groups.targetAria' | t: { name: row.node.name }"
                 [value]="row.target"
                 (valueChange)="setGroupTarget(row.node.id, $event)"
               />
@@ -116,6 +121,7 @@
             <input
               class="new-group__input"
               [placeholder]="'collSettings.groups.newPlaceholder' | t"
+              [attr.aria-label]="'collSettings.groups.newGroupAria' | t"
               autofocus
               (keydown)="newGroupKeydown($event)"
               (blur)="commitNewGroup($any($event.target).value)"
@@ -142,7 +148,12 @@
             [value]="inviteEmail()"
             (valueChange)="inviteEmail.set($event)"
           />
-          <ui-select [options]="inviteRoleOptions()" [value]="inviteRole()" (valueChange)="inviteRole.set($event)" />
+          <ui-select
+            [ariaLabel]="'collSettings.sharing.inviteRoleAria' | t"
+            [options]="inviteRoleOptions()"
+            [value]="inviteRole()"
+            (valueChange)="inviteRole.set($event)"
+          />
           <ui-button size="sm" (click)="invite()">{{ 'collSettings.sharing.invite' | t }}</ui-button>
         </div>
 
@@ -156,6 +167,7 @@
               </span>
               <ui-select
                 class="compact"
+                [ariaLabel]="'collSettings.sharing.memberRoleAria' | t: { name: row.member.name }"
                 [options]="roleOptions()"
                 [value]="row.member.role"
                 [disabled]="row.fixed"
@@ -176,7 +188,11 @@
             <span class="name">{{ 'collSettings.sharing.linkShare' | t }}</span>
             <span class="email">{{ 'collSettings.sharing.linkShareSub' | t }}</span>
           </span>
-          <ui-toggle [on]="d.linkShare" (onChange)="setLinkShare($event)" />
+          <ui-toggle
+            [ariaLabel]="'collSettings.sharing.linkShare' | t"
+            [on]="d.linkShare"
+            (onChange)="setLinkShare($event)"
+          />
         </ui-card>
 
         <div class="fine-print">

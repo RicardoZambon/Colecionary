@@ -50,12 +50,14 @@
               <span class="tag">{{ 'itemForm.copyTag' | t: { n: $index + 1 } }}</span>
               <ui-select
                 class="compact"
+                [ariaLabel]="'itemForm.copyConditionAria' | t: { n: $index + 1 }"
                 [options]="conditionOptions()"
                 [value]="copy.condition"
                 (valueChange)="patchCopy($index, { condition: $any($event) })"
               />
               <ui-select
                 class="compact"
+                [ariaLabel]="'itemForm.copyStatusAria' | t: { n: $index + 1 }"
                 [options]="copyStatusOptions()"
                 [value]="copy.status"
                 (valueChange)="patchCopy($index, { status: $any($event) })"
@@ -117,6 +119,7 @@
             <ui-text-input
               variant="subtle"
               placeholder="—"
+              [ariaLabel]="field.name"
               [type]="inputType(field)"
               [value]="customValue(field.name)"
               (valueChange)="setCustomValue(field.name, $event)"

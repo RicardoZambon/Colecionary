@@ -57,6 +57,10 @@ namespace Vault.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
                     b.HasKey("TenantId", "Id");
 
                     b.ToTable("Collections", "Catalog");
@@ -250,6 +254,9 @@ namespace Vault.Infrastructure.Migrations
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("UnreferencedSinceUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<int?>("Width")
                         .HasColumnType("int");

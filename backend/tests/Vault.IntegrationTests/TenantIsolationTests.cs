@@ -19,12 +19,12 @@ public class TenantIsolationTests(VaultApiFactory factory)
         await factory.EnsureSecondTenantAsync();
 
         var marcus = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
-        var acme = await marcus.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var acme = await marcus.GetCollectionsAsync();
         Assert.NotNull(acme);
         Assert.Contains(acme, c => c.Id == "retro");
 
         var gary = await factory.CreateAuthenticatedClientAsync(VaultApiFactory.GlobexOwnerEmail);
-        var globex = await gary.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var globex = await gary.GetCollectionsAsync();
         Assert.NotNull(globex);
         Assert.DoesNotContain(globex, c => c.Id == "retro");
     }
@@ -37,7 +37,12 @@ public class TenantIsolationTests(VaultApiFactory factory)
 
         // "retro" belongs to acme-vault; the filter must hide it entirely.
         var update = new CollectionDto("retro", "Hijacked", "", [], [], [], true);
-        var putResponse = await gary.PutAsJsonAsync("/api/collections/retro", update);
+        // A syntactically valid precondition gary invented: the point is that the
+        // 404 comes from the tenant filter and not from a missing header, and
+        // that no version of the tag — right or wrong — tells him the collection
+        // is there. He cannot read the real one, because the list he is served
+        // does not contain it.
+        var putResponse = await gary.PutCollectionAsync(update, ifMatch: "\"1\"");
         Assert.Equal(HttpStatusCode.NotFound, putResponse.StatusCode);
 
         var deleteResponse = await gary.DeleteAsync("/api/collections/retro");

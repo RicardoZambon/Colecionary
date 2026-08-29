@@ -59,7 +59,7 @@ public class ImagesAndTimestampsTests(VaultApiFactory factory)
             "i-photo-test", "Photographed", "", 2020, 10, "Sega", [], "x.jpg", [],
             Copies: [new ItemCopyDto("i-photo-test_c1", "Good", 5)],
             PhotoIds: [image.Id]);
-        var put = await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", item);
+        var put = await client.PutItemAsync("retro", item);
         Assert.Equal(HttpStatusCode.Created, put.StatusCode);
         var saved = (await put.Content.ReadFromJsonAsync<ItemDto>())!;
         Assert.Equal([image.Id], saved.PhotoIds);
@@ -73,7 +73,7 @@ public class ImagesAndTimestampsTests(VaultApiFactory factory)
     public async Task Collections_ListInCreationOrder_WithSeededRecentTimestamps()
     {
         var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
-        var collections = (await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections"))!;
+        var collections = await client.GetCollectionsAsync();
 
         // Seed order preserved — matches the design's sidebar.
         Assert.Equal("retro", collections[0].Id);

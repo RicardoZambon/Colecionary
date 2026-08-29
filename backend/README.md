@@ -105,8 +105,8 @@ tenant that owns it. Never pass the ambient request tenant instead.
 
 Uploads write the file *before* the row. The failure modes aren't symmetric — a
 file with no row is unreachable garbage, while a row with no file is a broken
-image in the UI. (Orphans are the same known gap as replaced images; collecting
-them is a documented follow-up.)
+image in the UI. Both that residue and images nothing points at any more are
+reclaimed by the garbage collector below, on a grace period.
 
 ### Framing (focal point)
 
@@ -129,6 +129,139 @@ unguessable id is the capability. A write has no such excuse — routed through
 the unfiltered read, one tenant could reframe another's image. Going through the
 global filter means a foreign id simply doesn't exist, so the caller gets a 404
 and learns nothing. `ImageFocalTests` pins that.
+
+### Collecting what nothing points at any more
+
+Removing a photo from an item used to leak: the id left `photoIds`, the row
+stayed in `Storage.Images` for ever and the bytes stayed on disk for ever. That
+is now collected — **on a grace period, never on the dereference**.
+
+`ImageGarbageCollector` (Application) is the policy;
+`ImageGarbageCollectionService` (Api) is a `BackgroundService` that runs it on a
+timer and writes down what it did. There is no endpoint and no CLI: the API
+contract mirrors the frontend's `VaultApi` one-for-one, so a route no user calls
+would be a contract change on both sides, and an authenticated endpoint that
+deletes data permanently is attack surface bought for nothing.
+
+**Mark and sweep, because dereferencing is not a decision.** A sweep records the
+first moment an image reads as unreferenced (`Images.UnreferencedSinceUtc`),
+clears that mark the instant anything points at the image again, and only
+destroys bytes once the mark has stood for the whole grace period. Deleting the
+moment a reference disappears would couple irreversible destruction to the
+full-document collection PUT — last-writer-wins, and today with no optimistic
+concurrency — so two open tabs, a partial client payload or a bad merge would
+take photographs with them, permanently, with no backup anywhere in the system.
+
+The mark is a better quarantine than moving the bytes aside would be. While it
+stands the image is **not degraded at all**: still served, still exported, still
+framable. An accidental dereference noticed inside the window costs nothing and
+needs no restore procedure — the mark is simply cleared. And because the mark is
+a column rather than in-process state, it survives restarts and deploys, which
+an in-memory "I have seen this unreferenced for N days" counter would not (that
+design is only ever safe by being useless: a process that restarts weekly never
+finishes a 30-day observation).
+
+**Saving a collection clears the mark itself**, rather than leaving it to the
+next sweep. A sweep only learns what it looks at, so a reference that appeared
+and disappeared between two of them would never be observed, and the image would
+then be destroyed on a clock started before it was ever used — the real undo
+window would be the sweep interval, not the grace period. That write-path clear
+is **tenant-filtered**, deliberately unlike the sweep's: its ids come from a
+request body, and pointing at somebody else's photograph must not reset their
+storage clock. A cross-tenant reference keeps the weaker, sweep-observed
+guarantee.
+
+`CreatedAtUtc` cannot be that clock, which is why the column exists.
+Creation time answers "how old is this picture" — a photo uploaded a year ago
+and dropped from an item this morning is older than any grace period on its
+first sweep. It is still consulted as a **second, independent** condition,
+because it is what covers the window between bytes being uploaded from the
+picker and the item that will carry them being saved. That window has no upper
+bound: the form can sit open indefinitely.
+
+The grace period is also what reconciles the collector with the whole-vault
+export, which deliberately packs *every* image a tenant owns rather than only
+the referenced ones, "since an image not currently on an item is still the
+user's". That is a statement about a photo mid-workflow — a state this app
+reaches on every single upload. Thirty days keeps that promise. What it stops
+keeping is the promise that a photo nothing has pointed at since last month is
+worth storing for ever, which is the promise that makes a storage quota
+impossible to offer honestly.
+
+**Reachability is computed globally, across every tenant, and that is the most
+dangerous line in the feature.** `ListReferencedImageIdsAcrossAllTenantsAsync`
+reads banners, icons and item `photoIds` with `IgnoreQueryFilters()` on every
+query. Without it the filter resolves `CurrentTenantId` against whatever tenant
+is in scope — outside a request, none — and the sweep would compute an *empty*
+reference set while reading every image row in the installation. Global is also
+the correct answer on its own terms: nothing validates that a banner or a photo
+id belongs to the tenant that wrote it, and the anonymous read resolves an id
+through the image's own row, so a cross-tenant reference is one that actually
+renders. Over-collecting the reference set is the safe direction;
+under-collecting destroys photographs. `photoIds[0]` needs no special case — the
+cover is a position in that list, not a column.
+
+Deletion always addresses **the tenant on the image's own row**, never an
+ambient one, exactly like the anonymous read. Renditions go with the original,
+found by the id's own prefix rather than by rebuilding each variant's name: a
+JPEG's cached copies are `.webp`, so reconstructing them from the row's content
+type would delete nothing and move the leak instead of fixing it.
+
+Two more guards sit on top. The doomed batch is re-checked against a **freshly
+read** reference set immediately before anything is destroyed, so a PUT that
+landed during the sweep still wins; and the row is deleted before the bytes —
+the mirror of how an image is created — so an interruption leaves a file nothing
+names rather than a row whose picture is gone.
+
+A separate pass reclaims **bytes no metadata row has ever named**: uploads and
+imports both write the file before the row, so a crash in between leaves
+something no query can see. It is guarded three ways — only files older than the
+whole grace period, only ids with no row anywhere, and a file whose id belongs to
+a *different* tenant's row is reported and left alone rather than resolved either
+way. Anything the store cannot classify is skipped outright: an unrecognised
+name is somebody else's file.
+
+**The defaults are inert.** This is the only code in the application that
+destroys user data permanently, so two separate deliberate acts stand between a
+deployment and a lost byte:
+
+```json
+"ImageGc": {
+  "Enabled": false,          // off: the background service is not even registered
+  "DryRun": true,            // reports exactly what it would remove, writes nothing
+  "GracePeriod": "30.00:00:00",
+  "Interval": "06:00:00",
+  "InitialDelay": "00:05:00",
+  "BatchSize": 200,          // bounds one sweep's blast radius
+  "CollectOrphanFiles": true
+}
+```
+
+A grace period under an hour fails at startup rather than being rounded into
+something plausible — it would turn mark-and-sweep back into
+delete-on-dereference, which is the one shape this design exists to avoid.
+`ImageReferenceCoverageTests` fails the build if a GUID-shaped column appears in
+the model that nobody has classified as an image reference or as something else,
+so a new reference site cannot be added and forgotten; its blind spot is a
+reference stored as a string, which is why `Item.Img` — free text named like an
+image, holding a slug of the item's own name — carries its own written argument
+in `CollectionRepository`.
+
+**Turn it off before restoring from a backup.** The sweep believes the database
+about what exists and storage about what is on disk. Restore one without the
+other — an older database beside a current image directory, or the reverse — and
+every file the restored database has forgotten reads as garbage older than the
+grace period, because `rsync -a` and friends preserve modification times. Set
+`Enabled` to false (or `DryRun` back to true) until the two are known to agree.
+
+Known limits: a server clock that jumps forward makes everything already marked
+ripe at once, bounded only by `BatchSize` per sweep; two app instances sweep
+independently (harmless — every operation is idempotent, and both compute the
+same answer); the re-check narrows the window between deciding and deleting but
+does not close it, which would need a lock across the whole catalogue; and a
+`Storage.Images` row whose file is missing is left alone rather than tidied,
+because "the bytes are gone" is a restore problem, not evidence about a
+reference.
 
 ### Migrating an existing database
 
@@ -236,19 +369,119 @@ with `sub`, `tenant_id`, `role` and `plan` claims (8 h lifetime). Everything
 else requires a bearer token (deny-by-default fallback policy);
 `PUT /api/tenant/members` additionally requires the `Owner` role.
 
+### Brute-force protection
+
+Login is the only anonymous write in the app, so it is the only door worth
+knocking on. `ILoginAttemptTracker` counts recent attempts in **two dimensions
+at once**, because neither is sufficient alone:
+
+| Dimension | Limit | Penalty | Why it is shaped that way |
+| --- | --- | --- | --- |
+| Account | 10 failures / 5 min | 5 min, doubling per consecutive trip, capped at 30 min | An account is one person's, so escalating is affordable |
+| Client address | 30 failures / 5 min, and 8 attempts in flight | 5 min, flat / retry in 1 s | An address is shared (NAT, CGNAT, a household), so escalating it punishes bystanders |
+
+Throttling only the address is weak against an attacker spread over a botnet
+and punishes everyone behind one office egress; throttling only the account
+hands any stranger a denial of service against a named user, since failing
+someone else's logins is free. Together, the address rule costs a distributed
+attacker addresses and the account rule costs them time.
+
+Six decisions are load-bearing:
+
+- **A correct password is never rate limited.** The account's budget is charged
+  as the attempt starts and refunded the moment it succeeds; an address is
+  charged only when an attempt fails. So the person who has forgotten which
+  password they used is not punished for finally remembering it, and an office
+  behind one address never spends its budget on people who are signing in fine.
+  A success deliberately does *not* touch the *address* record — otherwise every
+  credential-stuffing run would park one working login between batches.
+- **The penalty escalates; it never becomes a lockout.** A hard lockout needs a
+  human to undo, which turns "I fail your logins" into "your account is gone
+  until support answers". A delay that always expires on its own degrades that
+  attack into an inconvenience while still cutting the guess rate by orders of
+  magnitude. The 30-minute cap bounds what one burst of ten failures can buy.
+- **Concurrency is part of the limit, not an afterthought.** A gate that only
+  *reads* state can be walked past by a burst: a thousand parallel guesses all
+  pass a check none of them has paid for yet. The account is therefore charged
+  inside the same lock that checks it. The address cannot be — a crowd of
+  *legitimate* simultaneous sign-ins would trip a shared identifier before any
+  of them was refunded — so it gets an in-flight cap instead, which costs a
+  crowd a retry rather than a five-minute outage. Both are pinned by concurrent
+  tests.
+- **Every spelling of one account is one budget, and accounts that do not exist
+  are counted too.** The key is the *stored* email when the user exists, since
+  SQL Server matches case-insensitively and keying on what was typed would mint
+  a fresh allowance per capitalisation. The unknown-account key is the same
+  normalization of what was typed — bounded, stripped of characters the collation
+  weighs as nothing, width-folded, lower-cased, and **trimmed last**. Those two
+  derivations have to agree, or eleven requests would answer whether an account
+  exists: ten at an invisibly different spelling, one at the plain one, and
+  429-vs-401 tells you whether the database folded them together. The trim being
+  last is part of that — stripping an invisible character exposes a trailing
+  space that was hiding behind it, normalization turns a no-break space into a
+  plain one, and SQL Server ignores trailing spaces, so a leading-only trim
+  reopens the oracle. `FindForLoginAsync` names its collation
+  (`Latin1_General_CI_AS`) for the same reason: a database restored with an
+  accent-insensitive one would start folding spellings the key does not. Both
+  dimensions answer with the *same* message for the same reason.
+- **The check runs inside the controller action, not in a middleware ahead of
+  the pipeline.** It needs the submitted email, which exists only after model
+  binding; and only code downstream of `UseRequestLocalization` builds its title
+  in the culture the client asked for (see the ordering rule in CLAUDE.md). The
+  429 carries `Retry-After`, which the CORS policy exposes so the SPA can read
+  it.
+- **Both inputs are length-capped** (`LoginRequestValidator`). This was the only
+  email rule in the app without one, on the one endpoint that is anonymous, and
+  the throttle would have retained whatever arrived as a dictionary key for an
+  hour — a 30 MB address is a memory exhaustion attack, and a 30 MB password is
+  a PBKDF2 on demand.
+
+Limits bind from the `LoginThrottle` configuration section (defaults in
+`appsettings.json`, and again in `LoginThrottleOptions` so an operator who omits
+the section is still protected); a nonsensical combination fails at startup
+rather than silently serving an unprotected endpoint. Memory is bounded by
+`MaxTrackedRecords`: eviction spares records serving a live penalty while
+anything else can go, and when *everything* is blocked it drops the one closest
+to expiring — refusing to track new keys instead would let a flood switch the
+account rule off for everyone not already in the table.
+
+**Behind a reverse proxy, say so.** `RemoteIpAddress` is the connection's
+address, which behind nginx/Traefik/Cloudflare is the *proxy* — every caller in
+one bucket, so thirty failed logins from anyone would answer 429 to the whole
+deployment. Name the proxies you trust and the app reads `X-Forwarded-For`
+instead:
+
+```json
+"ForwardedHeaders": { "KnownProxies": ["10.0.0.2"] }
+```
+
+It is opt-in because the failure mode is asymmetric: trusting the header
+unconditionally would let any caller name their own address and mint a fresh
+budget per guess, which is worse than having no address dimension at all. With
+no proxy in front of the app, leave it empty.
+
+**What it does not survive.** The state is in memory, so a restart clears every
+counter and a scaled-out deployment throttles per node — acceptable while the
+app is single-instance, and fixable only with a shared store. When the host
+cannot see an address at all the address dimension is skipped rather than
+sharing one bucket, because a single attacker throttling the entire deployment
+is worse than no address rule.
+
 Known v1 tradeoffs: JWT lives in browser localStorage (no refresh tokens yet),
-no optimistic concurrency on the full-document collection PUT. Both are
-documented follow-ups.
+no optimistic concurrency on the full-document collection PUT, and the login
+throttle's counters do not survive a restart. All are documented follow-ups.
+(The concurrency gap is why image collection runs on a grace period rather than
+on the dereference — see "Collecting what nothing points at any more".)
 
 ## Endpoints
 
 | Method | Route | Notes |
 | --- | --- | --- |
-| POST | `/api/auth/login` | anonymous |
-| GET / POST | `/api/collections` | list (full graphs) / create |
-| PUT / DELETE | `/api/collections/{id}` | full-document replace / delete |
-| POST | `/api/collections/import/{listingId}` | 409 "Already in your vault" on re-import |
-| PUT / DELETE | `/api/collections/{cid}/items/{itemId}` | upsert by client-generated id / idempotent delete |
+| POST | `/api/auth/login` | anonymous; throttled per account and per address, 429 + `Retry-After` |
+| GET / POST | `/api/collections` | list (full graphs, each in a `{ version, collection }` envelope) / create (`ETag`) |
+| PUT / DELETE | `/api/collections/{id}` | full-document replace, **`If-Match` required** → `ETag` / delete (no precondition) |
+| POST | `/api/collections/import/{listingId}` | 409 "Already in your vault" on re-import; answers with an `ETag` |
+| PUT / DELETE | `/api/collections/{cid}/items/{itemId}` | upsert by client-generated id, **`If-Match` required** / idempotent delete; both answer with an `ETag` |
 | GET | `/api/store/listings` | global catalog |
 | POST | `/api/images` | multipart upload (≤5 MB, image/* only) → `{ id }` |
 | GET | `/api/images/{id}` | anonymous by design — the GUID is the capability (`<img>` can't send auth headers) |
@@ -258,10 +491,115 @@ documented follow-ups.
 | GET / PUT | `/api/profile` | email immutable in v1 |
 | GET | `/api/export` | zip: `collections.json` + `images/…` for the caller's tenant |
 | GET | `/api/export/collections/{id}` | zip of one collection and only the images it references |
-| POST | `/api/import` | raw-body zip; 409 + `ImportPlan` when a name collides, `?confirmed=true&replace=<id>` answers it; refuses a newer archive format |
+| POST | `/api/import` | raw-body zip; 409 + `ImportPlan` when a name collides, `?confirmed=true&replace=<id>` answers it; refuses a newer archive format; answers with `{ version, collection }` per collection |
 
 JSON is camelCase with string enums — byte-compatible with the Angular
 models in `frontend/src/app/core/models/`.
+
+## Optimistic concurrency on the collection PUT
+
+`PUT /api/collections/{id}` replaces the **whole document**, and
+`ReplaceGraph`/`MergeByKey` delete every group, item and member the payload does
+not carry. A client working from a version somebody has already replaced
+therefore does not overwrite part of their work — it restores an old document
+over all of it, with no error and no trace. `Catalog.Collections.Version` is
+what stops that.
+
+**The precondition is mandatory.** A write with no `If-Match` is refused with
+**428 Precondition Required**; one quoting a superseded tag with **412
+Precondition Failed**. Both write nothing at all. An *optional* precondition
+would protect only the clients that already remember to send one — which is
+exactly the set of clients that were never going to lose anybody's work — so
+"absent" is refused rather than treated as "no opinion". `*` and weak tags are
+refused as 428 too: `If-Match: *` means "if the resource exists at all", which
+would be an opt-out wearing the right clothes, and `If-Match` is defined to
+compare strongly so a weak tag can never identify a version.
+
+**The version belongs to the aggregate, not to the row.** An item write touches
+no column on `Collections`, yet a client that has not seen that item must not be
+allowed to PUT the document over it. `CollectionVersionInterceptor` therefore
+advances `Version` whenever *any* entity under the collection is added, changed
+or removed, and **throws** when a child is written without its collection in
+scope — a write that reached SQL without a bump would be a silently lost update.
+That is also why this is a counter and not a SQL `rowversion`: a rowversion moves
+only when its own row is updated, which is precisely the case an item edit is
+not.
+
+The interceptor walks EF-owned entities up to their principal, and that is
+load-bearing rather than tidy. An item's `Copies` and `Custom` and a group's
+`Fields` are owned entities mapped to JSON columns, and rewriting one leaves the
+row that carries it `Unchanged` — so matching on entity type alone saw nothing
+for such a write: no bump, and no `UPDATE` of the root either, which means the
+concurrency token was never consulted and the write went through completely
+unguarded. The owned entry carries its principal's key under names EF composes
+(`Item.TenantId` becomes `ItemTenantId` on `ItemCopy`), so the names are resolved
+through the ownership foreign keys rather than guessed.
+
+**Two guards, catching different things.** `CollectionService.UpdateAsync`
+compares the loaded version against `If-Match` and refuses before writing
+anything — that is the ordinary stale-tab case, and refusing early is what keeps
+a rejected PUT from clearing an image's garbage-collection mark (see *Collecting
+what nothing points at any more*). It cannot catch two writers who both read the
+same version in the same instant; `IsConcurrencyToken()` does, inside the UPDATE,
+and EF's transaction takes the loser's child writes back with it.
+`WhenBothWritersPassTheirPrecondition_TheDatabaseStillLetsOnlyOneThrough` builds
+that interleaving by hand, because it cannot be provoked reliably over HTTP — and
+it is the only test that fails if the token is removed.
+
+**The deletes demand nothing and honour what they are given.**
+`DELETE /api/collections/{id}` and `DELETE …/items/{itemId}` do not *require* a
+precondition: a delete is intent about a resource's identity, not a document
+derived from a read, so there is nothing in it a stale caller could overwrite
+unknowingly. An `If-Match` a caller chooses to send is still evaluated, as
+RFC 9110 §13.1.1 requires — silently dropping it would make the safest thing a
+client can do indistinguishable from the least safe. Both still *move* the
+version (the item delete through the interceptor), or a client that had not seen
+the delete would PUT the document back and resurrect what it removed.
+
+There is a consequence worth knowing: because `Version` is a concurrency token,
+EF puts it in the `WHERE` of the collection `DELETE` and of the root `UPDATE` the
+item delete's bump produces. A delete that races a concurrent write to the same
+collection is therefore refused with a 412 rather than succeeding, even though it
+sent no precondition. Nothing partial commits and a retry works; it is a rare,
+safe, retryable race rather than a lost update, and it is left as such because
+unguarding those two statements would mean reaching around the token.
+
+**An import that overwrites is guarded too, through the plan.** It runs the very
+same wholesale `ReplaceGraph`, so the same rule has to hold — but the decision is
+made in one request and acted on in another, with a dialog and a second upload in
+between, and a single `If-Match` header cannot speak for several collections at
+once. So `ImportEntry` carries the version of the collection it would land on,
+and the client sends it back: `?confirmed=true&replace=<id>&replaceVersion=<tag>`,
+two parallel lists that the server refuses if they do not line up. If any chosen
+collection has moved on, the import answers **409 with a fresh plan** — the same
+channel the first question used — and the user answers again against what is
+actually in the vault. Without this the endpoint was a full-document
+last-writer-wins replace with no precondition available to a client at all; an
+adversarial review demonstrated the lost update, and
+`Import_RefusesAnOverwriteDecidedAgainstAVersionThatHasMovedOn` is the test that
+now fails without the check.
+
+**Item writes are guarded by the *collection's* version**, which over-refuses.
+Two people editing different items in one collection will see one of them
+refused. The alternative was no check at all — there is nowhere to put a per-item
+token, since versions reach the client through the collection list and an item
+token would have to ride inside `ItemDto`, which is also the archive's on-disk
+format — and no check means two people editing *the same* item overwrite each
+other in silence. Over-refusing costs a reload; under-refusing costs the work.
+
+**The version travels as an opaque entity-tag.** `CollectionVersions.ToETag`
+formats it in one place, and nothing outside that file parses the digits — which
+is what would let the token become a `rowversion` later without touching a line
+of the frontend. It reaches the client as an `ETag` header on every
+single-collection response and inside a `{ version, collection }` envelope on
+the list, because a header describes one resource and the list is where this
+client synchronises. It is deliberately *not* a field on `CollectionDto`: that
+DTO is byte-for-byte what an exported archive holds, and a concurrency token has
+no business in a backup.
+
+`ETag` is listed in the CORS `WithExposedHeaders`. Without it the dev SPA —
+cross-origin until the build lands in `wwwroot` — cannot read a version back off
+a write, and every save after the first would be refused.
 
 ### Item copies
 

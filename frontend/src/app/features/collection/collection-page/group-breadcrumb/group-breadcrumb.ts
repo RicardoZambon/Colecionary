@@ -163,7 +163,6 @@ export interface ChildChip {
       padding: 5px 13px;
       font-size: 12px;
       font-family: var(--font-body);
-      outline: none;
       width: 180px;
     }
   `,

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Vault.Application.Collections.Dtos;
+using Vault.Application.Common;
 using Vault.Application.Import;
+using Vault.Application.Resources;
 
 namespace Vault.Api.Controllers;
 
@@ -37,24 +39,41 @@ public class ImportController(ImportService import) : ControllerBase
     /// Answers <b>409</b> with an <see cref="ImportPlan"/> when the archive holds
     /// a collection the vault already has by name: which one to overwrite is the
     /// user's call, never a default. Nothing is written in that case. The client
-    /// asks, then posts the same file again with <c>confirmed=true</c> and the
-    /// ids it chose to overwrite; anything it leaves out lands as a new
-    /// collection. An archive with no name collisions imports on the first
-    /// request, with no dialog.
+    /// asks, then posts the same file again with <c>confirmed=true</c>, the ids
+    /// it chose to overwrite, and the version each of those was at in the plan;
+    /// anything it leaves out lands as a new collection. An archive with no name
+    /// collisions imports on the first request, with no dialog.
+    /// </para>
+    /// <para>
+    /// It answers <b>409</b> with a fresh plan a second time if any collection
+    /// the caller chose to overwrite has moved on since the plan was drawn.
+    /// Overwriting runs the same wholesale replace the collection PUT does, and
+    /// the PUT is not allowed to write over a version it never saw either — the
+    /// difference is only that here the remedy is to ask the user again, against
+    /// what is actually in the vault.
     /// </para>
     /// </remarks>
     /// <param name="confirmed">The caller has seen the plan and is answering it.</param>
     /// <param name="replace">Ids of live collections to overwrite wholesale.</param>
+    /// <param name="replaceVersion">
+    /// The version each of those collections was at in the plan, in the same
+    /// order — the precondition for the overwrite. Two parallel lists rather
+    /// than one packed value: an id and an entity-tag both carry punctuation,
+    /// and a separator between them is a parsing rule to get subtly wrong, while
+    /// an unequal pair of lists is a mistake that is impossible to miss.
+    /// </param>
     /// <param name="ct">Cancellation.</param>
     [HttpPost]
     [RequestSizeLimit(MaxArchiveBytes)]
-    [ProducesResponseType<IReadOnlyList<CollectionDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<IReadOnlyList<VersionedCollectionDto>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ImportPlan>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Post(
         [FromQuery] bool confirmed,
         [FromQuery] string[]? replace,
+        [FromQuery] string[]? replaceVersion,
         CancellationToken ct)
     {
+        var decisions = ReadDecisions(confirmed, replace, replaceVersion);
         var scratch = Path.Combine(Path.GetTempPath(), $"vault-import-{Guid.NewGuid():N}.zip");
         try
         {
@@ -74,10 +93,6 @@ public class ImportController(ImportService import) : ControllerBase
             await using var received = new FileStream(
                 scratch, FileMode.Open, FileAccess.Read, FileShare.None);
 
-            var decisions = new ImportDecisions(
-                confirmed,
-                new HashSet<string>(replace ?? [], StringComparer.Ordinal));
-
             var outcome = await import.ImportAsync(received, decisions, ct);
             return outcome.Conflicts is { } conflicts
                 ? Conflict(conflicts)
@@ -87,5 +102,38 @@ public class ImportController(ImportService import) : ControllerBase
         {
             System.IO.File.Delete(scratch);
         }
+    }
+
+    /// <summary>
+    /// Pairs the two decision lists, refusing a request whose lists do not line
+    /// up rather than guessing which id lost its version.
+    /// </summary>
+    private static ImportDecisions ReadDecisions(
+        bool confirmed,
+        string[]? replace,
+        string[]? replaceVersion)
+    {
+        var ids = replace ?? [];
+        var versions = replaceVersion ?? [];
+        if (ids.Length != versions.Length)
+        {
+            throw new DomainRuleException(Messages.ReplaceDecisionsMalformed);
+        }
+
+        var decisions = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (var i = 0; i < ids.Length; i++)
+        {
+            // A duplicated id with two different versions cannot both be true,
+            // and picking one would be picking for the user.
+            if (decisions.TryGetValue(ids[i], out var existing)
+                && !string.Equals(existing, versions[i], StringComparison.Ordinal))
+            {
+                throw new DomainRuleException(Messages.ReplaceDecisionsMalformed);
+            }
+
+            decisions[ids[i]] = versions[i];
+        }
+
+        return new ImportDecisions(confirmed, decisions);
     }
 }

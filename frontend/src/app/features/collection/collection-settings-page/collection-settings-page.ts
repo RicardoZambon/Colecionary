@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router, RouterLink } from '@angular/router';
 
 import { I18nService, MessageKey } from '../../../core/i18n';
+import { VaultConflictError } from '../../../core/api/vault-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { ArchiveApi } from '../../../core/api/archive-api';
 import { saveFile } from '../../../core/utils/download.util';
@@ -252,10 +253,27 @@ export class CollectionSettingsPage {
     this.persistTimer = setTimeout(() => void this.persist(), PERSIST_DEBOUNCE_MS);
   }
 
+  /**
+   * Flushes the debounced save.
+   *
+   * Never rethrows, and never clears the draft. This page is a long-lived
+   * working copy of the collection, so a refused save has to leave it exactly
+   * as it is — the shell's conflict notice explains what happened and the user
+   * decides whether to reload. Before this, a rejection here was unhandled: the
+   * user kept typing into a draft that had silently stopped being saved.
+   */
   private async persist(): Promise<void> {
     clearTimeout(this.persistTimer);
     const draft = this.draft();
-    if (draft) await this.store.updateCollection(draft);
+    if (!draft) return;
+    try {
+      await this.store.updateCollection(draft);
+    } catch (err) {
+      if (err instanceof VaultConflictError) return;
+      this.toast.flash(
+        err instanceof Error ? err.message : this.i18n.t('toast.collection.saveFailed'),
+      );
+    }
   }
 
   // --- general ---

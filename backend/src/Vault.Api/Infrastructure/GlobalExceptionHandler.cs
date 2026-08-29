@@ -19,6 +19,14 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problemDetails
             NotFoundException e => (StatusCodes.Status404NotFound, Messages.ProblemNotFound, e.Message),
             ConflictException e => (StatusCodes.Status409Conflict, Messages.ProblemConflict, e.Message),
             DomainRuleException e => (StatusCodes.Status400BadRequest, Messages.ProblemInvalidOperation, e.Message),
+            // 412 and 428 both mean "your version of this document is not the
+            // one that would be overwritten", and both leave storage untouched.
+            // They are separate codes because the fixes differ: 428 says send a
+            // precondition, 412 says send a current one.
+            PreconditionFailedException e => (
+                StatusCodes.Status412PreconditionFailed, Messages.ProblemPreconditionFailed, e.Message),
+            PreconditionRequiredException e => (
+                StatusCodes.Status428PreconditionRequired, Messages.ProblemPreconditionRequired, e.Message),
             ValidationException e => (
                 StatusCodes.Status400BadRequest,
                 Messages.ProblemValidationFailed,

@@ -155,6 +155,7 @@ export const en = {
   'settings.access.subAfter':
     'tenant. Individual collections can also be shared from their own page.',
   'settings.access.removeMember': 'Remove {name}',
+  'settings.access.memberRoleAria': 'Role for {name}',
   'settings.access.policyHeading': 'Sharing policy',
   'settings.access.policy.invites.label': 'Members can share collections',
   'settings.access.policy.invites.description':
@@ -322,6 +323,7 @@ export const en = {
 
   // --- item page ---------------------------------------------------------
   'item.addPhoto': 'Add photo',
+  'item.showPhoto': 'Show photo {n}',
   'item.viewLarge': 'View large',
   'item.openViewer': 'Open the photo viewer',
   'item.adjustFraming': 'Adjust framing',
@@ -365,6 +367,8 @@ export const en = {
   'itemForm.copiesHeading': 'Copies · {n}',
   'itemForm.copyTag': 'Copy #{n}',
   'itemForm.removeCopy': 'Remove copy',
+  'itemForm.copyConditionAria': 'Condition of copy #{n}',
+  'itemForm.copyStatusAria': 'Status of copy #{n}',
   'itemForm.paid': 'Paid',
   'itemForm.copyValue': 'Est. value',
   'itemForm.copyValuePlaceholder': '— uses item value, or what you paid',
@@ -393,17 +397,23 @@ export const en = {
   'collSettings.groups.itemCount': '{n} items',
   'collSettings.groups.addSub': '+ Sub',
   'collSettings.groups.remove': 'Remove {name}',
+  'collSettings.groups.renameAria': 'Rename {name}',
   'collSettings.groups.fields': 'Fields',
   'collSettings.groups.removeField': 'Remove field {name}',
+  'collSettings.groups.fieldTypeAria': 'Type of field {name}',
   'collSettings.groups.fieldPlaceholder': 'Field name… (Enter)',
   'collSettings.groups.fieldAria': 'New field name',
+  'collSettings.groups.newFieldTypeAria': 'Type of the new field',
   'collSettings.groups.addField': '+ Field',
   'collSettings.groups.orderBy': 'Order by',
+  'collSettings.groups.orderByAria': 'Order the items in {name} by',
+  'collSettings.groups.orderDirectionAria': 'Order direction for {name}',
   'collSettings.groups.target': 'Target',
   'collSettings.groups.targetAria': 'Target for {name}',
   'collSettings.groups.inherited': 'Inherited — {label}',
   'collSettings.groups.notSet': 'Not set',
   'collSettings.groups.newPlaceholder': 'Group name… (Enter to create, Esc to cancel)',
+  'collSettings.groups.newGroupAria': 'New group name',
   'collSettings.groups.inParent': '↳ in {name}',
   'collSettings.groups.atRoot': '↳ at the top level',
   'collSettings.groups.finePrint1':
@@ -416,8 +426,10 @@ export const en = {
     "is how many items the complete set has, when you know it — a 120-issue run, a 24-card set — so progress is measured against the series instead of against what you've catalogued so far. Leave it blank and it falls back. Groups that still contain items can't be deleted — move the items first.",
 
   'collSettings.sharing.emailPlaceholder': 'email@company.com',
+  'collSettings.sharing.inviteRoleAria': 'Role for the invitation',
   'collSettings.sharing.invite': 'Invite',
   'collSettings.sharing.removeMember': 'Remove {name}',
+  'collSettings.sharing.memberRoleAria': 'Role for {name}',
   'collSettings.sharing.linkShare': 'Link sharing',
   'collSettings.sharing.linkShareSub': 'Anyone with the link can view this collection',
   'collSettings.sharing.finePrint': 'Tenant-wide access rules live in',
@@ -585,4 +597,19 @@ export const en = {
   'toast.field.added': 'Field "{name}" added',
   'toast.invite.invalidEmail': 'Enter a valid email',
   'toast.invite.sent': 'Invite sent ✓',
+  // --- save conflicts ------------------------------------------------------
+  'conflict.title': 'Saved somewhere else first',
+  'conflict.keepsYourWork':
+    'What you typed is still on screen and still unsaved. Copy anything you need before reloading.',
+  'conflict.reload': 'Reload the latest version',
+  'conflict.reloading': 'Reloading…',
+  'conflict.keep': 'Keep editing',
+  'conflict.reloadFailed': "Couldn't reload — check your connection and try again.",
+  'conflict.unknownVersion':
+    "This collection hasn't finished loading, so there's no version to save against. Reload and try again.",
+
+  'toast.collection.saveFailed': 'Could not save the collection',
+  'toast.item.saveFailed': 'Could not save the item',
+  'toast.item.deleteFailed': 'Could not delete the item',
+  'toast.group.addFailed': 'Could not add the group',
 } as const;

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Vault.Application.Abstractions;
 using Vault.Domain.Entities;
+using Vault.Infrastructure.Persistence.Interceptors;
 
 namespace Vault.Infrastructure.Persistence.Repositories;
 
@@ -13,7 +14,7 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
     public Task<List<CollectionIdentity>> ListIdentitiesAsync(CancellationToken ct) =>
         db.Collections
             .OrderBy(c => c.CreatedAtUtc).ThenBy(c => c.Id)
-            .Select(c => new CollectionIdentity(c.Id, c.Name))
+            .Select(c => new CollectionIdentity(c.Id, c.Name, c.Version))
             .ToListAsync(ct);
 
     public Task<Collection?> GetAsync(string id, CancellationToken ct) =>
@@ -26,8 +27,15 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
 
     public void Remove(Collection collection) => db.Collections.Remove(collection);
 
+    public void Touch(Collection collection) =>
+        CollectionVersionInterceptor.Bump(db.Entry(collection));
+
     public void ReplaceGraph(Collection tracked, Collection replacement)
     {
+        // Before the merge, not after: the bump has to happen whatever the merge
+        // turns out to change, including nothing at all.
+        Touch(tracked);
+
         tracked.Name = replacement.Name;
         tracked.Description = replacement.Description;
         tracked.LinkShare = replacement.LinkShare;
@@ -86,6 +94,78 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
                 current.Initials = incoming.Initials;
                 current.Role = incoming.Role;
             });
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Three reads, one per place an image id is stored, mirroring
+    /// <see cref="Vault.Application.Archives.CollectionImages.ReferencedBy"/>.
+    /// <para>
+    /// <c>IgnoreQueryFilters</c> on every one of them is load-bearing and is the
+    /// single most dangerous line in the garbage collector. Without it the
+    /// filter resolves <c>CurrentTenantId</c> against whatever tenant happens to
+    /// be in scope — outside a request, none — and the sweep would compute an
+    /// empty reference set while reading every image row in the installation.
+    /// That is total data loss, not a bug with a small blast radius.
+    /// </para>
+    /// <para>
+    /// <c>PhotoIds</c> is decoded by EF from its JSON column rather than by hand
+    /// or by a translated <c>Contains</c>: a translation that changed how a
+    /// <c>Guid</c> element compares would not throw, it would answer "not
+    /// referenced", and the answer to that question is a delete.
+    /// </para>
+    /// <para>
+    /// <c>Item.Img</c> is deliberately <em>not</em> read. It is a legacy slug of
+    /// the item's own name ("saga_1.jpg"), rendered as literal text by the
+    /// client and remapped by neither the export nor the import — so if it ever
+    /// did hold a real image id, exporting that collection would already drop
+    /// the photo and importing it would already break, long before a sweep
+    /// noticed. Widening the definition here alone would put a third, different
+    /// answer to "what does a collection reference" beside the two that already
+    /// have to agree.
+    /// </para>
+    /// </remarks>
+    public async Task<HashSet<Guid>> ListReferencedImageIdsAcrossAllTenantsAsync(CancellationToken ct)
+    {
+        var referenced = new HashSet<Guid>();
+
+        var banners = await db.Collections
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(c => c.BannerImageId != null || c.IconImageId != null)
+            .Select(c => new { c.BannerImageId, c.IconImageId })
+            .ToListAsync(ct);
+
+        foreach (var collection in banners)
+        {
+            if (collection.BannerImageId is { } banner)
+            {
+                referenced.Add(banner);
+            }
+
+            if (collection.IconImageId is { } icon)
+            {
+                referenced.Add(icon);
+            }
+        }
+
+        var items = await db.Items
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Select(i => i.PhotoIds)
+            .ToListAsync(ct);
+
+        foreach (var photoIds in items)
+        {
+            // photoIds[0] is the cover — there is no separate cover column, so
+            // the cover needs no special case and must not get one.
+            foreach (var photoId in photoIds)
+            {
+                referenced.Add(photoId);
+            }
+        }
+
+        return referenced;
     }
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);

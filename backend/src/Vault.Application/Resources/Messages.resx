@@ -88,6 +88,18 @@
   <data name="ProblemUnexpected" xml:space="preserve">
     <value>Something went wrong</value>
   </data>
+  <data name="ProblemPreconditionRequired" xml:space="preserve">
+    <value>Precondition required</value>
+  </data>
+  <data name="ProblemPreconditionFailed" xml:space="preserve">
+    <value>This changed somewhere else</value>
+  </data>
+  <data name="IfMatchRequired" xml:space="preserve">
+    <value>This request must say which version of the collection it is changing. Reload the collection and try again.</value>
+  </data>
+  <data name="CollectionChangedElsewhere" xml:space="preserve">
+    <value>This collection was changed somewhere else after you loaded it, so saving would have erased those changes. Nothing was saved.</value>
+  </data>
 
   <!-- Validation -->
   <data name="FieldNamesMustBeUnique" xml:space="preserve">
@@ -150,6 +162,9 @@
   <data name="ArchiveUnreadable" xml:space="preserve">
     <value>That file isn't a Vault archive.</value>
   </data>
+  <data name="ReplaceDecisionsMalformed" xml:space="preserve">
+    <value>Each collection chosen to be overwritten must be sent with the version it was at. Try the import again.</value>
+  </data>
   <data name="ArchiveHasNoCollections" xml:space="preserve">
     <value>This archive has no collections to import.</value>
   </data>
@@ -207,6 +222,9 @@
   </data>
   <data name="InvalidCredentials" xml:space="preserve">
     <value>Invalid email or password</value>
+  </data>
+  <data name="TooManyLoginAttempts" xml:space="preserve">
+    <value>Too many sign-in attempts. Wait a few minutes, then try again.</value>
   </data>
 
   <!-- Mapping -->

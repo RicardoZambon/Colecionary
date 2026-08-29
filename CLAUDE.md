@@ -55,6 +55,16 @@ Full detail in [`backend/README.md`](backend/README.md).
 3. **The API contract mirrors `VaultApi`** (frontend). JSON stays camelCase
    with string enums so the Angular models never change. Contract changes must
    update both sides plus the integration tests.
+   **A write to a collection or any of its items requires an `If-Match`
+   carrying the version the client last synchronised with**, and a missing
+   precondition is refused with `428` — an optional precondition only protects
+   the clients that already remember to send one, which is never the buggy one
+   about to erase someone's afternoon. Versions reach the client through the
+   collection list envelope and an `ETag` header, **never as a field inside
+   `CollectionDto`**: that DTO is also the archive format, and a concurrency
+   token has no business in a backup. Item writes bump the collection's version
+   and are guarded by it — there is nowhere to put a per-item token, so the real
+   choice was collection-wide or nothing, and nothing loses updates in silence.
 4. **Tests:** integration tests run against real SQL Server (Testcontainers);
    tenant isolation has dedicated coverage that must stay green.
 5. **User-facing API text is localized, and the middleware order is load-bearing.**
@@ -63,7 +73,11 @@ Full detail in [`backend/README.md`](backend/README.md).
    against `CurrentUICulture`, which `UseRequestLocalization` sets from the
    frontend's `Accept-Language`. That middleware is registered **before**
    `UseExceptionHandler` in both hosts: the handler builds its title while an
-   exception unwinds, so the culture must still be in scope. Never assert a
+   exception unwinds, so the culture must still be in scope. The general
+   property is broader than the exception handler, which is only its most
+   obvious instance: **anything that produces localized text must run
+   downstream of `UseRequestLocalization`** — the login throttle's `429` is not
+   an exception and would answer in English from the wrong position. Never assert a
    literal user-facing message in a test — go through `Messages.In(name,
    culture)`, or the test becomes a second copy of the English translation that
    drifts silently. `MessageResourceTests` pins name parity and placeholders
@@ -87,6 +101,16 @@ Full detail in [`backend/README.md`](backend/README.md).
    `GetForCurrentTenantAsync`, never `GetUnfilteredAsync`: ignoring the filter
    is only defensible for the anonymous byte read, and using it for a write
    would let one tenant reframe another's image.
+   **Bytes are destroyed only by the collector, and only after
+   `UnreferencedSinceUtc` has stood for the whole grace period.** Deletion is
+   never on the dereference path: a mark is not a death sentence, it is a clock
+   that any write resets, which is what makes an accidental dereference
+   survivable. Reachability is deliberately computed across every tenant with
+   `IgnoreQueryFilters()` — outside a request the filter resolves against no
+   tenant and would compute an **empty** reference set, i.e. "collect
+   everything". That call is the single most dangerous query in the
+   application, it is covered only by the Testcontainers suite, and a
+   plausible-looking cleanup that removes it is total data loss.
 
 ## Non-negotiable frontend rules
 
@@ -224,8 +248,23 @@ mechanically it is a one-file change (`styles/_themes.scss`).
 
 ## Known v1 tradeoffs (documented follow-ups)
 
-JWT in localStorage without refresh tokens; no optimistic concurrency on the
-full-document collection PUT; collection members are denormalized snapshots;
-invited members can't log in until an invite/set-password flow exists; images
-are served via unguessable-GUID URLs (signed URLs later); replaced/removed
-images are not garbage-collected yet.
+JWT in localStorage without refresh tokens; collection members are
+denormalized snapshots; invited members can't log in until an invite/set-password
+flow exists; images are served via unguessable-GUID URLs (signed URLs later).
+
+Login throttling is real but its state is **in-memory**: a deploy hands every
+attacker a clean slate and a scaled-out deployment throttles per node. The
+durable form is an `Identity.LoginAttempts` table keyed by `(Kind, Key)`,
+deliberately *not* tenant-owned since login precedes any tenant claim.
+Login also still **enumerates accounts by timing** — an unknown email skips
+PBKDF2 entirely and answers in microseconds, and status, title, body and
+headers are otherwise identical, so timing is the whole leak. The fix is a
+fixed decoy hash, at the cost of making every unknown-email attempt pay a
+PBKDF2. Relatedly, `Identity.Users` has no index on `Email` alone
+(`IX_Users_TenantId_Email` leads with `TenantId`), so **every login scans**;
+the read-only pre-gate exists so that a refused attempt never reaches SQL.
+
+Concurrency is guarded at **collection** granularity, so two people editing
+different items in the same collection will see one of them refused. There is
+nowhere to put a per-item token, and the alternative was losing writes
+silently.

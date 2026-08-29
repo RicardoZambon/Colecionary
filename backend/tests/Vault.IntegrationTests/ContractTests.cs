@@ -104,10 +104,10 @@ public class ContractTests(VaultApiFactory factory)
             LinkShare = false,
         };
 
-        var putResponse = await client.PutAsJsonAsync($"/api/collections/{created.Id}", updated);
+        var putResponse = await client.PutCollectionAsync(updated);
         putResponse.EnsureSuccessStatusCode();
 
-        var all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var all = await client.GetCollectionsAsync();
         var fetched = all!.Single(c => c.Id == created.Id);
         Assert.Equal("Manga (renamed)", fetched.Name);
         Assert.Equal(["g1", "g2"], fetched.Groups.Select(g => g.Id));
@@ -156,8 +156,8 @@ public class ContractTests(VaultApiFactory factory)
                 },
             ],
         };
-        (await client.PutAsJsonAsync($"/api/collections/{created.Id}", edited)).EnsureSuccessStatusCode();
-        all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        (await client.PutCollectionAsync(edited)).EnsureSuccessStatusCode();
+        all = await client.GetCollectionsAsync();
         var reFetchedGroup = all!.Single(c => c.Id == created.Id).Groups[0];
         Assert.Equal(new GroupSortDto("name", "desc"), reFetchedGroup.Sort);
         Assert.Equal("text", Assert.Single(reFetchedGroup.Fields).Type);
@@ -181,8 +181,8 @@ public class ContractTests(VaultApiFactory factory)
             Groups = [updated.Groups[0] with { Sort = null, Target = null }, updated.Groups[1]],
             Items = [],
         };
-        (await client.PutAsJsonAsync($"/api/collections/{created.Id}", emptied)).EnsureSuccessStatusCode();
-        all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        (await client.PutCollectionAsync(emptied)).EnsureSuccessStatusCode();
+        all = await client.GetCollectionsAsync();
         Assert.Empty(all!.Single(c => c.Id == created.Id).Items);
         Assert.Null(all!.Single(c => c.Id == created.Id).Groups[0].Sort);
         Assert.Null(all!.Single(c => c.Id == created.Id).Groups[0].Target);
@@ -197,7 +197,7 @@ public class ContractTests(VaultApiFactory factory)
         // No copies at all — a wantlist item.
         var item = new ItemDto("i1752300000000", "Panzer Dragoon Saga", "Grail hunt", 1998, 900, "Sega", ["wanted"], "pds.jpg", []);
 
-        var createResponse = await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", item);
+        var createResponse = await client.PutItemAsync("retro", item);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         Assert.Empty((await createResponse.Content.ReadFromJsonAsync<ItemDto>())!.Copies);
 
@@ -212,10 +212,10 @@ public class ContractTests(VaultApiFactory factory)
                 new ItemCopyDto("pds_c2", "Fair", 400, 700m, null, "ForSale", ""),
             ],
         };
-        var updateResponse = await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", owned);
+        var updateResponse = await client.PutItemAsync("retro", owned);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
-        var collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var collections = await client.GetCollectionsAsync();
         var fetched = collections!.Single(c => c.Id == "retro").Items.Single(i => i.Id == item.Id);
         Assert.Equal(["pds_c1", "pds_c2"], fetched.Copies.Select(c => c.Id));
         Assert.Equal(650, fetched.Copies[0].Price);
@@ -225,8 +225,8 @@ public class ContractTests(VaultApiFactory factory)
 
         // Sold one — shrink back to a single copy, still through ApplyTo.
         var sold = owned with { Copies = [owned.Copies[0] with { Notes = "kept the good one" }] };
-        (await client.PutAsJsonAsync($"/api/collections/retro/items/{item.Id}", sold)).EnsureSuccessStatusCode();
-        collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        (await client.PutItemAsync("retro", sold)).EnsureSuccessStatusCode();
+        collections = await client.GetCollectionsAsync();
         fetched = collections!.Single(c => c.Id == "retro").Items.Single(i => i.Id == item.Id);
         Assert.Equal("kept the good one", Assert.Single(fetched.Copies).Notes);
 
@@ -238,7 +238,7 @@ public class ContractTests(VaultApiFactory factory)
     public async Task SeededDemo_ExposesMultiCopyItems()
     {
         var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
-        var collections = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var collections = await client.GetCollectionsAsync();
 
         var squirtle = collections!.Single(c => c.Id == "pokemon").Items.Single(i => i.Id == "pk_squirtle");
         Assert.Equal(3, squirtle.Copies.Count);

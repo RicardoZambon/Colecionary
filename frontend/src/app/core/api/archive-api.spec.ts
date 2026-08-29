@@ -67,10 +67,18 @@ describe('ArchiveApi.importArchive', () => {
     await pending;
   });
 
-  it('names the collections to overwrite', async () => {
-    const pending = api.importArchive(file, ['retro', 'vinyl']);
+  it('names the collections to overwrite, each with the version it was seen at', async () => {
+    const pending = api.importArchive(file, [
+      { id: 'retro', version: '"3"' },
+      { id: 'vinyl', version: '"7"' },
+    ]);
     const req = http.expectOne(r => r.url === `${environment.apiBaseUrl}/import`);
     expect(req.request.params.getAll('replace')).toEqual(['retro', 'vinyl']);
+    // Paired by position, and the server refuses a request whose two lists do
+    // not line up — so a decision can never lose its version on the way and be
+    // acted on unguarded. An overwrite is the same wholesale replace the
+    // collection PUT is never allowed to make blind.
+    expect(req.request.params.getAll('replaceVersion')).toEqual(['"3"', '"7"']);
     req.flush([]);
     await pending;
   });

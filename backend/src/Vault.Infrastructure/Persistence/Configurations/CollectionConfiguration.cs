@@ -19,6 +19,15 @@ public sealed class CollectionConfiguration : IEntityTypeConfiguration<Collectio
         // Nullable on purpose — null is "follow the account", not a missing value.
         builder.Property(c => c.Currency).HasMaxLength(3);
 
+        // The aggregate's optimistic-concurrency token. As a concurrency token
+        // EF appends `AND Version = @original` to every UPDATE of this row, so a
+        // second writer working from a version somebody else has already moved
+        // on updates zero rows and SaveChanges throws instead of overwriting.
+        // The value is advanced by CollectionVersionInterceptor, not by SQL: a
+        // `rowversion` would only move when this row itself is updated, and an
+        // item edit writes no column here.
+        builder.Property(c => c.Version).IsConcurrencyToken();
+
         builder.HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Cascade);
 
         builder.HasMany(c => c.Groups)

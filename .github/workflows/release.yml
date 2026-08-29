@@ -7,7 +7,22 @@ on:
     branches: [main]
   workflow_dispatch:
 
-concurrency: release
+# One release at a time, which is what `concurrency: release` meant — but scoped
+# to the ref, so PR runs no longer share a queue with `main`. They used to: with
+# `cancel-in-progress` false a newly queued run displaces the one already
+# *pending* in the group, so an unrelated PR arriving while a push to main waited
+# its turn could cancel that push before it ever started — a release dropped with
+# no red check anywhere. Lengthening `validate` with the integration suite
+# widened that window, so the group is narrowed to close it. Every push and
+# dispatch on main still shares one group and still serialises, and nothing off
+# main can publish (.releaserc.json releases only from `main`).
+#
+# Do NOT add `cancel-in-progress: true` to a group shared with releases: it is
+# evaluated from the *incoming* run, so a new PR run would cancel an in-progress
+# release on main.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write # semantic-release creates tags + GitHub releases
@@ -19,19 +34,52 @@ jobs:
   # 1) Gate: everything must build and test before we consider a release.
   #    Job display name is "Build validation" to match the required status check
   #    configured in branch protection.
+  #
+  #    Every gate lives in THIS job on purpose. Branch protection requires a
+  #    check by name, and only a repository admin can add a name to that list —
+  #    a gate moved into a job of its own would stop being required the moment
+  #    it moved, silently, and nothing in this file could tell you. Keeping the
+  #    integration suite and the format check as steps of "Build validation"
+  #    means they are enforced by the protection rule that already exists, with
+  #    no GitHub settings change. Cost: the steps run serially. Pay it.
   validate:
     name: Build validation
     runs-on: ubuntu-latest
+    # Runs on one ref queue behind each other, so a hung job blocks every later
+    # run on that ref. A stuck container start would otherwise hold that queue
+    # for the 6-hour default. A timeout is a job failure, never a pass.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      # The gap this workflow had was a test project that existed and was simply
+      # never named here. Naming projects one by one reproduces that gap the day
+      # somebody adds a third, so this asserts that the solution's test projects
+      # are exactly the ones the steps below run. It fails loudly, with the fix
+      # in the message, rather than quietly gating less than it used to.
+      - name: Every test project in the solution is gated below
+        run: |
+          expected="tests/Vault.IntegrationTests/Vault.IntegrationTests.csproj tests/Vault.UnitTests/Vault.UnitTests.csproj"
+          actual=$(grep -oE 'Path="[^"]*"' backend/Vault.slnx | sed 's/Path="//;s/"$//' | grep -i '^tests/' | sort | tr '\n' ' ' | sed 's/ $//') || true
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Vault.slnx test projects are now [$actual], expected [$expected]. Add a 'dotnet test' step for the new project in this workflow, then update this guard."
+            exit 1
+          fi
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
       - name: Backend build (warnings are errors)
         run: dotnet build backend/Vault.slnx -c Release
+      - name: Backend format check
+        run: dotnet format backend/Vault.slnx --verify-no-changes
+      # `TreatNoTestsAsError` on both suites: VSTest exits 0 when it discovers
+      # zero tests, so losing xunit.runner.visualstudio (or migrating to
+      # Microsoft.Testing.Platform without the opt-in) would turn these steps
+      # green while running nothing at all. Verified: a project with no tests
+      # exits 0 without this and 1 with it.
       - name: Backend unit tests
-        run: dotnet test backend/tests/Vault.UnitTests -c Release --no-build
+        run: dotnet test backend/tests/Vault.UnitTests -c Release --no-build -- RunConfiguration.TreatNoTestsAsError=true
 
       - uses: actions/setup-node@v4
         with:
@@ -41,12 +89,37 @@ jobs:
       - name: Frontend install
         run: npm ci
         working-directory: frontend
+      # `--watch=false` explicitly, not left to the builder's TTY/CI sniffing:
+      # `@angular/build:unit-test` resolves `watch` as `options.watch ?? isTTY()`,
+      # so a runner that ever presented a TTY would put this step into watch mode
+      # and hang the job. Passing the flag is also the command CLAUDE.md documents.
       - name: Frontend tests
-        run: npm test
+        run: npm test -- --watch=false
         working-directory: frontend
       - name: Frontend production build
         run: npm run build
         working-directory: frontend
+
+      # Last on purpose: the only step that needs Docker, and the only one that
+      # can fail for reasons that are not the code (image pull, container
+      # start). Running it after every deterministic gate has already reported
+      # means a red job is never ambiguous about which kind of failure it was.
+      #
+      # Testcontainers starts mcr.microsoft.com/mssql/server:2022-latest against
+      # the Docker daemon that ships on ubuntu-latest, and needs no
+      # configuration to do it. NEVER add TESTCONTAINERS_RYUK_DISABLED or
+      # TESTCONTAINERS_HOST_OVERRIDE here: those exist only in a dev container
+      # whose Docker reaches SQL Server through the host, and setting them in CI
+      # would disable the reaper that cleans up after a cancelled run.
+      #
+      # This suite is the ONLY coverage for tenant isolation
+      # (TenantIsolationTests), the localization pipeline order
+      # (LocalizationTests), the API contract (ContractTests), the image
+      # collector's cross-tenant reachability read, and the database-level
+      # concurrency token. Each of those has a documented regression that leaves
+      # the unit suite entirely green. Do not weaken this step to a warning.
+      - name: Backend integration tests (SQL Server via Testcontainers)
+        run: dotnet test backend/tests/Vault.IntegrationTests -c Release --no-build -- RunConfiguration.TreatNoTestsAsError=true
 
   # 2) Compute the next version from conventional commits (no tag yet).
   #    Always a dry run here — safe on PRs. (semantic-release only *evaluates*
@@ -55,6 +128,7 @@ jobs:
   version:
     needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       published: ${{ steps.semantic.outputs.new_release_published }}
       version: ${{ steps.semantic.outputs.new_release_version }}
@@ -75,6 +149,7 @@ jobs:
     needs: validate
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -93,6 +168,7 @@ jobs:
     needs: version
     if: github.event_name != 'pull_request' && needs.version.outputs.published == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -130,6 +206,7 @@ jobs:
     needs: [version, publish]
     if: github.event_name != 'pull_request' && needs.version.outputs.published == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:

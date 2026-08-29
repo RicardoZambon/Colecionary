@@ -87,3 +87,38 @@ public sealed record CollectionDto(
     string? Currency = null);
 
 public sealed record CreateCollectionRequest(string Name, string Description);
+
+/// <summary>
+/// A collection paired with the version token a write of it must quote back.
+/// </summary>
+/// <param name="Version">
+/// The collection's current HTTP entity-tag, quotes included — exactly the value
+/// to put in an <c>If-Match</c> header. Opaque: the client never parses it.
+/// </param>
+/// <param name="Collection">The document itself, unchanged.</param>
+/// <remarks>
+/// <para>
+/// The version rides in an envelope beside <see cref="CollectionDto"/> rather
+/// than inside it, for two reasons that both matter. <see cref="CollectionDto"/>
+/// <em>is</em> the archive format — an entry in an export is byte-for-byte what
+/// <c>GET /api/collections</c> returns — and a concurrency token has no business
+/// in a backup. And the frontend's <c>Collection</c> model stays untouched,
+/// which is what the "the API contract mirrors VaultApi" rule protects.
+/// </para>
+/// <para>
+/// It exists at all because a single-resource <c>ETag</c> header cannot carry a
+/// version <em>per element</em> of a list, and the list is where this client
+/// synchronises: a token fetched at any other moment would describe a document
+/// the payload was not derived from, which is the one thing a precondition must
+/// never do.
+/// </para>
+/// </remarks>
+public sealed record VersionedCollectionDto(string Version, CollectionDto Collection);
+
+/// <summary>An item and the version its collection is now at.</summary>
+/// <remarks>
+/// An item write moves the whole aggregate's version (see
+/// <c>CollectionVersionInterceptor</c>), so the caller has to be told the new
+/// one or its next write would quote a token that is already stale.
+/// </remarks>
+public sealed record VersionedItemDto(string Version, ItemDto Item);

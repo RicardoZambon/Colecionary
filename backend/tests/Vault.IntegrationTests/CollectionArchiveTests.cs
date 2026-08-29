@@ -115,7 +115,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
         Assert.Equal(collection.Id, entry.ExistingId);
 
         // And asking cost nothing: the question is answered before any write.
-        var live = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var live = await client.GetCollectionsAsync();
         Assert.Equal(collection.Items.Count, live!.Single(c => c.Id == collection.Id).Items.Count);
     }
 
@@ -145,7 +145,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
                     Custom: []),
             ],
         };
-        await client.PutAsJsonAsync($"/api/collections/{collection.Id}", edited);
+        await client.PutCollectionAsync(edited);
 
         var imported = Assert.Single(await ImportAsync(client, archive, collection.Id));
 
@@ -159,7 +159,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
         Assert.DoesNotContain(imported.Items, item => item.Id == "added-after-the-backup");
 
         // And it replaced rather than duplicated.
-        var all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var all = await client.GetCollectionsAsync();
         Assert.Single(all!, c => c.Name == collection.Name);
     }
 
@@ -179,7 +179,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
 
         // Nothing already in the vault was touched: the original is still there,
         // under its own id, alongside the copy.
-        var all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var all = await client.GetCollectionsAsync();
         var original = all!.Single(c => c.Id == collection.Id);
         Assert.Equal(collection.Name, original.Name);
         Assert.Equal(collection.Items.Count, original.Items.Count);
@@ -190,7 +190,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
     public async Task AVaultArchive_ImportsThroughTheSameEndpoint()
     {
         var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
-        var before = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var before = await client.GetCollectionsAsync();
         var archive = await DownloadBytesAsync(client, "/api/export");
 
         var imported = await ImportAsync(client, archive);
@@ -227,7 +227,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
             Path.Combine(factory.ImageRoot, globexTenant.ToString("D"), $"{importedPhoto:D}.png")));
 
         // And acme keeps a collection of its own, untouched by someone else's import.
-        var acme = await marcus.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var acme = await marcus.GetCollectionsAsync();
         Assert.Contains(acme!, c => c.Id == collection.Id);
     }
 
@@ -260,7 +260,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
         var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var collection = await SeedCollectionAsync(client, await UploadAsync(client), photo: null);
         var archive = await DownloadBytesAsync(client, $"/api/export/collections/{collection.Id}");
-        var before = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var before = await client.GetCollectionsAsync();
 
         var response = await PostArchiveAsync(
             client,
@@ -275,7 +275,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
 
         // And it cost nothing: the gate runs before the first byte is written,
         // so a rejected archive leaves no half-restored collection behind.
-        var after = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var after = await client.GetCollectionsAsync();
         Assert.Equal(before!.Count, after!.Count);
     }
 
@@ -293,13 +293,83 @@ public class CollectionArchiveTests(VaultApiFactory factory)
     }
 
     [Fact]
+    public async Task Import_RefusesAnOverwriteDecidedAgainstAVersionThatHasMovedOn()
+    {
+        // The lost update this endpoint used to allow, and the reason it was not
+        // covered by the collection PUT's guard: overwriting runs the very same
+        // wholesale ReplaceGraph, but the decision is made in one request and
+        // acted on in another, with a dialog and a second upload in between.
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+        var collection = await SeedCollectionAsync(client, banner: null, photo: null);
+        var archive = await DownloadBytesAsync(client, $"/api/export/collections/{collection.Id}");
+
+        // The plan the user is shown, and answers.
+        var asked = await PostArchiveAsync(client, archive);
+        Assert.Equal(HttpStatusCode.Conflict, asked.StatusCode);
+        var plan = (await asked.Content.ReadFromJsonAsync<ImportPlan>())!;
+        var entry = Assert.Single(plan.Entries, e => e.ExistingId == collection.Id);
+        Assert.NotNull(entry.ExistingVersion);
+
+        // Meanwhile somebody else does real work on that collection.
+        var precious = collection.Items[0] with { Id = "precious", Name = "Precious new work" };
+        (await client.PutCollectionAsync(collection with { Items = [.. collection.Items, precious] }))
+            .EnsureSuccessStatusCode();
+
+        // The answer is now about a document that no longer exists. Performing it
+        // would delete work nobody chose to delete, so it is asked again instead —
+        // through the same 409 channel, carrying the version that is really there.
+        var refused = await PostArchiveAsync(
+            client, archive, confirmed: true, (collection.Id, entry.ExistingVersion!));
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+
+        var stored = await client.GetCollectionsAsync();
+        Assert.Contains(stored.Single(c => c.Id == collection.Id).Items, i => i.Id == "precious");
+
+        var reasked = (await refused.Content.ReadFromJsonAsync<ImportPlan>())!;
+        var fresh = Assert.Single(reasked.Entries, e => e.ExistingId == collection.Id);
+        Assert.NotEqual(entry.ExistingVersion, fresh.ExistingVersion);
+
+        // Answering the fresh plan works — the user is asked, not blocked.
+        var imported = Assert.Single(await ImportAsync(client, archive, collection.Id));
+        Assert.DoesNotContain(imported.Items, i => i.Id == "precious");
+    }
+
+    [Fact]
+    public async Task Import_ThatOverwrites_MovesTheCollectionsVersion()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+        var collection = await SeedCollectionAsync(client, banner: null, photo: null);
+        var archive = await DownloadBytesAsync(client, $"/api/export/collections/{collection.Id}");
+
+        // Drop an item, so the overwrite genuinely restores something.
+        (await client.PutCollectionAsync(collection with { Items = [] })).EnsureSuccessStatusCode();
+        var stale = await client.GetCollectionVersionAsync(collection.Id);
+
+        var restored = Assert.Single(await ImportAsync(client, archive, collection.Id));
+        Assert.Single(restored.Items);
+
+        // An overwriting import runs the same wholesale replace the PUT does, so
+        // it has to move the version too — otherwise a tab open since before the
+        // restore would PUT the emptied document straight back over it and pass
+        // its precondition doing so.
+        var refused = await client.PutCollectionAsync(collection with { Items = [] }, stale);
+        Assert.Equal(HttpStatusCode.PreconditionFailed, refused.StatusCode);
+
+        // And the version it answered with is the usable one.
+        var fresh = await client.GetVersionedCollectionsAsync();
+        (await client.PutCollectionAsync(
+                collection with { Name = "After the restore" },
+                fresh.Single(v => v.Collection.Id == collection.Id).Version))
+            .EnsureSuccessStatusCode();
+    }
+
+    [Fact]
     public async Task Import_BringsBackACollectionsPinnedCurrency()
     {
         var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
         var collection = await SeedCollectionAsync(client, banner: null, photo: null);
-        var pinned = await (await client.PutAsJsonAsync(
-            $"/api/collections/{collection.Id}",
-            collection with { Currency = "BRL" })).Content.ReadFromJsonAsync<CollectionDto>();
+        var pinned = await (await client.PutCollectionAsync(collection with { Currency = "BRL" }))
+            .Content.ReadFromJsonAsync<CollectionDto>();
         Assert.Equal("BRL", pinned!.Currency);
 
         var archive = await DownloadBytesAsync(client, $"/api/export/collections/{collection.Id}");
@@ -309,7 +379,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
         // silently reading in another. The response is what storage holds, so
         // this pins the row and not merely the reply.
         Assert.Equal("BRL", imported.Currency);
-        var all = await client.GetFromJsonAsync<List<CollectionDto>>("/api/collections");
+        var all = await client.GetCollectionsAsync();
         Assert.Equal("BRL", all!.Single(c => c.Id == imported.Id).Currency);
     }
 
@@ -357,7 +427,7 @@ public class CollectionArchiveTests(VaultApiFactory factory)
             PhotoIds: photo is { } id ? [id] : []);
 
         var filled = created! with { BannerImageId = banner, Items = [item] };
-        var saved = await (await client.PutAsJsonAsync($"/api/collections/{filled.Id}", filled))
+        var saved = await (await client.PutCollectionAsync(filled))
             .Content.ReadFromJsonAsync<CollectionDto>();
         return saved!;
     }
@@ -400,21 +470,31 @@ public class CollectionArchiveTests(VaultApiFactory factory)
         byte[] archive,
         params string[] replace)
     {
-        var response = await PostArchiveAsync(client, archive, confirmed: true, replace);
+        // Versions looked up now, which is what a client that has just been
+        // shown the plan would send. A test that means to answer with a *stale*
+        // one calls PostArchiveAsync directly.
+        var decisions = new List<(string Id, string Version)>(replace.Length);
+        foreach (var id in replace)
+        {
+            decisions.Add((id, await client.GetCollectionVersionAsync(id)));
+        }
+
+        var response = await PostArchiveAsync(client, archive, confirmed: true, [.. decisions]);
         if (!response.IsSuccessStatusCode)
         {
             // The ProblemDetails body, not just the status: an import rejects
             // for a dozen reasons and the detail names which one.
             throw new Xunit.Sdk.XunitException(await response.Content.ReadAsStringAsync());
         }
-        return (await response.Content.ReadFromJsonAsync<List<CollectionDto>>())!;
+        var imported = (await response.Content.ReadFromJsonAsync<List<VersionedCollectionDto>>())!;
+        return [.. imported.Select(v => v.Collection)];
     }
 
     private static Task<HttpResponseMessage> PostArchiveAsync(
         HttpClient client,
         byte[] archive,
         bool confirmed = false,
-        params string[] replace)
+        params (string Id, string Version)[] replace)
     {
         var content = new ByteArrayContent(archive);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
@@ -424,7 +504,8 @@ public class CollectionArchiveTests(VaultApiFactory factory)
         {
             query.Add("confirmed=true");
         }
-        query.AddRange(replace.Select(id => $"replace={Uri.EscapeDataString(id)}"));
+        query.AddRange(replace.Select(r => $"replace={Uri.EscapeDataString(r.Id)}"));
+        query.AddRange(replace.Select(r => $"replaceVersion={Uri.EscapeDataString(r.Version)}"));
 
         var url = query.Count == 0 ? "/api/import" : $"/api/import?{string.Join('&', query)}";
         return client.PostAsync(url, content);

@@ -135,13 +135,13 @@ All are exported from `shared/ui/index.ts`.
 | --- | --- | --- |
 | Button | `ui-button` | `variant: 'primary' \| 'ghost' \| 'danger' \| 'link' \| 'icon'`, `size: 'md' \| 'sm'`, `block`, `disabled`, `muted`, `type`, `ariaLabel` (required when the label is a bare glyph; also becomes the tooltip) — content-projected label. `link` is a text action inside a dense row, `icon` a bare glyph (the ✕ that removes a copy, a field, a member). `muted` reads as unavailable but still fires: `disabled` would be the obvious choice and is the wrong one, because a dead control cannot say *why* it is dead — removing the tenant's owner has an explanation the click is what surfaces. An action that navigates stays a real `<a>`; see the `a.link` note in `collection-settings-page.scss` |
 | Field | `ui-field` | `label` (required) — wraps any control with the mono uppercase label |
-| Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`; outputs `keydown`, `blurred` |
+| Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`, `ariaLabel`; outputs `keydown`, `blurred` |
 | Textarea | `ui-textarea` | `value` (model), `rows`, `placeholder` |
-| Select | `ui-select` | `value` (model), `options: SelectOption[]`, `disabled`; add class `compact` for dense rows |
+| Select | `ui-select` | `value` (model), `options: SelectOption[]`, `disabled`, `ariaLabel`; add class `compact` for dense rows |
 | Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count`, `link` (router commands), `queryParams` — content-projected label. Renders a `<button>` by default (attach `(click)` at the usage site); with `link` it renders a real `<a>` instead, because a chip that navigates must survive middle-click and a button nested in an anchor is invalid |
 | Card | `ui-card` | `interactive` (hover affordance), `dashed` — the panel surface |
 | Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone(condition)` for one copy, `itemTone(item)` for an item, `conditionLabelKey(condition)` for its message key, and `itemBadgeLabel(item, t)` for the rendered label ("Wanted", "Mint", "Mint ×3" — uppercased by CSS). The `t` argument is `I18nService.t`: the helper is pure and has no injector |
-| Toggle | `ui-toggle` | `on` (model) — rendered as `role="switch"` |
+| Toggle | `ui-toggle` | `on` (model), `ariaLabel` — rendered as `role="switch"` |
 | Tabs | `ui-tabs` | `tabs: TabDef[]`, `active` (model, required) |
 | Avatar | `ui-avatar` | `initials` (required), `size: 'sm' \| 'md' \| 'lg'` |
 | Avatar stack | `ui-avatar-stack` | `members: Member[]` (shows first 4, overlapped) |
@@ -154,6 +154,7 @@ All are exported from `shared/ui/index.ts`.
 | Image slot | `ui-image-slot` | `src`, `focal` (CSS `background-position`), `placeholder`, `reframable`; outputs `fileSelected(File)`, `reframeRequested()` — presentational; pages upload via `ImagesApi` and persist ids on the DTO |
 | Image focus | `ui-image-focus` | none — global outlet in the shell, driven by `ImageFocusService`; the focal-point editor (drag or arrow keys, live previews of the surfaces that match the image's `usage`) |
 | Toast | `ui-toast` | none — global outlet in the shell, driven by `ToastService.flash()` |
+| Conflict notice | `app-conflict-notice` | none — global outlet in the shell, driven by `ConflictService`. Lives in `layout/`, not `shared/ui`: it is one app-specific outlet, not a reusable element. Raised when a write is refused because someone else changed the collection first; it never discards what the user typed |
 | Money pipe | `\| money: currency()` | formats numbers as `$1,234.57`, always two decimals, always rounded **up**. Takes the collection's currency; omitted, the account default. Impure — see §6 |
 | Photo manager | `<ui-photo-manager>` | add / reorder / cover / frame / remove an item's photos. Owns the dropzone and the upload queue; emits the whole list back |
 | Lightbox | `<ui-lightbox>` | full-screen photo viewer, arrow-key paging, links the original |
@@ -173,6 +174,14 @@ style the same raw element the same way, that's the signal to promote it here.
   ProblemDetails errors into plain `Error`s so toast paths keep working.
   There is no mocked data in the frontend — demo data lives in the backend
   seeder (`backend/src/Vault.Infrastructure/Persistence/Seeding/`).
+- **Collection writes carry a version.** Every write to a collection or its
+  items sends an `If-Match` with the version the client last synchronised with;
+  the server refuses a missing precondition outright, so there is no path that
+  quietly opts out of the guard. `VaultStore` owns the version map and
+  `HttpVaultApi` reads versions off the list envelope and the `ETag` header —
+  **never off `Collection` itself**, because the same shape is the archive
+  format and a concurrency token has no business in a backup. A refused write
+  raises `ConflictService`; it never discards what the user typed.
 - **Images** go through `ImagesApi` (`core/api/images-api.ts`): authenticated
   multipart upload returning an id; reads are plain `<img>`-compatible URLs
   (`/api/images/{id}`). `ui-image-slot` is presentational — it renders `src`

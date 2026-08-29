@@ -155,6 +155,7 @@ export const ptBR: Record<MessageKey, string> = {
   'settings.access.subAfter':
     '. Coleções individuais também podem ser compartilhadas na própria página.',
   'settings.access.removeMember': 'Remover {name}',
+  'settings.access.memberRoleAria': 'Papel de {name}',
   'settings.access.policyHeading': 'Política de compartilhamento',
   'settings.access.policy.invites.label': 'Membros podem compartilhar coleções',
   'settings.access.policy.invites.description':
@@ -322,6 +323,7 @@ export const ptBR: Record<MessageKey, string> = {
 
   // --- item page ---------------------------------------------------------
   'item.addPhoto': 'Adicionar foto',
+  'item.showPhoto': 'Mostrar foto {n}',
   'item.viewLarge': 'Ver grande',
   'item.openViewer': 'Abrir o visualizador de fotos',
   'item.adjustFraming': 'Ajustar enquadramento',
@@ -365,6 +367,8 @@ export const ptBR: Record<MessageKey, string> = {
   'itemForm.copiesHeading': 'Exemplares · {n}',
   'itemForm.copyTag': 'Exemplar #{n}',
   'itemForm.removeCopy': 'Remover exemplar',
+  'itemForm.copyConditionAria': 'Condição do exemplar #{n}',
+  'itemForm.copyStatusAria': 'Situação do exemplar #{n}',
   'itemForm.paid': 'Pago',
   'itemForm.copyValue': 'Valor est.',
   'itemForm.copyValuePlaceholder': '— usa o valor do item ou o pago',
@@ -393,17 +397,23 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.groups.itemCount': '{n} itens',
   'collSettings.groups.addSub': '+ Sub',
   'collSettings.groups.remove': 'Remover {name}',
+  'collSettings.groups.renameAria': 'Renomear {name}',
   'collSettings.groups.fields': 'Campos',
   'collSettings.groups.removeField': 'Remover o campo {name}',
+  'collSettings.groups.fieldTypeAria': 'Tipo do campo {name}',
   'collSettings.groups.fieldPlaceholder': 'Nome do campo… (Enter)',
   'collSettings.groups.fieldAria': 'Nome do novo campo',
+  'collSettings.groups.newFieldTypeAria': 'Tipo do novo campo',
   'collSettings.groups.addField': '+ Campo',
   'collSettings.groups.orderBy': 'Ordenar por',
+  'collSettings.groups.orderByAria': 'Ordenar os itens de {name} por',
+  'collSettings.groups.orderDirectionAria': 'Sentido da ordenação de {name}',
   'collSettings.groups.target': 'Meta',
   'collSettings.groups.targetAria': 'Meta para {name}',
   'collSettings.groups.inherited': 'Herdado — {label}',
   'collSettings.groups.notSet': 'Não definido',
   'collSettings.groups.newPlaceholder': 'Nome do grupo… (Enter para criar, Esc para cancelar)',
+  'collSettings.groups.newGroupAria': 'Nome do novo grupo',
   'collSettings.groups.inParent': '↳ em {name}',
   'collSettings.groups.atRoot': '↳ no nível principal',
   'collSettings.groups.finePrint1':
@@ -416,8 +426,10 @@ export const ptBR: Record<MessageKey, string> = {
     'é quantos itens o conjunto completo tem, quando você sabe — uma série de 120 edições, um set de 24 cartas — para o progresso ser medido contra a série e não contra o que você já catalogou. Deixe em branco e ele volta ao padrão. Grupos que ainda têm itens não podem ser excluídos — mova os itens primeiro.',
 
   'collSettings.sharing.emailPlaceholder': 'email@empresa.com',
+  'collSettings.sharing.inviteRoleAria': 'Papel do convite',
   'collSettings.sharing.invite': 'Convidar',
   'collSettings.sharing.removeMember': 'Remover {name}',
+  'collSettings.sharing.memberRoleAria': 'Papel de {name}',
   'collSettings.sharing.linkShare': 'Compartilhamento por link',
   'collSettings.sharing.linkShareSub': 'Qualquer pessoa com o link pode ver esta coleção',
   'collSettings.sharing.finePrint': 'As regras de acesso de todo o tenant ficam em',
@@ -580,4 +592,19 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.field.added': 'Campo "{name}" adicionado',
   'toast.invite.invalidEmail': 'Informe um e-mail válido',
   'toast.invite.sent': 'Convite enviado ✓',
+  // --- save conflicts ------------------------------------------------------
+  'conflict.title': 'Alguém salvou antes',
+  'conflict.keepsYourWork':
+    'O que você digitou continua na tela e continua sem salvar. Copie o que precisar antes de recarregar.',
+  'conflict.reload': 'Recarregar a versão mais recente',
+  'conflict.reloading': 'Recarregando…',
+  'conflict.keep': 'Continuar editando',
+  'conflict.reloadFailed': 'Não foi possível recarregar — confira sua conexão e tente de novo.',
+  'conflict.unknownVersion':
+    'Esta coleção ainda não terminou de carregar, então não há versão para salvar. Recarregue e tente de novo.',
+
+  'toast.collection.saveFailed': 'Não foi possível salvar a coleção',
+  'toast.item.saveFailed': 'Não foi possível salvar o item',
+  'toast.item.deleteFailed': 'Não foi possível excluir o item',
+  'toast.group.addFailed': 'Não foi possível adicionar o grupo',
 };

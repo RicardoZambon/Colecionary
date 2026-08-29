@@ -28,6 +28,46 @@ public class StoredImage : ITenantOwned
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     /// <summary>
+    /// When the garbage collector first observed that nothing pointed at this
+    /// image any more, or null while it is referenced (or has never been swept).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the grace period's clock, and it exists because
+    /// <see cref="CreatedAtUtc"/> cannot be it. Creation time answers "how old
+    /// is this picture", which is the wrong question: a photo uploaded a year
+    /// ago and dropped from an item this morning would be older than any grace
+    /// period on its first sweep, and a full-document collection PUT — which
+    /// today carries no optimistic concurrency — can drop a reference the user
+    /// never meant to drop. Deleting on creation age would make that mistake
+    /// instantly unrecoverable.
+    /// </para>
+    /// <para>
+    /// So the sweep marks first and deletes later: it sets this the first time
+    /// an image reads as unreferenced, <b>clears it back to null the moment
+    /// anything points at the image again</b>, and only destroys bytes once the
+    /// mark has stood for the whole grace period. Nothing is degraded while the
+    /// mark stands — the image is still served, still exported, still framable —
+    /// so an accidental dereference that is noticed and undone inside the window
+    /// costs nothing at all.
+    /// </para>
+    /// <para>
+    /// "The moment" is meant literally, and that is why saving a collection
+    /// clears this column itself rather than leaving it to the next sweep. A
+    /// sweep only learns what it looks at, so a reference that appeared and
+    /// disappeared between two of them would never be observed, and the image
+    /// would then be destroyed on a clock started before it was ever used — the
+    /// real undo window would be the sweep interval, not the grace period.
+    /// </para>
+    /// <para>
+    /// Null therefore means "believed referenced", which is the safe reading for
+    /// every row that predates the column: the first sweep re-derives the truth
+    /// and starts the clock from then, never from the past.
+    /// </para>
+    /// </remarks>
+    public DateTimeOffset? UnreferencedSinceUtc { get; set; }
+
+    /// <summary>
     /// Intrinsic pixel width, or null for a row written before sizes were
     /// recorded. Backfilled the first time the image is derived.
     /// </summary>

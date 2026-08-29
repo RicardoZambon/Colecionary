@@ -8,7 +8,12 @@
 
     <ol class="steps" [attr.aria-label]="'setup.stepsAria' | t">
       @for (key of stepKeys; track key; let i = $index) {
-        <li class="steps__item" [class.active]="i === step()" [class.done]="i < step()">
+        <li
+          class="steps__item"
+          [class.active]="i === step()"
+          [class.done]="i < step()"
+          [attr.aria-current]="i === step() ? 'step' : null"
+        >
           <span class="steps__num">{{ i + 1 }}</span>{{ key | t }}
         </li>
       }
@@ -42,7 +47,11 @@
           <ui-text-input type="password" [value]="password()" (valueChange)="password.set($event)" />
         </ui-field>
         <ui-field [label]="'setup.db.trustCert' | t">
-          <ui-toggle [on]="trustCert()" (onChange)="trustCert.set($event)" />
+          <ui-toggle
+            [ariaLabel]="'setup.db.trustCert' | t"
+            [on]="trustCert()"
+            (onChange)="trustCert.set($event)"
+          />
         </ui-field>
       </div>
       <div class="test-row">

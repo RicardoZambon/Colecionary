@@ -3,6 +3,7 @@ using System.Text.Json;
 using FluentValidation;
 using Vault.Application.Abstractions;
 using Vault.Application.Archives;
+using Vault.Application.Collections;
 using Vault.Application.Collections.Dtos;
 using Vault.Application.Collections.Validators;
 using Vault.Application.Common;
@@ -76,7 +77,20 @@ public sealed class ImportService(
         }
 
         var plan = await PlanAsync(incoming, ct);
+        // Asked when the user has not answered yet — and asked *again* when the
+        // answer they gave no longer describes the vault. An overwrite runs the
+        // same wholesale ReplaceGraph the collection PUT does, so the same rule
+        // has to hold: a document may not be replaced on the strength of a read
+        // somebody has already superseded. The dialog and a second upload sit
+        // between the plan and the answer, which is a wide enough window to lose
+        // real work in, and re-asking is the only remedy that keeps the user in
+        // charge of it. Nothing is written in either case.
         if (!decisions.Confirmed && plan.NeedsConfirmation)
+        {
+            return new ImportOutcome(null, plan);
+        }
+
+        if (decisions.Confirmed && !decisions.AgreesWith(plan))
         {
             return new ImportOutcome(null, plan);
         }
@@ -87,7 +101,7 @@ public sealed class ImportService(
         for (var i = 0; i < incoming.Count; i++)
         {
             var replacing = plan.Entries[i].ExistingId is { } existing
-                && decisions.Replace.Contains(existing)
+                && decisions.Replace.ContainsKey(existing)
                     ? existing
                     : null;
             imported.Add(await ImportOneAsync(archive, incoming[i], photoMeta, replacing, ct));
@@ -121,17 +135,22 @@ public sealed class ImportService(
         CancellationToken ct)
     {
         var live = await collections.ListIdentitiesAsync(ct);
-        var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var byName = new Dictionary<string, CollectionIdentity>(StringComparer.OrdinalIgnoreCase);
         foreach (var candidate in live)
         {
-            byName.TryAdd(candidate.Name.Trim(), candidate.Id);
+            byName.TryAdd(candidate.Name.Trim(), candidate);
         }
 
         return new ImportPlan(
         [
-            .. incoming.Select(source => new ImportEntry(
-                source.Name,
-                byName.GetValueOrDefault(source.Name.Trim()))),
+            .. incoming.Select(source =>
+            {
+                var match = byName.GetValueOrDefault(source.Name.Trim());
+                return new ImportEntry(
+                    source.Name,
+                    match?.Id,
+                    match is null ? null : CollectionVersions.ToETag(match.Version));
+            }),
         ]);
     }
 
@@ -148,16 +167,24 @@ public sealed class ImportService(
     /// vault rather than about this method's intentions, the way
     /// <c>CollectionService.UpdateAsync</c> already does.
     /// </remarks>
-    private async Task<IReadOnlyList<CollectionDto>> ReadBackAsync(
+    /// <remarks>
+    /// Each collection comes back with its version, for the same reason the
+    /// collection list does: an overwrite moves the version of a collection the
+    /// client already had on screen, and a client left holding the old tag would
+    /// be refused on its next save for a change it just asked for itself.
+    /// </remarks>
+    private async Task<IReadOnlyList<VersionedCollectionDto>> ReadBackAsync(
         IReadOnlyList<string> ids,
         CancellationToken ct)
     {
-        var saved = new List<CollectionDto>(ids.Count);
+        var saved = new List<VersionedCollectionDto>(ids.Count);
         foreach (var id in ids)
         {
             var collection = await collections.GetAsync(id, ct)
                 ?? throw new NotFoundException(Messages.CollectionNotFoundFor(id));
-            saved.Add(collection.ToDto());
+            saved.Add(new VersionedCollectionDto(
+                CollectionVersions.ToETag(collection.Version),
+                collection.ToDto()));
         }
 
         return saved;

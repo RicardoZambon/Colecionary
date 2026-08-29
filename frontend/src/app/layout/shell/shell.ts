@@ -5,13 +5,14 @@ import { ImageFocusService } from '../../core/state/image-focus.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { TPipe } from '../../shared/pipes/t.pipe';
 import { UiImageFocus, UiToast } from '../../shared/ui';
+import { ConflictNotice } from '../conflict-notice/conflict-notice';
 import { Sidebar } from '../sidebar/sidebar';
 import { Topbar } from '../topbar/topbar';
 
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, TPipe, Topbar, Sidebar, UiToast, UiImageFocus],
+  imports: [RouterOutlet, TPipe, Topbar, Sidebar, ConflictNotice, UiToast, UiImageFocus],
   template: `
     <app-topbar />
     <div class="body">
@@ -25,6 +26,9 @@ import { Topbar } from '../topbar/topbar';
       </main>
     </div>
     <ui-toast />
+    <!-- Above the toast, and outlives it: a refused save is the one message
+         that must not disappear on its own. -->
+    <app-conflict-notice />
     <ui-image-focus />
   `,
   styles: `

@@ -78,17 +78,13 @@ public class CurrencySettingsTests(VaultApiFactory factory)
 
         try
         {
-            var withOverride = await (await marcus.PutAsJsonAsync(
-                $"/api/collections/{created.Id}",
-                created with { Currency = "EUR" }))
+            var withOverride = await (await marcus.PutCollectionAsync(created with { Currency = "EUR" }))
                 .Content.ReadFromJsonAsync<CollectionDto>();
             Assert.Equal("EUR", withOverride!.Currency);
 
             // Clearing it has to be expressible, or a collection could never go
             // back to following the account.
-            var cleared = await (await marcus.PutAsJsonAsync(
-                $"/api/collections/{created.Id}",
-                withOverride with { Currency = null }))
+            var cleared = await (await marcus.PutCollectionAsync(withOverride with { Currency = null }))
                 .Content.ReadFromJsonAsync<CollectionDto>();
             Assert.Null(cleared!.Currency);
 
@@ -117,10 +113,10 @@ public class CurrencySettingsTests(VaultApiFactory factory)
 
         try
         {
-            // A symbol, not an ISO 4217 code.
-            var response = await marcus.PutAsJsonAsync(
-                $"/api/collections/{created.Id}",
-                created with { Currency = "US$" });
+            // A symbol, not an ISO 4217 code. Sent with a current precondition,
+            // so what is being asserted is the currency rule and not the 428 a
+            // request with no If-Match would earn first.
+            var response = await marcus.PutCollectionAsync(created with { Currency = "US$" });
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         }
         finally

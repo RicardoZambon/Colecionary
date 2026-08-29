@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../../core/api/images-api';
 import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
+import { VaultConflictError } from '../../../core/api/vault-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
@@ -266,7 +267,21 @@ export class ItemFormPage {
         .filter(c => c.value),
     };
 
-    await this.store.upsertItem(collection.id, syncWantedTag(item));
+    try {
+      await this.store.upsertItem(collection.id, syncWantedTag(item));
+    } catch (err) {
+      // The one thing that must not happen here is navigating away: this form
+      // is the only copy of what was typed, and a refused save leaves it
+      // unsaved. A conflict explains itself through the shell's notice; any
+      // other failure gets a toast. Either way the page stays exactly as it is.
+      if (!(err instanceof VaultConflictError)) {
+        this.toast.flash(
+          err instanceof Error ? err.message : this.i18n.t('toast.item.saveFailed'),
+        );
+      }
+      return;
+    }
+
     this.toast.flash(this.i18n.t('toast.item.saved'));
 
     if (existing) {

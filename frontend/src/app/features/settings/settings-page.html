@@ -51,6 +51,7 @@
             </span>
             <ui-select
               class="compact"
+              [ariaLabel]="'settings.access.memberRoleAria' | t: { name: member.name }"
               [options]="roleOptions()"
               [value]="member.role"
               [disabled]="member.role === 'Owner'"
@@ -74,7 +75,11 @@
               <span class="name">{{ policy.label | t }}</span>
               <span class="email">{{ policy.description | t }}</span>
             </span>
-            <ui-toggle [on]="policies()[policy.key]" (onChange)="togglePolicy(policy.key)" />
+            <ui-toggle
+              [ariaLabel]="policy.label | t"
+              [on]="policies()[policy.key]"
+              (onChange)="togglePolicy(policy.key)"
+            />
           </div>
         }
       </ui-card>
@@ -213,6 +218,7 @@
       </div>
       <div class="currency">
         <ui-select
+          [ariaLabel]="'settings.currency.heading' | t"
           [options]="currencyOptions()"
           [value]="store.tenantSettings()?.defaultCurrency ?? ''"
           (valueChange)="chooseCurrency($event)"

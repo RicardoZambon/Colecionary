@@ -25,7 +25,10 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
       padding: 9px 12px;
       font-family: var(--font-body);
       font-size: 13px;
-      outline: none;
+      /* Deliberately no 'outline: none'. Angular scopes this rule to
+         textarea[_ngcontent-…], which outranks the global :focus-visible ring
+         in styles.scss — suppressing it here leaves every textarea in the app
+         with no visible focus at all. */
       resize: vertical;
     }
   `,

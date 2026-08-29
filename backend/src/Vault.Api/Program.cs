@@ -1,5 +1,7 @@
+using System.Net;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -135,6 +137,17 @@ static WebApplication BuildConfiguredApplication(WebApplicationBuilder builder, 
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentTenant, CurrentTenantFromHttpContext>();
 
+    // Registered only when an operator has actually asked for it. The collector
+    // is the one thing in this application that destroys user data permanently
+    // and irreversibly, so a development machine, the test host and any
+    // deployment that has not opted in should not merely have it idle — it
+    // should not exist. Enabling it still only produces a report until
+    // ImageGc:DryRun is turned off as well.
+    if (builder.Configuration.GetSection(ImageGcOptions.SectionName).Get<ImageGcOptions>()?.Enabled == true)
+    {
+        builder.Services.AddHostedService<ImageGarbageCollectionService>();
+    }
+
     builder.Services
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
@@ -180,10 +193,65 @@ static WebApplication BuildConfiguredApplication(WebApplicationBuilder builder, 
         // to a generic one — which looked correct for the vault export, whose
         // fallback happens to be its real name, and only showed up once a single
         // collection started naming its own file.
-        policy.WithExposedHeaders("Content-Disposition");
+        //
+        // Retry-After is on the same footing: the login throttle sets it on its
+        // 429, and without this the dev SPA — which is cross-origin until the
+        // build lands in wwwroot — cannot read how long it is being asked to wait.
+        // ETag carries a collection's optimistic-concurrency version. Without
+        // it exposed, the dev SPA — cross-origin until the build lands in
+        // wwwroot — cannot read the version back off a write and every save
+        // after the first would be refused.
+        policy.WithExposedHeaders("Content-Disposition", "Retry-After", "ETag");
     }));
 
     var app = builder.Build();
+
+    // Ahead of everything, because everything downstream that asks who the caller
+    // is has to get the same answer — the login throttle above all. Behind a
+    // reverse proxy the connection's address is the *proxy's*, which would
+    // collapse every caller into one bucket: thirty failed logins from anyone
+    // would then answer 429 to the entire deployment.
+    //
+    // Opt-in on purpose. An unconditional UseForwardedHeaders would let any
+    // caller name their own address by sending the header, which is strictly
+    // worse than not having the address dimension at all — so this runs only
+    // once an operator has named the proxies they actually trust.
+    //
+    // Nothing localized happens here, so sitting outside UseRequestLocalization
+    // costs nothing; it rewrites a connection property, not a message.
+    var trustedProxies = builder.Configuration
+        .GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+    if (trustedProxies.Length > 0)
+    {
+        var forwarding = new ForwardedHeadersOptions
+        {
+            // Only the address. Scheme and host are not the throttle's business,
+            // and rewriting them would change how URLs are generated.
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor,
+            // One hop: the header is a list, and trusting more of it than there
+            // are proxies in front of us is how a caller forges an address.
+            ForwardLimit = 1,
+        };
+        // Both lists, not just one: KnownIPNetworks defaults to 127.0.0.0/8, so
+        // leaving it would keep trusting anything on loopback to name its own
+        // address the moment a proxy is configured — the forged-address case
+        // this whole block is opt-in to avoid.
+        forwarding.KnownProxies.Clear();
+        forwarding.KnownIPNetworks.Clear();
+        foreach (var proxy in trustedProxies)
+        {
+            // Refusing to boot beats booting with a proxy list that silently
+            // trusts nothing — the address dimension would look configured and
+            // be counting the proxy's own address for everyone.
+            forwarding.KnownProxies.Add(
+                IPAddress.TryParse(proxy, out var address)
+                    ? address
+                    : throw new InvalidOperationException(
+                        $"ForwardedHeaders:KnownProxies contains '{proxy}', which is not an IP address."));
+        }
+
+        app.UseForwardedHeaders(forwarding);
+    }
 
     // Ahead of the exception handler on purpose. The handler runs as an
     // exception unwinds back up the pipeline, and it builds the ProblemDetails

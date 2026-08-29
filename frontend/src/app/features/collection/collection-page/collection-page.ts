@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 
 import { I18nService } from '../../../core/i18n';
+import { VaultConflictError } from '../../../core/api/vault-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { Condition, GroupNode, GroupSort, Item } from '../../../core/models';
@@ -300,9 +301,13 @@ export class CollectionPage {
       await this.store.updateCollection({ ...collection, items: pending.items });
       this.toast.flash(this.i18n.t('toast.order.saved'));
     } catch (err) {
-      this.toast.flash(
-        err instanceof Error ? err.message : this.i18n.t('toast.order.failed'),
-      );
+      // A conflict already has the shell's notice, which says more and stays
+      // put; a toast on top would say less and then take itself away.
+      if (!(err instanceof VaultConflictError)) {
+        this.toast.flash(
+          err instanceof Error ? err.message : this.i18n.t('toast.order.failed'),
+        );
+      }
     } finally {
       // Either way the store is now the authority again.
       this.pendingOrder.set(null);
@@ -390,6 +395,15 @@ export class CollectionPage {
     };
     void this.store
       .updateCollection({ ...collection, groups: [...collection.groups, node] })
-      .then(() => this.toast.flash(this.i18n.t('toast.group.added', { name: trimmed })));
+      .then(() => this.toast.flash(this.i18n.t('toast.group.added', { name: trimmed })))
+      // A refused save used to be an unhandled rejection here — nothing on
+      // screen, nothing in the log, and a group the user believes they added.
+      // The conflict notice explains a 412; this covers everything else.
+      .catch((err: unknown) => {
+        if (err instanceof VaultConflictError) return;
+        this.toast.flash(
+          err instanceof Error ? err.message : this.i18n.t('toast.group.addFailed'),
+        );
+      });
   }
 }
