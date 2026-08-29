@@ -403,7 +403,15 @@ export class CollectionSettingsPage {
       this.toast.flash(this.i18n.t('toast.group.hasItems'));
       return;
     }
-    this.mutate(d => ({ ...d, groups: d.groups.filter(g => !ids.includes(g.id)) }));
+    // The sections go with the groups. A section belongs to exactly one group,
+    // so one whose group is gone can never be reached again — and leaving it
+    // behind is not harmless: it rides every PUT from here on, and `sectionsOf`
+    // would hand it back the day a new group is created with the same id.
+    this.mutate(d => ({
+      ...d,
+      groups: d.groups.filter(g => !ids.includes(g.id)),
+      sections: d.sections.filter(s => !ids.includes(s.groupId)),
+    }));
     this.toast.flash(this.i18n.t('toast.group.removed'));
     // The detail pane was showing it. Leaving `?g=` pointing at a group that no
     // longer exists would render the empty state anyway, but the URL would keep

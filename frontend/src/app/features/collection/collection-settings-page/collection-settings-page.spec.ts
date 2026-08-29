@@ -344,6 +344,33 @@ describe('CollectionSettingsPage', () => {
     expect(page.lastPut().groups.map(g => g.id)).toEqual(['zeta', 'child']);
   });
 
+  it('takes a deleted group’s sections with it', async () => {
+    // A section belongs to exactly one group, so one whose group is gone can
+    // never be reached again. Leaving it behind is not harmless: it rides every
+    // PUT from here on, and `sectionsOf` would hand it back the day a new group
+    // is created with the same id.
+    const page = await mount({
+      collection: collection({
+        groups: [group('zeta'), group('child', { parentId: 'zeta' }), group('beta')],
+        sections: [
+          { id: 's1', groupId: 'zeta', name: 'Bronze', target: null },
+          { id: 's2', groupId: 'child', name: 'Prata', target: null },
+          { id: 's3', groupId: 'beta', name: 'Ouro', target: null },
+        ],
+        items: [],
+      }),
+      tab: 'groups',
+      g: 'zeta',
+    });
+
+    page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+    await page.done();
+
+    // The whole subtree went, so both its sections went — and only those.
+    expect(page.lastPut().groups.map(g => g.id)).toEqual(['beta']);
+    expect(page.lastPut().sections.map(s => s.id)).toEqual(['s3']);
+  });
+
   // --- sections ---
 
   it('turns sub-groups into sections, moving their items up under them', async () => {
