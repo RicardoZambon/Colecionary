@@ -77,6 +77,11 @@ const PERSIST_DEBOUNCE_MS = 400;
 @Component({
   selector: 'app-collection-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // The page is a 720px column of forms — the right width for reading one
+  // field per line. The groups tab is not that: it is a tree beside an editor,
+  // and at 720px the editor gets 450 of them, which is where a section's name,
+  // count, target and four buttons stop fitting on one line.
+  host: { '[class.wide]': "activeTab() === 'groups'" },
   imports: [RouterLink, TPipe, GroupPicker, UiAvatar, UiButton, UiCard, UiField, UiSelect, UiTabs, UiTextInput, UiTextarea, UiToggle],
   templateUrl: './collection-settings-page.html',
   styleUrl: './collection-settings-page.scss',

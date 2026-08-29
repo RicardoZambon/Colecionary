@@ -8,6 +8,10 @@
   max-width: 720px;
 }
 
+:host(.wide) {
+  max-width: 1080px;
+}
+
 .back {
   font-size: 12.5px;
   font-weight: 600;
@@ -65,25 +69,14 @@ a.link {
   }
 }
 
-.group-row {
-  border-top: 1px solid var(--border);
-  padding: 7px 0 9px;
-
-  &__main {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .tick {
-    color: var(--muted);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    width: 12px;
-    text-align: center;
-    flex: none;
-  }
-
+/*
+ * The editor for one group. These used to be rows of a flat list, nested under
+ * a `.group-row` element that the master-detail split removed — so the rules
+ * that were descendants of it are scoped to the pane instead. Leaving them
+ * keyed on a class no element carries any more is how `.rename` quietly stopped
+ * flexing and every name input collapsed to its intrinsic width.
+ */
+.groups-split__detail {
   .rename {
     flex: 1;
     min-width: 0;
@@ -95,61 +88,62 @@ a.link {
   }
 
   .count {
-    font-size: 11px;
-    color: var(--muted);
+    flex: none;
     width: 56px;
     text-align: right;
-    flex: none;
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
+
+.detail__name,
+.detail__order,
+.detail__fields,
+.detail__sections {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 0 0;
+
+  .fields-label {
+    @include mono-label(9px, 0.1em);
+    text-transform: uppercase;
+  }
+}
+
+/* One declaration per line, for fields and sections alike. Both are lists of
+   things a group declares, so they get one shape: name on the left, the
+   controls that belong to it lining up down a column on the right. As inline
+   pills they wrapped at arbitrary points and nothing lined up with anything.
+   Full-width children are what break the flex row, so the label takes a line
+   of its own and the trailing buttons still share the last one. */
+.detail__fields,
+.detail__sections {
+  .fields-label,
+  .field-chip,
+  .section-chip {
+    width: 100%;
+  }
+}
+
+.detail__order {
+  .order-by {
+    min-width: 170px;
   }
 
-  &__fields,
-  &__order,
-  &__sections {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    padding: 8px 0 0 22px;
-
-    .fields-label {
-      @include mono-label(9px, 0.1em);
-      text-transform: uppercase;
-    }
+  .direction {
+    min-width: 86px;
   }
 
-  /* One declaration per line, for fields and sections alike. Both are lists of
-     things a group declares, so they get one shape: name on the left, the
-     controls that belong to it lining up down a column on the right. As inline
-     pills they wrapped at arbitrary points and nothing lined up with anything.
-     Full-width children are what break the flex row, so the label takes a line
-     of its own and the trailing buttons still share the last one. */
-  &__fields,
-  &__sections {
-    .fields-label,
-    .field-chip,
-    .section-chip {
-      width: 100%;
-    }
+  /* Wide enough for a five-digit run, narrow enough to read as a number
+     rather than as another dropdown. */
+  .target {
+    width: 78px;
   }
 
-  &__order {
-    .order-by {
-      min-width: 170px;
-    }
-
-    .direction {
-      min-width: 86px;
-    }
-
-    /* Wide enough for a five-digit run, narrow enough to read as a number
-       rather than as another dropdown. */
-    .target {
-      width: 78px;
-    }
-
-    .fields-label.spaced {
-      margin-left: 10px;
-    }
+  .fields-label.spaced {
+    margin-left: 10px;
   }
 }
 
@@ -220,11 +214,16 @@ a.link {
 .new-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* Wraps because it now lives in a 260px column: "In Cavaleiros de Bronze"
+     beside a text field leaves neither of them a usable width, so the context
+     takes a line of its own and the field keeps the one below it. */
+  flex-wrap: wrap;
+  gap: 6px 10px;
   padding: 8px 0;
   border-top: 1px solid var(--border);
 
   .context {
+    width: 100%;
     font-family: var(--font-mono);
     font-size: 10px;
     text-transform: uppercase;
@@ -335,8 +334,8 @@ a.link {
   border-radius: var(--radius);
   background: var(--panel);
 
-  /* No max-width here on purpose — `.rename` already flexes at the group-row
-     level, so the name takes whatever the fixed columns to its right leave. */
+  /* No max-width here on purpose — `.rename` flexes at the pane level, so the
+     name takes whatever the fixed columns to its right leave. */
   .count {
     width: 56px;
     flex: none;
@@ -406,23 +405,4 @@ a.link {
   color: var(--muted);
   font-size: 12.5px;
   text-align: center;
-}
-
-/* The name sits on its own line, indented like the blocks below it, so the
-   group's own field lines up with the fields and sections it declares. */
-.group-row__name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 0 0 22px;
-
-  .fields-label {
-    @include mono-label(9px, 0.1em);
-    text-transform: uppercase;
-  }
-
-  .rename {
-    flex: 1;
-    min-width: 0;
-  }
 }

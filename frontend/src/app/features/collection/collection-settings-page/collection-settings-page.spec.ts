@@ -364,7 +364,7 @@ describe('CollectionSettingsPage', () => {
       g: 'espanha',
     });
 
-    const convert = [...page.el.querySelectorAll('.group-row__sections button')].find(b =>
+    const convert = [...page.el.querySelectorAll('.detail__sections button')].find(b =>
       b.textContent?.includes('Turn sub-groups into sections'),
     )!;
     page.click(convert);
@@ -399,7 +399,7 @@ describe('CollectionSettingsPage', () => {
       g: 'espanha',
     });
 
-    expect(page.detail().querySelectorAll('.group-row__sections ui-button')).toHaveLength(1);
+    expect(page.detail().querySelectorAll('.detail__sections ui-button')).toHaveLength(1);
   });
 
   it('removing a section unfiles its items instead of refusing', async () => {

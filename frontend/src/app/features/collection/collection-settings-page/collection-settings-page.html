@@ -10,7 +10,7 @@
            bottom is unreadable as one column of editors, and the branch you
            came to fix is somewhere in the middle of it. -->
       <div class="groups-split">
-        <ui-card class="groups-split__tree">
+        <ui-card class="groups-card groups-split__tree">
           <div class="groups-card__head">
             <span class="heading">{{ 'collSettings.groups.heading' | t }}</span>
             <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: null })"
@@ -39,7 +39,7 @@
           }
         </ui-card>
 
-        <ui-card class="groups-split__detail">
+        <ui-card class="groups-card groups-split__detail">
           @if (detail(); as sel) {
             <div class="detail__head">
               <span class="detail__path">
@@ -58,7 +58,7 @@
               >✕</ui-button>
             </div>
 
-            <div class="group-row__name">
+            <div class="detail__name">
               <span class="fields-label">{{ 'collSettings.groups.nameLabel' | t }}</span>
               <ui-text-input
                 class="rename"
@@ -69,7 +69,7 @@
               />
             </div>
 
-            <div class="group-row__order">
+            <div class="detail__order">
               <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
               <ui-select
                 class="compact order-by"
@@ -100,7 +100,7 @@
               />
             </div>
 
-            <div class="group-row__fields">
+            <div class="detail__fields">
               <span class="fields-label">{{ 'collSettings.groups.fields' | t }}</span>
               @for (field of sel.node.fields; track field.name) {
                 <span class="field-chip">
@@ -143,7 +143,7 @@
                 >{{ 'collSettings.groups.addField' | t }}</ui-button>
             </div>
 
-            <div class="group-row__sections">
+            <div class="detail__sections">
               <span class="fields-label">{{ 'collSettings.sections.label' | t }}</span>
               @for (row of sel.sections; track row.section.id; let i = $index) {
                 <span class="section-chip">
