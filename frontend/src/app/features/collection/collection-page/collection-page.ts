@@ -42,8 +42,10 @@ import {
   readOwn,
   readSection,
   readSort,
+  readTag,
   sectionParams,
   sortParams,
+  tagParams,
 } from '../browse-params';
 import { CollectionHero } from './collection-hero/collection-hero';
 import { CollectionFilters } from './collection-toolbar/collection-filters';
@@ -120,6 +122,8 @@ export class CollectionPage {
   readonly s = input<string | undefined>(undefined);
   readonly cond = input<string | undefined>(undefined);
   readonly own = input<string | undefined>(undefined);
+  /** `?tag=` — one exact tag. Arrives by clicking a tag on an item. */
+  readonly tag = input<string | undefined>(undefined);
   readonly sort = input<string | undefined>(undefined);
   readonly dir = input<string | undefined>(undefined);
 
@@ -128,6 +132,15 @@ export class CollectionPage {
     readSection(this.s(), this.sections(), this.g() ?? null),
   );
   protected readonly ownFilter = computed<OwnFilter>(() => readOwn(this.own()));
+  /**
+   * Null both when no tag was asked for and when the one asked for is carried by
+   * nothing in this collection — see `readTag`. Resolved against the stored
+   * items rather than `sourceItems()`, because a pending drag reorders the list
+   * and never changes anybody's tags.
+   */
+  protected readonly tagFilter = computed(() =>
+    readTag(this.tag(), this.collection()?.items ?? []),
+  );
   /** Null means "use the selected group's configured order". */
   protected readonly sortOverride = computed(() => readSort(this.sort(), this.dir()));
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
@@ -407,6 +420,7 @@ export class CollectionPage {
     sectionId: this.sectionFilter(),
     condition: this.condition(),
     own: this.ownFilter(),
+    tag: this.tagFilter(),
     query: this.store.query(),
     sort: this.sortOverride(),
   }));
@@ -564,6 +578,7 @@ export class CollectionPage {
       !!this.condition() ||
       !!this.ownFilter() ||
       !!this.sectionFilter() ||
+      !!this.tagFilter() ||
       this.searching(),
   );
 
@@ -667,6 +682,10 @@ export class CollectionPage {
     this.narrow(ownParams(next));
   }
 
+  protected setTag(next: string | null): void {
+    this.narrow(tagParams(next));
+  }
+
   protected setSortOverride(next: GroupSort | null): void {
     this.narrow(sortParams(next));
   }
@@ -705,7 +724,12 @@ export class CollectionPage {
    */
   protected clearFilters(): void {
     this.store.query.set('');
-    this.narrow({ ...conditionParams(null), ...ownParams(null), ...sectionParams(null) });
+    this.narrow({
+      ...conditionParams(null),
+      ...ownParams(null),
+      ...sectionParams(null),
+      ...tagParams(null),
+    });
   }
 
   private narrow(queryParams: Params): void {

@@ -3,6 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../core/api/images-api';
 import { I18nService } from '../../core/i18n';
+import { Collection } from '../../core/models';
 import { ImageFocusService } from '../../core/state/image-focus.service';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
@@ -54,6 +55,21 @@ export class DashboardPage {
    * point is to reserve the row, not to guess the count.
    */
   protected readonly loading = computed(() => !this.store.loaded());
+
+  /**
+   * "324 items across 5 collections · welcome back, Marcus".
+   *
+   * Two independent counts in one sentence: neither can be a `.one`/`.other`
+   * pair on its own, so each arrives as a rendered count phrase and the sentence
+   * stays a single translated unit whose word order the translator owns.
+   */
+  protected readonly sub = computed(() =>
+    this.i18n.t('dashboard.sub', {
+      items: this.i18n.count(this.store.totalItems(), 'item'),
+      collections: this.i18n.count(this.store.collections().length, 'collection'),
+      name: this.store.profile()?.name?.split(' ')?.[0] ?? '',
+    }),
+  );
   protected readonly placeholders = [0, 1, 2, 3];
 
   private readonly allItems = computed(() =>
@@ -95,13 +111,29 @@ export class DashboardPage {
     const collections = this.store.collections().length;
     const locale = this.i18n.locale();
     return [
-      { label: this.i18n.t('dashboard.stat.items'), values: [String(this.store.totalItems())], sub: this.i18n.t('dashboard.stat.itemsSub', { collections }) },
+      {
+        label: this.i18n.t('dashboard.stat.items'),
+        values: [String(this.store.totalItems())],
+        sub: this.i18n.plural(
+          collections,
+          'dashboard.stat.itemsSub.one',
+          'dashboard.stat.itemsSub.other',
+        ),
+      },
       {
         label: this.i18n.t('dashboard.stat.value'),
         values: this.store.ownedValueByCurrency().map(x => formatMoney(x.total, locale, x.currency)),
         sub: this.appreciationLabel(),
       },
-      { label: this.i18n.t('dashboard.stat.groups'), values: [String(this.store.totalGroups())], sub: this.i18n.t('dashboard.stat.groupsSub', { collections }) },
+      {
+        label: this.i18n.t('dashboard.stat.groups'),
+        values: [String(this.store.totalGroups())],
+        sub: this.i18n.plural(
+          collections,
+          'dashboard.stat.groupsSub.one',
+          'dashboard.stat.groupsSub.other',
+        ),
+      },
       { label: this.i18n.t('dashboard.stat.added'), values: [String(this.addedThisWeek())], sub: this.i18n.t('dashboard.stat.addedSub') },
     ];
   });
@@ -129,6 +161,18 @@ export class DashboardPage {
 
   protected ownedCount(collectionId: string): number {
     return this.store.collection(collectionId)?.items.filter(isOwned).length ?? 0;
+  }
+
+  /**
+   * "9/34 owned · 3 groups" — the group half is a count phrase, so a collection
+   * with one group no longer reads "1 groups".
+   */
+  protected collectionMeta(collection: Collection): string {
+    return this.i18n.t('dashboard.collectionMeta', {
+      owned: this.ownedCount(collection.id),
+      total: collection.items.length,
+      groups: this.i18n.count(collection.groups.length, 'group'),
+    });
   }
 
   protected ownedValue(collectionId: string): number {

@@ -22,6 +22,7 @@ import {
   valueIsPaid,
 } from '../../../core/utils/copies.util';
 import { formatDate } from '../../../core/utils/date.util';
+import { editableTags } from '../../../core/utils/tags.util';
 import { fieldsFor, groupById, pathOf } from '../../../core/utils/groups.util';
 import { readCriteria } from '../browse-params';
 import { formatMoney } from '../../../core/utils/money.util';
@@ -35,6 +36,7 @@ import {
   UiCard,
   UiEmpty,
   UiIcon,
+  UiChip,
   UiLightbox,
   UiSectionLabel,
   UiSkeleton,
@@ -59,6 +61,7 @@ const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
     UiEmpty,
     UiButton,
     UiCard,
+    UiChip,
     UiIcon,
     UiLightbox,
     UiSectionLabel,
@@ -99,6 +102,7 @@ export class ItemPage {
   readonly s = input<string | undefined>(undefined);
   readonly cond = input<string | undefined>(undefined);
   readonly own = input<string | undefined>(undefined);
+  readonly tag = input<string | undefined>(undefined);
   readonly sort = input<string | undefined>(undefined);
   readonly dir = input<string | undefined>(undefined);
 
@@ -161,12 +165,13 @@ export class ItemPage {
           s: this.s(),
           cond: this.cond(),
           own: this.own(),
+          tag: this.tag(),
           sort: this.sort(),
           dir: this.dir(),
         },
         this.g() ?? null,
         this.store.query(),
-        collection.sections,
+        { sections: collection.sections, items: collection.items },
       ),
       collection.sections,
     );
@@ -313,9 +318,29 @@ export class ItemPage {
     });
   });
 
-  protected readonly tags = computed(
-    () => this.item()?.tags.map(t => `#${t}`).join('  ') ?? '',
+  /**
+   * The tags, each as a link that filters the collection by it.
+   *
+   * `editableTags` drops the derived `wanted` tag, exactly as the editor does:
+   * it is not a label anybody applied, and `readTag` refuses it on the way back
+   * in, so a chip for it would navigate to no filter at all.
+   *
+   * The query params are built here rather than as an object literal in the
+   * template, so an OnPush check does not hand `ui-chip` a new object — and so
+   * the link stays stable while the page's own `?tag=` changes around it.
+   */
+  protected readonly tags = computed(() =>
+    editableTags(this.item()?.tags ?? []).map(name => ({ name, params: { tag: name } })),
   );
+
+  /**
+   * Where a tag chip goes: the collection, not a filtered copy of this page.
+   *
+   * `ui-chip` merges the query string, so the group, the order and any other
+   * filter already in the URL come along and the tag is one more predicate on
+   * the very list this item was opened from.
+   */
+  protected readonly collectionLink = computed(() => ['/c', this.collectionId()]);
 
   protected readonly groupPath = computed(() => {
     const collection = this.collection();

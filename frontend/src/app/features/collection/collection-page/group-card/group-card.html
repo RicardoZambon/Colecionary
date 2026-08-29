@@ -22,7 +22,7 @@
       </div>
 
       @if (stats().childCount) {
-        <div class="card__subs">{{ 'groupCard.subGroups' | t: { n: stats().childCount } }}</div>
+        <div class="card__subs">{{ subGroupsLabel() }}</div>
       }
 
       @if (empty()) {
@@ -58,7 +58,7 @@
         <div class="card__foot">
           <span class="card__missing">
             @if (stats().missing) {
-              <span class="warn">{{ 'progress.missing' | t: { n: stats().missing } }}</span>
+              <span class="warn">{{ missingLabel() }}</span>
               @if (stats().uncatalogued) {
                 <span class="soft">{{ 'progress.listed' | t: { n: stats().wanted } }}</span>
               }
@@ -71,7 +71,7 @@
               <span class="soft">{{ 'progress.over' | t: { n: stats().over } }}</span>
             }
             @if (stats().copies > stats().catalogued) {
-              <span class="soft">{{ 'progress.copies' | t: { n: stats().copies } }}</span>
+              <span class="soft">{{ copiesLabel() }}</span>
             }
           </span>
           <!-- `itemValue`, not `money`: nothing held is unknown, not zero. -->

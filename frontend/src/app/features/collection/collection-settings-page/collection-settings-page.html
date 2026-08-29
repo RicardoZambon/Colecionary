@@ -50,7 +50,7 @@
                   @if (!last) { <ui-icon class="detail__sep" name="chevron-right" [size]="11" /> }
                 }
               </span>
-              <span class="count">{{ 'collSettings.groups.itemCount' | t: { n: sel.count } }}</span>
+              <span class="count">{{ itemCount(sel.count) }}</span>
               <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: sel.node.id })"
                 >{{ 'collSettings.groups.addSub' | t }}</ui-button>
               <ui-button
@@ -206,7 +206,7 @@
                     [value]="row.section.name"
                     (valueChange)="renameSection(row.section.id, $event)"
                   />
-                  <span class="count">{{ 'collSettings.sections.itemCount' | t: { n: row.count } }}</span>
+                  <span class="count">{{ itemCount(row.count) }}</span>
                   <ui-text-input
                     class="target"
                     type="number"

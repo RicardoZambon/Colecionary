@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { Condition, GroupNode, Item, ItemCopy, Section } from '../models';
-import { NO_FILTERS, matchesQuery, neighbours, scopeItems, visibleItems } from './browse.util';
+import { NO_FILTERS, hasTag, matchesQuery, neighbours, scopeItems, visibleItems } from './browse.util';
 import { UNGROUPED_ID } from './group-stats.util';
 import { UNSECTIONED_ID } from './sections.util';
+import { WANTED_TAG } from './tags.util';
 
 function group(id: string, parentId: string | null = null): GroupNode {
   return { id, name: id, parentId, fields: [], sort: null, target: null };
@@ -127,6 +128,84 @@ describe('browse.util', () => {
       const original = ids(ITEMS);
       visibleItems(ITEMS, GROUPS, { ...ALL, sort: { by: 'name', direction: 'asc' } });
       expect(ids(ITEMS)).toEqual(original);
+    });
+  });
+
+  describe('hasTag', () => {
+    const tagged = { ...item('x', 'rare'), tags: ['CIB', 'first print'] };
+
+    it('matches a whole tag, ignoring case, the way the editor does', () => {
+      expect(hasTag(tagged, 'cib')).toBe(true);
+      expect(hasTag(tagged, 'CIB')).toBe(true);
+      expect(hasTag(tagged, '  cib ')).toBe(true);
+      expect(hasTag(tagged, 'first print')).toBe(true);
+    });
+
+    it('is exact, so it does not match the substrings a search would', () => {
+      // This is the whole difference between a tag filter and the search box:
+      // `matchesQuery` finds 'cib' inside 'cibernetico', and a filter must not.
+      expect(hasTag(tagged, 'ci')).toBe(false);
+      expect(hasTag(tagged, 'print')).toBe(false);
+      expect(hasTag({ ...tagged, tags: ['unboxed'] }, 'boxed')).toBe(false);
+    });
+
+    it('carries nothing for a blank tag or the derived wanted one', () => {
+      expect(hasTag(tagged, '')).toBe(false);
+      expect(hasTag({ ...tagged, tags: [WANTED_TAG] }, WANTED_TAG)).toBe(false);
+    });
+  });
+
+  describe('visibleItems — the tag filter', () => {
+    const TAGGED = [
+      { ...item('charizard', 'rare', [copy('Mint')]), tags: ['CIB', 'rare'] },
+      { ...item('alakazam', 'rare'), tags: ['cib'] },
+      { ...item('blastoise', 'cards', [copy('Mint')]), tags: ['loose'] },
+      { ...item('tetris', 'games', [copy('Mint')]), tags: [] },
+    ];
+
+    it('keeps only the items carrying it, however either side spelled it', () => {
+      // Order is the default sort's business, not the filter's — hence .sort().
+      expect(ids(visibleItems(TAGGED, GROUPS, { ...ALL, tag: 'cib' })).sort()).toEqual([
+        'alakazam',
+        'charizard',
+      ]);
+    });
+
+    it('is one more predicate, so it composes with condition, status and search', () => {
+      // Four filters at once, each removing something the others would keep:
+      // 'alakazam' owns nothing, 'blastoise' is not tagged cib, 'tetris' is
+      // neither — and the search still has to match.
+      expect(
+        ids(
+          visibleItems(TAGGED, GROUPS, {
+            ...ALL,
+            tag: 'cib',
+            condition: 'Mint',
+            own: 'owned',
+            query: 'chari',
+          }),
+        ),
+      ).toEqual(['charizard']);
+
+      // Drop the tag and the same filters keep two more items.
+      expect(
+        ids(visibleItems(TAGGED, GROUPS, { ...ALL, condition: 'Mint', own: 'owned' })).sort(),
+      ).toEqual(['blastoise', 'charizard', 'tetris']);
+
+      // Contradict it and nothing survives, rather than the tag quietly winning.
+      expect(visibleItems(TAGGED, GROUPS, { ...ALL, tag: 'loose', own: 'wanted' })).toEqual([]);
+    });
+
+    it('narrows within the group scope rather than escaping it', () => {
+      expect(
+        ids(visibleItems(TAGGED, GROUPS, { ...ALL, groupId: 'games', tag: 'cib' })),
+      ).toEqual([]);
+    });
+
+    it('does not narrow at all when no tag is asked for', () => {
+      expect(ids(visibleItems(TAGGED, GROUPS, { ...ALL, tag: null }))).toEqual(
+        ids(visibleItems(TAGGED, GROUPS, ALL)),
+      );
     });
   });
 

@@ -122,6 +122,20 @@ export class SettingsPage {
     });
   }
 
+  /** "1 item" / "12 itens" beside a collection — the shared count phrase. */
+  protected readonly itemCount = (n: number): string => this.i18n.count(n, 'item');
+
+  /**
+   * "324 items across 5 collections". Two independent counts, so each arrives as
+   * a rendered count phrase and the sentence stays one translated unit.
+   */
+  protected readonly dataSub = computed(() =>
+    this.i18n.t('settings.account.dataSub', {
+      items: this.i18n.count(this.store.totalItems(), 'item'),
+      collections: this.i18n.count(this.store.collections().length, 'collection'),
+    }),
+  );
+
   protected readonly planSub = computed(() =>
     this.i18n.t(this.store.profile()?.plan === 'pro' ? 'settings.plan.onPro' : 'settings.plan.onFree'),
   );

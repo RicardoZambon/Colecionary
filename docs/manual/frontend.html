@@ -904,6 +904,102 @@
   usuário digitou.
 </p>
 
+<h2 id="contagens">Números que concordam com o texto ao lado</h2>
+
+<p>
+  Um usuário viu <strong>“1 subgrupos”</strong>. A escada em vigor tem três
+  degraus, e a escolha entre eles não é de estilo:
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Caso</th><th>Mecanismo</th><th>Exemplo</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Uma string, sem contagem</td>
+      <td>o pipe <code>t</code></td>
+      <td><code>itemForm.tags</code></td>
+    </tr>
+    <tr>
+      <td><strong>Uma</strong> contagem</td>
+      <td>duas chaves <code>.one</code>/<code>.other</code> via
+          <code>I18nService.plural</code>, com um 4º argumento opcional
+          <code>params</code> para os outros marcadores da mesma frase</td>
+      <td><code>progress.missing.one</code>/<code>.other</code> —
+          <em>falta 1</em> / <em>faltam 179</em></td>
+    </tr>
+    <tr>
+      <td><strong>Duas ou mais</strong> contagens independentes</td>
+      <td>a frase inteira numa chave só, recebendo locuções de
+          <code>I18nService.count(n, noun)</code></td>
+      <td><code>dashboard.sub</code> —
+          <em>“324 itens em 10 coleções · bem-vindo de volta, Marcus”</em></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>COUNT_NOUNS</code> é uma <em>tabela</em>, não uma interpolação
+  <code>noun.&lt;nome&gt;</code>: as duas metades continuam <code>MessageKey</code>
+  de verdade, então um par cruzado ou faltando quebra o build em vez de imprimir
+  <code>noun.item.one</code> na tela de alguém. E <code>{n}</code> é aplicado
+  <em>depois</em> de <code>params</code> de propósito, para nenhum chamador
+  conseguir imprimir um número enquanto flexiona por outro.
+</p>
+
+<div class="callout warn">
+  <span class="label">Por que o português é onde isso dói</span>
+  <p>
+    Não há como consertar acrescentando um “s”: <em>item</em> → <strong>itens</strong>,
+    <em>coleção</em> → <strong>coleções</strong>, <em>seção</em> → <strong>seções</strong>
+    são irregulares; e <em>faltando</em> não flexiona enquanto o verbo
+    <em>falta/faltam</em> flexiona. É por isso que uma frase com <em>uma</em>
+    contagem ainda é escrita duas vezes: a contagem quase sempre concorda com um
+    verbo em outro lugar dela, e o inglês esconde isso porque “missing” e “hold”
+    não mudam.
+  </p>
+</div>
+
+<p>
+  O que <strong>não</strong> é caso de concordância, e não deve ser “corrigido”:
+  ordinal (<code>exemplar nº{n}</code>, <code>foto {n} de {total}</code>), delta
+  (<code>+{n} acima</code>), razão (<code>{owned}/{total}</code>), particípio que
+  não flexiona (<code>{n} na wishlist</code>, <code>{n} em mãos</code>), rótulo
+  com contagem anexada (<code>Exemplares · 3</code>), e contagem contra uma
+  constante de compilação maior que um (<code>Até 50 exemplares</code>).
+</p>
+
+<h2 id="etiquetas">Etiquetas: editáveis, buscáveis e agora navegáveis</h2>
+
+<p>
+  As etiquetas estavam no modelo, no DTO e no validador desde o começo, e por um
+  tempo só a barra de edição em massa mexia nelas — dava para aplicar uma
+  etiqueta a quarenta itens e não corrigir em nenhum. Hoje o ciclo está fechado:
+  <code>ui-tag-input</code> no formulário do item, adicionar/remover uma na barra
+  de massa, e <code>?tag=</code> para filtrar.
+</p>
+
+<p>
+  As regras de “o que é uma etiqueta” vivem só em
+  <code>core/utils/tags.util.ts</code>: guardada como foi digitada (apenas sem
+  espaços nas pontas), comparada <em>ignorando</em> a caixa, e a
+  <code>wanted</code> derivada nunca é oferecida. O filtro não reimplementa nada
+  disso — <code>hasTag</code> pergunta a <code>withTagAdded</code> se a
+  referência volta igual. <strong>A consequência é o motivo:</strong> duas
+  comparações independentes acabariam partindo um rótulo em duas respostas, que
+  é exatamente a falha que <code>tags.util.ts</code> existe para evitar.
+</p>
+
+<p>
+  <code>readTag</code> confere contra a coleção inteira e uma etiqueta
+  desconhecida lê como “sem filtro”, nunca como lista vazia — ver ADR-66. Na
+  página do item cada etiqueta é um <code>ui-chip</code> com link (um
+  <code>&lt;a&gt;</code> de verdade, para o clique do meio funcionar), e o filtro
+  ativo aparece e se limpa na mesma linha de chips que condição e situação, com
+  <code>clearFilters()</code> alcançando ele também.
+</p>
+
 <h2 id="temas">Temas e tokens</h2>
 
 <p>

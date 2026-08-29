@@ -73,7 +73,7 @@
             @if (entry.item.copies.length > 1) {
               <!-- Spelled out, not only folded into the condition badge: how many
                    you hold is the thing you came to check. -->
-              <span class="item-card__copies">{{ 'itemGrid.copies' | t: { n: entry.item.copies.length } }}</span>
+              <span class="item-card__copies">{{ copiesLabel(entry.item.copies.length) }}</span>
             }
           </div>
           <div class="item-card__foot">

@@ -113,17 +113,32 @@ export class CollectionHero {
    */
   protected readonly progressText = computed(() => {
     const scope = this.scope();
+    // `catalogued` is the count that decides the agreement — pt-BR writes
+    // "1 catalogado" against "2 catalogados". The other two figures agree with
+    // nothing and ride along as plain params.
     return scope.hasTarget
-      ? this.i18n.t('progress.textTarget', {
-          owned: scope.owned,
-          catalogued: scope.catalogued,
-          target: scope.target!,
-        })
-      : this.i18n.t('progress.textNoTarget', {
-          owned: scope.owned,
-          catalogued: scope.catalogued,
-        });
+      ? this.i18n.plural(
+          scope.catalogued,
+          'progress.textTarget.one',
+          'progress.textTarget.other',
+          { owned: scope.owned, target: scope.target! },
+        )
+      : this.i18n.plural(
+          scope.catalogued,
+          'progress.textNoTarget.one',
+          'progress.textNoTarget.other',
+          { owned: scope.owned },
+        );
   });
+
+  /** pt-BR conjugates this one: "falta 1", "faltam 2". */
+  protected readonly missingLabel = computed(() =>
+    this.i18n.plural(this.scope().missing, 'progress.missing.one', 'progress.missing.other'),
+  );
+
+  protected readonly copiesLabel = computed(() =>
+    this.i18n.plural(this.scope().copies, 'progress.copies.one', 'progress.copies.other'),
+  );
 
   /**
    * Uploads the picture, puts it in place, and only then offers to frame it.

@@ -1205,6 +1205,42 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
   </li>
 </ol>
 
+<h2 id="etiqueta">15 · Navegar por etiqueta</h2>
+
+<p>
+  Abrir um item, clicar numa etiqueta, e a coleção fica filtrada por ela.
+</p>
+
+<ol>
+  <li>A página do item renderiza cada etiqueta como <code>ui-chip</code> com
+      link, apontando para a coleção com <code>{ tag }</code>. O chip usa
+      <code>queryParamsHandling="merge"</code>, então o clique estreita
+      <em>a lista de onde o item foi aberto</em> — grupo, visão e os outros
+      filtros seguem junto — em vez de recomeçar na coleção inteira.</li>
+  <li><code>readTag</code> confere o valor contra as etiquetas da coleção. Uma
+      etiqueta que nenhum item carrega vira <code>null</code>: “sem filtro”, e
+      não “nada encontrado”.</li>
+  <li><code>visibleItems</code> aplica <code>hasTag</code> como um predicado a
+      mais, ao lado de condição, situação, seção e busca. Não é um segundo
+      caminho de código.</li>
+  <li>O chip <code>#etiqueta ×</code> aparece na linha de filtros e é a saída;
+      <code>clearFilters()</code> também limpa a etiqueta, senão o estado vazio
+      ofereceria uma saída que não funciona.</li>
+</ol>
+
+<div class="callout">
+  <span class="label">A consequência que vale escrever</span>
+  <p>
+    Como <code>?tag=</code> é estado de URL e todo link dentro da coleção
+    preserva a query string, a lista filtrada é compartilhável, sobrevive a um
+    recarregamento, e abrir um item dela e voltar cai na mesma lista — as setas
+    <code>←</code>/<code>→</code> passam a andar pelo conjunto filtrado. O
+    trade-off: uma etiqueta digitada errado mostra tudo em silêncio, em vez de
+    uma página vazia. Escolhido porque “nada encontrado” não deixa o leitor
+    distinguir se o problema é a URL ou a coleção.
+  </p>
+</div>
+
 <div class="pagenav"></div>
 </main>
 </div>

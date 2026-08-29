@@ -53,15 +53,7 @@
         </div>
         <div class="listing__body">
           <div class="name">{{ listing.name }}</div>
-          <div class="meta">{{
-            'store.listingMeta'
-              | t
-                : {
-                    publisher: listing.publisher,
-                    items: listing.items.length,
-                    groups: listing.groups.length
-                  }
-          }}</div>
+          <div class="meta">{{ listingMeta(listing) }}</div>
           <div class="desc">{{ listing.description }}</div>
           <div class="fill"></div>
           <div class="foot">

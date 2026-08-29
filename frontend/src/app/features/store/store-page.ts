@@ -29,6 +29,18 @@ export class StorePage {
    * prediction — it is a reserved row.
    */
   protected readonly loading = computed(() => !this.store.loaded());
+
+  /**
+   * "by Panini · 300 items · 12 groups" — two independent counts, each rendered
+   * as a count phrase so a one-group checklist stops saying "1 grupos".
+   */
+  protected listingMeta(listing: StoreListing): string {
+    return this.i18n.t('store.listingMeta', {
+      publisher: listing.publisher,
+      items: this.i18n.count(listing.items.length, 'item'),
+      groups: this.i18n.count(listing.groups.length, 'group'),
+    });
+  }
   protected readonly placeholders = [0, 1, 2];
 
   protected inVault(listing: StoreListing): boolean {

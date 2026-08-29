@@ -110,10 +110,7 @@
       <ui-card class="account-card">
         <span class="who">
           <span class="name">{{ 'settings.account.data' | t }}</span>
-          <span class="email">{{
-            'settings.account.dataSub'
-              | t: { items: store.totalItems(), collections: store.collections().length }
-          }}</span>
+          <span class="email">{{ dataSub() }}</span>
         </span>
         <ui-button variant="ghost" size="sm" [disabled]="exporting()" (click)="exportArchive()">
           {{ (exporting() ? 'settings.account.exporting' : 'settings.account.export') | t }}
@@ -146,9 +143,7 @@
         <ui-card class="account-card">
           <span class="who">
             <span class="name">{{ collection.name }}</span>
-            <span class="email">{{
-              'settings.account.collectionMeta' | t: { items: collection.items.length }
-            }}</span>
+            <span class="email">{{ itemCount(collection.items.length) }}</span>
           </span>
           <ui-button
             variant="ghost"

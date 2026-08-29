@@ -210,18 +210,24 @@ export class ImportDialog {
 
   protected readonly replacing = signal(new Set<string>());
 
-  protected readonly lede = computed(() => {
-    const clashing = (this.plan()?.entries ?? []).filter(entry => entry.existingId).length;
-    return this.i18n.t(clashing === 1 ? 'import.lede.one' : 'import.lede.other', { n: clashing });
-  });
+  // Both go through `plural` rather than a hand-rolled `=== 1` ternary: one
+  // place decides what "singular" means, so a language that ever disagrees is a
+  // change to the service and not to every call site.
+  protected readonly lede = computed(() =>
+    this.i18n.plural(
+      (this.plan()?.entries ?? []).filter(entry => entry.existingId).length,
+      'import.lede.one',
+      'import.lede.other',
+    ),
+  );
 
-  protected readonly warning = computed(() => {
-    const n = this.replacing().size;
-    return this.i18n.t(
-      n === 1 ? 'import.overwriteWarning.one' : 'import.overwriteWarning.other',
-      { n },
-    );
-  });
+  protected readonly warning = computed(() =>
+    this.i18n.plural(
+      this.replacing().size,
+      'import.overwriteWarning.one',
+      'import.overwriteWarning.other',
+    ),
+  );
 
   constructor() {
     effect(onCleanup => {

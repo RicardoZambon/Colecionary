@@ -43,15 +43,20 @@ export class SectionHeader {
   protected readonly progressText = computed(() => {
     const stats = this.stats();
     if (!stats) return '';
+    // `catalogued` carries the agreement; `owned` and `target` agree with
+    // nothing and travel as plain params.
     return stats.hasTarget
-      ? this.i18n.t('progress.textTarget', {
-          owned: stats.owned,
-          catalogued: stats.catalogued,
-          target: stats.target!,
-        })
-      : this.i18n.t('progress.textNoTarget', {
-          owned: stats.owned,
-          catalogued: stats.catalogued,
-        });
+      ? this.i18n.plural(
+          stats.catalogued,
+          'progress.textTarget.one',
+          'progress.textTarget.other',
+          { owned: stats.owned, target: stats.target! },
+        )
+      : this.i18n.plural(
+          stats.catalogued,
+          'progress.textNoTarget.one',
+          'progress.textNoTarget.other',
+          { owned: stats.owned },
+        );
   });
 }

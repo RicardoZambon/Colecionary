@@ -218,11 +218,11 @@ h1 {
 }
 
 .tags {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 7px;
-  white-space: pre;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
 }
 
 .price-row {

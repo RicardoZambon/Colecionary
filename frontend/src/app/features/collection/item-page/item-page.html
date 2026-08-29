@@ -121,7 +121,26 @@
       <div class="details">
         <div>
           <h1>{{ it.name }}</h1>
-          <div class="tags">{{ tags() }}</div>
+          <!-- Real links, not decoration: a tag is the fastest way to the rest
+               of the set, and it used to be dead mono text. `ui-chip` with
+               `link` renders an <a>, so middle-click and open-in-new-tab work.
+               The label carries the tag itself, and the tooltip says what the
+               click does. -->
+          @if (tags().length) {
+            <div class="tags">
+              <span class="sr-only">{{ 'itemPage.tags.aria' | t }}</span>
+              @for (tag of tags(); track tag.name) {
+                <ui-chip
+                  [small]="true"
+                  [link]="collectionLink()"
+                  [queryParams]="tag.params"
+                  [ariaLabel]="'itemPage.tags.filterBy' | t: { tag: tag.name }"
+                  [hint]="'itemPage.tags.filterBy' | t: { tag: tag.name }"
+                  >#{{ tag.name }}</ui-chip
+                >
+              }
+            </div>
+          }
         </div>
 
         <div class="price-row">

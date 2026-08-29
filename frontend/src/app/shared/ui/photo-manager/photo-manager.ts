@@ -43,7 +43,7 @@ import { UiReorder } from '../reorder/reorder';
       @if (full()) {
         <span>{{ 'photos.full' | t: { max: max() } }}</span>
       } @else {
-        <span>{{ 'photos.drop' | t }}<br />{{ 'photos.browse' | t: { remaining: remaining() } }}</span>
+        <span>{{ 'photos.drop' | t }}<br />{{ browseHint() }}</span>
       }
     </button>
 
@@ -308,6 +308,14 @@ export class UiPhotoManager {
 
   protected readonly remaining = computed(() => Math.max(0, this.max() - this.photoIds().length));
   protected readonly full = computed(() => this.remaining() === 0);
+
+  /**
+   * "· 3 left". pt-BR conjugates it — "falta 1" against "faltam 3" — so the
+   * count picks the sentence rather than only filling a hole in it.
+   */
+  protected readonly browseHint = computed(() =>
+    this.i18n.plural(this.remaining(), 'photos.browse.one', 'photos.browse.other'),
+  );
 
   /** Tiles are ~104px, so a thumbnail is the right rendition by a wide margin. */
   protected thumbUrl(id: string): string | null {

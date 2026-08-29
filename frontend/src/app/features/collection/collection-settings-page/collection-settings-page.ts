@@ -134,6 +134,12 @@ export class CollectionSettingsPage {
   /** The vault is still in flight — not the same fact as 'no such collection'. */
   protected readonly loading = computed(() => !this.store.loaded());
   private readonly i18n = inject(I18nService);
+
+  /**
+   * "1 item" / "12 itens" beside a group or a section — the shared count phrase
+   * rather than a bespoke `{n} items` key, which rendered "1 itens".
+   */
+  protected readonly itemCount = (n: number): string => this.i18n.count(n, 'item');
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
   private readonly router = inject(Router);
@@ -561,8 +567,10 @@ export class CollectionSettingsPage {
       bodyKey: 'confirm.deleteCollection.body',
       params: {
         name: draft.name,
-        items: draft.items.length,
-        groups: draft.groups.length,
+        // Two independent counts in one sentence: each arrives already rendered
+        // as a count phrase, so the sentence stays a single translated unit.
+        items: this.i18n.count(draft.items.length, 'item'),
+        groups: this.i18n.count(draft.groups.length, 'group'),
       },
       confirmKey: 'confirm.deleteCollection.confirm',
       tone: 'danger',
@@ -750,8 +758,12 @@ export class CollectionSettingsPage {
     const holders = this.fieldHolderCount(groupId, name);
     const confirmed = await this.confirm.ask({
       titleKey: 'confirm.removeField.title',
-      bodyKey: holders ? 'confirm.removeField.body' : 'confirm.removeField.bodyEmpty',
-      params: { name, count: holders },
+      bodyKey: holders
+        ? holders === 1
+          ? 'confirm.removeField.body.one'
+          : 'confirm.removeField.body.other'
+        : 'confirm.removeField.bodyEmpty',
+      params: { name, n: holders },
       confirmKey: 'confirm.removeField.confirm',
       tone: 'danger',
     });
@@ -912,8 +924,12 @@ export class CollectionSettingsPage {
 
     const confirmed = await this.confirm.ask({
       titleKey: 'confirm.removeSection.title',
-      bodyKey: affected ? 'confirm.removeSection.body' : 'confirm.removeSection.bodyEmpty',
-      params: { name: section?.name ?? '', count: affected },
+      bodyKey: affected
+        ? affected === 1
+          ? 'confirm.removeSection.body.one'
+          : 'confirm.removeSection.body.other'
+        : 'confirm.removeSection.bodyEmpty',
+      params: { name: section?.name ?? '', n: affected },
       confirmKey: 'confirm.removeSection.confirm',
       tone: 'danger',
     });
@@ -976,7 +992,13 @@ export class CollectionSettingsPage {
         return sectionId ? { ...item, groupId, sectionId } : item;
       }),
     }));
-    this.toast.flash(this.i18n.t('toast.section.converted', { n: children.length }));
+    this.toast.flash(
+      this.i18n.plural(
+        children.length,
+        'toast.section.converted.one',
+        'toast.section.converted.other',
+      ),
+    );
   }
 
   // --- sharing ---

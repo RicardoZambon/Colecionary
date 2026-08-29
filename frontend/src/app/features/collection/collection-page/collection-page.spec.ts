@@ -1,9 +1,9 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { Observable, of } from 'rxjs';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VaultApi, VersionedCollection, VersionedItem } from '../../../core/api/vault-api';
 import {
@@ -130,7 +130,14 @@ function collection(patch: Partial<Collection> = {}): Collection {
 }
 
 async function mount(
-  opts: { collection?: Collection; g?: string; v?: string; cond?: string; own?: string } = {},
+  opts: {
+    collection?: Collection;
+    g?: string;
+    v?: string;
+    cond?: string;
+    own?: string;
+    tag?: string;
+  } = {},
 ) {
   const api = new FakeVaultApi();
   api.collections = [opts.collection ?? collection()];
@@ -153,6 +160,7 @@ async function mount(
   if (opts.v !== undefined) fixture.componentRef.setInput('v', opts.v);
   if (opts.cond !== undefined) fixture.componentRef.setInput('cond', opts.cond);
   if (opts.own !== undefined) fixture.componentRef.setInput('own', opts.own);
+  if (opts.tag !== undefined) fixture.componentRef.setInput('tag', opts.tag);
   fixture.detectChanges();
 
   const el = fixture.nativeElement as HTMLElement;
@@ -167,7 +175,20 @@ async function mount(
   const emptyTitle = () => (empty()?.querySelector('.title')?.textContent ?? '').trim();
   const emptyIcon = () => empty()?.querySelector('ui-icon')?.getAttribute('data-name') ?? null;
 
-  return { el, fixture, headings, empty, emptyTitle };
+  const cardNames = () =>
+    [...el.querySelectorAll('.item-card__name')].map(n => (n.textContent ?? '').trim());
+  /** The filter row's chips, as [label, isSelected] pairs. */
+  const filterChips = () =>
+    [...el.querySelectorAll('app-collection-filters .chip')].map(c => ({
+      label: (c.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      selected: c.classList.contains('chip--selected'),
+    }));
+  const tagChip = () =>
+    [...el.querySelectorAll<HTMLElement>('app-collection-filters .chip')].find(c =>
+      (c.textContent ?? '').trim().startsWith('#'),
+    ) ?? null;
+
+  return { el, fixture, headings, empty, emptyTitle, emptyIcon, cardNames, filterChips, tagChip };
 }
 
 describe('CollectionPage — sections', () => {
@@ -341,5 +362,103 @@ describe('CollectionPage — the toolbar with nothing to filter', () => {
     expect(bar.querySelector('.view-toggle')).not.toBeNull();
     expect(bar.querySelector('.sort-trigger')).not.toBeNull();
     expect(page.el.querySelector('app-collection-filters')).not.toBeNull();
+  });
+});
+
+
+describe('CollectionPage — the tag filter', () => {
+  /** Three items, two of them tagged `cib` — one of those spelled `CIB`. */
+  function tagged(): Collection {
+    return collection({
+      sections: [],
+      items: [
+        { ...item('contra', 'espanha'), tags: ['CIB', 'rare'] },
+        { ...item('gradius', 'espanha'), tags: ['cib'] },
+        { ...item('lifeforce', 'espanha'), tags: ['loose'] },
+      ],
+    });
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+
+  it('narrows the grid to the items carrying the tag, however either spelled it', async () => {
+    const all = await mount({ collection: tagged(), g: 'espanha', v: 'grid' });
+    expect(all.cardNames()).toHaveLength(3);
+
+    TestBed.resetTestingModule();
+    const filtered = await mount({ collection: tagged(), g: 'espanha', v: 'grid', tag: 'cib' });
+    expect(filtered.cardNames().sort()).toEqual(['contra', 'gradius']);
+  });
+
+  it('shows the active tag in the filter row, and only when one is set', async () => {
+    // Off screen, a filter that narrows the list is indistinguishable from a
+    // collection that has gone missing.
+    const none = await mount({ collection: tagged(), g: 'espanha', v: 'grid' });
+    expect(none.tagChip()).toBeNull();
+
+    TestBed.resetTestingModule();
+    const page = await mount({ collection: tagged(), g: 'espanha', v: 'grid', tag: 'cib' });
+    const chip = page.tagChip();
+    expect(chip).not.toBeNull();
+    expect(chip!.textContent).toContain('#cib');
+    // Not colour alone: the row is labelled, and the chip names the tag.
+    expect(page.el.querySelector('app-collection-filters')!.textContent).toContain('Tag');
+  });
+
+  it('clears the tag from the URL when its chip is clicked', async () => {
+    const page = await mount({ collection: tagged(), g: 'espanha', v: 'grid', tag: 'cib' });
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    page.tagChip()!.click();
+    page.fixture.detectChanges();
+
+    expect(navigate).toHaveBeenCalled();
+    const [, options] = navigate.mock.calls[0] as [unknown[], Record<string, unknown>];
+    expect(options['queryParams']).toEqual({ tag: null });
+    // A filter replaces the history entry rather than stacking one per toggle.
+    expect(options['replaceUrl']).toBe(true);
+  });
+
+  it('drops the tag along with the rest when the empty state offers a way out', async () => {
+    // Regression guard: an empty state offering "clear filters" while the tag
+    // survived would be a dead end wearing the clothes of a way out.
+    const page = await mount({
+      collection: tagged(),
+      g: 'espanha',
+      v: 'grid',
+      tag: 'loose',
+      own: 'owned',
+    });
+    expect(page.cardNames()).toEqual([]);
+    expect(page.empty()).not.toBeNull();
+
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    page.el.querySelector<HTMLElement>('.layout__main ui-empty ui-button button')!.click();
+    page.fixture.detectChanges();
+
+    const [, options] = navigate.mock.calls[0] as [unknown[], Record<string, unknown>];
+    expect(options['queryParams']).toMatchObject({ tag: null, cond: null, own: null, s: null });
+  });
+
+  it('reads a tag nothing carries as no filter, not as an empty list', async () => {
+    // The same choice `readCondition` makes for `Bananas`: a stale or mistyped
+    // URL shows the collection, it does not accuse it of being empty.
+    const page = await mount({ collection: tagged(), g: 'espanha', v: 'grid', tag: 'bananas' });
+    expect(page.cardNames()).toHaveLength(3);
+    expect(page.tagChip()).toBeNull();
+    expect(page.empty()).toBeNull();
   });
 });

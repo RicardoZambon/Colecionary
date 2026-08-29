@@ -13,18 +13,28 @@
 export const en = {
   // --- common ------------------------------------------------------------
   'confirm.deleteCollection.title': 'Delete «{name}»?',
+  // `{items}` and `{groups}` arrive as rendered count phrases (`I18nService.count`)
+  // — two independent counts in one sentence, which no single `.one`/`.other`
+  // pair can agree with.
   'confirm.deleteCollection.body':
-    'This destroys the collection and everything filed in it — {items} items across {groups} groups. It cannot be undone, and the export on this page is the only way back.',
+    'This destroys the collection and everything filed in it — {items} across {groups}. It cannot be undone, and the export on this page is the only way back.',
   'confirm.deleteCollection.confirm': 'Delete the collection',
   'confirm.removeField.title': 'Remove the field «{name}»?',
-  'confirm.removeField.body':
-    'It stops being shown or offered for every item in this group. {count} items hold a value for it — the values are kept and come back if you declare the field again.',
+  // Two keys, not a count phrase: the count inflects the verb ("holds"/"hold",
+  // and in pt-BR "tem"/"têm") and the noun after it, so the sentence itself has
+  // to be written twice.
+  'confirm.removeField.body.one':
+    'It stops being shown or offered for every item in this group. {n} item holds a value for it — the value is kept and comes back if you declare the field again.',
+  'confirm.removeField.body.other':
+    'It stops being shown or offered for every item in this group. {n} items hold a value for it — the values are kept and come back if you declare the field again.',
   'confirm.removeField.bodyEmpty':
     'It stops being shown or offered for every item in this group. No item holds a value for it yet.',
   'confirm.removeField.confirm': 'Remove the field',
   'confirm.removeSection.title': 'Delete the divider «{name}»?',
-  'confirm.removeSection.body':
-    '{count} items sit under it and will go back to having no divider. Which run each of them belonged to is not recorded anywhere else, so this cannot be undone.',
+  'confirm.removeSection.body.one':
+    '{n} item sits under it and will go back to having no divider. Which run it belonged to is not recorded anywhere else, so this cannot be undone.',
+  'confirm.removeSection.body.other':
+    '{n} items sit under it and will go back to having no divider. Which run each of them belonged to is not recorded anywhere else, so this cannot be undone.',
   'confirm.removeSection.bodyEmpty': 'No item sits under it, so nothing else changes.',
   'confirm.removeSection.confirm': 'Delete the divider',
   'confirm.removeMember.title': 'Remove {name}?',
@@ -49,6 +59,32 @@ export const en = {
   // loading — the skeletons themselves are aria-hidden pictures of a layout.
   'common.loading': 'Loading…',
   'common.cancel': 'Cancel',
+
+  // --- count phrases -------------------------------------------------------
+  // A number and its noun, as one translated unit. Read only through
+  // `I18nService.count(n, 'item')`, and shared on purpose: "1 item" is the same
+  // phrase on the dashboard, in the group pane and in a delete confirmation, so
+  // a translator fixes "itens" once.
+  //
+  // These are for a sentence carrying **two** independent counts, where one
+  // `.one`/`.other` pair cannot agree with both and four keys per sentence would
+  // be combinatorial nonsense. The sentence stays one key and interpolates the
+  // rendered phrases — see the doc comment on `I18nService.count` for why that
+  // is not the concatenation §6.3 forbids. A sentence with a single count is
+  // still written twice with `.one`/`.other`, because the count usually inflects
+  // a verb somewhere else in it.
+  'noun.item.one': '{n} item',
+  'noun.item.other': '{n} items',
+  'noun.group.one': '{n} group',
+  'noun.group.other': '{n} groups',
+  'noun.subGroup.one': '{n} sub-group',
+  'noun.subGroup.other': '{n} sub-groups',
+  'noun.section.one': '{n} section',
+  'noun.section.other': '{n} sections',
+  'noun.copy.one': '{n} copy',
+  'noun.copy.other': '{n} copies',
+  'noun.collection.one': '{n} collection',
+  'noun.collection.other': '{n} collections',
 
   // --- value ---------------------------------------------------------------
   // How an amount is qualified, not the amount itself: `MoneyPipe` still owns
@@ -96,18 +132,22 @@ export const en = {
 
   // --- dashboard ---------------------------------------------------------
   'dashboard.title': 'Dashboard',
-  'dashboard.sub': '{items} items across {collections} collections · welcome back, {name}',
+  'dashboard.sub': '{items} across {collections} · welcome back, {name}',
   'dashboard.stat.items': 'Items',
-  'dashboard.stat.itemsSub': 'across {collections} collections',
+  'dashboard.stat.itemsSub.one': 'across {n} collection',
+  'dashboard.stat.itemsSub.other': 'across {n} collections',
   'dashboard.stat.value': 'Est. value',
   'dashboard.stat.groups': 'Groups',
-  'dashboard.stat.groupsSub': 'in {collections} collections',
+  'dashboard.stat.groupsSub.one': 'in {n} collection',
+  'dashboard.stat.groupsSub.other': 'in {n} collections',
   'dashboard.stat.added': 'Added',
   'dashboard.stat.addedSub': 'this week',
   'dashboard.noPurchaseData': 'no purchase data yet',
   'dashboard.appreciation': '{arrow} {pct}% vs purchase',
   'dashboard.collections': 'Collections',
-  'dashboard.collectionMeta': '{owned}/{total} owned · {groups} groups',
+  // `{owned}/{total} owned` is a ratio and agrees with nothing; `{groups}` is a
+  // rendered count phrase.
+  'dashboard.collectionMeta': '{owned}/{total} owned · {groups}',
   'dashboard.newCollection': '+ New collection',
   'dashboard.newCollectionName': 'New collection',
   'dashboard.recent': 'Recent additions',
@@ -118,7 +158,7 @@ export const en = {
   'store.sub':
     'Curated checklists — add one to your vault, then track how close you are to completing it.',
   'store.curated': 'Curated',
-  'store.listingMeta': 'by {publisher} · {items} items · {groups} groups',
+  'store.listingMeta': 'by {publisher} · {items} · {groups}',
   'store.estimate': 'est {value}',
   'store.inVault': '✓ In your vault',
   'store.add': '+ Add to vault',
@@ -137,7 +177,10 @@ export const en = {
   'ui.lightbox.original': 'Open original',
   'ui.lightbox.close': 'Close viewer',
   'photos.drop': 'drop photos here',
-  'photos.browse': 'or click to browse · {remaining} left',
+  // Two keys because pt-BR says "falta 1" / "faltam 2" — the verb agrees even
+  // though English "left" does not.
+  'photos.browse.one': 'or click to browse · {n} left',
+  'photos.browse.other': 'or click to browse · {n} left',
   'photos.full': 'All {max} photos used — remove one to add another',
   'photos.cover': 'Cover',
   'photos.makeCover': 'Make cover',
@@ -214,14 +257,13 @@ export const en = {
   'settings.access.remove.confirm.ok': 'Remove access',
 
   'settings.account.data': 'Data',
-  'settings.account.dataSub': '{items} items across {collections} collections',
+  'settings.account.dataSub': '{items} across {collections}',
   'settings.account.export': 'Export ZIP',
   'settings.account.exporting': 'Preparing…',
   'settings.account.import': 'Import ZIP',
   'settings.account.perCollection': 'One collection at a time',
   'settings.account.perCollectionHint':
     'A .zip of a single collection and the photos it uses — a copy to hand to someone, or to restore on its own. You can also export the one you are looking at from its own settings.',
-  'settings.account.collectionMeta': '{items} items',
   'settings.account.noCollections': 'No collections yet.',
   'settings.account.importing': 'Importing…',
   'settings.account.importHint':
@@ -297,16 +339,28 @@ export const en = {
 
   // --- progress (shared by the hero, the group cards and the tree) --------
   'progress.owned': '{ratio} owned',
-  'progress.missing': '{n} missing',
+  // English does not inflect "missing", pt-BR inflects the verb: "falta 1" vs
+  // "faltam 2". Also spoken by the group card's aria-label — one phrase, one
+  // pair.
+  'progress.missing.one': '{n} missing',
+  'progress.missing.other': '{n} missing',
   'progress.listed': '· {n} listed',
   'progress.complete': 'Complete',
   'progress.allOwned': 'All owned',
   'progress.overTarget': '· +{n} over target',
   'progress.over': '· +{n} over',
-  'progress.copies': '· {n} copies',
+  'progress.copies.one': '· {n} copy',
+  'progress.copies.other': '· {n} copies',
   'progress.label': '{name} progress',
-  'progress.textNoTarget': '{owned} owned of {catalogued} catalogued',
-  'progress.textTarget': '{owned} owned, {catalogued} catalogued, of {target} in the set',
+  // Written out per case rather than assembled from count phrases: pt-BR
+  // inflects "catalogado"/"catalogados" *inside* the sentence, and this is the
+  // string that already produced one grammar bug on this branch. `{n}` is what
+  // is catalogued; `{owned}` and `{target}` ride along through `plural`'s
+  // `params` and agree with nothing.
+  'progress.textNoTarget.one': '{owned} owned of {n} catalogued',
+  'progress.textNoTarget.other': '{owned} owned of {n} catalogued',
+  'progress.textTarget.one': '{owned} owned, {n} catalogued, of {target} in the set',
+  'progress.textTarget.other': '{owned} owned, {n} catalogued, of {target} in the set',
 
   // --- collection hero ---------------------------------------------------
   'hero.bannerPlaceholder': 'Drop a banner image for this collection',
@@ -323,14 +377,11 @@ export const en = {
   'hero.noMeasure.title': 'Nothing to measure yet',
 
   // --- group card --------------------------------------------------------
-  'groupCard.subGroups': '{n} sub-groups',
   'groupCard.emptyWithTarget': '0 / {target} · nothing here yet',
   'groupCard.empty': 'No items yet',
   'groupCard.badgeTarget': 'Target {target}',
   'groupCard.aria': '{name} — {ratio} owned',
-  'groupCard.ariaMissing': '{n} missing',
   'groupCard.ariaOver': '{n} over target',
-  'groupCard.ariaSubGroups': '{n} sub-groups',
 
   // --- group dashboard ---------------------------------------------------
   'groupDashboard.filedHere.one': '{n} item filed here',
@@ -380,6 +431,11 @@ export const en = {
   'filters.status': 'Status',
   'filters.owned': 'Owned',
   'filters.wanted': 'Wanted',
+  // Added here because both dictionaries are owned by one agent: the tag filter
+  // and the item page's tag chips landed on this branch in files another agent
+  // owns, and the keys had nowhere else to go.
+  'filters.tag': 'Tag',
+  'filters.tagClear': 'Clear the #{tag} filter',
 
   // --- item list & grid --------------------------------------------------
   'itemList.name': 'Name',
@@ -388,7 +444,6 @@ export const en = {
   'itemList.copies': 'Copies',
   'itemList.condition': 'Cond',
   'itemList.value': 'Value',
-  'itemGrid.copies': '· {n} copies',
   'itemGrid.addItem': '+ Add item',
   'itemGrid.chipTitle': '{field}: {value}',
   'item.noPhoto': 'No photo yet',
@@ -485,6 +540,8 @@ export const en = {
   'item.groupFields': 'Group fields · {name}',
   'item.edit': 'Edit item',
   'item.delete': 'Delete',
+  'itemPage.tags.aria': 'Tags',
+  'itemPage.tags.filterBy': 'Show every item tagged #{tag}',
   'item.notFound': 'Item not found in this collection.',
 
   // --- item form ---------------------------------------------------------
@@ -529,7 +586,6 @@ export const en = {
   'collSettings.tab.sharing': 'Sharing',
   'collSettings.groups.heading': 'Groups & sub-groups',
   'collSettings.groups.add': '+ Add group',
-  'collSettings.groups.itemCount': '{n} items',
   'collSettings.groups.addSub': '+ Sub',
   'collSettings.groups.remove': 'Remove {name}',
   'collSettings.groups.renameAria': 'Rename {name}',
@@ -836,11 +892,11 @@ export const en = {
   'collSettings.sections.renameAria': 'Rename section {name}',
   'collSettings.sections.targetAria': 'Target for section {name}',
   'collSettings.sections.remove': 'Remove section {name}',
-  'collSettings.sections.itemCount': '{n} items',
   'collSettings.sections.finePrint': 'A section divides one group\'s items without adding a level: it declares no fields and no order of its own, and you arrange the sections by hand — Bronze, Silver, Gold, not alphabetically.',
   'toast.section.added': 'Section "{name}" added',
   'toast.section.removed': 'Section removed — its items moved to no section',
-  'toast.section.converted': '{n} sub-groups are now sections',
+  'toast.section.converted.one': '{n} sub-group is now a section',
+  'toast.section.converted.other': '{n} sub-groups are now sections',
   'collSettings.groups.pickerAria': 'Groups in this collection',
   'collSettings.groups.noneYet': 'No groups yet',
   'collSettings.groups.nameLabel': 'Name',

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { Item } from '../../core/models';
 import { UNSECTIONED_ID } from '../../core/utils/sections.util';
+import { WANTED_TAG } from '../../core/utils/tags.util';
 import {
   groupLinkParams,
   nextSortFor,
@@ -9,9 +11,30 @@ import {
   readOwn,
   readSection,
   readSort,
+  readTag,
   sectionParams,
   sortParams,
+  tagParams,
 } from './browse-params';
+
+function item(id: string, tags: string[]): Item {
+  return {
+    id,
+    name: id,
+    description: '',
+    year: 2000,
+    value: 0,
+    groupId: '',
+    sectionId: '',
+    tags,
+    img: '',
+    custom: [],
+    copies: [],
+    photoIds: [],
+  };
+}
+
+const TAGGED = [item('a', ['CIB', 'rare']), item('b', ['loose', WANTED_TAG])];
 
 describe('browse-params', () => {
   describe('reading', () => {
@@ -45,6 +68,48 @@ describe('browse-params', () => {
       expect(readSort(undefined, 'desc')).toBeNull();
     });
 
+    describe('readTag', () => {
+      it('takes a tag some item carries, spelled however the URL spelled it', () => {
+        expect(readTag('CIB', TAGGED)).toBe('CIB');
+        // The editor stores a tag as typed and compares ignoring case, so the
+        // filter has to agree — otherwise one label would be two answers.
+        expect(readTag('cib', TAGGED)).toBe('cib');
+        expect(readTag('  rare  ', TAGGED)).toBe('rare');
+      });
+
+      it('reads a tag nobody carries as no filter, not as an empty list', () => {
+        // Same choice as an unknown `?cond=`: a filter nothing can satisfy would
+        // answer every screen "no matches" and never hint that the URL is what
+        // is wrong.
+        expect(readTag('bananas', TAGGED)).toBeNull();
+        expect(readTag('cib', [])).toBeNull();
+      });
+
+      it('reads a blank tag as no filter', () => {
+        expect(readTag('', TAGGED)).toBeNull();
+        expect(readTag('   ', TAGGED)).toBeNull();
+        expect(readTag(undefined, TAGGED)).toBeNull();
+      });
+
+      it('refuses the derived wanted tag however it is capitalised', () => {
+        // Nobody applied it and nobody may remove it, so it is not a label to
+        // browse by — and offering it would name a list no chip can produce.
+        expect(readTag(WANTED_TAG, TAGGED)).toBeNull();
+        expect(readTag('Wanted', TAGGED)).toBeNull();
+      });
+
+      it('is not a substring match, which is what the search box already is', () => {
+        expect(readTag('ci', TAGGED)).toBeNull();
+        expect(readTag('rarer', TAGGED)).toBeNull();
+      });
+
+      it('round-trips through the URL, and clears with a null', () => {
+        expect(tagParams('rare')).toEqual({ tag: 'rare' });
+        expect(tagParams(null)).toEqual({ tag: null });
+        expect(readTag(tagParams('rare')['tag'], TAGGED)).toBe('rare');
+      });
+    });
+
     it('assembles the criteria a screen browses under', () => {
       expect(
         readCriteria({ cond: 'Good', own: 'owned', sort: 'year', dir: 'desc' }, 'cards', 'holo'),
@@ -53,9 +118,17 @@ describe('browse-params', () => {
         sectionId: null,
         condition: 'Good',
         own: 'owned',
+        tag: null,
         query: 'holo',
         sort: { by: 'year', direction: 'desc' },
       });
+    });
+
+    it('resolves the tag against the collection it was handed', () => {
+      expect(readCriteria({ tag: 'rare' }, null, '', { items: TAGGED }).tag).toBe('rare');
+      // No collection in hand is not a licence to trust the param: with nothing
+      // to check against, nothing is carried.
+      expect(readCriteria({ tag: 'rare' }, null, '').tag).toBeNull();
     });
   });
 

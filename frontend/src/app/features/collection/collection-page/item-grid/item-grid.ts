@@ -130,6 +130,18 @@ export class ItemGrid {
     return valueIsPaid(item) ? this.i18n.t('value.fromPaidHint') : null;
   }
 
+  /**
+   * How many copies, agreeing with the number.
+   *
+   * A method rather than a computed because it is called from inside `@for`.
+   * Shares `progress.copies.*` with the group card and the hero instead of
+   * carrying its own pair: the phrase is the same phrase, and a translator
+   * should fix "exemplar/exemplares" once rather than in three places.
+   */
+  protected copiesLabel(count: number): string {
+    return this.i18n.plural(count, 'progress.copies.one', 'progress.copies.other');
+  }
+
   protected badgeTone(item: Item) {
     return itemTone(item);
   }

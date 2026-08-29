@@ -687,6 +687,26 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-65</span> Uma frase com duas contagens recebe uma <em>locução</em> como parâmetro</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A regra §6.3 proíbe concatenar string traduzida — e já foi violada nesta branch, produzindo <em>“9 / 10 na coleção do catalogado”</em>. Mas várias frases carregam <strong>duas contagens independentes</strong> (“{items} itens em {collections} coleções”), e um par <code>.one</code>/<code>.other</code> não consegue concordar com as duas. Quatro chaves por frase é combinatória sem fim.</dd>
+    <dt>Decisão</dt><dd><code>I18nService.count(n, noun)</code> renderiza <em>uma</em> locução — número mais substantivo — a partir de um par <code>noun.*</code> compartilhado, e a frase recebe isso como parâmetro. A tabela <code>COUNT_NOUNS</code> é conferida pelo compilador, então par trocado ou faltando quebra o build em vez de imprimir <code>noun.item.one</code> para o usuário. Onde a contagem precisa flexionar algo <em>dentro</em> da frase, escreve-se a frase duas vezes com <code>plural</code>.</dd>
+    <dt>Consequência</dt><dd>Não é concatenação, e a fronteira é nítida: a frase continua uma entrada só do dicionário, cuja ordem das palavras é do tradutor; o que viaja é um valor opaco, da mesma classe que um nome ou um valor formatado. A regra proíbe <em>código</em> decidir ordem de palavras, e um <code>{placeholder}</code> não decide. No instante em que o parâmetro carregaria uma oração, um verbo, ou pontuação juntando duas ideias, virou concatenação. O custo aceito: o tradutor perde a chance de flexionar <em>em volta</em> da contagem — foi por isso que <code>progress.textTarget</code> recusou a locução, já que o pt-BR flexiona <em>catalogado</em> dentro da frase.</dd>
+    <dt>Imposta por</dt><dd><code>i18n.service.spec.ts</code> (concordância irregular do pt-BR: item/itens, coleção/coleções, seção/seções, exemplar/exemplares) e <code>group-card.spec.ts</code>, que renderiza o DOM da superfície reportada e prende <code>1 subgrupo</code>, <code>falta 1</code> e <code>1 catalogado</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-66</span> <code>?tag=</code> é conferido contra o documento, e desconhecido não filtra nada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd><code>?tag=</code> é o primeiro parâmetro cujo vocabulário é <strong>dado do usuário</strong>: os valores válidos são criados digitando. Não há whitelist possível, ao contrário de <code>?cond=</code>.</dd>
+    <dt>Decisão</dt><dd>Conferido contra as etiquetas da <em>coleção inteira</em> — não do grupo aberto — e uma etiqueta desconhecida lê como “sem filtro”, nunca como lista vazia. A pertinência é decidida por <code>hasTag</code>, que pergunta a <code>withTagAdded</code> se a referência volta igual, reaproveitando as regras do editor de etiquetas.</dd>
+    <dt>Consequência</dt><dd>Conferir pelo grupo aberto faria entrar num grupo irmão descartar a etiqueta em silêncio, em vez de mostrar uma faixa honestamente vazia. E “sem filtro” em vez de “nada encontrado” significa que um link antigo mostra <em>mais</em> do que quem enviou via, e não uma página vazia — que é a única falha que o leitor consegue enxergar. O custo: um erro de digitação na etiqueta mostra tudo em silêncio. Uma comparação escrita de novo no filtro seria uma segunda definição de “a mesma etiqueta”, e a primeira divergência partiria um rótulo em duas respostas.</dd>
+    <dt>Imposta por</dt><dd><code>browse-params.spec.ts</code> e <code>browse.util.spec.ts</code> — igualdade exata e não substring, insensível à caixa, desconhecida e reservada lendo como sem filtro, e a composição com condição, situação e busca</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

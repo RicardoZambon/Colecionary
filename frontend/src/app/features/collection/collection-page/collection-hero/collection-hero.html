@@ -70,7 +70,7 @@
         />
         <div class="progress-box__foot">
           @if (scope().missing) {
-            <span class="missing">{{ 'progress.missing' | t: { n: scope().missing } }}</span>
+            <span class="missing">{{ missingLabel() }}</span>
             @if (scope().uncatalogued) {
               <span class="split">{{ 'progress.listed' | t: { n: scope().wanted } }}</span>
             }
@@ -81,7 +81,7 @@
             <span class="split">{{ 'progress.overTarget' | t: { n: scope().over } }}</span>
           }
           @if (scope().copies > scope().catalogued) {
-            <span class="split">{{ 'progress.copies' | t: { n: scope().copies } }}</span>
+            <span class="split">{{ copiesLabel() }}</span>
           }
           @if (narrowed()) {
             <span class="of-total">{{

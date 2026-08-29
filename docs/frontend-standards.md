@@ -65,7 +65,7 @@ a core service's state).
 5. **URL is state.** Anything the user would want restored on refresh,
    back-navigation, or a shared link lives in the route: selected group is
    `?g=<groupId>`, the chosen view is `?v=`, the item filters and order are
-   `?cond=` / `?own=` / `?sort=` + `?dir=`, the open section is `?s=`,
+   `?cond=` / `?own=` / `?tag=` / `?sort=` + `?dir=`, the open section is `?s=`,
    settings tabs are `?tab=<id>`,
    entity ids are path params (`/c/:collectionId/items/:itemId`). Route/query
    params bind to component inputs via `withComponentInputBinding()`.
@@ -88,6 +88,17 @@ a core service's state).
    declares its own and a one-off pick has no business outliving the group it
    was made in. Filters and order navigate with `replaceUrl`, so back means
    "where I came from" rather than undoing six chip toggles.
+
+   **A query param is checked against one of two things, and the difference
+   matters.** `?cond=`, `?own=` and `?sort=` are checked against a fixed
+   whitelist. `?s=` and `?tag=` are checked against *the document* — the
+   collection's own sections and its own tags — because their vocabulary is user
+   data, and `?tag=` is the first param whose valid values a user creates by
+   typing. Both classes degrade to **"no filter"**, never to "no results": a
+   stale shared link then shows more than the sender saw rather than an empty
+   page, which is the one failure a reader can see through. `groupLinkParams`
+   drops `?s=` and the ad-hoc order on a group change but **keeps `?tag=`**,
+   because a section belongs to one group and a tag belongs to the collection.
 
    **Two things are deliberately *not* URL state, and both need the
    justification written down or a later reader will "fix" them.** A row
@@ -356,7 +367,7 @@ All are exported from `shared/ui/index.ts`.
 | Text input | `ui-text-input` | `value` (model), `placeholder`, `type`, `variant: 'panel' \| 'subtle'`, `ariaLabel`; outputs `keydown`, `blurred` |
 | Textarea | `ui-textarea` | `value` (model), `rows`, `placeholder` |
 | Select | `ui-select` | `value` (model), `options: SelectOption[]`, `disabled`, `ariaLabel`; add class `compact` for dense rows |
-| Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count`, `link` (router commands), `queryParams` — content-projected label. Renders a `<button>` by default (attach `(click)` at the usage site); with `link` it renders a real `<a>` instead, because a chip that navigates must survive middle-click and a button nested in an anchor is invalid |
+| Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count`, `link` (router commands), `queryParams`, `ariaLabel`, `hint` — the last two land on the inner `<a>`/`<button>`, never on the `<ui-chip>` host, because the host is neither focusable nor announced: an attribute written there is a tooltip that works only by inheritance and an accessible name that never arrives. `ui-button` has the same pair for the same reason. A tag chip reads "#cib", which names the tag and not what clicking it does — content-projected label. Renders a `<button>` by default (attach `(click)` at the usage site); with `link` it renders a real `<a>` instead, because a chip that navigates must survive middle-click and a button nested in an anchor is invalid |
 | Card | `ui-card` | `interactive` (hover affordance), `dashed` — the panel surface |
 | Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone(condition)` for one copy, `itemTone(item)` for an item, `conditionLabelKey(condition)` for its message key, and `itemBadgeLabel(item, t)` for the rendered label ("Wanted", "Mint", "Mint ×3" — uppercased by CSS). The `t` argument is `I18nService.t`: the helper is pure and has no injector |
 | Toggle | `ui-toggle` | `on` (model), `ariaLabel`, `disabled` — rendered as `role="switch"`. A switch turns something on. **Never use it to select a row** — that is `ui-checkbox`, and assistive technology announces the two differently |
@@ -634,7 +645,7 @@ yourself computing one of these things inline, that is the bug.
 
 | Module | Owns |
 | --- | --- |
-| `core/utils/browse.util.ts` | `visibleItems`, `neighbours`, `scopeItems`, and `matchesQuery` — search reaches an item's name, description, tags **and custom-field values**, which is where a catalogue number actually lives. It matched the name alone, so the single most common lookup a cataloguer performs could not find anything |
+| `core/utils/browse.util.ts` | `visibleItems`, `neighbours`, `scopeItems`, `hasTag` — exact and case-insensitive, decided by asking `withTagAdded` for the same reference back, so the filter can never disagree with the tag editor about what one tag is — and `matchesQuery` — search reaches an item's name, description, tags **and custom-field values**, which is where a catalogue number actually lives. It matched the name alone, so the single most common lookup a cataloguer performs could not find anything |
 | `core/utils/sort.util.ts` | all comparison, plus `moveInList` / `applyManualOrder` |
 | `core/utils/groups.util.ts` | the tree: `childrenOf`, `flattenTree`, `visibleTree`, `pathOf`, `subtreeIds`, `fieldsFor`, `sortFor`, `resolveGroupId`, `canReparent`, `compareNames` |
 | `core/utils/group-stats.util.ts` | every owned / missing / percentage figure |
@@ -702,6 +713,17 @@ pt-BR copy, not a suggestion for it.
    composed sentence already existed in the component and was being passed only
    to an accessible-text binding. **Two adjacent keys are a concatenation**;
    compose the whole sentence with placeholders, and delete the fragments.
+
+   **The carve-out, so rule 6b does not read as a contradiction.** Passing a
+   *rendered noun phrase* as a parameter is not concatenation: the sentence
+   stays one dictionary entry whose word order the translator owns, and what
+   travels is an opaque value of the same class as a name or a formatted amount.
+   This rule bans **code** deciding word order, which a `{placeholder}` does
+   not. The boundary is sharp: the moment a parameter would carry a clause, a
+   verb, or punctuation joining two ideas, it *is* a concatenation — write the
+   sentence twice with `plural` instead. `progress.textTarget` is the case where
+   a count phrase was rejected for exactly that reason, because pt-BR inflects
+   *catalogado* inside the sentence.
 4. **Pure helpers take the translator as an argument.** `core/utils/sort.util.ts`
    and `shared/ui/badge/badge.ts` build labels but have no injector, so they take
    `t: Translate`. Their specs pass a fake `t` that echoes the key back, which
@@ -712,7 +734,36 @@ pt-BR copy, not a suggestion for it.
    the same key and Angular returns the cached string, freezing every label on
    screen in the old language. The impure version costs one dictionary lookup in
    views that were already being checked. **Do not "optimize" this.**
-6. **Plurals are two keys** (`.one` / `.other`) via `I18nService.plural`.
+6. **Plurals are two keys** (`.one` / `.other`) via `I18nService.plural`, which
+   takes an optional 4th `params` argument for the *other* placeholders of a
+   counted sentence — `{n}` comes from the count and is applied last, so a
+   caller cannot print one number while inflecting for another. A sentence with
+   **one** count is still written out twice, because the count usually inflects
+   something else in it: pt-BR needs *falta*/*faltam* and *tem*/*têm* where
+   English "missing" and "hold" do not inflect at all.
+
+6b. **A count phrase, for a sentence with two counts.** `I18nService.count(n,
+   noun)` renders a number and its noun as one translated unit from a shared
+   `noun.*` pair — the set is `COUNT_NOUNS` in `i18n.service.ts` and `CountNoun`
+   derives from it, so a missing or crossed pair fails the build instead of
+   printing `noun.item.one` to a user. Use it **only** where a sentence carries
+   two or more independent counts and one pair cannot agree with both:
+   `dashboard.sub`, `dashboard.collectionMeta`, `settings.account.dataSub`,
+   `store.listingMeta`, `confirm.deleteCollection.body`. Never a bespoke pair
+   per call site — "1 item" is the same phrase everywhere, and a translator
+   should fix *itens* once.
+
+   Portuguese is why none of this can be done by appending an "s":
+   *item*/**itens**, *coleção*/**coleções**, *seção*/**seções** are irregular,
+   and *faltando* does not inflect while the verb *falta*/*faltam* does. The bug
+   that prompted all of it was a group with one sub-group reading
+   **"1 subgrupos"**.
+
+   **Not an offender, so do not "fix" these:** ordinals (`copy #{n}`,
+   `photo {n} of {total}`), deltas (`+{n} over`), ratios (`{owned}/{total}`),
+   participles that do not inflect (`{n} listed`, `{n} in hand`), a label with
+   an appended count (`Copies · 3`), and a count against a compile-time
+   constant greater than one (`Up to 50 copies`).
    Portuguese and English agree on one-vs-rest, so ICU machinery would buy
    nothing.
 7. **Uppercase is CSS.** Dictionary copy is sentence case; `text-transform`

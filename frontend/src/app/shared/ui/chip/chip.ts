@@ -33,6 +33,8 @@ import { Params, RouterLink } from '@angular/router';
         [routerLink]="target"
         [queryParams]="queryParams()"
         queryParamsHandling="merge"
+        [attr.aria-label]="ariaLabel() || null"
+        [attr.title]="hint() || null"
         [class.chip--selected]="selected()"
         [class.chip--dashed]="dashed()"
         [class.chip--on-path]="onPath()"
@@ -44,6 +46,8 @@ import { Params, RouterLink } from '@angular/router';
       <button
         type="button"
         class="chip"
+        [attr.aria-label]="ariaLabel() || null"
+        [attr.title]="hint() || null"
         [class.chip--selected]="selected()"
         [class.chip--dashed]="dashed()"
         [class.chip--on-path]="onPath()"
@@ -114,6 +118,18 @@ export class UiChip {
   readonly small = input(false);
   readonly count = input<string | number | null>(null);
   /** Router commands. Set this to render an anchor instead of a button. */
+  /**
+   * Accessible name, when the chip's own text is not enough — a tag chip reads
+   * "#cib", which names the tag but not what clicking it does.
+   *
+   * Both of these land on the inner `<a>`/`<button>`, never on the `<ui-chip>`
+   * host: the host is neither focusable nor announced, so an attribute written
+   * there is a tooltip that happens to work by inheritance and an accessible
+   * name that never arrives. `ui-button` grew the same pair for the same reason.
+   */
+  readonly ariaLabel = input('');
+  /** Tooltip text. Set both when the hint is useful to sighted users too. */
+  readonly hint = input('');
   readonly link = input<unknown[] | null>(null);
   readonly queryParams = input<Params | null>(null);
 }

@@ -14,17 +14,21 @@ export const ptBR: Record<MessageKey, string> = {
   // --- common ------------------------------------------------------------
   'confirm.deleteCollection.title': 'Excluir «{name}»?',
   'confirm.deleteCollection.body':
-    'Isso destrói a coleção e tudo que está nela — {items} itens em {groups} grupos. Não há como desfazer, e o export desta página é o único caminho de volta.',
+    'Isso destrói a coleção e tudo que está nela — {items} em {groups}. Não há como desfazer, e o export desta página é o único caminho de volta.',
   'confirm.deleteCollection.confirm': 'Excluir a coleção',
   'confirm.removeField.title': 'Remover o campo «{name}»?',
-  'confirm.removeField.body':
-    'Ele deixa de aparecer e de ser oferecido para todos os itens deste grupo. {count} itens têm valor nele — os valores ficam guardados e voltam se você declarar o campo de novo.',
+  'confirm.removeField.body.one':
+    'Ele deixa de aparecer e de ser oferecido para todos os itens deste grupo. {n} item tem valor nele — o valor fica guardado e volta se você declarar o campo de novo.',
+  'confirm.removeField.body.other':
+    'Ele deixa de aparecer e de ser oferecido para todos os itens deste grupo. {n} itens têm valor nele — os valores ficam guardados e voltam se você declarar o campo de novo.',
   'confirm.removeField.bodyEmpty':
     'Ele deixa de aparecer e de ser oferecido para todos os itens deste grupo. Nenhum item tem valor nele ainda.',
   'confirm.removeField.confirm': 'Remover o campo',
   'confirm.removeSection.title': 'Excluir o separador «{name}»?',
-  'confirm.removeSection.body':
-    '{count} itens estão sob ele e voltam a ficar sem separador. A qual faixa cada um pertencia não está registrado em nenhum outro lugar, então não há como desfazer.',
+  'confirm.removeSection.body.one':
+    '{n} item está sob ele e volta a ficar sem separador. A qual faixa ele pertencia não está registrado em nenhum outro lugar, então não há como desfazer.',
+  'confirm.removeSection.body.other':
+    '{n} itens estão sob ele e voltam a ficar sem separador. A qual faixa cada um pertencia não está registrado em nenhum outro lugar, então não há como desfazer.',
   'confirm.removeSection.bodyEmpty': 'Nenhum item está sob ele, então nada mais muda.',
   'confirm.removeSection.confirm': 'Excluir o separador',
   'confirm.removeMember.title': 'Remover {name}?',
@@ -47,6 +51,23 @@ export const ptBR: Record<MessageKey, string> = {
   'common.clickToApply': 'Clique para aplicar',
   'common.loading': 'Carregando…',
   'common.cancel': 'Cancelar',
+
+  // --- count phrases -------------------------------------------------------
+  // Written out one by one, because the Portuguese plural is irregular and
+  // nothing here could just append an "s": item/itens, coleção/coleções,
+  // seção/seções, exemplar/exemplares.
+  'noun.item.one': '{n} item',
+  'noun.item.other': '{n} itens',
+  'noun.group.one': '{n} grupo',
+  'noun.group.other': '{n} grupos',
+  'noun.subGroup.one': '{n} subgrupo',
+  'noun.subGroup.other': '{n} subgrupos',
+  'noun.section.one': '{n} seção',
+  'noun.section.other': '{n} seções',
+  'noun.copy.one': '{n} exemplar',
+  'noun.copy.other': '{n} exemplares',
+  'noun.collection.one': '{n} coleção',
+  'noun.collection.other': '{n} coleções',
 
   // --- value ---------------------------------------------------------------
   'value.fromPaid': '≈ {value}',
@@ -87,18 +108,20 @@ export const ptBR: Record<MessageKey, string> = {
 
   // --- dashboard ---------------------------------------------------------
   'dashboard.title': 'Painel',
-  'dashboard.sub': '{items} itens em {collections} coleções · bem-vindo de volta, {name}',
+  'dashboard.sub': '{items} em {collections} · bem-vindo de volta, {name}',
   'dashboard.stat.items': 'Itens',
-  'dashboard.stat.itemsSub': 'em {collections} coleções',
+  'dashboard.stat.itemsSub.one': 'em {n} coleção',
+  'dashboard.stat.itemsSub.other': 'em {n} coleções',
   'dashboard.stat.value': 'Valor estimado',
   'dashboard.stat.groups': 'Grupos',
-  'dashboard.stat.groupsSub': 'em {collections} coleções',
+  'dashboard.stat.groupsSub.one': 'em {n} coleção',
+  'dashboard.stat.groupsSub.other': 'em {n} coleções',
   'dashboard.stat.added': 'Adicionados',
   'dashboard.stat.addedSub': 'esta semana',
   'dashboard.noPurchaseData': 'ainda sem dados de compra',
   'dashboard.appreciation': '{arrow} {pct}% vs. compra',
   'dashboard.collections': 'Coleções',
-  'dashboard.collectionMeta': '{owned}/{total} na coleção · {groups} grupos',
+  'dashboard.collectionMeta': '{owned}/{total} na coleção · {groups}',
   'dashboard.newCollection': '+ Criar coleção',
   'dashboard.newCollectionName': 'Nova coleção',
   'dashboard.recent': 'Adicionados recentemente',
@@ -109,7 +132,7 @@ export const ptBR: Record<MessageKey, string> = {
   'store.sub':
     'Checklists curadas — adicione uma ao seu acervo e acompanhe o quanto falta para completá-la.',
   'store.curated': 'Curada',
-  'store.listingMeta': 'por {publisher} · {items} itens · {groups} grupos',
+  'store.listingMeta': 'por {publisher} · {items} · {groups}',
   'store.estimate': 'est. {value}',
   'store.inVault': '✓ Já no seu acervo',
   'store.add': '+ Adicionar ao acervo',
@@ -128,7 +151,8 @@ export const ptBR: Record<MessageKey, string> = {
   'ui.lightbox.original': 'Abrir original',
   'ui.lightbox.close': 'Fechar visualizador',
   'photos.drop': 'solte as fotos aqui',
-  'photos.browse': 'ou clique para escolher · faltam {remaining}',
+  'photos.browse.one': 'ou clique para escolher · falta {n}',
+  'photos.browse.other': 'ou clique para escolher · faltam {n}',
   'photos.full': 'As {max} fotos já foram usadas — remova uma para adicionar outra',
   'photos.cover': 'Capa',
   'photos.makeCover': 'Tornar capa',
@@ -204,14 +228,13 @@ export const ptBR: Record<MessageKey, string> = {
   'settings.access.remove.confirm.ok': 'Remover o acesso',
 
   'settings.account.data': 'Dados',
-  'settings.account.dataSub': '{items} itens em {collections} coleções',
+  'settings.account.dataSub': '{items} em {collections}',
   'settings.account.export': 'Exportar ZIP',
   'settings.account.exporting': 'Preparando…',
   'settings.account.import': 'Importar ZIP',
   'settings.account.perCollection': 'Uma coleção por vez',
   'settings.account.perCollectionHint':
     'Um .zip só desta coleção e das fotos que ela usa — para passar para alguém ou restaurar sozinha. Dá para exportar a coleção que você está vendo direto das configurações dela.',
-  'settings.account.collectionMeta': '{items} itens',
   'settings.account.noCollections': 'Nenhuma coleção ainda.',
   'settings.account.importing': 'Importando…',
   'settings.account.importHint':
@@ -281,16 +304,20 @@ export const ptBR: Record<MessageKey, string> = {
 
   // --- progress (shared by the hero, the group cards and the tree) --------
   'progress.owned': '{ratio} na coleção',
-  'progress.missing': 'faltam {n}',
+  'progress.missing.one': 'falta {n}',
+  'progress.missing.other': 'faltam {n}',
   'progress.listed': '· {n} na wishlist',
   'progress.complete': 'Completo',
   'progress.allOwned': 'Tudo na coleção',
   'progress.overTarget': '· +{n} acima da meta',
   'progress.over': '· +{n} acima',
-  'progress.copies': '· {n} exemplares',
+  'progress.copies.one': '· {n} exemplar',
+  'progress.copies.other': '· {n} exemplares',
   'progress.label': 'progresso de {name}',
-  'progress.textNoTarget': '{owned} na coleção de {catalogued} catalogados',
-  'progress.textTarget': '{owned} na coleção, {catalogued} catalogados, de {target} no conjunto',
+  'progress.textNoTarget.one': '{owned} na coleção de {n} catalogado',
+  'progress.textNoTarget.other': '{owned} na coleção de {n} catalogados',
+  'progress.textTarget.one': '{owned} na coleção, {n} catalogado, de {target} no conjunto',
+  'progress.textTarget.other': '{owned} na coleção, {n} catalogados, de {target} no conjunto',
 
   // --- collection hero ---------------------------------------------------
   'hero.bannerPlaceholder': 'Solte uma imagem de capa para esta coleção',
@@ -305,14 +332,11 @@ export const ptBR: Record<MessageKey, string> = {
   'hero.noMeasure.title': 'Nada a medir ainda',
 
   // --- group card --------------------------------------------------------
-  'groupCard.subGroups': '{n} subgrupos',
   'groupCard.emptyWithTarget': '0 / {target} · nada aqui ainda',
   'groupCard.empty': 'Nenhum item ainda',
   'groupCard.badgeTarget': 'Meta {target}',
   'groupCard.aria': '{name} — {ratio} na coleção',
-  'groupCard.ariaMissing': 'faltam {n}',
   'groupCard.ariaOver': '{n} acima da meta',
-  'groupCard.ariaSubGroups': '{n} subgrupos',
 
   // --- group dashboard ---------------------------------------------------
   'groupDashboard.filedHere.one': '{n} item aqui',
@@ -362,6 +386,11 @@ export const ptBR: Record<MessageKey, string> = {
   'filters.status': 'Situação',
   'filters.owned': 'Na coleção',
   'filters.wanted': 'Wishlist',
+  // Added here because both dictionaries are owned by one agent: the tag filter
+  // and the item page's tag chips landed on this branch in files another agent
+  // owns, and the keys had nowhere else to go.
+  'filters.tag': 'Etiqueta',
+  'filters.tagClear': 'Limpar o filtro da etiqueta #{tag}',
 
   // --- item list & grid --------------------------------------------------
   'itemList.name': 'Nome',
@@ -370,7 +399,6 @@ export const ptBR: Record<MessageKey, string> = {
   'itemList.copies': 'Exemp.',
   'itemList.condition': 'Estado',
   'itemList.value': 'Valor',
-  'itemGrid.copies': '· {n} exemplares',
   'itemGrid.addItem': '+ Adicionar item',
   'itemGrid.chipTitle': '{field}: {value}',
   'item.noPhoto': 'Sem foto ainda',
@@ -465,6 +493,8 @@ export const ptBR: Record<MessageKey, string> = {
   'item.groupFields': 'Campos do grupo · {name}',
   'item.edit': 'Editar item',
   'item.delete': 'Excluir',
+  'itemPage.tags.aria': 'Etiquetas',
+  'itemPage.tags.filterBy': 'Ver todos os itens com a etiqueta #{tag}',
   'item.notFound': 'Item não encontrado nesta coleção.',
 
   // --- item form ---------------------------------------------------------
@@ -509,7 +539,6 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.tab.sharing': 'Compartilhamento',
   'collSettings.groups.heading': 'Grupos e subgrupos',
   'collSettings.groups.add': '+ Adicionar grupo',
-  'collSettings.groups.itemCount': '{n} itens',
   'collSettings.groups.addSub': '+ Sub',
   'collSettings.groups.remove': 'Remover {name}',
   'collSettings.groups.renameAria': 'Renomear {name}',
@@ -806,11 +835,11 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.sections.renameAria': 'Renomear a seção {name}',
   'collSettings.sections.targetAria': 'Meta da seção {name}',
   'collSettings.sections.remove': 'Remover a seção {name}',
-  'collSettings.sections.itemCount': '{n} itens',
   'collSettings.sections.finePrint': 'A seção divide os itens de um grupo sem criar mais um nível: não declara campos nem ordenação própria, e você arruma as seções na mão — Bronze, Prata, Ouro, e não em ordem alfabética.',
   'toast.section.added': 'Seção "{name}" adicionada',
   'toast.section.removed': 'Seção removida — os itens dela ficaram sem seção',
-  'toast.section.converted': '{n} sub-grupos agora são seções',
+  'toast.section.converted.one': '{n} subgrupo agora é uma seção',
+  'toast.section.converted.other': '{n} subgrupos agora são seções',
   'collSettings.groups.pickerAria': 'Grupos desta coleção',
   'collSettings.groups.noneYet': 'Nenhum grupo ainda',
   'collSettings.groups.nameLabel': 'Nome',
