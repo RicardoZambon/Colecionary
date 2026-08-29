@@ -460,6 +460,25 @@
     <code>linkShare</code> por coleção, e a página agora diz isso.
   </li>
   <li>
+    <strong>O interruptor de compartilhamento por link.</strong> Dizia
+    “qualquer pessoa com o link pode ver esta coleção” e persistia um booleano.
+    Não existe rota anônima, não existe endpoint público, e não existe link
+    nenhum para copiar: nada no backend lê <code>LinkShare</code> além de
+    guardá-lo. O campo continua no contrato — construir a página pública depois
+    muda só esse cartão — mas o controle agora está <strong>desabilitado</strong>
+    e diz que a página não existe. Um interruptor que persiste uma promessa que
+    ninguém cumpre é o mesmo defeito das políticas de tenant, e vale registrar
+    que <em>este</em> era o mais perigoso dos três: os outros não faziam nada,
+    e este dava a entender que uma coleção estava exposta publicamente.
+  </li>
+  <li>
+    <strong>“Convite enviado ✓”.</strong> Não há transporte de e-mail no
+    repositório, então nada era enviado. A pessoa entrava na lista de membros e
+    não conseguia entrar no sistema — o que já estava registrado como limite
+    conhecido, enquanto a UI afirmava o contrário. O toast agora diz o que de
+    fato aconteceu: a pessoa foi adicionada à coleção.
+  </li>
+  <li>
     <strong>O botão de plano.</strong> <code>choosePlan</code> deixava o cliente
     fazer um <code>PUT /api/profile</code> definindo o próprio <code>plan</code>
     como <code>pro</code> — sem pagamento, sem entitlement, sem auditoria. Como

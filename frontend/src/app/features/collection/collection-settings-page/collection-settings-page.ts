@@ -929,9 +929,6 @@ export class CollectionSettingsPage {
     this.toast.flash(this.i18n.t('toast.member.removed'));
   }
 
-  protected setLinkShare(on: boolean): void {
-    this.mutate(d => ({ ...d, linkShare: on }));
-  }
 
   /** The empty option means "follow the account", which is stored as null. */
   protected setCurrency(code: string): void {

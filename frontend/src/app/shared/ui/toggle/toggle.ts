@@ -10,7 +10,10 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
       class="track"
       [attr.aria-label]="ariaLabel() || null"
       [attr.aria-checked]="on()"
+      [attr.aria-disabled]="disabled() ? 'true' : null"
+      [disabled]="disabled()"
       [class.on]="on()"
+      [class.disabled]="disabled()"
       (click)="on.set(!on())"
     >
       <span class="knob"></span>
@@ -35,6 +38,11 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
       &.on {
         background: var(--accent);
       }
+    }
+
+    .track:disabled {
+      cursor: default;
+      opacity: 0.45;
     }
 
     .knob {
@@ -62,4 +70,13 @@ export class UiToggle {
    * with them, so there is no fallback.
    */
   readonly ariaLabel = input('');
+  /**
+   * Reads and announces as unavailable, and does not fire.
+   *
+   * For a switch whose subject does not exist yet — link sharing describes a
+   * public collection page that has not been built. The honest render of that
+   * is a switch you can see and cannot flip, beside a line saying why; the
+   * dishonest one is a switch that persists a promise nobody keeps.
+   */
+  readonly disabled = input(false);
 }

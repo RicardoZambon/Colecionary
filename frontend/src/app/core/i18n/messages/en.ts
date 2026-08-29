@@ -577,7 +577,7 @@ export const en = {
   'collSettings.sharing.removeMember': 'Remove {name}',
   'collSettings.sharing.memberRoleAria': 'Role for {name}',
   'collSettings.sharing.linkShare': 'Link sharing',
-  'collSettings.sharing.linkShareSub': 'Anyone with the link can view this collection',
+  'collSettings.sharing.linkShareSoon': 'Not available yet — a public collection page has not been built.',
   'collSettings.sharing.finePrint': 'Tenant-wide access rules live in',
   'collSettings.sharing.finePrintLink': 'Settings ▸ Sharing & access',
 
@@ -754,7 +754,7 @@ export const en = {
   'toast.field.duplicate': '"{name}" is already a field here',
   'toast.field.added': 'Field "{name}" added',
   'toast.invite.invalidEmail': 'Enter a valid email',
-  'toast.invite.sent': 'Invite sent ✓',
+  'toast.invite.sent': 'Added to this collection',
   // --- save conflicts ------------------------------------------------------
   'conflict.title': 'Saved somewhere else first',
   'conflict.keepsYourWork':

@@ -326,15 +326,25 @@
           }
         </ui-card>
 
+        <!--
+          The toggle here used to say "anyone with the link can view this
+          collection" and persist a boolean. There is no anonymous route, no
+          public endpoint and no link to copy: nothing anywhere reads the flag.
+          A switch that persists a promise nobody keeps is the same defect as
+          the tenant policy switches that were removed, so this one states the
+          truth and stays out of the way until the page it describes exists.
+          The field is untouched on the wire, so building it later changes only
+          this card.
+        -->
         <ui-card class="link-share">
           <span class="who">
             <span class="name">{{ 'collSettings.sharing.linkShare' | t }}</span>
-            <span class="email">{{ 'collSettings.sharing.linkShareSub' | t }}</span>
+            <span class="email">{{ 'collSettings.sharing.linkShareSoon' | t }}</span>
           </span>
           <ui-toggle
             [ariaLabel]="'collSettings.sharing.linkShare' | t"
-            [on]="d.linkShare"
-            (onChange)="setLinkShare($event)"
+            [on]="false"
+            [disabled]="true"
           />
         </ui-card>
 

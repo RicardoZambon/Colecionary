@@ -559,7 +559,7 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.sharing.removeMember': 'Remover {name}',
   'collSettings.sharing.memberRoleAria': 'Papel de {name}',
   'collSettings.sharing.linkShare': 'Compartilhamento por link',
-  'collSettings.sharing.linkShareSub': 'Qualquer pessoa com o link pode ver esta coleção',
+  'collSettings.sharing.linkShareSoon': 'Ainda não disponível — a página pública de coleção não foi construída.',
   'collSettings.sharing.finePrint': 'As regras de acesso de todo o tenant ficam em',
   'collSettings.sharing.finePrintLink': 'Configurações ▸ Compartilhamento e acesso',
 
@@ -730,7 +730,7 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.field.duplicate': '"{name}" já é um campo aqui',
   'toast.field.added': 'Campo "{name}" adicionado',
   'toast.invite.invalidEmail': 'Informe um e-mail válido',
-  'toast.invite.sent': 'Convite enviado ✓',
+  'toast.invite.sent': 'Adicionada a esta coleção',
   // --- save conflicts ------------------------------------------------------
   'conflict.title': 'Alguém salvou antes',
   'conflict.keepsYourWork':

@@ -55,13 +55,19 @@ await page.goto(BASE, { waitUntil: 'networkidle' });
 
 // A dev server mid-compile paints an overlay that swallows every click, and the
 // resulting failure is a thirty-second timeout on an unrelated locator. Say what
-// is actually wrong instead.
-const overlay = await page.locator('vite-error-overlay').count();
-if (overlay > 0) {
-  console.log('FAIL  the dev server is serving a compile error (vite-error-overlay is up)');
-  console.log('      Fix the build first: npm run build');
-  await browser.close();
-  process.exit(1);
+// is actually wrong instead — but wait first, because a rebuild triggered by the
+// file you just saved clears on its own within a second or two, and failing on
+// that is a script that cries wolf about the tool rather than the app.
+for (let attempt = 0; ; attempt++) {
+  if ((await page.locator('vite-error-overlay').count()) === 0) break;
+  if (attempt >= 10) {
+    console.log('FAIL  the dev server is serving a compile error (vite-error-overlay is up)');
+    console.log('      Fix the build first: npm run build');
+    await browser.close();
+    process.exit(1);
+  }
+  await page.waitForTimeout(1000);
+  await page.reload({ waitUntil: 'networkidle' });
 }
 
 // First paint carries the stored theme and language, before the bundle runs.

@@ -168,9 +168,14 @@ a core service's state).
     persists nothing must not look like a setting, and a button that cannot
     perform a transaction must not look like it can. Two shipped surfaces broke
     this — three tenant "access policy" toggles that were a component signal,
-    and a plan button that let the client set its own `plan` to `pro` with no
-    payment, entitlement or audit. Both are gone; the plan tiers remain as
-    information with the unavailable action explicitly disabled.
+    a plan button that let the client set its own `plan` to `pro` with no
+    payment, entitlement or audit, and a link-sharing switch that said "anyone
+    with the link can view this collection" when no anonymous route, public
+    endpoint or copyable link existed anywhere — the most dangerous of the
+    three, because the other two merely did nothing while this one implied a
+    collection was already exposed. All are gone or disabled-with-a-reason; the
+    plan tiers and the sharing field remain, because the tier list is true
+    information and the field is what a future public page will read.
 
 ## 3. Theming
 
@@ -315,7 +320,7 @@ All are exported from `shared/ui/index.ts`.
 | Chip | `ui-chip` | `selected`, `onPath`, `dashed`, `small`, `count`, `link` (router commands), `queryParams` — content-projected label. Renders a `<button>` by default (attach `(click)` at the usage site); with `link` it renders a real `<a>` instead, because a chip that navigates must survive middle-click and a button nested in an anchor is invalid |
 | Card | `ui-card` | `interactive` (hover affordance), `dashed` — the panel surface |
 | Badge | `ui-badge` | `tone: 'good' \| 'warn' \| 'accent' \| 'neutral'`; helpers `conditionTone(condition)` for one copy, `itemTone(item)` for an item, `conditionLabelKey(condition)` for its message key, and `itemBadgeLabel(item, t)` for the rendered label ("Wanted", "Mint", "Mint ×3" — uppercased by CSS). The `t` argument is `I18nService.t`: the helper is pure and has no injector |
-| Toggle | `ui-toggle` | `on` (model), `ariaLabel` — rendered as `role="switch"`. A switch turns something on. **Never use it to select a row** — that is `ui-checkbox`, and assistive technology announces the two differently |
+| Toggle | `ui-toggle` | `on` (model), `ariaLabel`, `disabled` — rendered as `role="switch"`. A switch turns something on. **Never use it to select a row** — that is `ui-checkbox`, and assistive technology announces the two differently |
 | Checkbox | `ui-checkbox` | `checked` (model), `indeterminate`, `disabled`, `ariaLabel`; output `picked({ checked, shift })`. A real `<input type="checkbox">`, not a styled button, because only the platform gives you the `indeterminate` dash a tri-state "select all" needs — plus the role, the checked state and space-bar activation for free. `picked` carries the modifier keys so a list can implement shift-click ranges without reading the event; shift+**Space** is the keyboard equivalent, since the platform dispatches a real click carrying `shiftKey`. Below `$bp-lg` it grows a 44px target through a centred pseudo-element rather than by growing the 15px box, which a dense table row depends on |
 | Tabs | `ui-tabs` | `tabs: TabDef[]`, `active` (model, required) |
 | Avatar | `ui-avatar` | `initials` (required), `size: 'sm' \| 'md' \| 'lg'` |
