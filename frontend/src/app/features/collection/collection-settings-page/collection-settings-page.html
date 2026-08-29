@@ -40,11 +40,42 @@
                 (click)="removeGroup(row.node.id)"
               >✕</ui-button>
             </div>
+            <div class="group-row__order">
+              <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
+              <ui-select
+                class="compact order-by"
+                [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: row.node.name }"
+                [options]="row.sortByOptions"
+                [value]="row.sortBy"
+                (valueChange)="setGroupSortBy(row.node.id, $event)"
+              />
+              @if (row.showDirection) {
+                <ui-select
+                  class="compact direction"
+                  [ariaLabel]="'collSettings.groups.orderDirectionAria' | t: { name: row.node.name }"
+                  [options]="directionOptions()"
+                  [value]="row.sortDirection"
+                  (valueChange)="setGroupSortDirection(row.node.id, $event)"
+                />
+              }
+
+              <span class="fields-label spaced">{{ 'collSettings.groups.target' | t }}</span>
+              <ui-text-input
+                class="target"
+                type="number"
+                variant="subtle"
+                placeholder="—"
+                [ariaLabel]="'collSettings.groups.targetAria' | t: { name: row.node.name }"
+                [value]="row.target"
+                (valueChange)="setGroupTarget(row.node.id, $event)"
+              />
+            </div>
+
             <div class="group-row__fields">
               <span class="fields-label">{{ 'collSettings.groups.fields' | t }}</span>
               @for (field of row.node.fields; track field.name) {
                 <span class="field-chip">
-                  {{ field.name }}
+                  <span class="name">{{ field.name }}</span>
                   <ui-select
                     class="compact type"
                     [ariaLabel]="'collSettings.groups.fieldTypeAria' | t: { name: field.name }"
@@ -151,36 +182,6 @@
               }
             </div>
 
-            <div class="group-row__order">
-              <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
-              <ui-select
-                class="compact order-by"
-                [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: row.node.name }"
-                [options]="row.sortByOptions"
-                [value]="row.sortBy"
-                (valueChange)="setGroupSortBy(row.node.id, $event)"
-              />
-              @if (row.showDirection) {
-                <ui-select
-                  class="compact direction"
-                  [ariaLabel]="'collSettings.groups.orderDirectionAria' | t: { name: row.node.name }"
-                  [options]="directionOptions()"
-                  [value]="row.sortDirection"
-                  (valueChange)="setGroupSortDirection(row.node.id, $event)"
-                />
-              }
-
-              <span class="fields-label spaced">{{ 'collSettings.groups.target' | t }}</span>
-              <ui-text-input
-                class="target"
-                type="number"
-                variant="subtle"
-                placeholder="—"
-                [ariaLabel]="'collSettings.groups.targetAria' | t: { name: row.node.name }"
-                [value]="row.target"
-                (valueChange)="setGroupTarget(row.node.id, $event)"
-              />
-            </div>
           </div>
         }
 
