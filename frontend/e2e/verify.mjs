@@ -152,6 +152,49 @@ if ((await toggle.count()) === 1) {
 }
 await phone.close();
 
+// Two facts about the assembled page that only a layout engine knows.
+//
+// 1. Tap targets. `--tap` is 44px and every control below $bp-lg is supposed to
+//    reach it. The collection hero's sharing link measured 69x27 for as long as
+//    it existed, because it inherits its height from three avatars and nothing
+//    in a unit test has a height at all.
+// 2. No hatched placeholder anywhere. The 45-degree `stripes` hatch is the
+//    silhouette of a skeleton sweep, so any surface still wearing one claims to
+//    be mid-fetch for ever. It was removed from six callers and the mixin is
+//    gone; this is what stops it coming back through a hand-rolled gradient.
+//    `ui-progress` is the one legitimate user — its dimmer band is hatched *as
+//    well as* dimmed so the two bands survive a monochrome theme — so it is
+//    excluded by name rather than by accident.
+const touch = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  storageState: await context.storageState(),
+});
+const tp = await touch.newPage();
+tp.on('pageerror', e => pageErrors.push(`390px touch: ${String(e).slice(0, 160)}`));
+for (const [name, url] of routes) {
+  await tp.goto(BASE + url, { waitUntil: 'networkidle' });
+  await tp.waitForTimeout(900);
+  const found = await tp.evaluate(() => {
+    const tap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tap'));
+    const short = [];
+    for (const el of document.querySelectorAll('app-collection-hero .header__actions > a')) {
+      const r = el.getBoundingClientRect();
+      if (r.height > 0 && r.height < tap) short.push(`${Math.round(r.width)}x${Math.round(r.height)}`);
+    }
+    const hatched = [];
+    for (const el of document.querySelectorAll('*')) {
+      if (el.closest('ui-progress')) continue;
+      if (getComputedStyle(el).backgroundImage.includes('repeating-linear-gradient')) {
+        hatched.push(`${el.tagName.toLowerCase()}.${String(el.className).slice(0, 24)}`);
+      }
+    }
+    return { short, hatched: [...new Set(hatched)] };
+  });
+  check(`hero actions meet --tap at 390px: ${name}`, found.short.length === 0, found.short.join(', '));
+  check(`no hatched placeholder: ${name}`, found.hatched.length === 0, found.hatched.join(', '));
+}
+await touch.close();
+
 check('no uncaught errors on any page', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
 
 await browser.close();

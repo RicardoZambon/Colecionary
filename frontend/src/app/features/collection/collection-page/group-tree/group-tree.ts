@@ -17,7 +17,7 @@ import { visibleTree } from '../../../../core/utils/groups.util';
 import { groupLinkParams } from '../../browse-params';
 import { TreeKeyboard } from '../../tree-keyboard';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiProgress, UiSectionLabel } from '../../../../shared/ui';
+import { UiIcon, UiProgress, UiSectionLabel } from '../../../../shared/ui';
 
 interface TreeRowView {
   node: GroupNode;
@@ -47,7 +47,7 @@ interface TreeRowView {
 @Component({
   selector: 'app-group-tree',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, UiProgress, UiSectionLabel],
+  imports: [RouterLink, TPipe, UiIcon, UiProgress, UiSectionLabel],
   templateUrl: './group-tree.html',
   styleUrl: './group-tree.scss',
 })

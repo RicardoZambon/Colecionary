@@ -179,6 +179,10 @@ h1 {
     gap: 7px;
 
     .tick {
+      /* Nailed to the first line: a feature that wraps keeps its tick beside
+         the words it belongs to rather than centring on the whole block. */
+      align-self: flex-start;
+      margin-top: 3px;
       color: var(--accent);
     }
   }

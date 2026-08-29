@@ -1,6 +1,8 @@
 @if (collection(); as coll) {
   <div class="topline">
-    <a class="back" [routerLink]="['/c', coll.id]" queryParamsHandling="preserve">← {{ coll.name }}</a>
+    <a class="back" [routerLink]="['/c', coll.id]" queryParamsHandling="preserve"
+      ><ui-icon name="chevron-left" [size]="13" />{{ coll.name }}</a
+    >
 
     @if (canBrowse()) {
       <nav
@@ -15,12 +17,12 @@
             queryParamsHandling="preserve"
             [attr.aria-label]="'item.browse.previous' | t: { name: prev.name }"
           >
-            <span class="browse__chev" aria-hidden="true">‹</span>
+            <ui-icon class="browse__chev" name="chevron-left" [size]="13" />
             <span class="browse__name">{{ prev.name }}</span>
           </a>
         } @else {
           <span class="browse__step browse__step--off" aria-disabled="true">
-            <span class="browse__chev" aria-hidden="true">‹</span>
+            <ui-icon class="browse__chev" name="chevron-left" [size]="13" />
             <span class="browse__name">{{ 'item.browse.start' | t }}</span>
           </span>
         }
@@ -40,12 +42,12 @@
             [attr.aria-label]="'item.browse.next' | t: { name: next.name }"
           >
             <span class="browse__name">{{ next.name }}</span>
-            <span class="browse__chev" aria-hidden="true">›</span>
+            <ui-icon class="browse__chev" name="chevron-right" [size]="13" />
           </a>
         } @else {
           <span class="browse__step browse__step--off" aria-disabled="true">
             <span class="browse__name">{{ 'item.browse.end' | t }}</span>
-            <span class="browse__chev" aria-hidden="true">›</span>
+            <ui-icon class="browse__chev" name="chevron-right" [size]="13" />
           </span>
         }
       </nav>
@@ -193,6 +195,19 @@
   } @else {
     <div class="missing">{{ 'item.notFound' | t }}</div>
   }
+} @else if (loading()) {
+  <!--
+    Ordered before the not-found branch, and that order is the whole point: the
+    vault arrives asynchronously, so "the store has no such collection yet" and
+    "there is no such collection" are the same expression at two different
+    moments. Telling someone their collection does not exist while it is still
+    in flight is the version of this bug that the shell used to hide by refusing
+    to render any page at all until the whole vault had landed.
+  -->
+  <div class="missing" aria-busy="true">
+    <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
+    <ui-skeleton variant="text" [lines]="2" />
+  </div>
 } @else {
   <div class="missing">
     {{ 'common.collectionNotFound' | t }}

@@ -58,6 +58,21 @@ export class CollectionHero {
   /** Name of the open group, or empty at the collection root. */
   readonly scopeName = input('');
   readonly members = input.required<Member[]>();
+  /**
+   * Nothing catalogued *and* no declared set — the one case where the whole
+   * numeric apparatus is meaningless rather than merely low.
+   *
+   * With a target, "0 / 30 · 0%" is a real measurement of a real set and the
+   * bar earns its place. Without one the denominator is the catalogued count,
+   * so the bar is 0 ÷ 0, "est." is a claim that the collection is worth zero
+   * (it is worth *unknown*, which is what `—` says), and "0 missing" is true
+   * only in the sense that nothing was ever asked for. Rendering all of it
+   * anyway is how a brand-new collection came to look like a broken one.
+   *
+   * An input, not a computed: `app-collection-toolbar` collapses on the same
+   * fact, so the page owns it and both read the one value.
+   */
+  readonly blank = input.required<boolean>();
 
   /**
    * Amounts here belong to this collection, so they follow its currency rather
@@ -69,22 +84,6 @@ export class CollectionHero {
 
   /** True while a group narrows what the numbers describe. */
   protected readonly narrowed = computed(() => !!this.scopeName());
-
-  /**
-   * Nothing catalogued *and* no declared set — the one case where the whole
-   * numeric apparatus is meaningless rather than merely low.
-   *
-   * With a target, "0 / 30 · 0%" is a real measurement of a real set and the
-   * bar earns its place. Without one the denominator is the catalogued count,
-   * so the bar is 0 ÷ 0, "est." is a claim that the collection is worth zero
-   * (it is worth *unknown*, which is what `—` says), and "0 missing" is true
-   * only in the sense that nothing was ever asked for. Rendering all of it
-   * anyway is how a brand-new collection came to look like a broken one.
-   */
-  protected readonly blank = computed(() => {
-    const scope = this.scope();
-    return scope.catalogued === 0 && !scope.hasTarget;
-  });
 
   /** "12 / 120" against a target, "12 / 34" against what is catalogued. */
   protected readonly ratio = computed(() => {

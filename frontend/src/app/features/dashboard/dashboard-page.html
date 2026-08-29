@@ -13,50 +13,91 @@
   </p>
 </header>
 
-<div class="stats">
-  @for (stat of stats(); track stat.label) {
-    <ui-card class="stat">
-      <div class="stat__label">{{ stat.label }}</div>
-      <div class="stat__value">
-        @for (amount of stat.values; track amount) {
-          <span class="stat__amount">{{ amount }}</span>
-        }
-      </div>
-      <div class="stat__sub">{{ stat.sub }}</div>
-    </ui-card>
+<!--
+  The skeleton wears the real card's own classes rather than fixed pixel
+  heights, and every bar is `1lh` tall — one line box of whatever it lands in.
+  `.stat__label`, `.stat__value` and `.stat__sub` carry the font sizes, so the
+  placeholder rows measure 14, 27 and 14 px exactly as the text does, and a card
+  comes out the same height either way. A hand-guessed `height: 12px` does not,
+  and neither does the component's own `0.72em` default, which is a *bar* inside
+  a line rather than the line itself.
+
+  `aria-busy` and the announcement live on the region; the skeletons themselves
+  are `aria-hidden`, because a reader hearing "loading" once is served and
+  hearing eleven unnamed graphics is not.
+-->
+<div class="stats" [attr.aria-busy]="loading() ? 'true' : null">
+  @if (loading()) {
+    <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
+    @for (row of placeholders; track row) {
+      <ui-card class="stat">
+        <div class="stat__label"><ui-skeleton width="58%" height="1lh" /></div>
+        <div class="stat__value"><ui-skeleton width="46%" height="1lh" /></div>
+        <div class="stat__sub"><ui-skeleton width="72%" height="1lh" /></div>
+      </ui-card>
+    }
+  } @else {
+    @for (stat of stats(); track stat.label) {
+      <ui-card class="stat">
+        <div class="stat__label">{{ stat.label }}</div>
+        <div class="stat__value">
+          @for (amount of stat.values; track amount) {
+            <span class="stat__amount">{{ amount }}</span>
+          }
+        </div>
+        <div class="stat__sub">{{ stat.sub }}</div>
+      </ui-card>
+    }
   }
 </div>
 
 <section class="collections">
   <ui-section-label>{{ 'dashboard.collections' | t }}</ui-section-label>
-  <div class="grid">
-    @for (collection of store.collections(); track collection.id) {
-      <ui-card [interactive]="true" [routerLink]="['/c', collection.id]">
-        <div class="banner">
-          <ui-image-slot
-            [src]="images.url(collection.bannerImageId, 'thumb')"
-            [focal]="focus.position(collection.bannerImageId)"
-            [placeholder]="collection.name"
-          />
-        </div>
-        <div class="card-body">
-          <div class="name">{{ collection.name }}</div>
-          <div class="meta">
-            {{
-              'dashboard.collectionMeta'
-                | t
-                  : {
-                      owned: ownedCount(collection.id),
-                      total: collection.items.length,
-                      groups: collection.groups.length
-                    }
-            }}
+  <div class="grid" [attr.aria-busy]="loading() ? 'true' : null">
+    @if (loading()) {
+      <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
+      @for (row of placeholders; track row) {
+        <ui-card>
+          <!-- The banner is a fixed 70px box whatever the picture is, so its
+               shape needs no aspect-ratio to reserve — the height already does
+               it, and the block skeleton simply fills it. -->
+          <div class="banner"><ui-skeleton variant="block" radius="0" /></div>
+          <div class="card-body">
+            <div class="name"><ui-skeleton width="68%" height="1lh" /></div>
+            <div class="meta"><ui-skeleton width="88%" height="1lh" /></div>
+            <div class="value"><ui-skeleton width="42%" height="1lh" /></div>
           </div>
-          <div class="value">{{ ownedValue(collection.id) | money: store.currencyFor(collection.id) }}</div>
-        </div>
-      </ui-card>
+        </ui-card>
+      }
+    } @else {
+      @for (collection of store.collections(); track collection.id) {
+        <ui-card [interactive]="true" [routerLink]="['/c', collection.id]">
+          <div class="banner">
+            <ui-image-slot
+              [src]="images.url(collection.bannerImageId, 'thumb')"
+              [focal]="focus.position(collection.bannerImageId)"
+              [placeholder]="collection.name"
+            />
+          </div>
+          <div class="card-body">
+            <div class="name">{{ collection.name }}</div>
+            <div class="meta">
+              {{
+                'dashboard.collectionMeta'
+                  | t
+                    : {
+                        owned: ownedCount(collection.id),
+                        total: collection.items.length,
+                        groups: collection.groups.length
+                      }
+              }}
+            </div>
+            <div class="value">{{ ownedValue(collection.id) | money: store.currencyFor(collection.id) }}</div>
+          </div>
+        </ui-card>
+      }
+      <button type="button" class="new-tile" (click)="newCollection()">{{ 'dashboard.newCollection' | t }}</button>
     }
-    <button type="button" class="new-tile" (click)="newCollection()">{{ 'dashboard.newCollection' | t }}</button>
   </div>
 </section>
 

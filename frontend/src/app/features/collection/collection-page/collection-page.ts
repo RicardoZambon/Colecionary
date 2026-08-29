@@ -67,7 +67,7 @@ import {
 } from './item-selection';
 import { readHidden, toggleHidden, visibleFields, writeHidden } from './column-prefs';
 import { TPipe } from '../../../shared/pipes/t.pipe';
-import { UiButton, UiDialog, UiEmpty } from '../../../shared/ui';
+import { UiButton, UiDialog, UiEmpty, UiSkeleton } from '../../../shared/ui';
 import { ViewMode, resolveView, viewParam } from './view-mode';
 import {
   initialExpanded,
@@ -101,6 +101,7 @@ const WIDE_ENOUGH = '(min-width: 1200px)';
     UiButton,
     UiDialog,
     UiEmpty,
+    UiSkeleton,
   ],
   templateUrl: './collection-page.html',
   styleUrl: './collection-page.scss',
@@ -139,6 +140,16 @@ export class CollectionPage {
   /** Null means "use the selected group's configured order". */
   protected readonly sortOverride = computed(() => readSort(this.sort(), this.dir()));
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
+
+  /**
+   * The vault is still in flight, so `collection()` being undefined does not
+   * mean the collection is missing — it means nobody has looked yet. Telling
+   * those two apart is the whole reason this exists: the not-found sentence used
+   * to render for both.
+   */
+  protected readonly loading = computed(() => !this.store.loaded());
+  /** Item tiles the skeleton reserves. Six fills the first row at any width. */
+  protected readonly placeholders = [0, 1, 2, 3, 4, 5];
 
   /**
    * Which rows a bulk action applies to. A signal and **not** URL state — the
@@ -275,6 +286,26 @@ export class CollectionPage {
   /** What the header describes: the open group, or the whole collection. */
   protected readonly scope = computed(() => scopeStats(this.stats(), this.g() ?? null));
   protected readonly total = computed(() => scopeStats(this.stats(), null));
+
+  /**
+   * Nothing catalogued in the open scope *and* no declared set — the one case
+   * where the whole numeric apparatus, and every control that narrows or redraws
+   * a list, is meaningless rather than merely low.
+   *
+   * With a target, "0 / 30 · 0%" is a real measurement of a real set and the
+   * hero's bar earns its place. Without one the denominator is the catalogued
+   * count, so the bar is 0 ÷ 0 and "est." claims the collection is worth zero
+   * when it is worth *unknown*. The same predicate answers the toolbar: an
+   * order, a column picker, three view toggles and two rows of filter chips all
+   * act on items, and there are none.
+   *
+   * Computed here rather than in each consumer: the hero used to own it, and a
+   * second copy in the toolbar is a second thing to keep in step.
+   */
+  protected readonly blank = computed(() => {
+    const scope = this.scope();
+    return scope.catalogued === 0 && !scope.hasTarget;
+  });
 
   protected readonly scopeName = computed(() => {
     if (this.g() === UNGROUPED_ID) return this.i18n.t('group.none');

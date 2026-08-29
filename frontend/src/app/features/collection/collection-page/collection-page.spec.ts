@@ -297,3 +297,49 @@ describe('CollectionPage — the two empty states', () => {
     expect(clear.disabled).toBe(false);
   });
 });
+
+describe('CollectionPage — the toolbar with nothing to filter', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+
+  it('hides the order, the columns and the view toggles when the scope holds nothing', async () => {
+    // Five controls that can only narrow or redraw a list of items, in front of
+    // a collection that has none. They were rendered anyway, so a brand-new
+    // collection opened onto a bar of dead affordances and no guidance.
+    const page = await mount({ collection: collection({ items: [], sections: [] }), v: 'grid' });
+    const bar = page.el.querySelector('app-collection-toolbar')!;
+
+    expect(bar.querySelector('.view-toggle')).toBeNull();
+    expect(bar.querySelector('.sort-trigger')).toBeNull();
+    expect(page.el.querySelector('app-collection-filters')).toBeNull();
+  });
+
+  it('keeps the identity row, which is the only thing there that still works', async () => {
+    const page = await mount({ collection: collection({ items: [], sections: [] }), v: 'grid' });
+    const crumbs = page.el.querySelector('app-group-breadcrumb')!;
+
+    expect(crumbs.querySelector('ui-chip')).not.toBeNull();
+    expect(crumbs.querySelector('.manage')).not.toBeNull();
+  });
+
+  it('renders the whole bar again as soon as one item exists', async () => {
+    const page = await mount({ g: 'espanha', v: 'grid' });
+    const bar = page.el.querySelector('app-collection-toolbar')!;
+
+    expect(bar.querySelector('.view-toggle')).not.toBeNull();
+    expect(bar.querySelector('.sort-trigger')).not.toBeNull();
+    expect(page.el.querySelector('app-collection-filters')).not.toBeNull();
+  });
+});

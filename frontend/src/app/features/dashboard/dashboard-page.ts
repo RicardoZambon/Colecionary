@@ -11,7 +11,7 @@ import { formatRelative } from '../../core/utils/date.util';
 import { CurrencyCode, formatMoney } from '../../core/utils/money.util';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { TPipe } from '../../shared/pipes/t.pipe';
-import { UiCard, UiImageSlot, UiSectionLabel } from '../../shared/ui';
+import { UiCard, UiImageSlot, UiSectionLabel, UiSkeleton } from '../../shared/ui';
 
 interface RecentEntry {
   collectionId: string;
@@ -29,7 +29,7 @@ const RECENT_COUNT = 4;
 @Component({
   selector: 'app-dashboard-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, TPipe, UiCard, UiImageSlot, UiSectionLabel],
+  imports: [RouterLink, MoneyPipe, TPipe, UiCard, UiImageSlot, UiSectionLabel, UiSkeleton],
   templateUrl: './dashboard-page.html',
   styleUrl: './dashboard-page.scss',
 })
@@ -40,6 +40,14 @@ export class DashboardPage {
   protected readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+
+  /**
+   * The vault has not arrived yet, so the page draws its own shape instead of
+   * nothing. Four stat tiles and four cards, which is the modal case — the
+   * point is to reserve the row, not to guess the count.
+   */
+  protected readonly loading = computed(() => !this.store.loaded());
+  protected readonly placeholders = [0, 1, 2, 3];
 
   private readonly allItems = computed(() =>
     this.store.collections().flatMap(collection =>

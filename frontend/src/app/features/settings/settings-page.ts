@@ -24,6 +24,7 @@ import {
   UiButton,
   UiCard,
   UiFlag,
+  UiIcon,
   UiSelect,
   UiTabs,
 } from '../../shared/ui';
@@ -65,7 +66,7 @@ const ROLE_KEYS: { value: MemberRole; label: MessageKey }[] = [
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiSelect, UiTabs, ImportDialog],
+  imports: [TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiIcon, UiSelect, UiTabs, ImportDialog],
   templateUrl: './settings-page.html',
   styleUrl: './settings-page.scss',
 })

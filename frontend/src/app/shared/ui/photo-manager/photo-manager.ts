@@ -6,6 +6,7 @@ import { ImageUsage } from '../../../core/models';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { PhotoUploadService } from '../../../core/state/photo-upload.service';
 import { TPipe } from '../../pipes/t.pipe';
+import { UiIcon } from '../icon/icon';
 import { UiProgress } from '../progress/progress';
 import { UiReorder } from '../reorder/reorder';
 
@@ -27,7 +28,7 @@ import { UiReorder } from '../reorder/reorder';
 @Component({
   selector: 'ui-photo-manager',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiProgress, UiReorder],
+  imports: [TPipe, UiIcon, UiProgress, UiReorder],
   template: `
     <button
       type="button"
@@ -38,10 +39,11 @@ import { UiReorder } from '../reorder/reorder';
       (dragover)="$event.preventDefault()"
       (drop)="onDrop($event)"
     >
+      <ui-icon class="dropzone__mark" name="image" [size]="20" [strokeWidth]="1.5" />
       @if (full()) {
-        {{ 'photos.full' | t: { max: max() } }}
+        <span>{{ 'photos.full' | t: { max: max() } }}</span>
       } @else {
-        {{ 'photos.drop' | t }}<br />{{ 'photos.browse' | t: { remaining: remaining() } }}
+        <span>{{ 'photos.drop' | t }}<br />{{ 'photos.browse' | t: { remaining: remaining() } }}</span>
       }
     </button>
 
@@ -55,7 +57,7 @@ import { UiReorder } from '../reorder/reorder';
             class="upload__dismiss"
             [attr.aria-label]="'photos.dismiss' | t"
             (click)="uploads.dismiss(upload.key)"
-          >✕</button>
+          ><ui-icon name="close" [size]="12" /></button>
         } @else {
           <ui-progress
             class="upload__bar"
@@ -101,14 +103,14 @@ import { UiReorder } from '../reorder/reorder';
                 [attr.aria-label]="'photos.frame' | t"
                 [title]="'photos.frame' | t"
                 (click)="framed.emit(id)"
-              >⌖</button>
+              ><ui-icon name="crosshair" [size]="11" /></button>
               <button
                 type="button"
                 class="danger"
                 [title]="'photos.remove' | t"
                 [attr.aria-label]="'photos.remove' | t"
                 (click)="remove($index)"
-              >✕</button>
+              ><ui-icon name="close" [size]="11" /></button>
             </span>
           </li>
         }
@@ -124,7 +126,17 @@ import { UiReorder } from '../reorder/reorder';
       gap: 10px;
     }
 
+    /*
+     * Flat, not hatched. The diagonal hatch this used to wear is the silhouette
+     * of a skeleton sweep, so an empty dropzone read as a batch that was
+     * already uploading — the one thing it must never say. Flat --panel2 plus a
+     * dimmed mark, the same pair ui-image-slot and ui-mosaic settled on.
+     */
     .dropzone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--sp-1);
       padding: 22px 12px;
       font-family: var(--font-mono);
       font-size: 11px;
@@ -132,7 +144,7 @@ import { UiReorder } from '../reorder/reorder';
       color: var(--muted);
       text-align: center;
       cursor: pointer;
-      background: repeating-linear-gradient(45deg, var(--panel2) 0 8px, var(--panel) 8px 16px);
+      background: var(--panel2);
       border: var(--bw) dashed var(--border);
       border-radius: var(--radius);
 
@@ -174,7 +186,14 @@ import { UiReorder } from '../reorder/reorder';
       color: var(--danger);
     }
 
+    .dropzone__mark {
+      /* Decoration behind the instruction, which keeps full contrast. */
+      opacity: 0.4;
+    }
+
     .upload__dismiss {
+      display: inline-flex;
+      align-items: center;
       border: 0;
       background: none;
       color: var(--muted);
@@ -240,6 +259,8 @@ import { UiReorder } from '../reorder/reorder';
       transition: opacity 120ms ease;
 
       button {
+        display: inline-flex;
+        align-items: center;
         padding: 2px 6px;
         font-family: var(--font-mono);
         font-size: 9px;

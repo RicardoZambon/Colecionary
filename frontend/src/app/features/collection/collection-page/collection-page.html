@@ -5,6 +5,7 @@
     [total]="total()"
     [scopeName]="scopeName()"
     [members]="headerMembers()"
+    [blank]="blank()"
   />
 
   <!-- Full width, above the split: it describes the whole page, not the pane
@@ -30,6 +31,7 @@
         [fields]="groupFields()"
         [groupSort]="groupSort()"
         [searching]="searching()"
+        [blank]="blank()"
         [sortOverride]="sortOverride()"
         (sortOverrideChange)="setSortOverride($event)"
         [hiddenColumns]="hiddenColumns()"
@@ -39,7 +41,10 @@
       />
     </div>
 
-    @if (view() !== 'dashboard') {
+    <!-- Hidden while the scope holds nothing: two rows of chips that can only
+         narrow an empty list are five dead controls, not guidance. `blank()` is
+         the hero's predicate, computed once by the page. -->
+    @if (view() !== 'dashboard' && !blank()) {
       <app-collection-filters
         [condition]="condition()"
         (conditionChange)="setCondition($event)"
@@ -185,6 +190,36 @@
       </ng-container>
     </ui-dialog>
   }
+} @else if (loading()) {
+  <!--
+    The loading path used to be the not-found path: while the vault was in
+    flight this branch told the user their collection did not exist, then
+    replaced the sentence with a whole page. It now reserves the page's real
+    shape — banner, header, control bar, two columns — so nothing jumps when
+    the data lands.
+
+    `aria-busy` and one announcement live on the region; every skeleton in it is
+    `aria-hidden`, because hearing "loading" once beats hearing thirty unnamed
+    graphics.
+  -->
+  <div class="skeleton" aria-busy="true">
+    <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
+    <ui-skeleton class="skeleton__banner" variant="block" height="150px" />
+    <div class="skeleton__head">
+      <ui-skeleton class="skeleton__icon" variant="block" height="80px" />
+      <div class="skeleton__title">
+        <ui-skeleton height="26px" width="46%" />
+        <ui-skeleton height="13px" width="72%" />
+      </div>
+      <ui-skeleton class="skeleton__box" variant="block" height="50px" />
+    </div>
+    <ui-skeleton class="skeleton__bar" height="16px" width="58%" />
+    <div class="skeleton__grid">
+      @for (row of placeholders; track row) {
+        <ui-skeleton variant="block" height="188px" />
+      }
+    </div>
+  </div>
 } @else {
   <div class="missing">
     {{ 'common.collectionNotFound' | t }}

@@ -34,6 +34,7 @@ npm start        # dev server → http://localhost:4200 (expects the API on 5100
 npm test         # vitest unit tests
 npm run build    # production build (must pass before merging)
 npm run verify:browser   # Playwright checks against a running dev server
+npm run check:literals   # run this when you see NG2012 (see below)
 ```
 
 Demo login: `marcus@example.com` / `vault-demo` (also `ana@` Editor, `dev@` Viewer).
@@ -334,6 +335,21 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    refuses the palette below 4.5:1. Only `ui-skeleton` may shimmer; a no-image
    state is flat, because a hatch is indistinguishable from a loading shimmer.
    A raw Unicode glyph is not an icon — add a name to `ICON_NAMES`.
+
+## One trap that costs an hour every time
+
+**Never put a backtick inside an inline `template:` or `styles:` block** — not
+even inside a CSS or HTML comment. Those blocks are JavaScript template
+literals, so a backtick ends the string; the rest of the file becomes garbage,
+and the compiler reports `NG2012: Component imports must be standalone
+components` at **every call site that imports the component**, never at the file
+that was broken. The house style of wrapping identifiers in backticks makes this
+easy to do while writing a perfectly good comment. Write them bare inside those
+blocks; TSDoc above the class and `.scss` files take backticks freely.
+
+`npm run check:literals` names the file and line. It is a script and not a spec
+on purpose: the mistake always breaks the build, so a spec could never run to
+report it.
 
 ## Documentation is part of the change
 

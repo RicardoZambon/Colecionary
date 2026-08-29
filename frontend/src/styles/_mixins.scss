@@ -47,13 +47,12 @@
   opacity: 0.55;
 }
 
-@mixin stripes($step: 8px) {
-  background: repeating-linear-gradient(
-    45deg,
-    var(--panel2) 0 $step,
-    var(--panel) $step $step * 2
-  );
-}
+// `stripes` used to live here — a 45° hatch for "no image yet". It is gone, and
+// deliberately so: the hatch is the silhouette of a skeleton sweep, so every
+// surface wearing it claimed to be mid-fetch. Placeholders are now flat
+// `--panel2` plus a dimmed `ui-icon` (`ui-image-slot`, `ui-mosaic`), and the
+// only thing allowed to look like it is moving is `ui-skeleton`. Do not
+// reintroduce it.
 
 // ============================================================================
 // Breakpoints

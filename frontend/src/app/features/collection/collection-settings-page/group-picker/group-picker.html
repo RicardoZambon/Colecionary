@@ -19,7 +19,7 @@
               | t: { name: row.node.name }
           "
           (click)="toggle($event, row.node.id)"
-        >{{ row.expanded ? '▾' : '▸' }}</button>
+        ><ui-icon [name]="row.expanded ? 'chevron-down' : 'chevron-right'" [size]="11" /></button>
       } @else {
         <span class="pick__twisty pick__twisty--leaf" aria-hidden="true"></span>
       }

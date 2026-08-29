@@ -12,7 +12,7 @@ import { fieldSortKey, fieldValue } from '../../../../core/utils/sort.util';
 import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiCard, UiCheckbox, UiReorder } from '../../../../shared/ui';
+import { IconName, UiCard, UiCheckbox, UiIcon, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
 import { SectionHeader } from '../section-header/section-header';
@@ -37,6 +37,7 @@ export interface RowPick {
     SectionHeader,
     UiCard,
     UiCheckbox,
+    UiIcon,
     UiReorder,
   ],
   templateUrl: './item-list.html',
@@ -195,10 +196,18 @@ export class ItemList {
       : this.i18n.t('itemList.sortedDesc', { label });
   }
 
-  /** The arrow next to an active header. Empty for the columns not in force. */
-  protected sortArrow(by: string): string {
-    if (this.sort().by !== by) return '';
-    return this.sort().direction === 'asc' ? '↑' : '↓';
+  /**
+   * The mark next to an active header, or null for the columns not in force.
+   *
+   * A name rather than a glyph: the arrows here were the last two substitute
+   * characters in the app's chrome, and a table header full of them at whatever
+   * weight the fallback font happened to have sat badly next to the tracked mono
+   * label it belongs to. Decoration only — `sortTitle` is what a screen reader
+   * hears, and it says the direction in words.
+   */
+  protected sortArrow(by: string): IconName | null {
+    if (this.sort().by !== by) return null;
+    return this.sort().direction === 'asc' ? 'chevron-up' : 'chevron-down';
   }
 
   protected onDrop(event: DragEvent, to: number): void {

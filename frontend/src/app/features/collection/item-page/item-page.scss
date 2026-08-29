@@ -16,7 +16,12 @@
   flex-wrap: wrap;
 }
 
+/* The chevron is a mark now, so the row spaces it — and it keeps the link's
+   own colour rather than declaring one, so hover moves both together. */
 .back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -67,8 +72,6 @@
   }
 
   &__chev {
-    font-size: 14px;
-    line-height: 1;
     color: var(--accent);
   }
 
@@ -119,7 +122,10 @@
 
   &__main {
     height: 300px;
-    @include stripes;
+    /* Flat, never hatched. A diagonal hatch is the silhouette of a skeleton
+       sweep, so an item with no photograph read as one still loading its
+       picture — for ever. The `ui-empty` inside says what the absence means. */
+    background: var(--panel2);
     border: var(--bw) solid var(--border);
     border-radius: var(--radius);
     display: grid;
@@ -159,7 +165,10 @@
 .thumb {
   width: 74px;
   height: 58px;
-  @include stripes(6px);
+  /* See .gallery__main: a permanent state must not wear a loading state's
+     clothes. Every thumb here carries a photograph anyway, so this only shows
+     through while one decodes. */
+  background: var(--panel2);
   border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 0;

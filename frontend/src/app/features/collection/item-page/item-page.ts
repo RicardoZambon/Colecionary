@@ -29,7 +29,16 @@ import { conditionLabelKey, conditionTone, itemBadgeLabel, itemTone } from '../.
 import { ItemValuePipe } from '../../../shared/pipes/item-value.pipe';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import { TPipe } from '../../../shared/pipes/t.pipe';
-import { UiBadge, UiButton, UiCard, UiEmpty, UiLightbox, UiSectionLabel } from '../../../shared/ui';
+import {
+  UiBadge,
+  UiButton,
+  UiCard,
+  UiEmpty,
+  UiIcon,
+  UiLightbox,
+  UiSectionLabel,
+  UiSkeleton,
+} from '../../../shared/ui';
 
 /** Null for the default, so only a notable status shows up on a copy row. */
 const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
@@ -50,8 +59,10 @@ const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
     UiEmpty,
     UiButton,
     UiCard,
+    UiIcon,
     UiLightbox,
     UiSectionLabel,
+    UiSkeleton,
   ],
   templateUrl: './item-page.html',
   styleUrl: './item-page.scss',
@@ -59,6 +70,9 @@ const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
 })
 export class ItemPage {
   protected readonly store = inject(VaultStore);
+
+  /** The vault is still in flight — not the same fact as 'no such collection'. */
+  protected readonly loading = computed(() => !this.store.loaded());
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
   private readonly i18n = inject(I18nService);

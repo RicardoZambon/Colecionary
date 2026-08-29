@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, input, output } from '@angu
 
 import { I18nService } from '../../../core/i18n';
 import { UiButton } from '../button/button';
+import { UiIcon } from '../icon/icon';
 
 /**
  * Keyboard-reachable move controls that sit on top of a draggable item. Drag
@@ -16,7 +17,7 @@ import { UiButton } from '../button/button';
 @Component({
   selector: 'ui-reorder',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiButton],
+  imports: [UiButton, UiIcon],
   host: { '(click)': 'contain($event)' },
   template: `
     <ui-button
@@ -25,14 +26,14 @@ import { UiButton } from '../button/button';
       [disabled]="first()"
       [ariaLabel]="i18n.t('ui.reorder.earlier', { name: label() })"
       (click)="moved.emit(-1)"
-    >↑</ui-button>
+    ><ui-icon name="chevron-up" [size]="12" /></ui-button>
     <ui-button
       variant="ghost"
       size="sm"
       [disabled]="last()"
       [ariaLabel]="i18n.t('ui.reorder.later', { name: label() })"
       (click)="moved.emit(1)"
-    >↓</ui-button>
+    ><ui-icon name="chevron-down" [size]="12" /></ui-button>
   `,
   styles: `
     :host {
@@ -70,7 +71,7 @@ import { UiButton } from '../button/button';
      * At either end of the list one arrow is disabled, and ui-button dims the
      * whole button to say so — which over a photo dims the chip back towards
      * transparent, the very thing this fixes. The chip stays solid and only the
-     * glyph fades, so "can't move further" still reads as a button.
+     * mark fades, so "can't move further" still reads as a button.
      */
     :host ::ng-deep .btn.btn:disabled {
       opacity: 1;

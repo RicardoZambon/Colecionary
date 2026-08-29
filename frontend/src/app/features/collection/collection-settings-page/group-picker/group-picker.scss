@@ -12,6 +12,8 @@ ul {
 
 .pick__twisty {
   flex: none;
+  display: grid;
+  place-items: center;
   width: 18px;
   padding: 0;
   border: 0;

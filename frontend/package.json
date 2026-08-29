@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "verify:browser": "node e2e/verify.mjs"
+    "verify:browser": "node e2e/verify.mjs",
+    "check:literals": "node scripts/check-inline-literals.mjs"
   },
   "private": true,
   "packageManager": "npm@11.6.2",

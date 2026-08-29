@@ -128,11 +128,18 @@ export type ButtonSize = 'md' | 'sm';
     }
 
     /*
-     * A bare glyph — the ✕ that removes a copy, a field, a member. Quiet until
-     * pointed at, then danger-coloured, because removal is the one action here
-     * that cannot be undone by clicking again.
+     * A bare mark — the ui-icon close that removes a copy, a field, a member.
+     * Quiet until pointed at, then danger-coloured, because removal is the one
+     * action here that cannot be undone by clicking again.
+     *
+     * The flex centring is what an inline svg needs: a button lays its content
+     * out on a text baseline, so a block-level svg sat a couple of pixels low
+     * and left a descender's worth of dead space under it.
      */
     .btn--icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       background: none;
       border: 0;
       padding: 2px 4px;
@@ -175,7 +182,7 @@ export class UiButton {
   readonly disabled = input(false);
   readonly type = input<'button' | 'submit'>('button');
   /**
-   * Accessible name for buttons whose content is a bare glyph (↑ ↓ ✕). Also
+   * Accessible name for buttons whose content is a bare mark (a `ui-icon`). Also
    * becomes the tooltip, so the meaning is reachable by mouse too.
    */
   readonly ariaLabel = input('');

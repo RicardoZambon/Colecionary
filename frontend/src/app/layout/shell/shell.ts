@@ -59,9 +59,7 @@ import { Topbar } from '../topbar/topbar';
       }
 
       <main class="main" id="main-content" tabindex="-1">
-        @if (store.loaded()) {
-          <router-outlet />
-        } @else if (store.loadError(); as error) {
+        @if (store.loadError(); as error) {
           <!--
             The state this used to have no way to render. load() was called
             with a catch that discarded the error, and the outlet was gated on
@@ -78,7 +76,17 @@ import { Topbar } from '../topbar/topbar';
             </ui-button>
           </div>
         } @else {
-          <div class="loading">{{ 'shell.loading' | t }}</div>
+          <!--
+            Rendered while the vault is still in flight, not after. This used to
+            be gated on loaded(), which meant no page existed until the whole
+            vault had landed — so every page's own loading state was
+            unreachable, and the shell showed one centred line of text for all
+            of them. Each routed page now orders a loading branch before its
+            not-found branch, because "the store has no such collection yet" and
+            "there is no such collection" are the same expression at two
+            different moments.
+          -->
+          <router-outlet />
         }
       </main>
     </div>

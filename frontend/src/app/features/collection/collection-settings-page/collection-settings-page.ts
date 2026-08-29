@@ -46,7 +46,9 @@ import {
   UiButton,
   UiCard,
   UiField,
+  UiIcon,
   UiSelect,
+  UiSkeleton,
   UiTabs,
   UiTextInput,
   UiTextarea,
@@ -105,12 +107,31 @@ const PERSIST_DEBOUNCE_MS = 400;
   // and at 720px the editor gets 450 of them, which is where a section's name,
   // count, target and four buttons stop fitting on one line.
   host: { '[class.wide]': "activeTab() === 'groups'" },
-  imports: [RouterLink, TPipe, GroupDeleteDialog, GroupPicker, UiAvatar, UiButton, UiCard, UiField, UiSelect, UiTabs, UiTextInput, UiTextarea, UiToggle],
+  imports: [
+    RouterLink,
+    TPipe,
+    GroupDeleteDialog,
+    GroupPicker,
+    UiAvatar,
+    UiButton,
+    UiCard,
+    UiField,
+    UiIcon,
+    UiSelect,
+    UiSkeleton,
+    UiTabs,
+    UiTextInput,
+    UiTextarea,
+    UiToggle,
+  ],
   templateUrl: './collection-settings-page.html',
   styleUrl: './collection-settings-page.scss',
 })
 export class CollectionSettingsPage {
   protected readonly store = inject(VaultStore);
+
+  /** The vault is still in flight — not the same fact as 'no such collection'. */
+  protected readonly loading = computed(() => !this.store.loaded());
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);

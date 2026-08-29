@@ -191,7 +191,11 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
       overflow: hidden;
       border: var(--bw) solid var(--border);
       border-radius: var(--radius);
-      background: repeating-linear-gradient(45deg, var(--panel2) 0 8px, var(--panel) 8px 16px);
+      /* Flat: a hatch here is the silhouette of a loading sweep, and this
+         surface always already holds the photograph. Nothing is ever missing
+         behind it, so it takes no placeholder mark either — just a ground for
+         the letterboxing around a picture that does not fill the stage. */
+      background: var(--panel2);
       touch-action: none;
       cursor: crosshair;
     }

@@ -19,6 +19,7 @@ export const ICON_NAMES = [
   'chevron-left',
   'chevron-right',
   'chevron-down',
+  'chevron-up',
   'crosshair',
   'trend-up',
   'trend-down',
@@ -29,6 +30,8 @@ export const ICON_NAMES = [
   'drag',
   'filter',
   'sort',
+  'alert',
+  'contrast',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -57,6 +60,14 @@ const FILLED: readonly IconName[] = ['diamond', 'drag'];
  *
  * Outline paths follow Feather Icons (MIT © Cole Bemis) in style and stroke
  * geometry so a new one never looks foreign next to an old one.
+ *
+ * The set started at four names, which is why the app went on substituting
+ * glyphs for the other nineteen for a while: `▤ ▦ ☰ ✓ ⟨ ▾ ▸ › ‹ ← → ↑ ↓ ✕ ⌖ ◐
+ * ◆ !`. Those are gone from every template now. Three places keep a glyph on
+ * purpose and are not bugs to fix: `<option>` labels cannot hold an SVG (the
+ * `↳` indent in the group pickers), and `dashboard-page` and `sort.util` pass
+ * an arrow *into* a translated sentence, where the mark is part of the copy
+ * rather than part of the chrome.
  */
 @Component({
   selector: 'ui-icon',
@@ -137,6 +148,9 @@ const FILLED: readonly IconName[] = ['diamond', 'drag'];
         @case ('chevron-down') {
           <path d="M5.5 9 12 15.5 18.5 9" />
         }
+        @case ('chevron-up') {
+          <path d="M5.5 15 12 8.5 18.5 15" />
+        }
         @case ('crosshair') {
           <circle cx="12" cy="12" r="7.4" />
           <path d="M12 1.6v4M12 18.4v4M1.6 12h4M18.4 12h4" />
@@ -185,6 +199,16 @@ const FILLED: readonly IconName[] = ['diamond', 'drag'];
         @case ('sort') {
           <path d="M3.5 6.5h11M3.5 12h8M3.5 17.5h5" />
           <path d="M18 8v11M14.8 15.8 18 19l3.2-3.2" />
+        }
+        @case ('alert') {
+          <path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+          <path d="M12 9.2v4.2M12 17.2h.01" />
+        }
+        @case ('contrast') {
+          <circle cx="12" cy="12" r="9" />
+          <!-- The filled half is what carries the meaning, so it paints itself
+               rather than inheriting the outline treatment. -->
+          <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
         }
       }
     </svg>

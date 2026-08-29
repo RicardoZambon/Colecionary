@@ -23,6 +23,8 @@
 
   &__collapse {
     flex: none;
+    display: grid;
+    place-items: center;
     border: none;
     background: transparent;
     color: var(--muted);
@@ -57,6 +59,8 @@ ul {
      which starts exactly at the name. */
   &__twisty {
     width: 14px;
+    display: grid;
+    place-items: center;
     flex: none;
     margin-top: 6px;
     padding: 0;

@@ -23,8 +23,10 @@ import {
   UiCard,
   UiDateInput,
   UiField,
+  UiIcon,
   UiPhotoManager,
   UiSelect,
+  UiSkeleton,
   UiTextInput,
   UiTextarea,
 } from '../../../shared/ui';
@@ -90,8 +92,10 @@ function fromDraft(draft: CopyDraft): ItemCopy {
     UiCard,
     UiDateInput,
     UiField,
+    UiIcon,
     UiPhotoManager,
     UiSelect,
+    UiSkeleton,
     UiTextInput,
     UiTextarea,
   ],
@@ -100,6 +104,9 @@ function fromDraft(draft: CopyDraft): ItemCopy {
 })
 export class ItemFormPage {
   protected readonly store = inject(VaultStore);
+
+  /** The vault is still in flight — not the same fact as 'no such collection'. */
+  protected readonly loading = computed(() => !this.store.loaded());
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
   private readonly i18n = inject(I18nService);

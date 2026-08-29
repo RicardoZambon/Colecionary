@@ -196,6 +196,13 @@ a core service's state).
   accents fail 4.5:1 as text while passing as fills. Raising `--muted` would
   have fixed the contrast and destroyed the distinction between text that
   informs and text that decorates.
+- **`stripes()` no longer exists.** The no-image contract is a flat `--panel2`
+  with a dimmed `ui-icon`. A 45° hatch is the silhouette of a skeleton shimmer,
+  which is what made the dashboard, the store and the group cards read as
+  permanently mid-fetch. The single sanctioned `repeating-linear-gradient` left
+  in the app is `ui-progress`'s dimmer band, which is hatched *as well as*
+  dimmed so the two bands stay apart without relying on colour (rule 12). A
+  browser check asserts no other element is hatched.
 - **`--danger` is not `--warn`.** `--danger` is destruction and error;
   `--warn` is a warning. They were one token, which is why "Delete collection"
   and a Fair-condition badge rendered in the same colour — a colour that marks
@@ -315,7 +322,7 @@ All are exported from `shared/ui/index.ts`.
 | Avatar stack | `ui-avatar-stack` | `members: Member[]` (shows first 4, overlapped) |
 | Progress | `ui-progress` | `pct` (required, 0–100, clamped), `secondaryPct` (a dimmer hatched band drawn behind the fill — owned vs catalogued against one denominator), `size: 'sm' \| 'md'`, `label` (→ `aria-label`), `valueText` (→ `aria-valuetext`, e.g. "12 of 120 owned"). Two shades of one hue is a colour-only distinction, so always print the numbers beside the bar |
 | Mosaic | `ui-mosaic` | `tiles: MosaicTile[]` (`{ src, position }`, up to 4), `placeholder`, `dim` — a cover built from several photos, `aria-hidden` because the name belongs to the link wrapping it. Presentational: the page resolves ids through `ImagesApi`/`ImageFocusService`, as with `ui-image-slot` |
-| Icon | `ui-icon` | `name` (required, one of `ICON_NAMES`), `size`, `strokeWidth`, optional `label`. Inline Feather-style SVG. With `label` it is `role="img"` + `aria-label`; without, `aria-hidden="true"` — so an icon beside its own text label never double-announces. **A raw Unicode glyph is not an icon**: add a name to `ICON_NAMES` instead. The set was four names, which is exactly why the app had accumulated `⌖ ⚙ ⟩ ▤ ☰ ▲ ✕` as substitutes, at the cost of baseline alignment, cross-platform consistency, screen-reader predictability and two extra webfonts. `icon.spec.ts` asserts every name in `ICON_NAMES` draws geometry, because a mistyped `@case` renders an empty `<svg>` and nothing else complains |
+| Icon | `ui-icon` | `name` (required, one of the 26 in `ICON_NAMES`), `size`, `strokeWidth`, optional `label`. Inline Feather-style SVG. With `label` it is `role="img"` + `aria-label`; without, `aria-hidden="true"` — so an icon beside its own text label never double-announces. **A raw Unicode glyph is not an icon**: add a name to `ICON_NAMES` instead. The set was four names, which is exactly why the app had accumulated `⌖ ⚙ ⟩ ▤ ☰ ▲ ✕` as substitutes, at the cost of baseline alignment, cross-platform consistency, screen-reader predictability and two extra webfonts. `icon.spec.ts` asserts every name in `ICON_NAMES` draws geometry, because a mistyped `@case` renders an empty `<svg>` and nothing else complains |
 | Reorder | `ui-reorder` | `label` (names the item for screen readers), `first`, `last`; output `moved(-1 | 1)` — the keyboard half of a drag-to-reorder list, absolutely positioned over a `position: relative` parent |
 | Section label | `ui-section-label` | content-projected mono uppercase micro-heading |
 | Dropdown | `ui-dropdown` | `width`; project trigger via `[ddTrigger]`, panel via `[ddPanel]`; call `close()` from panel handlers |
@@ -325,7 +332,7 @@ All are exported from `shared/ui/index.ts`.
 | Dialog | `ui-dialog` | `title` (required), `describedBy`, `role: 'dialog' \| 'alertdialog'`; output `dismissed`; default slot plus a projected `[dlgActions]`. Owns the scrim, `aria-modal`, Escape, and initial focus — on the **panel**, deliberately not on a control, so a held Enter cannot answer a dialog before it has been read. **`dismissed` always means "nothing happened"**: Escape and the scrim both fire it, and a caller must never read either as a confirmation. A dialog you cannot leave by reflex is one people answer at random |
 | Confirm | `ui-confirm` | none — global outlet in the shell, driven by `ConfirmService.ask(req): Promise<boolean>` where `req` is `{ titleKey, bodyKey, bodyParams?, confirmKey, cancelKey?, tone? }`. Built on `ui-dialog` as an `alertdialog`. With `tone: 'danger'` the confirm button takes the `danger` variant and **initial focus goes to Cancel**. Escape, the scrim and a second `ask()` all resolve `false`; it never rejects. A service and an outlet, following `ConflictService`/`app-conflict-notice` — not a modal framework |
 | Empty state | `ui-empty` | `icon`, `title` (**required, no default**), `body` (optional, capped near 48ch), `compact`; actions projected via `[emptyActions]`. The title has no default on purpose: "nothing matches your filters" and "nothing here yet" are different facts, and one message serving both is what told people to clear filters they had never set. Deliberately **not** `role="status"` — these render on first paint, where a live region announces nothing while stealing the announcement from whatever did change |
-| Skeleton | `ui-skeleton` | `variant: 'text' \| 'block' \| 'circle'`, `width`, `height`, `radius`, `lines`. **The only thing in the app allowed to shimmer**, and only inside `motion-safe`. A no-image state is flat — see `ui-image-slot` — because a diagonal hatch is indistinguishable from a shimmer, which is what made the dashboard, the store and the group cards read as permanently mid-fetch. `aria-hidden` with no name; the surrounding region owns `aria-busy` |
+| Skeleton | `ui-skeleton` | `variant: 'text' \| 'block' \| 'circle'`, `width`, `height`, `radius`, `lines`. Size bars in **`1lh`** against the real element's own class — one line box of whatever they land in — rather than a guessed pixel height, which is what keeps cumulative layout shift at zero. Note `variant="block"` carries a `min-height: var(--sp-12)` floor that silently overrides a smaller `height`. **The only thing in the app allowed to shimmer**, and only inside `motion-safe`. A no-image state is flat — see `ui-image-slot` — because a diagonal hatch is indistinguishable from a shimmer, which is what made the dashboard, the store and the group cards read as permanently mid-fetch. `aria-hidden` with no name; the surrounding region owns `aria-busy` |
 | Date input | `ui-date-input` | `value` (model, ISO `yyyy-MM-dd`; `''` = no date), `min`, `max`, `variant`, `ariaLabel`; output `blurred`. A native `<input type="date">` follows the **browser's** locale, not the document's, so an English-locale Chrome renders `mm/dd/yyyy` inside a pt-BR UI — which does not fail, it records the wrong date. Two defences: `lang` is bound to `I18nService.current()` (Chromium honours it; Firefox and Safari still take the OS locale), and the expected order is printed under the field from `Intl.DateTimeFormat` for `I18nService.locale()`, wired up as `aria-describedby` so it is announced and not merely drawn. Always use this instead of `ui-text-input type="date"` |
 | Conflict notice | `app-conflict-notice` | none — global outlet in the shell, driven by `ConflictService`. Lives in `layout/`, not `shared/ui`: it is one app-specific outlet, not a reusable element. Raised when a write is refused because someone else changed the collection first; it never discards what the user typed |
 | Money pipe | `\| money: currency()` | formats numbers as `$1,234.57`, always two decimals, always rounded **up**. Takes the collection's currency; omitted, the account default. Impure — see §6 |
@@ -699,6 +706,11 @@ fails if anyone reorders it.
   (`npm start`), including at least one dark theme — token regressions usually
   only show up there — and **in Portuguese**, which runs ~20% longer than
   English and is where text overflow shows up first.
+- **`npm run check:literals`** when a component change produces `NG2012` or a
+  stray syntax error: a backtick inside an inline `template:`/`styles:` block
+  ends the literal, and the compiler blames the importers rather than the file.
+  A script rather than a spec, because the mistake always breaks the build and a
+  spec would never get to run.
 - **`npm run verify:browser`** (`frontend/e2e/verify.mjs`) makes the checks only
   a real browser can. Run it against a dev server before merging UI work. It
   asserts first paint carries the stored theme and language, that the dashboard

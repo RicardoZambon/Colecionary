@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ToastService } from '../../../core/state/toast.service';
 import { TPipe } from '../../pipes/t.pipe';
 import { UiButton } from '../button/button';
+import { UiIcon } from '../icon/icon';
 
 /**
  * Global toast outlet — rendered once in the app shell.
@@ -23,7 +24,7 @@ import { UiButton } from '../button/button';
 @Component({
   selector: 'ui-toast',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiButton],
+  imports: [TPipe, UiButton, UiIcon],
   template: `
     @if (toast.current(); as current) {
       <div
@@ -34,12 +35,18 @@ import { UiButton } from '../button/button';
         [attr.aria-live]="current.tone === 'error' ? 'assertive' : 'polite'"
       >
         @if (current.tone !== 'info') {
-          <!-- The marker is text, not a hue: rule 12 does not allow status to
-               be carried by colour alone. -->
+          <!-- The marker is text as well as a mark: rule 12 does not allow
+               status to be carried by colour alone, and the word beside the
+               ring is what carries it. The mark stays aria-hidden precisely
+               because that word is already there: naming it too would announce
+               the tone twice. -->
           <span class="toast__mark">
-            <span class="toast__glyph" aria-hidden="true">{{
-              current.tone === 'error' ? '!' : '✓'
-            }}</span>
+            <ui-icon
+              class="toast__glyph"
+              [name]="current.tone === 'error' ? 'alert' : 'check'"
+              [size]="13"
+              [strokeWidth]="2.1"
+            />
             {{ (current.tone === 'error' ? 'toast.failed' : 'toast.done') | t }}
           </span>
         }
@@ -57,7 +64,7 @@ import { UiButton } from '../button/button';
             class="toast__close"
             [attr.aria-label]="'toast.dismiss' | t"
             (click)="toast.dismiss()"
-          >✕</button>
+          ><ui-icon name="close" [size]="13" /></button>
         }
 
         @if (toast.waiting()) {
@@ -119,15 +126,14 @@ import { UiButton } from '../button/button';
       color: var(--danger);
     }
 
+    /*
+     * No ring any more. The circle existed to make a bare ✓ or ! character look
+     * deliberate; a drawn mark already does, and a triangle inside a 15px
+     * circle is two shapes fighting for the same ten pixels. Colour comes from
+     * .toast__mark, so the mark follows the tone with the word.
+     */
     .toast__glyph {
-      display: inline-grid;
-      place-items: center;
-      width: 15px;
-      height: 15px;
-      border-radius: 999px;
-      border: var(--bw) solid currentColor;
-      font-size: 10px;
-      line-height: 1;
+      flex: none;
     }
 
     .toast__text {
@@ -139,6 +145,8 @@ import { UiButton } from '../button/button';
     }
 
     .toast__close {
+      display: inline-flex;
+      align-items: center;
       flex: none;
       background: none;
       border: 0;

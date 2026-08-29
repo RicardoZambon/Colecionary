@@ -15,7 +15,7 @@ import { ImageFocusService } from '../../../../core/state/image-focus.service';
 import { GroupStats, UNGROUPED_ID } from '../../../../core/utils/group-stats.util';
 import { childrenOf } from '../../../../core/utils/groups.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { MosaicTile } from '../../../../shared/ui';
+import { MosaicTile, UiIcon } from '../../../../shared/ui';
 import { GroupCard } from '../group-card/group-card';
 
 interface CardView {
@@ -32,7 +32,7 @@ interface CardView {
 @Component({
   selector: 'app-group-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, GroupCard],
+  imports: [RouterLink, TPipe, GroupCard, UiIcon],
   templateUrl: './group-dashboard.html',
   styleUrl: './group-dashboard.scss',
 })

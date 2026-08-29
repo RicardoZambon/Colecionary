@@ -13,6 +13,9 @@
 }
 
 .back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -451,8 +454,11 @@ h1 {
   font-weight: 600;
 }
 
+/* An inline mark inside a line of text: an inline-flex box has no baseline of
+   its own, so without this the chevron rides the descender line. */
 .detail__sep {
   margin: 0 4px;
+  vertical-align: middle;
 }
 
 .detail__empty {

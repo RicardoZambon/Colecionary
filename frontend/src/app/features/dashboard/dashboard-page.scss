@@ -99,6 +99,13 @@ h1 {
   height: 70px;
   border-bottom: var(--bw) solid var(--border);
   pointer-events: none;
+
+  /* A block skeleton sizes its bar to its host, and the host is auto-height, so
+     the banner hands its own height down — stated here, beside the 70px it
+     comes from, rather than repeated as a literal in the template. */
+  ui-skeleton {
+    height: 100%;
+  }
 }
 
 .card-body {

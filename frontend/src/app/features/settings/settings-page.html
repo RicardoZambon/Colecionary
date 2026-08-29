@@ -19,7 +19,13 @@
             </div>
             <div class="plan__features">
               @for (feature of plan.featureKeys; track feature) {
-                <div class="feature"><span class="tick">›</span>{{ feature | t }}</div>
+                <!-- A tick, not a chevron. This was a `›` — the mark that
+                     means "goes deeper" everywhere else in the app — standing in
+                     for "included in this plan", which is a different claim. -->
+                <div class="feature">
+                  <ui-icon class="tick" name="check" [size]="12" [strokeWidth]="2.4" />
+                  {{ feature | t }}
+                </div>
               }
             </div>
             @if (store.profile()?.plan === plan.id) {
@@ -66,7 +72,7 @@
               [muted]="member.role === 'Owner'"
               [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
               (click)="removeMember(member.email)"
-            >✕</ui-button>
+            ><ui-icon name="close" [size]="13" /></ui-button>
           </div>
         }
       </ui-card>

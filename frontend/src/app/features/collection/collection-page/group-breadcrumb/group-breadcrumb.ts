@@ -4,7 +4,7 @@ import { RouterLink } from '@angular/router';
 import { GroupNode } from '../../../../core/models';
 import { groupLinkParams } from '../../browse-params';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiChip } from '../../../../shared/ui';
+import { UiChip, UiIcon } from '../../../../shared/ui';
 
 interface Crumb {
   id: string | null;
@@ -34,7 +34,7 @@ export interface ChildChip {
 @Component({
   selector: 'app-group-breadcrumb',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, UiChip],
+  imports: [RouterLink, TPipe, UiChip, UiIcon],
   template: `
     <nav [attr.aria-label]="'breadcrumb.pathAria' | t">
       @for (crumb of crumbs(); track crumb.id; let last = $last) {
@@ -46,7 +46,7 @@ export interface ChildChip {
           [attr.aria-current]="crumb.current ? 'page' : null"
         >{{ crumb.label }}</ui-chip>
         @if (!last) {
-          <span class="sep" aria-hidden="true">›</span>
+          <ui-icon class="sep" name="chevron-right" [size]="11" [strokeWidth]="2.2" />
         }
       }
     </nav>
@@ -94,7 +94,7 @@ export interface ChildChip {
       [routerLink]="['/c', collectionId(), 'settings']"
       [queryParams]="{ tab: 'groups', g: currentId() }"
       [title]="'breadcrumb.editGroupsTitle' | t"
-    >{{ 'breadcrumb.editGroups' | t }}</a>
+    ><ui-icon name="gear" [size]="12" />{{ 'breadcrumb.editGroups' | t }}</a>
   `,
   styles: `
     /* No border of its own: it shares one bar with the item controls, and the
@@ -117,7 +117,6 @@ export interface ChildChip {
 
     .sep {
       color: var(--muted);
-      font-size: 12px;
     }
 
     /* Separates path from children without a second row or a second label. */
@@ -145,7 +144,13 @@ export interface ChildChip {
       }
     }
 
+    /* The gear used to be a glyph inside the translated label. It is a mark
+       now, so the row has to space it — and the label keeps its own words in
+       both languages. */
     .manage {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--sp-1);
       font-size: 11.5px;
       color: var(--muted);
       white-space: nowrap;

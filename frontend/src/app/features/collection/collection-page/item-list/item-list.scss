@@ -132,9 +132,12 @@
   }
 }
 
+/* An inline mark in a line of tracked mono: an inline-flex box has no baseline
+   of its own, so without the alignment it rides the descender line. */
 .col__arrow {
   color: var(--accent);
   margin-left: 3px;
+  vertical-align: middle;
 }
 
 .list-row {

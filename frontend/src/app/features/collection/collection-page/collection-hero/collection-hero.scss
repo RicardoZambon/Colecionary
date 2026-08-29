@@ -71,9 +71,26 @@
     gap: 10px;
     flex-wrap: wrap;
 
-    > a:hover {
-      text-decoration: none;
+    > a {
+      display: inline-flex;
+      align-items: center;
+
+      &:hover {
+        text-decoration: none;
+      }
     }
+  }
+}
+
+/*
+ * The sharing link is an avatar stack, so it inherits its height from three
+ * 27px circles — 69 × 27 at 390px, well under the 44px a finger needs, and the
+ * only control on this row that was still short of it. Padded rather than
+ * stretched: the avatars keep their size and the touch area grows around them.
+ */
+@include upto($bp-lg) {
+  .header__actions > a {
+    min-height: var(--tap);
   }
 }
 
