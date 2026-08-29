@@ -67,7 +67,12 @@ public static class DtoMapper
         new(user.Name, user.Email, user.Initials, user.Role.ToString());
 
     public static UserProfileDto ToProfileDto(this User user) =>
-        new(user.Name, user.Email, user.Initials, user.Plan.ToString().ToLowerInvariant());
+        new(
+            user.Name,
+            user.Email,
+            user.Initials,
+            user.Plan.ToString().ToLowerInvariant(),
+            user.Role.ToString());
 
     public static StoreListingDto ToDto(this StoreListing listing) => new(
         listing.Id,

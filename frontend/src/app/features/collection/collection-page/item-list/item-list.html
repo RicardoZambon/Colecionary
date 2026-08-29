@@ -4,18 +4,24 @@
        body must never scroll horizontally — so the table does, and the
        checkbox and the name stay pinned so a row never loses its identity. -->
   <div class="list-scroll" [style.--field-cols]="fields().length">
-    <div class="list-table" [class.list-table--fields]="fields().length > 0">
+    <div
+      class="list-table"
+      [class.list-table--fields]="fields().length > 0"
+      [class.list-table--readonly]="!canEdit()"
+    >
       <!-- Once, at the top: the columns do not change between sections, and
            repeating them under every heading would double the chrome. -->
       <div class="list-head" [class.list--manual]="manual()">
-        <span class="pick" [attr.title]="'select.rangeHint' | t">
-          <ui-checkbox
-            [checked]="allSelected()"
-            [indeterminate]="someSelected()"
-            [ariaLabel]="'select.all' | t"
-            (picked)="allPicked.emit($event.checked)"
-          />
-        </span>
+        @if (canEdit()) {
+          <span class="pick" [attr.title]="'select.rangeHint' | t">
+            <ui-checkbox
+              [checked]="allSelected()"
+              [indeterminate]="someSelected()"
+              [ariaLabel]="'select.all' | t"
+              (picked)="allPicked.emit($event.checked)"
+            />
+          </span>
+        }
         <div class="list-cells">
           <button
             type="button"
@@ -75,22 +81,28 @@
             class="list-line"
             [class.dragging]="drag.index() === entry.index"
             [class.selected]="isSelected(entry.item)"
-            [attr.draggable]="manual() ? true : null"
+            [attr.draggable]="manual() && canEdit() ? true : null"
             (dragstart)="drag.start($event, entry.index)"
             (dragover)="drag.over($event)"
             (drop)="onDrop($event, entry.index)"
             (dragend)="drag.end()"
           >
             <!-- A sibling of the anchor, never inside it: a checkbox nested in
-                 an `<a>` is invalid HTML, and `ui-reorder` already establishes
-                 exactly this arrangement in the same wrapper. -->
-            <span class="pick">
-              <ui-checkbox
-                [checked]="isSelected(entry.item)"
-                [ariaLabel]="selectLabel(entry.item)"
-                (picked)="pick(entry.item, $event)"
-              />
-            </span>
+                 an <a> is invalid HTML, and ui-reorder already establishes
+                 exactly this arrangement in the same wrapper.
+
+                 Absent for a reader: selecting rows is only ever a prelude to
+                 editing them, so offering the selection and refusing the edit is
+                 the worst possible order to find out. -->
+            @if (canEdit()) {
+              <span class="pick">
+                <ui-checkbox
+                  [checked]="isSelected(entry.item)"
+                  [ariaLabel]="selectLabel(entry.item)"
+                  (picked)="pick(entry.item, $event)"
+                />
+              </span>
+            }
             <a
               class="list-row"
               [class.list--manual]="manual()"
@@ -116,7 +128,7 @@
               }
               <span class="right value" [attr.title]="valueHint(entry.item)">{{ entry.item | itemValue: currency() }}</span>
             </a>
-            @if (manual()) {
+            @if (manual() && canEdit()) {
               <ui-reorder
                 [label]="entry.item.name"
                 [first]="entry.index === 0"

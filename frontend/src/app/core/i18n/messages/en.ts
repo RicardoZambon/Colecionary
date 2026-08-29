@@ -203,6 +203,21 @@ export const en = {
   'role.editor': 'Can edit',
   'role.viewer': 'Can view',
 
+  // --- read-only access ----------------------------------------------------
+  // Why a screen looks bare. Deliberately about the *session* rather than about
+  // any one control, because that is what the fact is — and deliberately not
+  // phrased as a refusal, since nothing was refused: the app simply stopped
+  // offering what the server would not have accepted. The role noun is left out
+  // on purpose; "Can view" is already this app's word for it, and repeating a
+  // wire value here would only invite translating one.
+  'readOnly.vault.title': 'You have view-only access',
+  'readOnly.vault.body':
+    'This vault is shared with you for viewing, so the controls that would change it aren’t shown. Everything is still yours to browse, search and export.',
+  'readOnly.account.title': 'Only the vault’s owner can change this',
+  'readOnly.account.body':
+    'Members, roles and the account currency belong to the owner. Your own appearance, language and exports are unaffected.',
+  'readOnly.routeRefused': 'That page only edits — and your access is view-only.',
+
   // --- theme catalog (names are proper nouns and stay untranslated) -------
   'theme.devlight.description': 'Clean dev-tool. Quiet neutrals, indigo accent.',
   'theme.devdark.description': 'Same bones, dark. Soft indigo on charcoal.',

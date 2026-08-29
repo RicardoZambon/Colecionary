@@ -90,7 +90,7 @@ class FakeVaultApi extends VaultApi {
     return of({ ...settings });
   }
   getProfile(): Observable<UserProfile> {
-    return of({ name: OWNER.name, email: OWNER.email, initials: OWNER.initials, plan: 'free' });
+    return of({ name: OWNER.name, email: OWNER.email, initials: OWNER.initials, plan: 'free', role: 'Owner' });
   }
   updateProfile(profile: UserProfile): Observable<UserProfile> {
     return of(profile);

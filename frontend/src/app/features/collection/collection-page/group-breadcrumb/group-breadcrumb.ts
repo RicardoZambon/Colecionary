@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { GroupNode } from '../../../../core/models';
@@ -76,25 +76,30 @@ export interface ChildChip {
       }
     }
 
-    @if (pending()) {
-      <input
-        class="chip-input"
-        [placeholder]="'breadcrumb.newGroupPlaceholder' | t"
-        [attr.aria-label]="'breadcrumb.newGroupAria' | t"
-        autofocus
-        (keydown)="nameKeydown.emit($event)"
-        (blur)="nameCommit.emit($any($event.target).value)"
-      />
-    } @else {
-      <ui-chip [small]="true" [dashed]="true" (click)="newGroup.emit()">{{ 'breadcrumb.new' | t }}</ui-chip>
-    }
+    @if (canEdit()) {
+      @if (pending()) {
+        <input
+          class="chip-input"
+          [placeholder]="'breadcrumb.newGroupPlaceholder' | t"
+          [attr.aria-label]="'breadcrumb.newGroupAria' | t"
+          autofocus
+          (keydown)="nameKeydown.emit($event)"
+          (blur)="nameCommit.emit($any($event.target).value)"
+        />
+      } @else {
+        <ui-chip [small]="true" [dashed]="true" (click)="newGroup.emit()">{{ 'breadcrumb.new' | t }}</ui-chip>
+      }
 
-    <a
-      class="manage"
-      [routerLink]="['/c', collectionId(), 'settings']"
-      [queryParams]="{ tab: 'groups', g: currentId() }"
-      [title]="'breadcrumb.editGroupsTitle' | t"
-    ><ui-icon name="gear" [size]="12" />{{ 'breadcrumb.editGroups' | t }}</a>
+      <!-- The settings route is refused by canEditGuard anyway, so a reader
+           following this link would be bounced straight back. Better not to
+           offer the round trip. -->
+      <a
+        class="manage"
+        [routerLink]="['/c', collectionId(), 'settings']"
+        [queryParams]="{ tab: 'groups', g: currentId() }"
+        [title]="'breadcrumb.editGroupsTitle' | t"
+      ><ui-icon name="gear" [size]="12" />{{ 'breadcrumb.editGroups' | t }}</a>
+    }
   `,
   styles: `
     /* No border of its own: it shares one bar with the item controls, and the
@@ -173,6 +178,22 @@ export interface ChildChip {
   `,
 })
 export class GroupBreadcrumb {
+  /**
+   * Whether to offer the write affordances at all.
+   *
+   * An **input**, not a read of `VaultStore.canEdit`, even though that is where
+   * the answer comes from. Injecting the store into a presentational child drags
+   * `VaultApi` into the TestBed of every component that renders it — the same
+   * reason `CurrencyService` exists as a dependency-free signal rather than
+   * letting the money pipe reach for the store. The page reads it once and
+   * passes it down.
+   *
+   * Defaults to true so an un-passed caller keeps the behaviour it had, and so
+   * this fails open exactly as the store's own computed does.
+   */
+  readonly canEdit = input(true);
+
+
   /** Opening a group keeps the filters and drops the ad-hoc order. */
   protected readonly linkParams = groupLinkParams;
 

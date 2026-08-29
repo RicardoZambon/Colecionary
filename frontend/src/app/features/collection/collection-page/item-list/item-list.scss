@@ -17,6 +17,12 @@
  */
 .list-table {
   --check-w: 34px;
+
+  /* No checkbox column for a reader, rather than an empty 34px gutter beside
+     every row. One custom property, so the head and the rows cannot disagree. */
+  &.list-table--readonly {
+    --check-w: 0px;
+  }
   --field-w: 104px;
   /* One row background, read by the row itself and by the two sticky cells
      that have to hide what scrolls under them. */

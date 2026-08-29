@@ -234,6 +234,35 @@ Current themes: `devlight` (Paperwhite, default), `devdark` (Graphite),
 `terminal` (Phosphor), `arcade` (Arcade), `hud` (Starship), `paper` (Zine),
 `synth` (Synthwave).
 
+## 2b. Roles in the client
+
+The backend enforces `VaultPolicies.CanWrite` (Owner, Editor) on every catalogue
+write and `CanAdminister` (Owner) on account-scale ones. Closing that hole opened
+a UX one: the client did not know its own role, so a Viewer was shown every write
+button and each earned a 403.
+
+- `UserProfile.role` comes from the server and is **read-only** —
+  `ProfileService.UpdateAsync` ignores it, exactly as it refuses a changed email.
+- Read **`VaultStore.canEdit()`** / **`canAdminister()`**. Never compare the role
+  string at a call site.
+- Both **fail open** while the profile is null. The direction is deliberate:
+  hiding an Owner's entire UI during a slow load is worse than briefly offering a
+  button that turns out to be refused.
+- **A courtesy, not a control.** The 403 is the real answer. Nothing in the
+  browser — not the guard, not a `@if` — may ever be the only thing between a
+  Viewer and a write; if it ever is, the server policy has been lost.
+- A route that exists *only* to write is declined by `canEditGuard`, which
+  redirects **inward** — someone who followed a stale "edit" link wanted to see
+  that item, and the item page shows it.
+- **Prefer not rendering to disabling.** A disabled control invites "why?", and
+  the answer is a property of the session rather than of that control. Give a
+  reader **one** `ui-read-only-notice` per major surface instead.
+- A presentational child takes **`canEdit` as an input**, defaulting to true.
+  Injecting `VaultStore` into a leaf drags `VaultApi` into the TestBed of every
+  component that renders it — the same reason `CurrencyService` is a
+  dependency-free signal rather than something the money pipe reaches for. The
+  page reads the store once and passes it down.
+
 ## 3b. Responsive layout, breakpoints and targets
 
 The app was desktop-only: four `@media` rules across twenty-three stylesheets,

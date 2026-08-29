@@ -34,6 +34,13 @@ const RECENT_COUNT = 4;
   styleUrl: './dashboard-page.scss',
 })
 export class DashboardPage {
+  /**
+   * Whether to offer the write affordances at all.
+   *
+   * A courtesy, not a control — see the doc comment on VaultStore.canEdit.
+   */
+  protected readonly canEdit = computed(() => this.store.canEdit());
+
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);

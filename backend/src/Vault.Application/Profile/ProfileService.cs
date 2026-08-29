@@ -31,6 +31,10 @@ public class ProfileService(
         user.Name = dto.Name;
         user.Initials = dto.Initials;
         user.Plan = DtoMapper.ParsePlan(dto.Plan);
+        // `dto.Role` is deliberately not read. The client is told its role so it
+        // can stop offering what the server would refuse; letting it write one
+        // back would make every policy advisory.
+
         await users.SaveChangesAsync(ct);
         return user.ToProfileDto();
     }

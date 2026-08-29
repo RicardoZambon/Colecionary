@@ -1,8 +1,11 @@
 <div class="banner">
+  <!-- `fillable` and `reframable` both follow canEdit: replacing the banner and
+       reframing it are two separate writes, and both answer 403 to a reader. -->
   <ui-image-slot
     [src]="images.url(collection().bannerImageId, 'display')"
     [focal]="focus.position(collection().bannerImageId)"
-    [reframable]="!!collection().bannerImageId"
+    [fillable]="canEdit()"
+    [reframable]="canEdit() && !!collection().bannerImageId"
     [placeholder]="'hero.bannerPlaceholder' | t"
     (fileSelected)="setImage('banner', $event)"
     (reframeRequested)="reframe('banner')"
@@ -16,7 +19,8 @@
       icon="diamond"
       [src]="images.url(collection().iconImageId, 'thumb')"
       [focal]="focus.position(collection().iconImageId)"
-      [reframable]="!!collection().iconImageId"
+      [fillable]="canEdit()"
+      [reframable]="canEdit() && !!collection().iconImageId"
       [placeholder]="'hero.iconPlaceholder' | t"
       (fileSelected)="setImage('icon', $event)"
       (reframeRequested)="reframe('icon')"
@@ -93,28 +97,41 @@
         <span class="value">{{ scope().value | itemValue: currency() }}</span>
       </div>
     }
-    <a
-      [routerLink]="['/c', collection().id, 'settings']"
-      [queryParams]="{ tab: 'sharing' }"
-      [attr.aria-label]="'hero.manageSharing' | t"
-      [title]="'hero.manageSharing' | t"
-    >
-      <ui-avatar-stack aria-hidden="true" [members]="members()" />
-    </a>
-    <ui-button
-      variant="ghost"
-      size="sm"
-      [routerLink]="['/c', collection().id, 'settings']"
-      [title]="'hero.manageTitle' | t"
-    >
-      <span class="btn-label"><ui-icon name="gear" [size]="14" />{{ 'hero.manage' | t }}</span>
-    </ui-button>
-    <ui-button
-      size="sm"
-      [routerLink]="['/c', collection().id, 'items', 'new']"
-      queryParamsHandling="preserve"
-    >
-      <span class="btn-label"><ui-icon name="plus" [size]="14" />{{ 'hero.addItem' | t }}</span>
-    </ui-button>
+    <!-- Who is on the collection is worth seeing either way, but the link
+         behind it lands on a route `canEditGuard` turns back — so a reader gets
+         the faces without a journey that ends where it started. The stack keeps
+         its own name once it is no longer wrapped in a named anchor. -->
+    @if (canEdit()) {
+      <a
+        [routerLink]="['/c', collection().id, 'settings']"
+        [queryParams]="{ tab: 'sharing' }"
+        [attr.aria-label]="'hero.manageSharing' | t"
+        [title]="'hero.manageSharing' | t"
+      >
+        <ui-avatar-stack aria-hidden="true" [members]="members()" />
+      </a>
+      <ui-button
+        variant="ghost"
+        size="sm"
+        [routerLink]="['/c', collection().id, 'settings']"
+        [title]="'hero.manageTitle' | t"
+      >
+        <span class="btn-label"><ui-icon name="gear" [size]="14" />{{ 'hero.manage' | t }}</span>
+      </ui-button>
+      <ui-button
+        size="sm"
+        [routerLink]="['/c', collection().id, 'items', 'new']"
+        queryParamsHandling="preserve"
+      >
+        <span class="btn-label"><ui-icon name="plus" [size]="14" />{{ 'hero.addItem' | t }}</span>
+      </ui-button>
+    } @else {
+      <ui-avatar-stack
+        role="img"
+        [attr.aria-label]="'hero.manageSharing' | t"
+        [title]="'hero.manageSharing' | t"
+        [members]="members()"
+      />
+    }
   </div>
 </div>

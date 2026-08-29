@@ -336,6 +336,23 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    state is flat, because a hatch is indistinguishable from a loading shimmer.
    A raw Unicode glyph is not an icon — add a name to `ICON_NAMES`.
 
+19. **The client stops offering what the server would refuse.** Read
+   `VaultStore.canEdit()` / `canAdminister()` — never compare the role string at
+   a call site. Both **fail open** while the profile is loading: hiding an
+   Owner's whole UI during a slow load is a worse wrong than briefly offering a
+   button that turns out to be refused. This is a *courtesy, not a control* —
+   the 403 is the real answer, and nothing in the browser may ever be the only
+   thing standing between a Viewer and a write. A route that exists **only** to
+   write (both item-form routes, collection settings) is declined by
+   `canEditGuard` and redirected *inward*, to the page that shows the same thing
+   without editing it. Prefer not rendering a write affordance to disabling it,
+   and give a reader **one** read-only notice per major surface rather than an
+   explanation per hidden control — why the screen looks bare is a property of
+   the session, not of any button. A presentational child takes `canEdit` as an
+   **input**: injecting the store into a leaf drags `VaultApi` into the TestBed
+   of every component that renders it, which is exactly why `CurrencyService`
+   exists.
+
 ## One trap that costs an hour every time
 
 **Never put a backtick inside an inline `template:` or `styles:` block** — not

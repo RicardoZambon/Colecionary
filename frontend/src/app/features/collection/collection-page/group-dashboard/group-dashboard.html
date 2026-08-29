@@ -21,7 +21,9 @@
     </a>
   }
 
-  <button type="button" class="tile tile--new" (click)="newGroup.emit()">{{ 'groupDashboard.newGroup' | t }}</button>
+  @if (canEdit()) {
+    <button type="button" class="tile tile--new" (click)="newGroup.emit()">{{ 'groupDashboard.newGroup' | t }}</button>
+  }
 </div>
 
 @if (!cards().length && !directCount()) {

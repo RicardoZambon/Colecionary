@@ -67,7 +67,7 @@ import {
 } from './item-selection';
 import { readHidden, toggleHidden, visibleFields, writeHidden } from './column-prefs';
 import { TPipe } from '../../../shared/pipes/t.pipe';
-import { UiButton, UiDialog, UiEmpty, UiSkeleton } from '../../../shared/ui';
+import { UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSkeleton } from '../../../shared/ui';
 import { ViewMode, resolveView, viewParam } from './view-mode';
 import {
   initialExpanded,
@@ -86,27 +86,18 @@ const WIDE_ENOUGH = '(min-width: 1200px)';
 @Component({
   selector: 'app-collection-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    RouterLink,
-    TPipe,
-    CollectionHero,
-    CollectionFilters,
-    CollectionToolbar,
-    GroupBreadcrumb,
-    GroupDashboard,
-    GroupTree,
-    ItemGrid,
-    ItemList,
-    BulkBar,
-    UiButton,
-    UiDialog,
-    UiEmpty,
-    UiSkeleton,
-  ],
+  imports: [BulkBar, CollectionFilters, CollectionHero, CollectionToolbar, GroupBreadcrumb, GroupDashboard, GroupTree, ItemGrid, ItemList, RouterLink, TPipe, UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSkeleton],
   templateUrl: './collection-page.html',
   styleUrl: './collection-page.scss',
 })
 export class CollectionPage {
+  /**
+   * Whether to offer the write affordances at all.
+   *
+   * A courtesy, not a control — see the doc comment on VaultStore.canEdit.
+   */
+  protected readonly canEdit = computed(() => this.store.canEdit());
+
   protected readonly store = inject(VaultStore);
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);

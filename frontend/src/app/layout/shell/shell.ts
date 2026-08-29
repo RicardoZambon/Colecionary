@@ -227,9 +227,13 @@ export class Shell {
   constructor() {
     // An expired token is the auth interceptor's business — it logs out and
     // redirects. Everything else is recorded in `store.loadError()` and
-    // rendered above with a retry, so this catch only keeps the rejection from
-    // going unhandled. It used to be the whole of the error handling.
-    this.store.load().catch(() => undefined);
+    // rendered above with a retry.
+    //
+    // `ensureLoaded` rather than `load`: a route guard on a write surface has to
+    // know the role before this component exists, so it starts the same load,
+    // and the two must not become two requests for the whole vault. It never
+    // rejects, which is why there is no catch here any more.
+    void this.store.ensureLoaded();
     // Framing is cosmetic: if it fails to load, every image just renders
     // centred, which is exactly the pre-framing behaviour. Never block the app.
     this.focus.load().catch(() => undefined);

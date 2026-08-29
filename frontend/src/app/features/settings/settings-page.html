@@ -44,6 +44,7 @@
     </section>
   }
   @case ('access') {
+      <ui-read-only-notice scope="administer" />
     <section class="section access">
       <div>
         <div class="heading">{{ 'settings.access.heading' | t }}</div>
@@ -59,20 +60,29 @@
               <span class="name">{{ member.name }}</span>
               <span class="email">{{ member.email }}</span>
             </span>
-            <ui-select
-              class="compact"
-              [ariaLabel]="'settings.access.memberRoleAria' | t: { name: member.name }"
-              [options]="roleOptions()"
-              [value]="member.role"
-              [disabled]="member.role === 'Owner'"
-              (valueChange)="setMemberRole(member.email, $event)"
-            />
-            <ui-button
-              variant="icon"
-              [muted]="member.role === 'Owner'"
-              [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
-              (click)="removeMember(member.email)"
-            ><ui-icon name="close" [size]="13" /></ui-button>
+            <!-- Membership is CanAdminister, not CanWrite: an Editor is
+                 refused it too, so this is `canAdminister` and not `canEdit`.
+                 The Owner's own row keeps its existing disabled/muted treatment,
+                 which explains why the *Owner* cannot be demoted — a different
+                 question from whether you may change anybody at all. -->
+            @if (store.canAdminister()) {
+              <ui-select
+                class="compact"
+                [ariaLabel]="'settings.access.memberRoleAria' | t: { name: member.name }"
+                [options]="roleOptions()"
+                [value]="member.role"
+                [disabled]="member.role === 'Owner'"
+                (valueChange)="setMemberRole(member.email, $event)"
+              />
+              <ui-button
+                variant="icon"
+                [muted]="member.role === 'Owner'"
+                [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
+                (click)="removeMember(member.email)"
+              ><ui-icon name="close" [size]="13" /></ui-button>
+            } @else {
+              <span class="role-static">{{ roleLabel(member.role) | t }}</span>
+            }
           </div>
         }
       </ui-card>
@@ -115,6 +125,7 @@
           variant="ghost"
           size="sm"
           [disabled]="importing()"
+          [disabled]="importing() || !store.canAdminister()"
           (click)="archiveInput.click()"
         >
           {{ (importing() ? 'settings.account.importing' : 'settings.account.import') | t }}

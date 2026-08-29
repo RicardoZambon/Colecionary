@@ -96,7 +96,9 @@
           </div>
         </ui-card>
       }
-      <button type="button" class="new-tile" (click)="newCollection()">{{ 'dashboard.newCollection' | t }}</button>
+      @if (canEdit()) {
+        <button type="button" class="new-tile" (click)="newCollection()">{{ 'dashboard.newCollection' | t }}</button>
+      }
     }
   </div>
 </section>

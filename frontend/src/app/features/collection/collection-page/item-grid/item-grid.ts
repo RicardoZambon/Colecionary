@@ -41,6 +41,22 @@ import { VaultStore } from '../../../../core/state/vault.store';
   styleUrl: './item-grid.scss',
 })
 export class ItemGrid {
+  /**
+   * Whether to offer the write affordances at all.
+   *
+   * An **input**, not a read of `VaultStore.canEdit`, even though that is where
+   * the answer comes from. Injecting the store into a presentational child drags
+   * `VaultApi` into the TestBed of every component that renders it — the same
+   * reason `CurrencyService` exists as a dependency-free signal rather than
+   * letting the money pipe reach for the store. The page reads it once and
+   * passes it down.
+   *
+   * Defaults to true so an un-passed caller keeps the behaviour it had, and so
+   * this fails open exactly as the store's own computed does.
+   */
+  readonly canEdit = input(true);
+
+
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
   private readonly i18n = inject(I18nService);

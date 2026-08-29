@@ -69,6 +69,13 @@ const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
   host: { '(document:keydown)': 'onKeydown($event)' },
 })
 export class ItemPage {
+  /**
+   * Whether to offer the write affordances at all.
+   *
+   * A courtesy, not a control — see the doc comment on VaultStore.canEdit.
+   */
+  protected readonly canEdit = computed(() => this.store.canEdit());
+
   protected readonly store = inject(VaultStore);
 
   /** The vault is still in flight — not the same fact as 'no such collection'. */

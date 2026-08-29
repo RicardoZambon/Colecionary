@@ -1,5 +1,6 @@
 @if (collection(); as coll) {
   <app-collection-hero
+    [canEdit]="canEdit()"
     [collection]="coll"
     [scope]="scope()"
     [total]="total()"
@@ -14,6 +15,7 @@
   <div class="controls">
     <div class="bar">
       <app-group-breadcrumb
+        [canEdit]="canEdit()"
         [collectionId]="coll.id"
         [collectionName]="coll.name"
         [path]="crumbPath()"
@@ -70,9 +72,17 @@
 
     <div class="layout__main">
 
+      <!-- One notice for the whole page, not one per hidden control: why the
+
+           screen looks bare is a property of the session, not of any button. -->
+
+      <ui-read-only-notice />
+
+
       @switch (view()) {
         @case ('dashboard') {
           <app-group-dashboard
+            [canEdit]="canEdit()"
             [collectionId]="coll.id"
             [groups]="groups()"
             [stats]="stats()"
@@ -83,6 +93,7 @@
         }
         @case ('list') {
           <app-item-list
+            [canEdit]="canEdit()"
             [items]="items()"
             [chunks]="chunks()"
             [sectionStats]="sectionStats()"
@@ -105,6 +116,7 @@
         }
         @default {
           <app-item-grid
+            [canEdit]="canEdit()"
             [items]="items()"
             [chunks]="chunks()"
             [sectionStats]="sectionStats()"
@@ -157,7 +169,11 @@
       <!-- Rendered here rather than by the table, because the card grid needs
            the identical bar and neither view knows about the other. Sticky at
            the foot of the main column. -->
-      @if (selectionCount() > 0) {
+      <!-- Guarded on canEdit as well as the count: the checkboxes are already
+           gone for a reader, so the count cannot rise — but the bar is the one
+           surface here that only ever writes, and it should not depend on
+           another component having hidden its controls. -->
+      @if (canEdit() && selectionCount() > 0) {
         <app-bulk-bar
           [items]="selectedItems()"
           [groups]="groups()"

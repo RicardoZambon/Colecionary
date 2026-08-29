@@ -5,14 +5,7 @@ import { Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { VaultApi, VaultConflictError, VersionedCollection, VersionedItem } from '../api/vault-api';
-import {
-  Collection,
-  Item,
-  Member,
-  StoreListing,
-  TenantSettings,
-  UserProfile,
-} from '../models';
+import { Collection, Item, Member, MemberRole, StoreListing, TenantSettings, UserProfile } from '../models';
 import { ConflictService } from './conflict.service';
 import { I18nService } from '../i18n';
 import { VaultStore } from './vault.store';
@@ -108,8 +101,17 @@ class FakeVaultApi extends VaultApi {
   updateTenantSettings(settings: TenantSettings): Observable<TenantSettings> {
     return of(settings);
   }
+  /** Whatever role the test wants this session to have. */
+  role: MemberRole = 'Owner';
+
   getProfile(): Observable<UserProfile> {
-    return of({ name: 'Marcus', email: 'marcus@example.com', initials: 'MC', plan: 'free' });
+    return of({
+      name: 'Marcus',
+      email: 'marcus@example.com',
+      initials: 'MC',
+      plan: 'free',
+      role: this.role,
+    });
   }
   updateProfile(profile: UserProfile): Observable<UserProfile> {
     return of(profile);
@@ -153,9 +155,10 @@ function item(patch: Partial<Item> = {}): Item {
   };
 }
 
-async function mount(collections: Collection[] = [collection()]) {
+async function mount(collections: Collection[] = [collection()], role: MemberRole = 'Owner') {
   const api = new FakeVaultApi();
   api.collections = collections;
+  api.role = role;
 
   TestBed.configureTestingModule({
     providers: [
@@ -372,5 +375,51 @@ describe('VaultStore load failures', () => {
     // A refused write must not leave the status line stuck on "Saving…".
     await expect(store.updateCollection(collection({ name: 'Stale' }))).rejects.toThrow();
     expect(store.syncState()).toBe('conflict');
+  });
+});
+
+describe('VaultStore permissions', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('lets an Owner and an Editor write, and refuses a Viewer', async () => {
+    for (const role of ['Owner', 'Editor'] as const) {
+      TestBed.resetTestingModule();
+      const page = await mount([collection()], role);
+      expect(page.store.canEdit(), role).toBe(true);
+    }
+
+    TestBed.resetTestingModule();
+    const viewer = await mount([collection()], 'Viewer');
+    expect(viewer.store.canEdit()).toBe(false);
+  });
+
+  it('reserves account administration for the Owner', async () => {
+    const owner = await mount([collection()], 'Owner');
+    expect(owner.store.canAdminister()).toBe(true);
+
+    TestBed.resetTestingModule();
+    const editor = await mount([collection()], 'Editor');
+    // An Editor writes catalogue content and does not touch membership, tenant
+    // settings or an archive restore — `CanAdminister` on the server.
+    expect(editor.store.canEdit()).toBe(true);
+    expect(editor.store.canAdminister()).toBe(false);
+  });
+
+  it('fails open before the profile has arrived', async () => {
+    // Deliberate, and the direction matters: hiding every control from an Owner
+    // during a slow load is a worse wrong than briefly offering a button that
+    // turns out to be refused. The 403 is the real answer either way.
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: VaultApi, useValue: new FakeVaultApi() },
+      ],
+    });
+    const store = TestBed.inject(VaultStore);
+
+    expect(store.profile()).toBeNull();
+    expect(store.canEdit()).toBe(true);
+    expect(store.canAdminister()).toBe(true);
   });
 });

@@ -193,6 +193,15 @@ export const ptBR: Record<MessageKey, string> = {
   'role.editor': 'Pode editar',
   'role.viewer': 'Pode ver',
 
+  // --- read-only access ----------------------------------------------------
+  'readOnly.vault.title': 'Seu acesso é somente de visualização',
+  'readOnly.vault.body':
+    'Este acervo foi compartilhado com você para visualizar, então os controles que o alterariam não aparecem. Você continua livre para explorar, buscar e exportar tudo.',
+  'readOnly.account.title': 'Só o dono do acervo pode mudar isso',
+  'readOnly.account.body':
+    'Membros, papéis e a moeda da conta pertencem ao dono. Sua aparência, seu idioma e seus exports seguem como sempre.',
+  'readOnly.routeRefused': 'Essa página só serve para editar — e seu acesso é de visualização.',
+
   // --- theme catalog (names are proper nouns and stay untranslated) -------
   'theme.devlight.description': 'Ferramenta de dev limpa. Neutros discretos, acento índigo.',
   'theme.devdark.description': 'Mesma estrutura, escura. Índigo suave sobre carvão.',

@@ -442,6 +442,54 @@
 </table>
 </div>
 
+<h2 id="cliente-papel">O cliente para de oferecer o que o servidor recusaria</h2>
+
+<p>
+  Fechar o buraco de autorização abriu um problema de experiência: o frontend
+  nunca soube o papel de quem entrou, então um Viewer continuava vendo todos os
+  botões de escrita — e cada um passou a render um 403 com toast vermelho.
+  Segurança correta, experiência pior: um botão que sempre falha é pior que
+  botão nenhum.
+</p>
+
+<p>
+  <code>UserProfileDto</code> passou a carregar <code>Role</code>, e é
+  <strong>somente leitura</strong>: <code>ProfileService.UpdateAsync</code>
+  ignora o campo, exatamente como recusa um e-mail alterado. Um cliente que
+  pudesse dar <code>PUT</code> no próprio papel seria o erro do botão de plano
+  outra vez, agora com consequência. O claim já estava no JWT e era lido por
+  ninguém; decodificar o token no navegador seria um parser para manter por um
+  valor que o perfil pode simplesmente dizer.
+</p>
+
+<p>
+  No cliente, <code>VaultStore.canEdit()</code> e <code>canAdminister()</code>
+  espelham as duas políticas, e ambos <strong>falham abertos</strong> enquanto o
+  perfil não chegou: esconder a interface inteira de um dono durante um
+  carregamento lento é um erro maior que oferecer por um instante um botão que
+  será recusado.
+</p>
+
+<div class="callout warn">
+  <span class="label">Cortesia, não controle</span>
+  <p>
+    Nada no navegador — nem o guard, nem o <code>canEdit</code>, nem um
+    <code>@if</code> — está entre um Viewer e uma escrita. O token é dele, o
+    bundle é dele, e quem recusa é o servidor. Todo o gating do cliente existe
+    para não <em>oferecer</em> o que renderia 403. Se algum dia for a única coisa
+    impedindo a escrita, a política do servidor foi perdida.
+  </p>
+</div>
+
+<p>
+  Rotas que existem <em>só</em> para escrever — as duas do formulário de item e
+  as configurações de coleção — são recusadas por <code>canEditGuard</code>, que
+  redireciona <strong>para dentro</strong>: quem seguiu um link “editar” queria
+  ver aquele item, e a página do item mostra. Um leitor recebe
+  <strong>um</strong> aviso por superfície, não um por controle escondido: por
+  que a tela está enxuta é uma propriedade da sessão, não de um botão.
+</p>
+
 <h2 id="removidos">Controles que pareciam segurança e não eram</h2>
 
 <p>

@@ -29,7 +29,8 @@ import { IconName, UiIcon } from '../icon/icon';
     '(drop)': 'onDrop($event)',
     // Bound, not literal: a host attribute is written once at creation, so the
     // title has to be an expression to follow a language change.
-    '[title]': "i18n.t('ui.imageSlot.hint')",
+    '[title]': "fillable() ? i18n.t('ui.imageSlot.hint') : null",
+    '[class.readonly]': '!fillable()',
   },
   template: `
     @if (src(); as url) {
@@ -66,6 +67,11 @@ import { IconName, UiIcon } from '../icon/icon';
       height: 100%;
       overflow: hidden;
       cursor: pointer;
+    }
+
+    /* Nothing to click, so nothing that looks clickable. */
+    :host(.readonly) {
+      cursor: default;
     }
 
     .reframe {
@@ -140,6 +146,16 @@ export class UiImageSlot {
   readonly focal = input('50% 50%');
   /** Shows the "adjust framing" affordance. Off by default: read-only usages
    * (the dashboard card) must stay inert. */
+  /**
+   * Whether picking or dropping a file is offered at all.
+   *
+   * Defaults to true, because that is what every existing caller relied on
+   * before this existed. It is set to false for a Viewer: the whole slot is a
+   * click target and a drop zone, so without this a reader clicking the banner
+   * gets a file dialog for an upload the server will refuse with a 403. A
+   * courtesy, not a control — the 403 is the real answer.
+   */
+  readonly fillable = input(true);
   readonly reframable = input(false);
   readonly placeholder = input('');
   /** The mark drawn behind the placeholder label. */
@@ -155,6 +171,7 @@ export class UiImageSlot {
   }
 
   protected browse(): void {
+    if (!this.fillable()) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -166,10 +183,15 @@ export class UiImageSlot {
   }
 
   protected onDragOver(event: DragEvent): void {
+    // Not preventing the default is what makes the browser refuse the drop, so
+    // an unfillable slot shows the "no drop" cursor rather than accepting a file
+    // and silently doing nothing with it.
+    if (!this.fillable()) return;
     event.preventDefault();
   }
 
   protected onDrop(event: DragEvent): void {
+    if (!this.fillable()) return;
     event.preventDefault();
     const file = event.dataTransfer?.files?.[0];
     if (file) this.fileSelected.emit(file);

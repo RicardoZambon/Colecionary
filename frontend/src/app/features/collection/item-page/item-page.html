@@ -89,7 +89,7 @@
               (click)="selectedPhoto.set($index)"
             ></button>
           }
-          @if (it.photoIds.length < 8) {
+          @if (it.photoIds.length < 8 && canEdit()) {
             <button
               type="button"
               class="thumb thumb--add"
@@ -186,10 +186,14 @@
           </ui-card>
         }
 
-        <div class="actions">
-          <ui-button [routerLink]="['/c', coll.id, 'items', it.id, 'edit']" queryParamsHandling="preserve">{{ 'item.edit' | t }}</ui-button>
-          <ui-button variant="danger" (click)="deleteItem()">{{ 'item.delete' | t }}</ui-button>
-        </div>
+        <!-- The edit route is refused by canEditGuard, and the delete earns a
+             403, so for a reader this row is two buttons that cannot work. -->
+        @if (canEdit()) {
+          <div class="actions">
+            <ui-button [routerLink]="['/c', coll.id, 'items', it.id, 'edit']" queryParamsHandling="preserve">{{ 'item.edit' | t }}</ui-button>
+            <ui-button variant="danger" (click)="deleteItem()">{{ 'item.delete' | t }}</ui-button>
+          </div>
+        }
       </div>
     </div>
   } @else {

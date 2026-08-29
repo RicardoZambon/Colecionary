@@ -17,17 +17,7 @@ import { VaultStore } from '../../core/state/vault.store';
 import { MemberRole } from '../../core/models';
 import { saveFile } from '../../core/utils/download.util';
 import { CurrencyCode, SUPPORTED_CURRENCIES, currencyLabel } from '../../core/utils/money.util';
-import {
-  SelectOption,
-  TabDef,
-  UiAvatar,
-  UiButton,
-  UiCard,
-  UiFlag,
-  UiIcon,
-  UiSelect,
-  UiTabs,
-} from '../../shared/ui';
+import { SelectOption, TabDef, UiAvatar, UiButton, UiCard, UiFlag, UiIcon, UiReadOnlyNotice, UiSelect, UiTabs } from '../../shared/ui';
 import { TPipe } from '../../shared/pipes/t.pipe';
 
 const TAB_KEYS: { id: string; label: MessageKey }[] = [
@@ -66,7 +56,7 @@ const ROLE_KEYS: { value: MemberRole; label: MessageKey }[] = [
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiIcon, UiSelect, UiTabs, ImportDialog],
+  imports: [ImportDialog, TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiIcon, UiReadOnlyNotice, UiSelect, UiTabs],
   templateUrl: './settings-page.html',
   styleUrl: './settings-page.scss',
 })
@@ -135,6 +125,15 @@ export class SettingsPage {
   protected readonly planSub = computed(() =>
     this.i18n.t(this.store.profile()?.plan === 'pro' ? 'settings.plan.onPro' : 'settings.plan.onFree'),
   );
+
+  /**
+   * A member's role as a message key, for the read-only rendering.
+   *
+   * The enum value is data and is never translated (rule 8); the label is copy.
+   */
+  protected roleLabel(role: MemberRole): MessageKey {
+    return ROLE_KEYS.find(r => r.value === role)?.label ?? 'role.viewer';
+  }
 
   protected onTabChange(tab: string): void {
     this.activeTab.set(tab);

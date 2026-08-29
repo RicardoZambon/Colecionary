@@ -51,6 +51,27 @@ export class VaultStore {
   readonly storeListings = this.storeListingsState.asReadonly();
   readonly tenantMembers = this.tenantMembersState.asReadonly();
   readonly profile = this.profileState.asReadonly();
+
+  /**
+   * Whether this person may change catalogue content.
+   *
+   * Mirrors `VaultPolicies.CanWrite` on the server (Owner, Editor). It is a
+   * *courtesy*, not a control: the 403 is the real answer, and this only stops
+   * the app offering an action that would earn one. So it fails **open** while
+   * the profile is still loading — briefly showing a button that turns out to be
+   * refused is a smaller wrong than hiding the whole app's controls from an
+   * Owner during a slow load.
+   */
+  readonly canEdit = computed(() => {
+    const role = this.profileState()?.role;
+    return role === undefined || role === 'Owner' || role === 'Editor';
+  });
+
+  /** Owner-only surfaces: membership, tenant settings, restoring an archive. */
+  readonly canAdminister = computed(() => {
+    const role = this.profileState()?.role;
+    return role === undefined || role === 'Owner';
+  });
   readonly tenantSettings = this.tenantSettingsState.asReadonly();
   readonly loaded = signal(false);
 
@@ -198,6 +219,35 @@ export class VaultStore {
       throw err;
     }
   }
+
+  /**
+   * Loads once, whoever asks first, and never rejects.
+   *
+   * Exists for the route guards. A `CanActivateFn` runs *before* the component
+   * tree is built, so on a cold navigation straight to a URL the guard is asked
+   * "may this person write?" while `Shell` — the only thing that ever called
+   * {@link load} — has not been constructed yet, and the honest answer would be
+   * "nobody knows". Kicking off a second full load from the guard would then
+   * fetch the whole vault twice on every such navigation, so the two callers
+   * share one promise instead.
+   *
+   * It resolves rather than rejects on failure because the caller only ever
+   * wants "we have tried". A guard that has no profile to read falls open, and
+   * the shell renders {@link loadError} on the page it lands on — which is the
+   * message the user actually needs to see.
+   */
+  async ensureLoaded(): Promise<void> {
+    if (this.loaded()) return;
+    this.loadInFlight ??= this.load()
+      .catch(() => undefined)
+      .finally(() => {
+        this.loadInFlight = null;
+      });
+    await this.loadInFlight;
+  }
+
+  /** The shared {@link ensureLoaded} attempt, while one is running. */
+  private loadInFlight: Promise<void> | null = null;
 
   /**
    * Tries the load again, and answers whether it worked.

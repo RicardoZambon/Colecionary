@@ -32,6 +32,7 @@ export const ICON_NAMES = [
   'sort',
   'alert',
   'contrast',
+  'eye',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -203,6 +204,10 @@ const FILLED: readonly IconName[] = ['diamond', 'drag'];
         @case ('alert') {
           <path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
           <path d="M12 9.2v4.2M12 17.2h.01" />
+        }
+        @case ('eye') {
+          <path d="M1.6 12S5.6 5.2 12 5.2 22.4 12 22.4 12 18.4 18.8 12 18.8 1.6 12 1.6 12z" />
+          <circle cx="12" cy="12" r="3.1" />
         }
         @case ('contrast') {
           <circle cx="12" cy="12" r="9" />
