@@ -1,5 +1,6 @@
 import { CopyStatus, CustomFieldValue, GroupNode, Item, Section } from '../../../core/models';
 import { resolveGroupId } from '../../../core/utils/groups.util';
+import { withTagAdded, withTagRemoved } from '../../../core/utils/tags.util';
 import { resolveSectionId } from '../../../core/utils/sections.util';
 
 /**
@@ -58,14 +59,6 @@ export interface BulkContext {
   groups: GroupNode[];
   sections: Section[];
 }
-
-/**
- * `wanted` is expressed twice — as an empty copy list and as a tag — and
- * `syncWantedTag` owns keeping the two in step. Bulk tagging must therefore
- * never touch it: adding it would claim an item with copies is on the wantlist,
- * and removing it would strip the marker off one that is.
- */
-const WANTED_TAG = 'wanted';
 
 /** Tolerant of a decimal comma, like every other number the app parses. */
 function parseNumber(raw: string): number {
@@ -162,14 +155,11 @@ export function applyBulkPatch(
       next.custom = mergeFields(item.custom, patch.fields);
     }
 
-    const addTag = patch.addTag?.trim() ?? '';
-    const removeTag = patch.removeTag?.trim() ?? '';
-    if (addTag && addTag !== WANTED_TAG && !next.tags.includes(addTag)) {
-      next.tags = [...next.tags, addTag];
-    }
-    if (removeTag && removeTag !== WANTED_TAG) {
-      next.tags = next.tags.filter(tag => tag !== removeTag);
-    }
+    // Through the shared rules, not re-implemented: the item form edits the
+    // same tags one at a time, and two implementations of "what is a tag"
+    // eventually disagree about duplicates, casing and the reserved one.
+    if (patch.addTag) next.tags = [...withTagAdded(next.tags, patch.addTag)];
+    if (patch.removeTag) next.tags = [...withTagRemoved(next.tags, patch.removeTag)];
 
     if (patch.copyStatus !== undefined) {
       next.copies = item.copies.map(copy => ({ ...copy, status: patch.copyStatus! }));

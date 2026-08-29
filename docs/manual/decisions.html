@@ -667,6 +667,16 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-63</span> Uma etiqueta é guardada como foi escrita e comparada sem caixa</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Etiquetas existiam no modelo, no DTO e no validador desde o início, e a barra de edição em massa passou a adicionar e remover uma — mas o formulário do item apenas as carregava adiante. Dava para aplicar uma etiqueta a quarenta itens de uma vez e não havia como corrigir em nenhum deles. O formulário agora edita, e isso obrigou a decidir o que é uma etiqueta.</dd>
+    <dt>Decisão</dt><dd>Guardar exatamente como foi digitada, apenas sem espaços nas pontas; comparar <em>ignorando</em> a caixa. As regras vivem em <code>core/utils/tags.util.ts</code> e a barra de massa passou a usá-las também. O <code>wanted</code> derivado é filtrado do editor e não pode ser adicionado nem removido.</dd>
+    <dt>Consequência</dt><dd>Reescrever a capitalização de alguém é o tipo de normalização silenciosa que faz um campo parecer quebrado, então <code>Sealed</code> continua <code>Sealed</code>. Mas permitir <code>boxed</code> e <code>Boxed</code> ao mesmo tempo seriam duas fichas significando uma coisa, e um filtro por etiqueta daria duas respostas para ela — daí a comparação sem caixa. O <code>wanted</code> tinha de sair do editor por um motivo mais forte que estética: ele é derivado das cópias por <code>syncWantedTag</code>, então uma remoção seria desfeita no próximo save, e um controle cujo efeito é revertido em silêncio é pior que controle nenhum.</dd>
+    <dt>Imposta por</dt><dd><code>tags.util.spec.ts</code> e os testes de etiquetas em <code>item-form-page.spec.ts</code> (mostra, adiciona, remove, persiste, e nunca toca no <code>wanted</code>)</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

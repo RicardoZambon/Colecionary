@@ -211,6 +211,23 @@ async function mount(opts: { g?: string; itemId?: string; items?: Item[] } = {})
       .find(row => row.querySelector('.key')!.textContent!.trim() === name)!
       .querySelector('input') as HTMLInputElement;
 
+  const tagChips = () =>
+    [...el.querySelectorAll('ui-tag-input .tag')].map(c => c.textContent!.trim());
+  const tagField = () => el.querySelector('ui-tag-input .add__field') as HTMLInputElement;
+  const addTag = (value: string) => {
+    const field = tagField();
+    field.value = value;
+    field.dispatchEvent(new Event('input'));
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+  };
+  const removeTag = (tag: string) => {
+    const chip = [...el.querySelectorAll('ui-tag-input .tag')].find(c =>
+      (c.textContent ?? '').trim().startsWith(tag),
+    )!;
+    click(chip.querySelector('.tag__remove')!);
+  };
+
   const save = async () => {
     el.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
     await tick();
@@ -231,6 +248,10 @@ async function mount(opts: { g?: string; itemId?: string; items?: Item[] } = {})
     copyRows,
     fieldNames,
     fieldInput,
+    tagChips,
+    tagField,
+    addTag,
+    removeTag,
     save,
     /** The item handed to the API by the last save. */
     lastSaved: () => api.saved[api.saved.length - 1].item,
@@ -423,5 +444,81 @@ describe('ItemFormPage', () => {
     await page.save();
     expect(page.navigate).toHaveBeenCalled();
     expect(page.api.saved.at(-1)!.item.name).toBe('Revolver');
+  });
+});
+
+describe('ItemFormPage — tags', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('shows the item’s tags and saves one added to them', async () => {
+    // The gap this closes: tags were reachable from the bulk bar and nowhere
+    // else, so a tag could be applied to forty items at once and never
+    // corrected on any one of them.
+    const page = await mount({ items: [item({ id: 'i1', tags: ['boxed'], copies: [copy()] })], itemId: 'i1' });
+
+    expect(page.tagChips()).toEqual(['boxed']);
+
+    page.addTag('CIB');
+    expect(page.tagChips()).toEqual(['boxed', 'CIB']);
+
+    await page.save();
+    expect(page.lastSaved().tags).toEqual(['boxed', 'CIB']);
+  });
+
+  it('saves a removal', async () => {
+    const page = await mount({
+      items: [item({ id: 'i1', tags: ['boxed', 'CIB'], copies: [copy()] })],
+      itemId: 'i1',
+    });
+
+    page.removeTag('boxed');
+    expect(page.tagChips()).toEqual(['CIB']);
+
+    await page.save();
+    expect(page.lastSaved().tags).toEqual(['CIB']);
+  });
+
+  it('clears the field after committing, so one tag is not added twice', async () => {
+    const page = await mount({ items: [item({ id: 'i1', copies: [copy()] })], itemId: 'i1' });
+
+    page.addTag('sealed');
+    expect(page.tagField().value).toBe('');
+    page.addTag('sealed');
+    expect(page.tagChips()).toEqual(['sealed']);
+  });
+
+  it('never shows or touches the derived wanted tag', async () => {
+    // `wanted` is the copies said twice, and `syncWantedTag` owns it. An item
+    // with no copies carries the tag; the editor must not offer to remove it,
+    // and the save must not drop it.
+    const page = await mount({ items: [item({ id: 'i1', tags: ['wanted'], copies: [] })], itemId: 'i1' });
+
+    expect(page.tagChips()).toEqual([]);
+
+    page.addTag('rare');
+    await page.save();
+
+    const saved = page.lastSaved();
+    expect(saved.tags).toContain('rare');
+    expect(saved.tags).toContain('wanted');
+  });
+
+  it('offers the tags already used elsewhere in the collection', async () => {
+    const page = await mount({
+      items: [
+        item({ id: 'i1', tags: [], copies: [copy()] }),
+        item({ id: 'i2', tags: ['Boxed'], copies: [copy()] }),
+        item({ id: 'i3', tags: ['sealed'], copies: [copy()] }),
+      ],
+      itemId: 'i1',
+    });
+
+    const options = [...page.el.querySelectorAll('ui-tag-input datalist option')].map(o =>
+      o.getAttribute('value'),
+    );
+    expect(options).toEqual(['Boxed', 'sealed']);
   });
 });

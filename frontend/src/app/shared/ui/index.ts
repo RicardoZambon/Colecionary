@@ -25,6 +25,7 @@ export * from './section-label/section-label';
 export * from './select/select';
 export * from './skeleton/skeleton';
 export * from './tabs/tabs';
+export * from './tag-input/tag-input';
 export * from './text-input/text-input';
 export * from './textarea/textarea';
 export * from './toast/toast';

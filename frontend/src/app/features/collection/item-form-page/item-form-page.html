@@ -57,6 +57,16 @@
         <ui-textarea [rows]="3" [value]="description()" (valueChange)="description.set($event)" />
       </ui-field>
 
+      <!--
+        Tags were reachable from the bulk bar and nowhere else, so a tag could be
+        applied to forty items at once and never corrected on one of them. The
+        derived `wanted` tag is filtered out inside `ui-tag-input`; see
+        `tags.util.ts` for why it is not offered.
+      -->
+      <ui-field [label]="'itemForm.tags' | t">
+        <ui-tag-input [(tags)]="tags" [suggestions]="tagSuggestions()" />
+      </ui-field>
+
       <div class="pair">
         <ui-field [label]="'itemForm.group' | t">
           <ui-select [options]="groupOptions()" [value]="groupId()" (valueChange)="setGroupId($event)" />

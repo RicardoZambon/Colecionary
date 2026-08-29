@@ -11,6 +11,7 @@ import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
 import { CurrencyService } from '../../../core/state/currency.service';
 import { isOwned, newCopy, ownedValue, paidTotal, syncWantedTag } from '../../../core/utils/copies.util';
+import { tagsInUse } from '../../../core/utils/tags.util';
 import { currencyOf } from '../../../core/utils/currency.util';
 import { fieldsFor, flattenTree, groupById, resolveGroupId } from '../../../core/utils/groups.util';
 import { resolveSectionId, sectionsOf } from '../../../core/utils/sections.util';
@@ -27,6 +28,7 @@ import {
   UiPhotoManager,
   UiSelect,
   UiSkeleton,
+  UiTagInput,
   UiTextInput,
   UiTextarea,
 } from '../../../shared/ui';
@@ -96,6 +98,7 @@ function fromDraft(draft: CopyDraft): ItemCopy {
     UiPhotoManager,
     UiSelect,
     UiSkeleton,
+    UiTagInput,
     UiTextInput,
     UiTextarea,
   ],
@@ -156,6 +159,14 @@ export class ItemFormPage {
   protected readonly copies = signal<CopyDraft[]>([]);
   protected readonly custom = signal<Record<string, string>>({});
   protected readonly photoIds = signal<string[]>([]);
+  /**
+   * The item's whole tag list, the derived `wanted` one included.
+   *
+   * Kept whole rather than pre-filtered because `syncWantedTag` runs over the
+   * saved item and expects to find it: dropping it here would make every save
+   * from this form look like the item had left the wantlist.
+   */
+  protected readonly tags = signal<readonly string[]>([]);
 
   /**
    * The draft as it stood when the form opened, or when it was last saved.
@@ -209,6 +220,7 @@ export class ItemFormPage {
       this.copies.set(item ? item.copies.map(toDraft) : [toDraft(newCopy())]);
       this.custom.set(Object.fromEntries((item?.custom ?? []).map(c => [c.key, c.value])));
       this.photoIds.set([...(item?.photoIds ?? [])]);
+      this.tags.set([...(item?.tags ?? [])]);
       // Seeded after every field, so an untouched form is clean. Read through
       // `untracked` is unnecessary here: the effect already depends on all of
       // them by having just written them.
@@ -358,7 +370,7 @@ export class ItemFormPage {
       year: parseNumber(this.year()) || new Date().getFullYear(),
       value: parseNumber(this.value()),
       copies: this.copies().map(fromDraft),
-      tags: [...(existing?.tags ?? [])],
+      tags: [...this.tags()],
       img: existing?.img ?? slugify(this.name().trim()) + '.jpg',
       photoIds: this.photoIds(),
       createdAt: existing?.createdAt,
@@ -367,6 +379,15 @@ export class ItemFormPage {
         .filter(c => c.value),
     };
   });
+
+  /**
+   * Tags already used elsewhere in this collection, offered as completions.
+   *
+   * A vocabulary that grows one typo at a time is one nobody can filter by, and
+   * the cheapest guard against that is showing people the words they have
+   * already chosen.
+   */
+  protected readonly tagSuggestions = computed(() => tagsInUse(this.collection()?.items ?? []));
 
   protected readonly currency = computed(() =>
     currencyOf(this.collection(), this.currencies.account()),
