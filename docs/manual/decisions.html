@@ -617,6 +617,26 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-58</span> A gaveta fora da tela em <code>$bp-lg</code>, com o breakpoint duplicado em script</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>O app era só desktop: quatro <code>@media</code> em vinte e três stylesheets, em quatro larguras sem coordenação, e um documento que transbordava um viewport de 390px em até 107px em <strong>toda</strong> tela — a sidebar era uma coluna de 226px fixos, sem breakpoint nenhum. Uma media query não pode ser lida pelo JavaScript, e uma gaveta escondida precisa sair também da árvore de acessibilidade e da ordem de tabulação.</dd>
+    <dt>Decisão</dt><dd><code>LayoutService</code> guarda <code>navOpen</code> (transitório, nunca persistido — gaveta aberta é um gesto, não uma preferência) e <code>compact</code>, um espelho de <code>$bp-lg</code> via <code>matchMedia</code>. A gaveta é <code>position: fixed</code>, e fechada abaixo do breakpoint é <code>aria-hidden</code> <strong>e</strong> <code>inert</code>.</dd>
+    <dt>Consequência</dt><dd>Um constante duplicada — documentada no serviço, e que precisa mudar junto com o mixin. A alternativa era uma gaveta <code>aria-hidden</code> enquanto visível, ou uma dúzia de paradas de tabulação invisíveis. <code>position: fixed</code> e não <code>absolute</code> é o detalhe que resolve o transbordo: uma caixa absoluta transladada para fora ainda conta na largura do documento, que era a origem dos 280px de rolagem lateral.</dd>
+    <dt>Imposta por</dt><dd>Medição com Playwright: <code>scrollWidth === clientWidth</code> em 390/768/900 nas nove rotas, em pt-BR e em tema escuro; e o contrato de foco da gaveta (abre no primeiro item, Escape devolve o foco ao botão)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-59</span> Um <code>confirm()</code> nativo para o guard de item não salvo</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A página do formulário de item ficava com o Salvar abaixo da dobra, sem barra fixa e sem indicador de alteração — uma armadilha de perda de dados a um clique da sidebar. Um <code>CanDeactivate</code> tem de responder de forma síncrona ou devolver um Observable.</dd>
+    <dt>Decisão</dt><dd>Barra de ação fixa, indicador de “alterações não salvas” derivado de um snapshot JSON contra uma linha de base, e <code>unsavedItemGuard</code> nas duas rotas do formulário — usando o <code>confirm()</code> do navegador, não o <code>ui-dialog</code>.</dd>
+    <dt>Consequência</dt><dd>Custa um diálogo sem estilo. A rota do <code>ui-dialog</code> exigiria estacionar uma navegação pela metade dentro do estado do componente, na única página cujo trabalho é justamente não perder dados. O snapshot, e não um flag, é o que permite notar um caractere digitado e apagado.</dd>
+    <dt>Imposta por</dt><dd><code>unsaved-item.guard.ts</code> e a verificação ao vivo (descartar fica na página; aceitar navega; formulário limpo não pergunta)</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

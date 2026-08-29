@@ -124,6 +124,20 @@ Full detail in [`backend/README.md`](backend/README.md).
    application, it is covered only by the Testcontainers suite, and a
    plausible-looking cleanup that removes it is total data loss.
 
+9. **Authentication is not authorization, and a write endpoint must name a
+   policy.** `[Authorize(Policy = VaultPolicies.CanWrite)]` (Owner, Editor) for
+   catalogue content — collections, items, image bytes, framing;
+   `VaultPolicies.CanAdminister` (Owner) for anything at account scale, which
+   includes archive import, because one request can overwrite every collection
+   in the vault. The deny-by-default `FallbackPolicy` only makes an endpoint
+   *authenticated*; for a long time that was all it was, and a Viewer's token
+   was accepted by every write in the application. Never spell a role list in a
+   controller — the membership of "may write" is one decision, and a list copied
+   into eleven attributes eventually disagrees with itself. `RoleAuthorizationTests`
+   must cover three directions: the Viewer refused, the **Editor accepted**, and
+   nothing written by the refused attempt. Policies are tenant-wide;
+   `CollectionMember.Role` still authorises nothing, deliberately.
+
 ## Non-negotiable frontend rules
 
 Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standards.md).
@@ -267,6 +281,55 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    Portuguese** — it runs ~20% longer than English, so that is where text
    overflow shows up first.
 
+14. **A bulk write is one full-document PUT**, never N `upsertItem` calls: each
+   item write bumps the collection version, so N writes are N sequential
+   round-trips where a failure at item 7 of 40 is unrecoverable and a competing
+   writer refuses the rest with a 412 nobody can act on. Bulk delete is the same
+   PUT with the items filtered out, because `DELETE /items/{id}` carries no
+   precondition by design. A bulk apply **keeps** custom fields the destination
+   group does not declare — the single-item form may drop them in front of
+   someone looking at that item's whole field set; doing it across forty destroys
+   data nobody was shown. Selection lives in a signal on the page, intersected
+   with the *visible* list before any action, and is **not** URL state; neither
+   is column visibility (`localStorage`, per collection and group, storing the
+   *hidden* names). Both exceptions are justified in the code.
+15. **A destructive act asks, and an undo is worth more than the question.**
+   Deletion goes through `ConfirmService.ask()`, with the count or name in the
+   body and the outcome in the button ("Delete 12 items"). Where an undo exists,
+   state its limits honestly — a restore is version-guarded, so a refused one
+   leaves the item deleted. Where none exists, say so and offer the export.
+   Deleting a group asks what happens to its contents (move up / unfile with
+   `groupId: ''`, never `UNGROUPED_ID` / delete too), and the counts shown and
+   the graph applied come from one function, `groupDeletePlan`.
+16. **No HTTP failure is silent, and no expected failure is reported.**
+   `errorInterceptor` is the single reporter; it retries idempotent GETs only —
+   a PUT that timed out may have been applied — and leaves 401 to auth and 412
+   to `ConflictService`. A request that is *meant* to fail opts out with
+   `SILENT_FAILURE`: `/api/setup/status` 404s by design on a configured host, and
+   reporting it greeted every user with a red toast in front of a working app.
+   Store writes rethrow rather than swallow; `VaultStore.loadError` +
+   `retryLoad()` exist because a boot failure that was not a 401 used to leave
+   "Loading…" on screen for ever.
+17. **Breakpoints live only in `_mixins.scss`** (`$bp-sm/md/lg/xl`, via
+   `upto()`/`from()`), grids state a `minmax` minimum and never a column count,
+   and below `$bp-lg` nothing interactive renders under `--tap` (44px) — grow the
+   *target* with a pseudo-element where the visual box must not grow. The
+   sidebar is a `position: fixed` off-canvas drawer there, `inert` and
+   `aria-hidden` when closed: an absolute box translated off-screen still widens
+   the document, which is what made every screen overflow a phone. The
+   responsive pass is a measurement — `scrollWidth === clientWidth` at
+   390/768/900 — not a look.
+18. **`--danger` is destruction and error; `--warn` is a warning; `--muted` is
+   decoration and `--muted-strong` is the secondary type layer.** The raw
+   `--accent`/`--accent2` are *fills* (3:1); `--accent-strong`/`--accent2-strong`
+   are *type* (4.5:1). Structural scales — `--sp-*`, `--fs-*`, `--dur-*`,
+   `--ease-*`, `--z-*`, focus — do not vary by theme. A new theme derives its
+   own `--muted-strong`, `--accent-strong`, `--accent2-strong` and `--danger`
+   against its own `--bg`, `--panel` **and** `--panel2`, and `themes.spec.ts`
+   refuses the palette below 4.5:1. Only `ui-skeleton` may shimmer; a no-image
+   state is flat, because a hatch is indistinguishable from a loading shimmer.
+   A raw Unicode glyph is not an icon — add a name to `ICON_NAMES`.
+
 ## Documentation is part of the change
 
 The technical manual lives in [`docs/manual/`](docs/manual/index.html) — 12
@@ -346,3 +409,16 @@ Concurrency is guarded at **collection** granularity, so two people editing
 different items in the same collection will see one of them refused. There is
 nowhere to put a per-item token, and the alternative was losing writes
 silently.
+
+Roles are enforced **tenant-wide**, not per collection: an Editor can write to
+any collection in the account, including one never shared with them.
+`CollectionMember.Role` is validated and displayed and grants nothing.
+
+Undo exists for deleting **one item** and nowhere else, and even that is
+version-guarded — if the collection moved on, the restore is refused and the
+item stays deleted. A restored item lands at the end of its group, because
+manual order is the array index. Billing is not implemented and the plan control
+says so. `Item.img` is still on the wire, populated, validated and used by
+nothing. `GET /api/collections` still returns the whole vault with no
+pagination, and the item list is not virtualised — fine at demo size, and the
+hardest ceiling in the codebase.

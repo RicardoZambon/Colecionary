@@ -412,10 +412,78 @@ npm run build            <span class="c"># precisa passar antes de qualquer merg
   precisa reconhecê-las porque cada uma tem um sintoma visível.
 </p>
 
+<div class="callout">
+  <span class="label">Fechados nesta rodada</span>
+  <p>
+    Um grupo com itens <strong>pode</strong> ser apagado — o diálogo pergunta o
+    destino do conteúdo, em vez de recusar. Um grupo <strong>pode</strong> ser
+    movido para outro pai. A lista <strong>mostra</strong> os campos
+    customizados do grupo, e a busca alcança tags, descrição e valores de campo.
+    Vários itens <strong>podem</strong> ser editados de uma vez. O app
+    <strong>funciona</strong> em tela de celular. Um <code>Viewer</code>
+    <strong>não</strong> escreve mais. Uma falha de rede <strong>aparece</strong>.
+  </p>
+</div>
+
 <div class="table-wrap">
 <table>
   <thead><tr><th>Limite</th><th>Sintoma para quem usa</th><th>Forma durável</th></tr></thead>
   <tbody>
+    <tr>
+      <td>Não há undo, exceto para apagar <em>um</em> item</td>
+      <td>Apagar um item mostra <strong>Desfazer</strong> no toast; qualquer
+          outra exclusão é definitiva. E até esse undo é guardado por versão: se
+          alguém salvou a coleção nesse intervalo, a restauração é recusada e o
+          item <em>continua apagado</em></td>
+      <td>Uma pilha de undo de verdade, ou uma lixeira</td>
+    </tr>
+    <tr>
+      <td>Um item restaurado perde a posição manual</td>
+      <td>Volta ao fim do grupo. A ordem manual é o índice do array e nada
+          persiste posição por item</td>
+      <td>Nada barato — ver ADR sobre ordem manual</td>
+    </tr>
+    <tr>
+      <td>Cobrança não existe</td>
+      <td>O cartão do plano diz isso, e a ação está desabilitada. Nada no app é
+          limitado por plano hoje</td>
+      <td>Entitlement no servidor, antes de qualquer paywall</td>
+    </tr>
+    <tr>
+      <td>Não há políticas de compartilhamento do tenant</td>
+      <td>O acesso é a lista de membros mais o <code>linkShare</code> por
+          coleção. As três chaves que sugeriam o contrário foram removidas
+          porque não persistiam nada</td>
+      <td>Campos reais no DTO do tenant, se e quando a regra existir</td>
+    </tr>
+    <tr>
+      <td>Papel é do tenant, não da coleção</td>
+      <td>Um Editor escreve em qualquer coleção da conta, inclusive uma que não
+          foi compartilhada com ele. <code>CollectionMember.Role</code> é
+          exibido e não autoriza nada</td>
+      <td>Checagem por coleção no serviço</td>
+    </tr>
+    <tr>
+      <td>A lista de itens não é virtualizada</td>
+      <td>Uma coleção de 286 itens renderiza 286 linhas. Ainda responde; em
+          milhares, não vai</td>
+      <td>Virtualização na tabela, mais paginação no contrato — hoje
+          <code>GET /api/collections</code> devolve o vault inteiro</td>
+    </tr>
+    <tr>
+      <td><code>Item.img</code> continua no contrato e não serve para nada</td>
+      <td>Nenhum. É preenchido pelo seeder, validado e devolvido, e nada busca
+          nada com ele — fotos de verdade são <code>photoIds</code>. Até
+          recentemente o nome do arquivo era <em>impresso na tela</em> onde
+          devia haver uma foto</td>
+      <td>Remover do DTO numa mudança de contrato deliberada</td>
+    </tr>
+    <tr>
+      <td>Um convite não chega a ninguém</td>
+      <td>Não há transporte de e-mail no repositório. O membro aparece na lista
+          e não consegue entrar</td>
+      <td>Convite com token de definição de senha, e um transporte</td>
+    </tr>
     <tr>
       <td>JWT em <code>localStorage</code>, 8 h, sem refresh token</td>
       <td>Sessão cai sem aviso depois de 8 h; um 401 no meio da sessão desloga</td>
