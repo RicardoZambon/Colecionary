@@ -16,6 +16,9 @@ export type ButtonSize = 'md' | 'sm';
       [type]="type()"
       [disabled]="disabled()"
       [attr.aria-label]="ariaLabel() || null"
+      [attr.id]="controlId() || null"
+      [attr.aria-expanded]="ariaExpanded() ?? null"
+      [attr.aria-controls]="ariaControls() || null"
       [attr.title]="ariaLabel() || null"
       class="btn"
       [class.btn--primary]="variant() === 'primary'"
@@ -176,6 +179,19 @@ export class UiButton {
    * becomes the tooltip, so the meaning is reachable by mouse too.
    */
   readonly ariaLabel = input('');
+  /**
+   * For a button that discloses something — the nav drawer's hamburger.
+   *
+   * These have to land on the real inner `<button>`, not on the `<ui-button>`
+   * host: the host is not focusable and carries no role, so assistive
+   * technology never reaches an attribute placed there. Without these inputs a
+   * caller has to reach into the DOM after render to set them, which is exactly
+   * what `Topbar` was doing.
+   */
+  readonly ariaExpanded = input<boolean | undefined>(undefined);
+  readonly ariaControls = input('');
+  /** An id on the inner button, so something else can point focus back at it. */
+  readonly controlId = input('');
   /** Stretch to the full width of the container (e.g. plan cards). */
   readonly block = input(false);
   /**

@@ -25,5 +25,7 @@
   <a class="nav-item" routerLink="/settings" routerLinkActive="active">
     <ui-icon name="gear" />{{ 'nav.settings' | t }}
   </a>
-  <div class="status">{{ 'nav.status' | t }}</div>
+  <!-- Derived, not decorative. This read "synced - v0.1 mock API" in a product
+       running on a real .NET backend, and the dot never changed colour. -->
+  <div class="status" [attr.data-sync]="store.syncState()">{{ store.syncStatusKey() | t }}</div>
 </div>

@@ -51,7 +51,11 @@ button {
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--muted);
+  /* A placeholder states the expected format or the field's purpose, so it is
+     informational text and belongs on --muted-strong. --muted measured 2.4-4.4:1
+     depending on theme and surface, and this one line is every field in the
+     app. */
+  color: var(--muted-strong);
   opacity: 1;
 }
 

@@ -31,6 +31,30 @@ import { ChangeDetectionStrategy, Component, computed, input, model, output } fr
     :host {
       display: inline-flex;
       align-items: center;
+      /* The pseudo-element target below is positioned against this. */
+      position: relative;
+    }
+
+    /*
+     * A selection box is 15px because that is the size it should look, and 15px
+     * is less than half the 44px a finger needs. So the visual box keeps its
+     * size and an invisible target is centred on it — the same trick the filter
+     * chips use, and for the same reason: growing the box would wreck the
+     * density of a table row, which is the whole point of the list view.
+     *
+     * Only below the breakpoint where touch is the assumption; on a desktop the
+     * pointer is precise and a 44px hit area would swallow the row around it.
+     */
+    @media (max-width: 900px) {
+      :host::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: var(--tap, 44px);
+        height: var(--tap, 44px);
+        transform: translate(-50%, -50%);
+      }
     }
 
     input {

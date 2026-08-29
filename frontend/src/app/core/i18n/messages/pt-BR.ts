@@ -34,7 +34,6 @@ export const ptBR: Record<MessageKey, string> = {
   'nav.store': 'Loja',
   'nav.settings': 'Configurações',
   'nav.collections': 'Coleções',
-  'nav.status': 'Status de sincronização',
   'nav.sync.synced': 'Tudo salvo',
   'nav.sync.saving': 'Salvando…',
   'nav.sync.offline': 'Sem conexão',

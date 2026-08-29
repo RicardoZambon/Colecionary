@@ -41,7 +41,6 @@ export const en = {
   // Kept only until the sidebar binds `VaultStore.syncStatusKey()`; the value
   // that used to be here claimed "synced · v0.1 mock API" from a decorative dot
   // that never changed, against a real .NET backend.
-  'nav.status': 'Sync status',
   // The four states the status line can actually be in. Words, not a hue — the
   // dot beside them is decoration and never carries the meaning on its own.
   'nav.sync.synced': 'All changes saved',
