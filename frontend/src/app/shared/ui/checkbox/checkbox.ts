@@ -24,7 +24,7 @@ import { ChangeDetectionStrategy, Component, computed, input, model, output } fr
       [attr.aria-checked]="ariaChecked()"
       [disabled]="disabled()"
       (click)="onClick($event)"
-      (keydown.shift.enter)="onClick($event)"
+      (keydown.shift.enter)="onShiftEnter($event)"
     />
   `,
   styles: `
@@ -36,26 +36,12 @@ import { ChangeDetectionStrategy, Component, computed, input, model, output } fr
     }
 
     /*
-     * A selection box is 15px because that is the size it should look, and 15px
-     * is less than half the 44px a finger needs. So the visual box keeps its
-     * size and an invisible target is centred on it — the same trick the filter
-     * chips use, and for the same reason: growing the box would wreck the
-     * density of a table row, which is the whole point of the list view.
-     *
-     * Only below the breakpoint where touch is the assumption; on a desktop the
-     * pointer is precise and a 44px hit area would swallow the row around it.
+     * The 44px touch target is NOT here. It is a breakpointed rule, and an
+     * inline styles block cannot @use the breakpoint mixins, so writing it here
+     * meant a third hand-copied 900 beside the two in _mixins.scss and
+     * layout.service.ts. It lives in styles.scss instead, next to the other
+     * tap-target rules, where it can say upto($bp-lg) and mean it.
      */
-    @media (max-width: 900px) {
-      :host::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: var(--tap, 44px);
-        height: var(--tap, 44px);
-        transform: translate(-50%, -50%);
-      }
-    }
 
     input {
       /*
@@ -118,13 +104,38 @@ export class UiCheckbox {
     this.indeterminate() && !this.checked() ? 'mixed' : String(this.checked()),
   );
 
-  protected onClick(event: Event): void {
+  protected onClick(event: MouseEvent): void {
     const input = event.target as HTMLInputElement;
     // The DOM has already flipped it; mirror that into the model rather than
     // negating our own value, or a click landing on an indeterminate box
-    // disagrees with what the user just saw happen.
-    const next = input.checked;
+    // disagrees with what the user just saw happen. Space arrives here too —
+    // the platform dispatches a real click for it, carrying the modifier keys,
+    // which is what makes shift+Space the keyboard twin of shift-click.
+    this.commit(input.checked, event.shiftKey);
+  }
+
+  /**
+   * Enter is the one path where the browser has *not* flipped the box, because
+   * Enter does not activate a checkbox at all — so this handler has to do both
+   * halves itself.
+   *
+   * Reading `input.checked` here, as the click path does, reported the state the
+   * box was already in. A caller comparing that against its own record saw "no
+   * change" and did nothing, so the key looked dead; the one caller that noticed
+   * worked around it by reading "requested equals current" as "toggle", which is
+   * a workaround for this bug living in somebody else's file.
+   */
+  protected onShiftEnter(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const next = !input.checked;
+    // Keep the element in step with the model, or the next click computes from
+    // a box whose visual state and `checked` disagree.
+    input.checked = next;
+    this.commit(next, true);
+  }
+
+  private commit(next: boolean, shift: boolean): void {
     this.checked.set(next);
-    this.picked.emit({ checked: next, shift: (event as MouseEvent).shiftKey === true });
+    this.picked.emit({ checked: next, shift });
   }
 }

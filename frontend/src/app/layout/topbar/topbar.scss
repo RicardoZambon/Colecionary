@@ -84,6 +84,13 @@
   }
 }
 
+/* Tighter than the trigger's 7px content gap: a caret belongs to the label
+   beside it, not to the next control. */
+.caret {
+  margin-left: -3px;
+  color: var(--muted);
+}
+
 .theme-row {
   display: flex;
   align-items: center;
@@ -121,9 +128,14 @@
     font-family: var(--font-body);
   }
 
+  /* Reserved whether or not the tick is drawn, so the rows do not shift
+     sideways as the selection moves down the menu. */
   &__check {
+    display: grid;
+    place-items: center;
+    width: 13px;
+    flex: none;
     color: var(--accent);
-    font-size: 12px;
   }
 }
 

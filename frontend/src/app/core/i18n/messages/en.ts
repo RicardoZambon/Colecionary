@@ -16,6 +16,9 @@ export const en = {
   'common.backToDashboard': 'back to Dashboard',
   'common.active': '● Active',
   'common.clickToApply': 'Click to apply',
+  // The text alternative behind a skeleton. Said once, by the region that is
+  // loading — the skeletons themselves are aria-hidden pictures of a layout.
+  'common.loading': 'Loading…',
   'common.cancel': 'Cancel',
 
   // --- value ---------------------------------------------------------------
@@ -104,7 +107,7 @@ export const en = {
   'ui.lightbox.next': 'Next photo',
   'ui.lightbox.original': 'Open original',
   'ui.lightbox.close': 'Close viewer',
-  'photos.drop': '⇪ drop photos here',
+  'photos.drop': 'drop photos here',
   'photos.browse': 'or click to browse · {remaining} left',
   'photos.full': 'All {max} photos used — remove one to add another',
   'photos.cover': 'Cover',
@@ -311,10 +314,13 @@ export const en = {
   'breadcrumb.showPanel': 'Show the group panel',
   'breadcrumb.groupPanel': '⟩ Group panel',
   'breadcrumb.subGroupsAria': 'Sub-groups',
+  'crumb.new': 'new',
+  'crumb.edit': 'edit',
+  'crumb.settings': 'settings',
   'breadcrumb.newGroupPlaceholder': 'New group name… (Enter)',
   'breadcrumb.newGroupAria': 'New group name',
   'breadcrumb.new': '+ New',
-  'breadcrumb.editGroups': '⚙ Edit groups',
+  'breadcrumb.editGroups': 'Edit groups',
   'breadcrumb.editGroupsTitle': 'Rename, nest, add fields and set targets for these groups',
 
   // --- toolbar & filters -------------------------------------------------

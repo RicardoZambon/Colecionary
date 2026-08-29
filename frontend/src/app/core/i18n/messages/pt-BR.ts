@@ -16,6 +16,7 @@ export const ptBR: Record<MessageKey, string> = {
   'common.backToDashboard': 'voltar ao painel',
   'common.active': '● Ativo',
   'common.clickToApply': 'Clique para aplicar',
+  'common.loading': 'Carregando…',
   'common.cancel': 'Cancelar',
 
   // --- value ---------------------------------------------------------------
@@ -97,7 +98,7 @@ export const ptBR: Record<MessageKey, string> = {
   'ui.lightbox.next': 'Próxima foto',
   'ui.lightbox.original': 'Abrir original',
   'ui.lightbox.close': 'Fechar visualizador',
-  'photos.drop': '⇪ solte as fotos aqui',
+  'photos.drop': 'solte as fotos aqui',
   'photos.browse': 'ou clique para escolher · faltam {remaining}',
   'photos.full': 'As {max} fotos já foram usadas — remova uma para adicionar outra',
   'photos.cover': 'Capa',
@@ -301,10 +302,13 @@ export const ptBR: Record<MessageKey, string> = {
   'breadcrumb.showPanel': 'Mostrar o painel de grupos',
   'breadcrumb.groupPanel': '⟩ Painel de grupos',
   'breadcrumb.subGroupsAria': 'Subgrupos',
+  'crumb.new': 'novo',
+  'crumb.edit': 'editar',
+  'crumb.settings': 'ajustes',
   'breadcrumb.newGroupPlaceholder': 'Nome do novo grupo… (Enter)',
   'breadcrumb.newGroupAria': 'Nome do novo grupo',
   'breadcrumb.new': '+ Novo',
-  'breadcrumb.editGroups': '⚙ Editar grupos',
+  'breadcrumb.editGroups': 'Editar grupos',
   'breadcrumb.editGroupsTitle': 'Renomear, aninhar, adicionar campos e definir metas para estes grupos',
 
   // --- toolbar & filters -------------------------------------------------

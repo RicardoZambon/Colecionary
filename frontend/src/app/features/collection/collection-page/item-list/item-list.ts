@@ -116,18 +116,16 @@ export class ItemList {
    *
    * Space on a focused checkbox dispatches a real `click` carrying the modifier
    * state, so shift+Space *is* the keyboard equivalent of shift-click and needs
-   * no separate handler — which is what rule 12 asks for.
+   * no separate handler — which is what rule 12 asks for. Shift+Enter is handled
+   * inside `ui-checkbox`, which reports the state it moved the box to.
    *
-   * `ui-checkbox` also fires `picked` on shift+Enter, where the browser has not
-   * flipped the box (Enter does not activate a checkbox), so the reported
-   * `checked` is the state it is already in. Reading "the requested state equals
-   * the current one" as "toggle it" makes that path behave like the other two
-   * instead of appearing dead.
+   * This used to correct the reported state, because the shift+Enter path
+   * reported the box's *pre-toggle* value. That was a bug in `ui-checkbox` and
+   * it has been fixed there, with a spec; a caller compensating for a shared
+   * component is a workaround that outlives the reason for it.
    */
   protected pick(item: Item, event: { checked: boolean; shift: boolean }): void {
-    const already = this.isSelected(item);
-    const checked = event.checked === already ? !already : event.checked;
-    this.picked.emit({ id: item.id, checked, shift: event.shift });
+    this.picked.emit({ id: item.id, checked: event.checked, shift: event.shift });
   }
 
   protected badgeTone(item: Item) {
