@@ -4,7 +4,13 @@ import { TestBed } from '@angular/core/testing';
 import { Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { VaultApi, VaultConflictError, VersionedCollection, VersionedItem } from '../api/vault-api';
+import {
+  VaultApi,
+  VaultBusyError,
+  VaultConflictError,
+  VersionedCollection,
+  VersionedItem,
+} from '../api/vault-api';
 import { Collection, Item, Member, MemberRole, StoreListing, TenantSettings, UserProfile } from '../models';
 import { ConflictService } from './conflict.service';
 import { I18nService } from '../i18n';
@@ -30,6 +36,33 @@ class FakeVaultApi extends VaultApi {
   failReadsWith: Error | null = null;
   /** How many times the store has asked for the collection list. */
   reads = 0;
+
+  /**
+   * While true, an accepted write is *received* but not answered — it parks
+   * until {@link release}. That is the only way to have two writes overlap the
+   * way they do in a browser, which is the situation the store's per-collection
+   * guard exists for; a fake that answers synchronously can never produce it.
+   */
+  holdWrites = false;
+  private held: (() => void)[] = [];
+
+  /** Answers every parked write, oldest first. */
+  release(): void {
+    const parked = this.held;
+    this.held = [];
+    for (const answer of parked) answer();
+  }
+
+  /** The response, now or when the test lets go of it. */
+  private answer<T>(value: T): Observable<T> {
+    if (!this.holdWrites) return of(value);
+    return new Observable<T>(subscriber => {
+      this.held.push(() => {
+        subscriber.next(value);
+        subscriber.complete();
+      });
+    });
+  }
 
   /** Moves a collection on behind the store's back, as another tab would. */
   moveOn(id: string): void {
@@ -60,7 +93,7 @@ class FakeVaultApi extends VaultApi {
     }
     this.moveOn(collection.id);
     this.collections = this.collections.map(c => (c.id === collection.id ? collection : c));
-    return of({ version: this.tag(collection.id), collection });
+    return this.answer({ version: this.tag(collection.id), collection });
   }
 
   deleteCollection(): Observable<void> {
@@ -77,7 +110,7 @@ class FakeVaultApi extends VaultApi {
       return throwError(() => new VaultConflictError(collectionId, 'Changed somewhere else.'));
     }
     this.moveOn(collectionId);
-    return of({ version: this.tag(collectionId), item });
+    return this.answer({ version: this.tag(collectionId), item });
   }
 
   deleteItem(collectionId: string): Observable<string> {
@@ -186,6 +219,81 @@ describe('VaultStore versions', () => {
     // saving twice in a row is the single commonest thing this page does.
     expect(api.preconditions).toEqual(['"1"', '"2"']);
     expect(store.collection('c1')!.name).toBe('Second');
+  });
+
+  it('refuses a second write of the same collection while the first is in flight', async () => {
+    // The bug this exists for: a full-document PUT of a large collection takes
+    // long enough that an ordinary double-click lands before the first answers.
+    // Both would quote the same version, the server would refuse the second,
+    // and the app would tell the user somebody else had edited their
+    // collection. The only other writer was their own second click.
+    const { api, store, conflicts } = await mount();
+    api.holdWrites = true;
+
+    const first = store.updateCollection(collection({ name: 'First' }));
+    await expect(store.updateCollection(collection({ name: 'Second' }))).rejects.toBeInstanceOf(
+      VaultBusyError,
+    );
+
+    // Never sent, which is the point: one precondition reached the server, not
+    // two, so there was no 412 to explain and nothing to explain it with.
+    expect(api.preconditions).toEqual(['"1"']);
+    expect(conflicts.pending()).toBeNull();
+
+    api.release();
+    await first;
+    expect(store.collection('c1')!.name).toBe('First');
+  });
+
+  it('lets go of the collection when the write settles, and the next save works', async () => {
+    // A lock that outlived its write would be worse than the conflict it
+    // prevents: every control on the collection would stay dead for the rest of
+    // the session, with nothing on screen to say why.
+    const { api, store } = await mount();
+    api.holdWrites = true;
+
+    const first = store.updateCollection(collection({ name: 'First' }));
+    api.release();
+    await first;
+
+    api.holdWrites = false;
+    await store.updateCollection(collection({ name: 'Second' }));
+    expect(api.preconditions).toEqual(['"1"', '"2"']);
+    expect(store.collection('c1')!.name).toBe('Second');
+  });
+
+  it('lets go even when the write is refused', async () => {
+    const { api, store } = await mount();
+    api.moveOn('c1');
+
+    await expect(store.updateCollection(collection({ name: 'Stale' }))).rejects.toBeInstanceOf(
+      VaultConflictError,
+    );
+
+    // Refused, not busy: the guard released on the way out, so the second
+    // attempt reaches the server and is judged on its own precondition.
+    await expect(store.updateCollection(collection({ name: 'Stale again' }))).rejects.toBeInstanceOf(
+      VaultConflictError,
+    );
+    expect(api.preconditions).toEqual(['"1"', '"1"']);
+  });
+
+  it('guards an item write against the collection it belongs to, and no other', async () => {
+    // Per collection and not global: an item write holds the collection whose
+    // version it moves, and saving one collection is no reason to freeze the
+    // controls on another.
+    const { api, store } = await mount([collection(), collection({ id: 'c2' })]);
+    api.holdWrites = true;
+
+    const first = store.upsertItem('c1', item({ name: 'Held' }));
+    await expect(store.upsertItem('c1', item({ name: 'Second' }))).rejects.toBeInstanceOf(
+      VaultBusyError,
+    );
+
+    const other = store.upsertItem('c2', item({ name: 'Elsewhere' }));
+    api.release();
+    await Promise.all([first, other]);
+    expect(api.preconditions).toEqual(['"1"', '"1"']);
   });
 
   it('refuses a save built on a version somebody else has replaced', async () => {

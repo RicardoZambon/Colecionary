@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { Router, RouterLink } from '@angular/router';
 
 import { I18nService, MessageKey } from '../../../core/i18n';
-import { VaultConflictError } from '../../../core/api/vault-api';
+import { VaultBusyError, isReportedWriteFailure } from '../../../core/api/vault-api';
+import { ConfirmService } from '../../../core/state/confirm.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { ArchiveApi } from '../../../core/api/archive-api';
 import { saveFile } from '../../../core/utils/download.util';
@@ -134,6 +135,7 @@ export class CollectionSettingsPage {
   protected readonly loading = computed(() => !this.store.loaded());
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
   private readonly router = inject(Router);
   private readonly archives = inject(ArchiveApi);
 
@@ -485,7 +487,18 @@ export class CollectionSettingsPage {
     try {
       await this.store.updateCollection(draft);
     } catch (err) {
-      if (err instanceof VaultConflictError) return;
+      // Refused here rather than sent, because another write of this collection
+      // was still in flight. Nothing is lost and nothing is said: this page's
+      // draft is the live working copy, so re-arming the debounce re-sends
+      // whatever it holds *then* — which is the save the user was expecting all
+      // along, one beat later. Dropping it would leave them typing into a draft
+      // that had quietly stopped saving, which is the failure this method's own
+      // docblock exists because of.
+      if (err instanceof VaultBusyError) {
+        this.persistTimer = setTimeout(() => void this.persist(), PERSIST_DEBOUNCE_MS);
+        return;
+      }
+      if (isReportedWriteFailure(err)) return;
       this.toast.flash(
         err instanceof Error ? err.message : this.i18n.t('toast.collection.saveFailed'),
       );
@@ -530,9 +543,32 @@ export class CollectionSettingsPage {
     }
   }
 
+  /**
+   * Destroys the collection, and asks first — this is the largest irreversible
+   * act in the app and it used to happen on one click.
+   *
+   * The question names the collection and states what goes with it, because
+   * "are you sure?" is not information: the number of items is the fact that
+   * changes somebody's mind. There is no undo, so the export sitting on this
+   * same page is the only recovery there is and the body says so.
+   */
   protected async deleteCollection(): Promise<void> {
     const draft = this.draft();
     if (!draft) return;
+
+    const confirmed = await this.confirm.ask({
+      titleKey: 'confirm.deleteCollection.title',
+      bodyKey: 'confirm.deleteCollection.body',
+      params: {
+        name: draft.name,
+        items: draft.items.length,
+        groups: draft.groups.length,
+      },
+      confirmKey: 'confirm.deleteCollection.confirm',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     await this.store.deleteCollection(draft.id);
     this.toast.flash(this.i18n.t('toast.collection.deleted'));
     void this.router.navigate(['/dashboard']);
@@ -701,7 +737,26 @@ export class CollectionSettingsPage {
     this.mutate(d => ({ ...d, groups: d.groups.map(g => (g.id === groupId ? fn(g) : g)) }));
   }
 
-  protected removeField(groupId: string, name: string): void {
+  /**
+   * Drops a field declaration from a group, after asking.
+   *
+   * The values themselves survive — `custom` is keyed by field *name* on the
+   * item, so they go dormant and come back if the field is declared again. That
+   * is exactly why the question has to say so: refusing to explain would make a
+   * reversible act look like a deletion, and a count of the items holding a
+   * value is what tells somebody whether they are about to hide anything at all.
+   */
+  protected async removeField(groupId: string, name: string): Promise<void> {
+    const holders = this.fieldHolderCount(groupId, name);
+    const confirmed = await this.confirm.ask({
+      titleKey: 'confirm.removeField.title',
+      bodyKey: holders ? 'confirm.removeField.body' : 'confirm.removeField.bodyEmpty',
+      params: { name, count: holders },
+      confirmKey: 'confirm.removeField.confirm',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     this.mutateGroup(groupId, g => ({
       ...g,
       fields: g.fields.filter(f => f.name !== name),
@@ -710,6 +765,22 @@ export class CollectionSettingsPage {
       sort: g.sort?.by === fieldSortKey(name) ? null : g.sort,
     }));
     this.toast.flash(this.i18n.t('toast.field.removed'));
+  }
+
+  /**
+   * How many items in a group's subtree hold a value for one of its fields.
+   *
+   * Counted the way `groupMoveImpact` counts it, and for the same reason: a
+   * warning with a number in it is a warning somebody can act on, and one
+   * without is noise they learn to click through.
+   */
+  private fieldHolderCount(groupId: string, name: string): number {
+    const draft = this.draft();
+    if (!draft) return 0;
+    const ids = new Set(subtreeIds(draft.groups, groupId));
+    return draft.items.filter(
+      item => ids.has(item.groupId) && item.custom.some(c => c.key === name && c.value.trim()),
+    ).length;
   }
 
   protected setFieldType(groupId: string, name: string, type: string): void {
@@ -825,7 +896,29 @@ export class CollectionSettingsPage {
    * it would resolve to "no section" either way, but a stored reference to
    * something deleted is a thing to explain later.
    */
-  protected removeSection(id: string): void {
+  /**
+   * Deletes a divider, after asking.
+   *
+   * Unlike a field, this one does destroy something: every item under the
+   * section has its `sectionId` cleared, and which run each of them belonged to
+   * is not recorded anywhere else. So the count in the question is the number of
+   * items that lose their place, not a decoration.
+   */
+  protected async removeSection(id: string): Promise<void> {
+    const draft = this.draft();
+    if (!draft) return;
+    const section = draft.sections.find(s => s.id === id);
+    const affected = draft.items.filter(item => item.sectionId === id).length;
+
+    const confirmed = await this.confirm.ask({
+      titleKey: 'confirm.removeSection.title',
+      bodyKey: affected ? 'confirm.removeSection.body' : 'confirm.removeSection.bodyEmpty',
+      params: { name: section?.name ?? '', count: affected },
+      confirmKey: 'confirm.removeSection.confirm',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     this.mutate(d => ({
       ...d,
       sections: d.sections.filter(s => s.id !== id),
@@ -920,11 +1013,24 @@ export class CollectionSettingsPage {
     this.toast.flash(this.i18n.t('toast.member.roleUpdated'));
   }
 
-  protected removeMember(email: string, fixed: boolean): void {
+  protected async removeMember(email: string, fixed: boolean): Promise<void> {
     if (fixed) {
       this.toast.flash(this.i18n.t('toast.member.ownerImmutable'));
       return;
     }
+
+    // Revoking access is recoverable — they can be added again — but not by
+    // them, and not without somebody noticing they are gone. Worth a question.
+    const member = this.draft()?.members.find(m => m.email === email);
+    const confirmed = await this.confirm.ask({
+      titleKey: 'confirm.removeMember.title',
+      bodyKey: 'confirm.removeMember.body',
+      params: { name: member?.name ?? email },
+      confirmKey: 'confirm.removeMember.confirm',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     this.mutate(d => ({ ...d, members: d.members.filter(m => m.email !== email) }));
     this.toast.flash(this.i18n.t('toast.member.removed'));
   }

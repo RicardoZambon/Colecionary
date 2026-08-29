@@ -5,7 +5,8 @@ import { Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../../core/api/images-api';
 import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
-import { VaultConflictError } from '../../../core/api/vault-api';
+import { isReportedWriteFailure } from '../../../core/api/vault-api';
+import { ConfirmService } from '../../../core/state/confirm.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
@@ -57,6 +58,29 @@ interface CopyDraft {
   acquiredOn: string;
   status: CopyStatus;
   notes: string;
+}
+
+/**
+ * Whether a copy draft holds anything a person typed.
+ *
+ * `condition` and `status` are excluded on purpose: every new copy arrives with
+ * both already set, so counting them would make an untouched blank copy look
+ * like it had content and put a pointless question in front of every removal.
+ */
+function copyDraftHasContent(copy: CopyDraft): boolean {
+  // The numbers are parsed, not tested as strings. `newCopy()` starts at
+  // `price: 0` and `toDraft` stringifies that to "0", so reading the raw string
+  // made every freshly added copy look like it held data — which would have put
+  // a question in front of every single removal and taught people to dismiss it
+  // without reading. Zero is "not set" here, exactly as it is for an item's
+  // estimate; the cost is that a copy whose only fact is "paid nothing" is
+  // removed without asking.
+  return Boolean(
+    parseNumber(copy.value) ||
+      parseNumber(copy.price) ||
+      copy.acquiredOn.trim() ||
+      copy.notes.trim(),
+  );
 }
 
 function toDraft(copy: ItemCopy): CopyDraft {
@@ -114,6 +138,7 @@ export class ItemFormPage {
   protected readonly focus = inject(ImageFocusService);
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
   private readonly router = inject(Router);
   private readonly currencies = inject(CurrencyService);
   private readonly document = inject(DOCUMENT);
@@ -145,6 +170,14 @@ export class ItemFormPage {
   );
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
+
+  /**
+   * Whether this collection already has a write in flight, so Save can stop
+   * offering itself. An item write is guarded by the *collection's* version, so
+   * a second one sent before the first answers quotes a token that is about to
+   * move and is refused — as a conflict with nobody.
+   */
+  protected readonly saving = computed(() => this.store.saving(this.collectionId()));
   protected readonly editing = computed(() =>
     this.collection()?.items.find(i => i.id === this.itemId()),
   );
@@ -256,8 +289,23 @@ export class ItemFormPage {
   /**
    * The manager hands back the whole list after any edit — added, reordered,
    * made cover, removed — so the form has one way in rather than four.
+   *
+   * A shorter list is the only one of those four that loses something: putting
+   * a photo back means finding the file and uploading it again, because the
+   * bytes survive their grace period but nothing in the app offers them back.
+   * So the question is asked on the shrink and on nothing else — a reorder that
+   * stopped to ask would be a confirmation people learn to dismiss.
    */
-  protected setPhotos(ids: string[]): void {
+  protected async setPhotos(ids: string[]): Promise<void> {
+    if (ids.length < this.photoIds().length) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'confirm.removePhoto.title',
+        bodyKey: 'confirm.removePhoto.body',
+        confirmKey: 'confirm.removePhoto.confirm',
+        tone: 'danger',
+      });
+      if (!confirmed) return;
+    }
     this.photoIds.set(ids);
   }
 
@@ -276,9 +324,37 @@ export class ItemFormPage {
     this.copies.update(copies => [...copies, toDraft(newCopy())]);
   }
 
-  protected removeCopy(index: number): void {
+  /**
+   * Removes one copy, asking first if there is anything in it to lose.
+   *
+   * A copy is a physical object with a price paid, a condition, a date and
+   * notes, and none of that is recoverable from anywhere else — so a mis-click
+   * on the wrong row of a list of identical-looking copies is expensive. But an
+   * untouched blank copy, which is what "add copy" gives you, holds nothing:
+   * asking about that one would teach people to dismiss the question without
+   * reading it, which is how a confirmation stops working.
+   *
+   * Removing the last copy is also how an item goes on the wantlist, and that
+   * is a deliberate act worth naming rather than a side effect.
+   */
+  protected async removeCopy(index: number): Promise<void> {
+    const copy = this.copies()[index];
+    if (!copy) return;
+
+    if (copyDraftHasContent(copy)) {
+      const last = this.copies().length === 1;
+      const confirmed = await this.confirm.ask({
+        titleKey: 'confirm.removeCopy.title',
+        bodyKey: last ? 'confirm.removeCopy.bodyLast' : 'confirm.removeCopy.body',
+        confirmKey: 'confirm.removeCopy.confirm',
+        tone: 'danger',
+      });
+      if (!confirmed) return;
+    }
+
     this.copies.update(copies => copies.filter((_, i) => i !== index));
   }
+
 
   protected patchCopy(index: number, patch: Partial<CopyDraft>): void {
     this.copies.update(copies => copies.map((c, i) => (i === index ? { ...c, ...patch } : c)));
@@ -425,7 +501,7 @@ export class ItemFormPage {
       // is the only copy of what was typed, and a refused save leaves it
       // unsaved. A conflict explains itself through the shell's notice; any
       // other failure gets a toast. Either way the page stays exactly as it is.
-      if (!(err instanceof VaultConflictError)) {
+      if (!isReportedWriteFailure(err)) {
         this.toast.flash(
           err instanceof Error ? err.message : this.i18n.t('toast.item.saveFailed'),
         );

@@ -12,6 +12,35 @@ import { MessageKey } from './keys';
  */
 export const ptBR: Record<MessageKey, string> = {
   // --- common ------------------------------------------------------------
+  'confirm.deleteCollection.title': 'Excluir «{name}»?',
+  'confirm.deleteCollection.body':
+    'Isso destrói a coleção e tudo que está nela — {items} itens em {groups} grupos. Não há como desfazer, e o export desta página é o único caminho de volta.',
+  'confirm.deleteCollection.confirm': 'Excluir a coleção',
+  'confirm.removeField.title': 'Remover o campo «{name}»?',
+  'confirm.removeField.body':
+    'Ele deixa de aparecer e de ser oferecido para todos os itens deste grupo. {count} itens têm valor nele — os valores ficam guardados e voltam se você declarar o campo de novo.',
+  'confirm.removeField.bodyEmpty':
+    'Ele deixa de aparecer e de ser oferecido para todos os itens deste grupo. Nenhum item tem valor nele ainda.',
+  'confirm.removeField.confirm': 'Remover o campo',
+  'confirm.removeSection.title': 'Excluir o separador «{name}»?',
+  'confirm.removeSection.body':
+    '{count} itens estão sob ele e voltam a ficar sem separador. A qual faixa cada um pertencia não está registrado em nenhum outro lugar, então não há como desfazer.',
+  'confirm.removeSection.bodyEmpty': 'Nenhum item está sob ele, então nada mais muda.',
+  'confirm.removeSection.confirm': 'Excluir o separador',
+  'confirm.removeMember.title': 'Remover {name}?',
+  'confirm.removeMember.body':
+    'Essa pessoa perde o acesso a esta coleção na hora. Você pode compartilhar de novo depois, mas ela não consegue fazer isso sozinha.',
+  'confirm.removeMember.confirm': 'Remover',
+  'confirm.removeCopy.title': 'Remover este exemplar?',
+  'confirm.removeCopy.body':
+    'O quanto você pagou, o estado, quando conseguiu e as anotações vão com ele, e nada disso está registrado em outro lugar.',
+  'confirm.removeCopy.bodyLast':
+    'Este é o último exemplar, então o item volta para a lista de desejos. O quanto você pagou, o estado, quando conseguiu e as anotações vão com ele.',
+  'confirm.removeCopy.confirm': 'Remover o exemplar',
+  'confirm.removePhoto.title': 'Remover esta foto?',
+  'confirm.removePhoto.body':
+    'Para colocá-la de volta você precisa achar o arquivo e subir de novo.',
+  'confirm.removePhoto.confirm': 'Remover a foto',
   'common.collectionNotFound': 'Coleção não encontrada —',
   'common.backToDashboard': 'voltar ao painel',
   'common.active': '● Ativo',
@@ -370,6 +399,7 @@ export const ptBR: Record<MessageKey, string> = {
   'bulk.showEdit': 'Editar campos',
   'bulk.hideEdit': 'Fechar campos',
   'bulk.apply': 'Aplicar',
+  'bulk.applying': 'Salvando\u2026',
   'bulk.delete': 'Excluir',
   'bulk.leaveAlone': '— manter como está',
   'bulk.values.none': 'nada preenchido',
@@ -470,6 +500,7 @@ export const ptBR: Record<MessageKey, string> = {
   'itemForm.groupFieldsLink': 'Configurações da coleção ▸ Grupos e campos',
   'itemForm.cancel': 'Cancelar',
   'itemForm.save': 'Salvar item',
+  'itemForm.saving': 'Salvando\u2026',
 
   // --- collection settings -----------------------------------------------
   'collSettings.title': 'Configurações da coleção',

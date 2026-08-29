@@ -8,7 +8,7 @@
   <ui-button variant="ghost" size="sm" (click)="open.set(!open())">
     {{ (open() ? 'bulk.hideEdit' : 'bulk.showEdit') | t }}
   </ui-button>
-  <ui-button variant="danger" size="sm" (click)="removeRequested.emit()">
+  <ui-button variant="danger" size="sm" [disabled]="saving()" (click)="removeRequested.emit()">
     {{ 'bulk.delete' | t }}
   </ui-button>
   <ui-button variant="ghost" size="sm" (click)="cleared.emit()">
@@ -208,8 +208,16 @@
       @if (!canApply()) {
         <span class="fields__note">{{ 'bulk.nothingToApply' | t }}</span>
       }
-      <ui-button variant="primary" size="sm" [disabled]="!canApply()" (click)="apply()">
-        {{ 'bulk.apply' | t }}
+      <!-- Disabled while this collection's own write is in flight: a second
+           full-document PUT would quote the version the first is about to move
+           and come back refused. -->
+      <ui-button
+        variant="primary"
+        size="sm"
+        [disabled]="!canApply() || saving()"
+        (click)="apply()"
+      >
+        {{ (saving() ? 'bulk.applying' : 'bulk.apply') | t }}
       </ui-button>
     </div>
   </div>

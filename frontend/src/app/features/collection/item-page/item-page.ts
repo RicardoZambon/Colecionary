@@ -4,7 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ImagesApi } from '../../../core/api/images-api';
 import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
-import { VaultConflictError } from '../../../core/api/vault-api';
+import { isReportedWriteFailure } from '../../../core/api/vault-api';
 import { ConfirmService } from '../../../core/state/confirm.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
@@ -370,7 +370,7 @@ export class ItemPage {
         // message on top of it would only muddle what happened. The photo's
         // bytes are safely uploaded either way — it is the item that did not
         // save, and re-adding it after a reload costs no second upload.
-        if (err instanceof VaultConflictError) return;
+        if (isReportedWriteFailure(err)) return;
         this.toast.flash(
           err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),
         );
@@ -394,7 +394,7 @@ export class ItemPage {
         syncWantedTag({ ...item, copies: [...item.copies, newCopy()] }),
       );
     } catch (err) {
-      if (!(err instanceof VaultConflictError)) {
+      if (!isReportedWriteFailure(err)) {
         this.toast.flash(
           err instanceof Error ? err.message : this.i18n.t('toast.item.saveFailed'),
         );
@@ -427,7 +427,7 @@ export class ItemPage {
     const confirmed = await this.confirm.ask({
       titleKey: 'item.delete.confirm.title',
       bodyKey: 'item.delete.confirm.body',
-      bodyParams: { name: item.name },
+      params: { name: item.name },
       confirmKey: 'item.delete.confirm.ok',
       tone: 'danger',
     });

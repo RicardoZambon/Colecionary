@@ -21,6 +21,7 @@ import {
 } from '../../../core/models';
 import { I18nService } from '../../../core/i18n';
 import { UNGROUPED_ID } from '../../../core/utils/group-stats.util';
+import { ConfirmService } from '../../../core/state/confirm.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CollectionSettingsPage } from './collection-settings-page';
 
@@ -165,6 +166,20 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
     fixture.detectChanges();
   };
 
+  /**
+   * Answers the confirmation a destructive action now raises.
+   *
+   * Every irreversible act on this page asks first, so a test that clicks one
+   * and asserts the result has to say what the user said. Passing `false` is how
+   * the cancel path is tested, and it is the more important of the two: a
+   * confirmation that cannot be declined is a speed bump, not a safeguard.
+   */
+  const answerConfirm = async (answer = true) => {
+    TestBed.inject(ConfirmService).answer(answer);
+    await tick();
+    fixture.detectChanges();
+  };
+
   /** "Done" flushes the debounced save immediately, so nothing waits 400 ms. */
   const done = async () => {
     click(el.querySelector('.done-row ui-button button')!);
@@ -207,6 +222,7 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
     type,
     click,
     done,
+    answerConfirm,
     rows,
     rowNames,
     detail,
@@ -323,6 +339,7 @@ describe('CollectionSettingsPage', () => {
     });
 
     page.click(page.el.querySelector('[aria-label="Remove field Issue"]')!);
+    await page.answerConfirm();
     await page.done();
 
     expect(page.lastPut().groups[0].fields).toEqual([]);
@@ -655,6 +672,7 @@ describe('CollectionSettingsPage', () => {
     });
 
     page.click(page.el.querySelector('[aria-label="Remove section Bronze"]')!);
+    await page.answerConfirm();
     await page.done();
 
     expect(page.lastPut().sections).toEqual([]);
@@ -765,5 +783,69 @@ describe('CollectionSettingsPage', () => {
       [],
       expect.objectContaining({ queryParams: expect.objectContaining({ g: null }) }),
     );
+  });
+});
+
+describe('CollectionSettingsPage — nothing is destroyed without a question', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('keeps the divider when the question is declined', async () => {
+    const page = await mount({
+      collection: collection({
+        groups: [group('espanha')],
+        sections: [{ id: 'bronze', groupId: 'espanha', name: 'Bronze', target: null }],
+        items: [{ ...item('seiya', 'espanha'), sectionId: 'bronze' }],
+      }),
+      tab: 'groups',
+      g: 'espanha',
+    });
+
+    page.click(page.el.querySelector('[aria-label="Remove section Bronze"]')!);
+    await page.answerConfirm(false);
+    await page.done();
+
+    // "Done" always flushes a save, so the assertion is about the content, not
+    // about whether a PUT happened: the divider survives, and so does the item's
+    // place in it — the part that could not have been recovered.
+    expect(page.lastPut().sections).toHaveLength(1);
+    expect(page.lastPut().items[0].sectionId).toBe('bronze');
+  });
+
+  it('keeps the field when the question is declined', async () => {
+    const page = await mount({
+      collection: collection({
+        groups: [group('zeta', { fields: [{ name: 'Issue', type: 'number' }] })],
+      }),
+      tab: 'groups',
+      g: 'zeta',
+    });
+
+    page.click(page.el.querySelector('[aria-label="Remove field Issue"]')!);
+    await page.answerConfirm(false);
+    await page.done();
+
+    expect(page.lastPut().groups[0].fields).toEqual([{ name: 'Issue', type: 'number' }]);
+  });
+
+  it('will not delete the collection until the question is answered yes', async () => {
+    // The largest irreversible act in the app, and it used to happen on one
+    // click with nothing in between.
+    const page = await mount();
+    const deleted: string[] = [];
+    page.api.deleteCollection = ((id: string) => {
+      deleted.push(id);
+      return of(void 0);
+    }) as typeof page.api.deleteCollection;
+
+    page.click(page.el.querySelector('.danger-row ui-button button, .general ui-button[variant="danger"] button')!);
+    await page.answerConfirm(false);
+    expect(deleted).toEqual([]);
+
+    page.click(page.el.querySelector('.danger-row ui-button button, .general ui-button[variant="danger"] button')!);
+    await page.answerConfirm(true);
+    expect(deleted).toEqual(['c1']);
   });
 });

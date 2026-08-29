@@ -123,7 +123,17 @@ a core service's state).
    Micro-headings use `ui-section-label` / the `mono-label` mixin — uppercase
    is applied by CSS, never typed in copy, so translators get sentence case.
 
-9. **A destructive act asks, and an undo is worth more than the question.**
+9. **Every irreversible act asks, and an undo is worth more than the question.**
+   The full list, so a new one is not missed: deleting a collection, a group, a
+   section, an item, several items at once, a group field, a member, a copy that
+   holds data, and a photo. Each states its own consequence with a real count —
+   "are you sure?" is not information; the number of items is the fact that
+   changes somebody's mind. Two deliberate exceptions: an **untouched blank
+   copy** and a **tag** are removed without asking, because a question in front
+   of an act that costs nothing is a question people learn to dismiss without
+   reading, and that is how a confirmation stops working. Cancel is the point:
+   test the declined path, not only the accepted one.
+
    Deletion goes through `ConfirmService.ask()`, with the count or the name in
    the body and the outcome in the button ("Delete 12 items", not "Delete").
    The dialog can stay one sentence long *because* the act is reversible — so
@@ -397,6 +407,28 @@ style the same raw element the same way, that's the signal to promote it here.
   **never off `Collection` itself**, because the same shape is the archive
   format and a concurrency token has no business in a backup. A refused write
   raises `ConflictService`; it never discards what the user typed.
+- **One write per collection at a time, and the second is refused rather than
+  queued.** That version only advances when the write in flight answers, so two
+  simultaneous writes of one collection quote the same token and the server
+  refuses the second — which the app used to explain as somebody else having
+  edited it. On a 286-item collection the full-document PUT takes about half a
+  second, so an ordinary double-click was enough, and the other writer was the
+  second click. `VaultStore.exclusive` keeps at most one in flight per
+  collection and rejects the rest with `VaultBusyError`, which is **never** a
+  `VaultConflictError` and so never raises the notice. Refused and not queued
+  because the second payload is the whole document as the page built it *before*
+  the first landed: sending it afterwards would restore the pre-write document
+  over the one that just saved. Where the payload is live rather than a
+  snapshot — the settings autosave, a pending manual order — the caller re-arms
+  its debounce instead of dropping the write. Callers ignore both failures
+  through the one predicate `isReportedWriteFailure`, never a pair of
+  `instanceof` checks copied eight times.
+- **A write affordance stops offering itself while its own write is running.**
+  Read `VaultStore.saving(collectionId)`; a presentational child takes it as an
+  input (`ui`-level components never inject the store). Bulk *Apply*, bulk
+  *Delete* and the item form's *Save* are disabled and say "Saving…". The store
+  guard above is the safety net — this is the fix the user actually sees, and it
+  is the same principle as `canEdit`: do not offer what the server would refuse.
 - **Images** go through `ImagesApi` (`core/api/images-api.ts`): authenticated
   multipart upload returning an id; reads are plain `<img>`-compatible URLs
   (`/api/images/{id}`). `ui-image-slot` is presentational — it renders `src`

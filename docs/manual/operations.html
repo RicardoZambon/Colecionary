@@ -359,6 +359,33 @@
           olhe o log da API, não o navegador</td>
     </tr>
     <tr>
+      <td>“Diz que <em>outra pessoa</em> alterou a coleção, e estou sozinho na
+          conta”</td>
+      <td><strong>Corrigido.</strong> Duas escritas da mesma coleção em voo ao
+          mesmo tempo citavam a mesma versão em <code>If-Match</code>; o servidor
+          aceitava a primeira e recusava a segunda com <code>412</code>. Numa
+          coleção grande o PUT leva cerca de meio segundo, então um clique duplo
+          em “Aplicar” bastava. O outro escritor era o próprio segundo clique</td>
+      <td>O store agora mantém no máximo uma escrita em voo por coleção
+          (<code>VaultStore.exclusive</code>, ADR-64) e os botões ficam
+          desabilitados enquanto ela corre. Se a mensagem aparecer mesmo assim,
+          é conflito de verdade — outra aba, outra sessão, ou um
+          <code>load()</code> que terminou depois de uma escrita que ele não
+          viu; a saída é <em>Recarregar a versão mais recente</em> no aviso</td>
+    </tr>
+    <tr>
+      <td>“O log da API mostra <code>ERR … responded 500</code> para um conflito
+          que o cliente recebeu como 412”</td>
+      <td>Não é o que aconteceu com o cliente.
+          <code>UseSerilogRequestLogging</code> está registrado <em>depois</em>
+          de <code>UseExceptionHandler</code>, ou seja, por dentro dele: o
+          middleware de log vê a exceção subindo antes de o handler escrever a
+          resposta, e anota 500. O status real é o do handler</td>
+      <td>Confie no status que o cliente recebeu, não no do log; a linha
+          seguinte nomeia a exceção
+          (<code>PreconditionFailedException</code>) e essa é a informação boa</td>
+    </tr>
+    <tr>
       <td>“Salvei / apaguei / mudei um papel e nada aconteceu”</td>
       <td>Antes, oito métodos do store rejeitavam para cima e vários chamadores
           não capturavam — uma troca de papel falha deixava o papel novo no

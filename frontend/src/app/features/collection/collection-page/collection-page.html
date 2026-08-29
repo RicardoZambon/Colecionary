@@ -178,6 +178,7 @@
           [items]="selectedItems()"
           [groups]="groups()"
           [sections]="sections()"
+          [saving]="saving()"
           (applied)="applyBulk($event)"
           (removeRequested)="confirmingDelete.set(true)"
           (cleared)="clearSelection()"

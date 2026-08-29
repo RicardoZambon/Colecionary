@@ -22,6 +22,7 @@ import {
   TenantSettings,
   UserProfile,
 } from '../../../core/models';
+import { ConfirmService } from '../../../core/state/confirm.service';
 import { ConflictService } from '../../../core/state/conflict.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { UNGROUPED_ID } from '../../../core/utils/group-stats.util';
@@ -228,6 +229,20 @@ async function mount(opts: { g?: string; itemId?: string; items?: Item[] } = {})
     click(chip.querySelector('.tag__remove')!);
   };
 
+  /**
+   * Answers the confirmation a destructive action now raises.
+   *
+   * Every irreversible act on this page asks first, so a test that clicks one
+   * and asserts the result has to say what the user said. Passing `false` is how
+   * the cancel path is tested, and it is the more important of the two: a
+   * confirmation that cannot be declined is a speed bump, not a safeguard.
+   */
+  const answerConfirm = async (answer = true) => {
+    TestBed.inject(ConfirmService).answer(answer);
+    await tick();
+    fixture.detectChanges();
+  };
+
   const save = async () => {
     el.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
     await tick();
@@ -248,6 +263,7 @@ async function mount(opts: { g?: string; itemId?: string; items?: Item[] } = {})
     copyRows,
     fieldNames,
     fieldInput,
+    answerConfirm,
     tagChips,
     tagField,
     addTag,
@@ -363,6 +379,9 @@ describe('ItemFormPage', () => {
   it('syncs the wanted tag with the copies in both directions', async () => {
     const owned = await mount({ itemId: 'i1', items: [item({ copies: [copy()] })] });
     owned.click(owned.copyRows()[0].querySelector('.copies__row-head ui-button button')!);
+    // The copy has a price, so removing it asks — and removing the last copy is
+    // exactly the act that moves the item to the wantlist.
+    await owned.answerConfirm();
     await owned.save();
 
     expect(owned.lastSaved().copies).toHaveLength(0);
@@ -520,5 +539,41 @@ describe('ItemFormPage — tags', () => {
       o.getAttribute('value'),
     );
     expect(options).toEqual(['Boxed', 'sealed']);
+  });
+});
+
+describe('ItemFormPage — nothing is destroyed without a question', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('keeps the copy when the question is declined', async () => {
+    // The half that matters. A confirmation that cannot be declined is a speed
+    // bump, not a safeguard.
+    const page = await mount({ itemId: 'i1', items: [item({ copies: [copy(), copy({ id: 'cp2' })] })] });
+    expect(page.copyRows()).toHaveLength(2);
+
+    page.click(page.copyRows()[0].querySelector('.copies__row-head ui-button button')!);
+    await page.answerConfirm(false);
+
+    expect(page.copyRows()).toHaveLength(2);
+  });
+
+  it('does not ask about an untouched blank copy', async () => {
+    // "Add copy" hands you an empty one. Asking about that would teach people to
+    // dismiss the question without reading it, which is how a confirmation
+    // stops working.
+    const page = await mount({ itemId: 'i1', items: [item({ copies: [copy()] })] });
+    page.click(page.el.querySelector('.copies__actions ui-button button')!);
+    expect(page.copyRows()).toHaveLength(2);
+
+    // The blank one is last; remove it and expect no question to be pending.
+    page.click(page.copyRows()[1].querySelector('.copies__row-head ui-button button')!);
+    await tick();
+    page.fixture.detectChanges();
+
+    expect(TestBed.inject(ConfirmService).pending()).toBeNull();
+    expect(page.copyRows()).toHaveLength(1);
   });
 });

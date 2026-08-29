@@ -296,7 +296,10 @@
           local a partir da resposta. Também
           <code>loadError</code>/<code>retrying</code>/<code>retryLoad()</code>
           (ver <a href="#carga">os três estados da casca</a>) e
-          <code>syncState</code>/<code>syncStatusKey</code> derivados</td>
+          <code>syncState</code>/<code>syncStatusKey</code> derivados. Guarda
+          ainda <strong>quais coleções têm escrita em voo</strong>: no máximo
+          uma por coleção (<code>exclusive</code>), lida pela UI através de
+          <code>saving(id)</code></td>
     </tr>
     <tr>
       <td><code>AuthService</code></td>
@@ -449,6 +452,32 @@
     porque são <em>respostas</em>: repetir um 429 aprofunda o throttle que ele
     relata, e repetir um 500 causado por um bug roda o bug de novo
     (<a href="decisions.html">ADR-50</a>).
+  </p>
+</div>
+
+<div class="callout">
+  <span class="label">Uma escrita por coleção de cada vez</span>
+  <p>
+    Toda escrita cita a versão com que o app sincronizou por último, e essa
+    versão só avança quando a escrita em voo responde. Duas escritas simultâneas
+    da mesma coleção citam portanto o <em>mesmo</em> token, e o servidor recusa a
+    segunda com <code>412</code> — que o app então explicava como “outra pessoa
+    alterou esta coleção”. Numa coleção de 286 itens o PUT de documento inteiro
+    leva cerca de meio segundo, então bastava clicar duas vezes em “Aplicar”:
+    não havia outra pessoa.
+  </p>
+  <p>
+    <code>VaultStore.exclusive</code> agora recusa a segunda ali mesmo, com
+    <code>VaultBusyError</code> — que <strong>nunca</strong> é um
+    <code>VaultConflictError</code>, então o aviso de conflito não mente. E
+    <strong>recusa em vez de enfileirar</strong>: o payload da segunda é o
+    documento inteiro como a página o montou antes de a primeira aterrissar, e
+    mandá-lo depois seria restaurar por cima dela. Onde o payload é vivo e não
+    instantâneo — o autosave das configurações, a ordem manual pendente — quem
+    chama rearma seu <em>debounce</em>, porque ali descartar seria perda
+    silenciosa. A correção que o usuário vê, porém, é o botão: “Aplicar”,
+    “Excluir” em massa e “Salvar item” param de se oferecer enquanto a escrita
+    corre (<a href="decisions.html">ADR-64</a>).
   </p>
 </div>
 

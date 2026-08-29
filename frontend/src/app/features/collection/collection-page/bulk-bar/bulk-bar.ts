@@ -89,6 +89,22 @@ export class BulkBar {
   readonly groups = input.required<GroupNode[]>();
   readonly sections = input.required<Section[]>();
 
+  /**
+   * Whether a write of this collection is already in flight.
+   *
+   * An input rather than the store, like every other presentational child here:
+   * injecting VaultStore into a leaf drags VaultApi into the TestBed of
+   * everything that renders it.
+   *
+   * It exists because a bulk apply is one full-document PUT, and a large
+   * collection takes long enough for a second click to land before the first
+   * answers. That second PUT quotes the version the first is about to move, so
+   * the server refuses it — and the app used to explain the refusal as somebody
+   * else having edited the collection. Nobody else had; the user had clicked
+   * twice.
+   */
+  readonly saving = input(false);
+
   readonly applied = output<BulkPatch>();
   readonly removeRequested = output<void>();
   readonly cleared = output<void>();

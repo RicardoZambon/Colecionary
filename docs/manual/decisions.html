@@ -677,6 +677,16 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-64</span> Uma segunda escrita da mesma coleção é recusada, nunca enfileirada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Toda escrita cita em <code>If-Match</code> a versão com que o app sincronizou por último, e essa versão só avança quando a escrita em voo responde. Numa coleção grande o PUT de documento inteiro leva cerca de meio segundo — medido em 521&nbsp;ms para 286 itens — e um segundo clique em “Aplicar” chega bem antes disso. As duas requisições citavam o mesmo token, o servidor recusava a segunda com <code>412</code>, e o app levantava o aviso de conflito dizendo que <em>outra pessoa</em> havia alterado a coleção. Não havia outra pessoa: havia um clique duplo.</dd>
+    <dt>Decisão</dt><dd><code>VaultStore.exclusive</code> mantém no máximo uma escrita em voo <em>por coleção</em>. A segunda é recusada aqui mesmo, com <code>VaultBusyError</code> — que nunca é um <code>VaultConflictError</code> e portanto nunca aciona o aviso. <code>VaultStore.saving(id)</code> expõe o estado para que os controles parem de se oferecer: “Aplicar”, “Excluir” em massa e “Salvar item” ficam desabilitados e dizem “Salvando…”.</dd>
+    <dt>Consequência</dt><dd>Recusar e não enfileirar é a metade que importa. O payload da segunda escrita é o documento inteiro como a página o montou <em>antes</em> de a primeira aterrissar; mandá-lo depois não seria uma segunda edição, seria uma restauração por cima da primeira — exatamente a perda que a pré-condição existe para impedir. Onde o payload é vivo em vez de instantâneo, quem chama rearma em vez de descartar: o autosave das configurações e a ordenação manual pendente remarcam seu <em>debounce</em>, porque ali o descarte seria perda silenciosa. O guard é rede de proteção; a correção que o usuário vê é o botão que para de se oferecer.</dd>
+    <dt>Imposta por</dt><dd><code>vault.store.spec.ts</code> — recusa a segunda escrita sem mandá-la e sem levantar aviso, solta a coleção quando a escrita termina (aceita ou recusada) e não bloqueia outra coleção</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

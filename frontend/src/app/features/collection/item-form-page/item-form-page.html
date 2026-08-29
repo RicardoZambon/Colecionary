@@ -198,7 +198,12 @@
           }
         </span>
         <ui-button variant="ghost" (click)="cancel()">{{ 'itemForm.cancel' | t }}</ui-button>
-        <ui-button type="submit">{{ 'itemForm.save' | t }}</ui-button>
+        <!-- Disabled while this collection's own write is in flight: a second
+             save would quote the version the first is about to move, and come
+             back refused as a conflict with a writer who does not exist. -->
+        <ui-button type="submit" [disabled]="saving()">
+          {{ (saving() ? 'itemForm.saving' : 'itemForm.save') | t }}
+        </ui-button>
       </div>
     </form>
   </div>

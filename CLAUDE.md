@@ -353,6 +353,24 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    of every component that renders it, which is exactly why `CurrencyService`
    exists.
 
+20. **One write per collection at a time, and the second is refused, never
+   queued.** A write quotes the version the app last synchronised with, and that
+   version only moves when the write in flight answers — so two at once quote
+   the same token and the server refuses the second with a `412` the app used to
+   blame on somebody else. On a 286-item collection the PUT takes ~500 ms, so a
+   double-click was enough. `VaultStore.exclusive` holds the collection and
+   rejects the rest with `VaultBusyError`, which is **never** a
+   `VaultConflictError` — the notice must not lie. Queueing is forbidden: the
+   second payload is the whole document as the page built it *before* the first
+   landed, so replaying it restores over the write that just succeeded. Where
+   the payload is live rather than a snapshot (the settings autosave, a pending
+   manual order) the caller re-arms its debounce instead of dropping it. Catch
+   both expected failures through `isReportedWriteFailure`, never a pair of
+   `instanceof` checks. And do the visible half too: read
+   `VaultStore.saving(id)` — as an **input** in a presentational child — so bulk
+   *Apply*, bulk *Delete* and *Save item* stop offering themselves while their
+   own write runs.
+
 ## One trap that costs an hour every time
 
 **Never put a backtick inside an inline `template:` or `styles:` block** — not

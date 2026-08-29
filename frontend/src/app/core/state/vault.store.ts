@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, firstValueFrom } from 'rxjs';
 
 import { ArchiveApi, ReplaceDecision } from '../api/archive-api';
-import { VaultApi, VaultConflictError, VersionedCollection } from '../api/vault-api';
+import { VaultApi, VaultBusyError, VaultConflictError, VersionedCollection } from '../api/vault-api';
 import { ConflictService } from './conflict.service';
 import { CurrencyService } from './currency.service';
 import { I18nService } from '../i18n/i18n.service';
@@ -42,6 +42,19 @@ export class VaultStore {
    * *the app* is at, which is what this holds.
    */
   private readonly versions = new Map<string, string>();
+
+  /**
+   * Which collections have a write in flight right now.
+   *
+   * A signal, unlike {@link versions}, precisely because the UI does have to
+   * render it: a save button that stays live while its own save is running
+   * offers the one action the server is certain to refuse, and this is what lets
+   * it stop offering it. Read it through {@link saving}.
+   *
+   * Replaced rather than mutated on every change — a `Set` mutated in place is
+   * the same object, and a signal holding it would never notify.
+   */
+  private readonly writing = signal<ReadonlySet<string>>(new Set());
   private readonly storeListingsState = signal<StoreListing[]>([]);
   private readonly tenantMembersState = signal<Member[]>([]);
   private readonly profileState = signal<UserProfile | null>(null);
@@ -312,15 +325,19 @@ export class VaultStore {
    * why every caller has to catch rather than navigate away.
    */
   async updateCollection(updated: Collection): Promise<void> {
-    // Read synchronously, before the first await. This is the closest thing
-    // there is to "the version the payload was derived from": the page built
-    // `updated` from what the store held a moment ago, so the token current at
-    // the moment it asked to save is the one that describes it. Reading it after
-    // an await would quote a version that a write finishing in between had
-    // already moved, and the guard would pass exactly when it should not.
-    const version = this.versionFor(updated.id);
-    const saved = await this.write(this.guard(updated.id, this.api.updateCollection(updated, version)));
-    this.replace(this.remember(saved));
+    return this.exclusive(updated.id, async () => {
+      // Read synchronously, before the first await. This is the closest thing
+      // there is to "the version the payload was derived from": the page built
+      // `updated` from what the store held a moment ago, so the token current at
+      // the moment it asked to save is the one that describes it. Reading it after
+      // an await would quote a version that a write finishing in between had
+      // already moved, and the guard would pass exactly when it should not.
+      const version = this.versionFor(updated.id);
+      const saved = await this.write(
+        this.guard(updated.id, this.api.updateCollection(updated, version)),
+      );
+      this.replace(this.remember(saved));
+    });
   }
 
   async deleteCollection(id: string): Promise<void> {
@@ -377,34 +394,43 @@ export class VaultStore {
    * collection's version, because there is nowhere to keep a per-item one.
    */
   async upsertItem(collectionId: string, item: Item): Promise<void> {
-    const version = this.versionFor(collectionId);
-    const saved = await this.write(
-      this.guard(collectionId, this.api.upsertItem(collectionId, item, version)),
-    );
-    this.versions.set(collectionId, saved.version);
-    this.collectionsState.update(all =>
-      all.map(c => {
-        if (c.id !== collectionId) return c;
-        const exists = c.items.some(i => i.id === saved.item.id);
-        return {
-          ...c,
-          items: exists
-            ? c.items.map(i => (i.id === saved.item.id ? saved.item : i))
-            : [...c.items, saved.item],
-        };
-      }),
-    );
+    return this.exclusive(collectionId, async () => {
+      const version = this.versionFor(collectionId);
+      const saved = await this.write(
+        this.guard(collectionId, this.api.upsertItem(collectionId, item, version)),
+      );
+      this.versions.set(collectionId, saved.version);
+      this.collectionsState.update(all =>
+        all.map(c => {
+          if (c.id !== collectionId) return c;
+          const exists = c.items.some(i => i.id === saved.item.id);
+          return {
+            ...c,
+            items: exists
+              ? c.items.map(i => (i.id === saved.item.id ? saved.item : i))
+              : [...c.items, saved.item],
+          };
+        }),
+      );
+    });
   }
 
   async deleteItem(collectionId: string, itemId: string): Promise<void> {
-    // Unguarded on the server, but it still moves the version — so the token it
-    // answers with has to be kept, or the next save would be refused for a
-    // change this app made itself.
-    const version = await this.write(firstValueFrom(this.api.deleteItem(collectionId, itemId)));
-    this.versions.set(collectionId, version);
-    this.collectionsState.update(all =>
-      all.map(c => (c.id === collectionId ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c)),
-    );
+    // Exclusive like the guarded writes even though this one sends no
+    // precondition: it still moves the version, so a save racing it would be
+    // refused for a change this app made itself.
+    return this.exclusive(collectionId, async () => {
+      // Unguarded on the server, but it still moves the version — so the token it
+      // answers with has to be kept, or the next save would be refused for a
+      // change this app made itself.
+      const version = await this.write(firstValueFrom(this.api.deleteItem(collectionId, itemId)));
+      this.versions.set(collectionId, version);
+      this.collectionsState.update(all =>
+        all.map(c =>
+          c.id === collectionId ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c,
+        ),
+      );
+    });
   }
 
   // --- tenant / profile ---
@@ -454,6 +480,50 @@ export class VaultStore {
       return await work;
     } finally {
       this.pendingWrites.update(n => n - 1);
+    }
+  }
+
+  /**
+   * Whether a write of this collection is in flight.
+   *
+   * For write affordances to disable themselves while their own save runs. It
+   * is per collection and not global on purpose: saving one collection is no
+   * reason to freeze the buttons on another.
+   */
+  saving(collectionId: string): boolean {
+    return this.writing().has(collectionId);
+  }
+
+  /**
+   * Runs a write with at most one in flight per collection.
+   *
+   * The second one is **refused, not queued**, and the difference matters. Its
+   * payload is the whole document as the page built it before the first write
+   * landed, so running it afterwards would restore the pre-first-write document
+   * over the one that just saved. Queueing would turn a double-click into
+   * silent data loss, which is worse than the refusal it was meant to spare the
+   * user.
+   *
+   * Every path out releases, rejections included, or one failed save would lock
+   * the collection's controls for the rest of the session.
+   *
+   * `run` is called synchronously, which is what preserves the rule the writes
+   * themselves depend on: the version has to be read before the first await, or
+   * it describes a document the payload was not derived from.
+   */
+  private async exclusive<T>(collectionId: string, run: () => Promise<T>): Promise<T> {
+    if (this.writing().has(collectionId)) {
+      throw new VaultBusyError(collectionId);
+    }
+    this.writing.update(all => new Set(all).add(collectionId));
+    try {
+      return await run();
+    } finally {
+      this.writing.update(all => {
+        const next = new Set(all);
+        next.delete(collectionId);
+        return next;
+      });
     }
   }
 

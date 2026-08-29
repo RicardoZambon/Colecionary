@@ -354,6 +354,17 @@ npm test -- --watch=false</code></pre>
       <td><code>RoleAuthorizationTests</code>, nas três direções</td>
     </tr>
     <tr>
+      <td>Um clique duplo em “Aplicar” acusava outra pessoa de ter editado a
+          coleção</td>
+      <td>Nenhum spec tinha duas escritas em voo ao mesmo tempo: o fake
+          respondia de forma síncrona, então a segunda nunca alcançava a
+          primeira</td>
+      <td><code>vault.store.spec.ts</code> com escritas seguradas
+          (<code>holdWrites</code>/<code>release</code>) — a segunda é recusada
+          sem sair, sem levantar aviso; a coleção é liberada quando a escrita
+          termina, aceita ou recusada; outra coleção não fica bloqueada</td>
+    </tr>
+    <tr>
       <td>O app travava em “Carregando…” para sempre</td>
       <td>Nenhum spec derrubava a API durante o boot</td>
       <td><code>vault.store.spec.ts</code> nas falhas de carga</td>

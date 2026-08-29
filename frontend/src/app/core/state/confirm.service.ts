@@ -5,9 +5,18 @@ import { MessageKey, MessageParams } from '../i18n/messages';
 /** What to ask, in keys — the outlet does the translating. */
 export interface ConfirmRequest {
   titleKey: MessageKey;
-  /** The consequence, named. `{placeholders}` come from `bodyParams`. */
+  /** The consequence, named. `{placeholders}` come from `params`. */
   bodyKey: MessageKey;
-  bodyParams?: MessageParams;
+  /**
+   * Substituted into **both** the title and the body.
+   *
+   * One bag rather than two, because a title and a body describing one act
+   * share their facts — "Delete «{name}»?" and "…{items} items in it" are the
+   * same question asked twice at different lengths. It was `bodyParams` and fed
+   * only the body, so the first title to use a placeholder rendered a literal
+   * `{name}` on screen.
+   */
+  params?: MessageParams;
   confirmKey: MessageKey;
   /** Defaults to the shared "Cancel". */
   cancelKey?: MessageKey;

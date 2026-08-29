@@ -5,7 +5,7 @@ import { ImagesApi } from '../../../../core/api/images-api';
 import { I18nService } from '../../../../core/i18n';
 import { Collection, Member } from '../../../../core/models';
 import { ImageFocusService } from '../../../../core/state/image-focus.service';
-import { VaultConflictError } from '../../../../core/api/vault-api';
+import { isReportedWriteFailure } from '../../../../core/api/vault-api';
 import { ToastService } from '../../../../core/state/toast.service';
 import { currencyOf } from '../../../../core/utils/currency.util';
 import { VaultStore } from '../../../../core/state/vault.store';
@@ -149,7 +149,7 @@ export class CollectionHero {
     } catch (err) {
       // The bytes are uploaded either way — it is the collection that did not
       // save. The shell's notice explains a conflict and outlives a toast.
-      if (err instanceof VaultConflictError) return;
+      if (isReportedWriteFailure(err)) return;
       this.toast.flash(
         err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),
       );

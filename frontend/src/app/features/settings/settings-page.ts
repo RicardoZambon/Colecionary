@@ -196,7 +196,7 @@ export class SettingsPage {
     const confirmed = await this.confirm.ask({
       titleKey: 'settings.access.remove.confirm.title',
       bodyKey: 'settings.access.remove.confirm.body',
-      bodyParams: { name: member.name },
+      params: { name: member.name },
       confirmKey: 'settings.access.remove.confirm.ok',
       tone: 'danger',
     });

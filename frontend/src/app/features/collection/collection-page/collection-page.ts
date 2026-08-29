@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 
 import { I18nService, MessageKey } from '../../../core/i18n';
-import { VaultConflictError } from '../../../core/api/vault-api';
+import { VaultBusyError, isReportedWriteFailure } from '../../../core/api/vault-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { Collection, Condition, GroupNode, GroupSort, Item } from '../../../core/models';
@@ -139,6 +139,18 @@ export class CollectionPage {
    * to render for both.
    */
   protected readonly loading = computed(() => !this.store.loaded());
+
+  /**
+   * Whether this collection already has a write in flight.
+   *
+   * Bulk actions stop offering themselves while it is true. A bulk apply is one
+   * full-document PUT and a large collection takes long enough for a second
+   * click to arrive before the first answers — and that second PUT quotes the
+   * version the first is about to move, so the server refuses it and the app
+   * blames a writer who does not exist.
+   */
+  protected readonly saving = computed(() => this.store.saving(this.collectionId()));
+
   /** Item tiles the skeleton reserves. Six fills the first row at any width. */
   protected readonly placeholders = [0, 1, 2, 3, 4, 5];
 
@@ -537,7 +549,7 @@ export class CollectionPage {
       // A conflict keeps the selection *and* the draft: the bar is still
       // mounted, so nothing the user typed is lost, and the shell's notice says
       // more about a 412 than a toast could. Everything else gets a toast.
-      if (!(err instanceof VaultConflictError)) {
+      if (!isReportedWriteFailure(err)) {
         this.toast.flash(err instanceof Error ? err.message : this.i18n.t(failed));
       }
       return;
@@ -613,15 +625,26 @@ export class CollectionPage {
       await this.store.updateCollection({ ...collection, items: pending.items });
       this.toast.flash(this.i18n.t('toast.order.saved'));
     } catch (err) {
+      // Refused here, not sent: another write of this collection was still in
+      // flight. The order is still only in `pendingOrder`, so it is kept and
+      // re-armed rather than dropped — the drag has to reach storage, and the
+      // debounce is exactly the mechanism for "later".
+      if (err instanceof VaultBusyError) {
+        clearTimeout(this.orderTimer);
+        this.orderTimer = setTimeout(() => void this.persistOrder(), ORDER_DEBOUNCE_MS);
+        return;
+      }
       // A conflict already has the shell's notice, which says more and stays
       // put; a toast on top would say less and then take itself away.
-      if (!(err instanceof VaultConflictError)) {
+      if (!isReportedWriteFailure(err)) {
         this.toast.flash(
           err instanceof Error ? err.message : this.i18n.t('toast.order.failed'),
         );
       }
     } finally {
-      // Either way the store is now the authority again.
+      // Either way the store is now the authority again — except after a
+      // re-arm, where the pending order is the only copy of the drag and the
+      // early return above is what keeps it.
       this.pendingOrder.set(null);
     }
   }
@@ -743,7 +766,7 @@ export class CollectionPage {
       // screen, nothing in the log, and a group the user believes they added.
       // The conflict notice explains a 412; this covers everything else.
       .catch((err: unknown) => {
-        if (err instanceof VaultConflictError) return;
+        if (isReportedWriteFailure(err)) return;
         this.toast.flash(
           err instanceof Error ? err.message : this.i18n.t('toast.group.addFailed'),
         );

@@ -12,6 +12,35 @@
  */
 export const en = {
   // --- common ------------------------------------------------------------
+  'confirm.deleteCollection.title': 'Delete «{name}»?',
+  'confirm.deleteCollection.body':
+    'This destroys the collection and everything filed in it — {items} items across {groups} groups. It cannot be undone, and the export on this page is the only way back.',
+  'confirm.deleteCollection.confirm': 'Delete the collection',
+  'confirm.removeField.title': 'Remove the field «{name}»?',
+  'confirm.removeField.body':
+    'It stops being shown or offered for every item in this group. {count} items hold a value for it — the values are kept and come back if you declare the field again.',
+  'confirm.removeField.bodyEmpty':
+    'It stops being shown or offered for every item in this group. No item holds a value for it yet.',
+  'confirm.removeField.confirm': 'Remove the field',
+  'confirm.removeSection.title': 'Delete the divider «{name}»?',
+  'confirm.removeSection.body':
+    '{count} items sit under it and will go back to having no divider. Which run each of them belonged to is not recorded anywhere else, so this cannot be undone.',
+  'confirm.removeSection.bodyEmpty': 'No item sits under it, so nothing else changes.',
+  'confirm.removeSection.confirm': 'Delete the divider',
+  'confirm.removeMember.title': 'Remove {name}?',
+  'confirm.removeMember.body':
+    'They lose access to this collection straight away. You can share it with them again later, but they cannot do it themselves.',
+  'confirm.removeMember.confirm': 'Remove them',
+  'confirm.removeCopy.title': 'Remove this copy?',
+  'confirm.removeCopy.body':
+    'What you paid, its condition, when you got it and any notes go with it, and none of that is recorded anywhere else.',
+  'confirm.removeCopy.bodyLast':
+    'This is the last copy, so the item moves to the wantlist. What you paid, its condition, when you got it and any notes go with it.',
+  'confirm.removeCopy.confirm': 'Remove the copy',
+  'confirm.removePhoto.title': 'Remove this photo?',
+  'confirm.removePhoto.body':
+    'Putting it back means finding the file and uploading it again.',
+  'confirm.removePhoto.confirm': 'Remove the photo',
   'common.collectionNotFound': 'Collection not found —',
   'common.backToDashboard': 'back to Dashboard',
   'common.active': '● Active',
@@ -390,6 +419,7 @@ export const en = {
   'bulk.showEdit': 'Edit fields',
   'bulk.hideEdit': 'Close fields',
   'bulk.apply': 'Apply',
+  'bulk.applying': 'Saving\u2026',
   'bulk.delete': 'Delete',
   'bulk.leaveAlone': '— leave alone',
   'bulk.values.none': 'none set',
@@ -490,6 +520,7 @@ export const en = {
   'itemForm.groupFieldsLink': 'Collection settings ▸ Groups & fields',
   'itemForm.cancel': 'Cancel',
   'itemForm.save': 'Save item',
+  'itemForm.saving': 'Saving\u2026',
 
   // --- collection settings -----------------------------------------------
   'collSettings.title': 'Collection settings',

@@ -43,12 +43,12 @@ import { UiDialog } from '../dialog/dialog';
            the DOM, leaving two nested elements claiming to be the same dialog. -->
       <ui-dialog
         [role]="'alertdialog'"
-        [title]="request.titleKey | t"
+        [title]="request.titleKey | t: request.params"
         [describedBy]="bodyId"
         (dismissed)="confirm.answer(false)"
       >
         <p class="confirm__body" [id]="bodyId">
-          {{ request.bodyKey | t: request.bodyParams }}
+          {{ request.bodyKey | t: request.params }}
         </p>
         <ng-container dlgActions>
           <ui-button

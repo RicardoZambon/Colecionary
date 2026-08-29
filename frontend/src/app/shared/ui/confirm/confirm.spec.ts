@@ -8,7 +8,7 @@ import { UiConfirm } from './confirm';
 const DANGER: ConfirmRequest = {
   titleKey: 'item.delete.confirm.title',
   bodyKey: 'item.delete.confirm.body',
-  bodyParams: { name: 'Rubber Soul' },
+  params: { name: 'Rubber Soul' },
   confirmKey: 'item.delete.confirm.ok',
   tone: 'danger',
 };
