@@ -16,6 +16,7 @@ export const en = {
   'common.backToDashboard': 'back to Dashboard',
   'common.active': '● Active',
   'common.clickToApply': 'Click to apply',
+  'common.cancel': 'Cancel',
 
   // --- value ---------------------------------------------------------------
   // How an amount is qualified, not the amount itself: `MoneyPipe` still owns
@@ -27,11 +28,26 @@ export const en = {
 
   // --- shell / sidebar ---------------------------------------------------
   'shell.loading': 'Loading your vault…',
+  // A failed load is a state now, not an eternal "Loading…".
+  'shell.loadFailed.title': 'Couldn’t load your vault',
+  'shell.loadFailed.body':
+    'Nothing was lost — the app just couldn’t reach the server. Check your connection, then try again.',
+  'shell.loadFailed.retry': 'Try again',
+  'shell.loadFailed.retrying': 'Trying again…',
   'nav.dashboard': 'Dashboard',
   'nav.store': 'Store',
   'nav.settings': 'Settings',
   'nav.collections': 'Collections',
-  'nav.status': '● synced · v0.1 mock API',
+  // Kept only until the sidebar binds `VaultStore.syncStatusKey()`; the value
+  // that used to be here claimed "synced · v0.1 mock API" from a decorative dot
+  // that never changed, against a real .NET backend.
+  'nav.status': 'Sync status',
+  // The four states the status line can actually be in. Words, not a hue — the
+  // dot beside them is decoration and never carries the meaning on its own.
+  'nav.sync.synced': 'All changes saved',
+  'nav.sync.saving': 'Saving…',
+  'nav.sync.offline': 'Not connected',
+  'nav.sync.conflict': 'Save refused — see the notice',
 
   // --- login -------------------------------------------------------------
   'login.tagline': 'Sign in to your collection vault.',
@@ -147,8 +163,11 @@ export const en = {
   'settings.plan.onPro': 'You are on Pro — thanks for supporting Vault.',
   'settings.plan.onFree': 'You are on Free — upgrade to unlock custom fields, photos and backups.',
   'settings.plan.current': '● Current plan',
-  'settings.plan.upgrade': 'Upgrade to Pro',
-  'settings.plan.downgrade': 'Switch to Free',
+  // No client-set plan any more: there is no billing behind it and nothing in
+  // the app is gated on the plan, so the control says so instead of pretending.
+  'settings.plan.unavailable': 'Not available yet',
+  'settings.plan.billingNote':
+    'Billing isn’t built yet, so plans can’t be changed from here — and nothing in the app is limited by your plan today. This is what the tiers will cover.',
 
   'settings.access.heading': 'Tenant members',
   'settings.access.subBefore': 'Everyone with access to the',
@@ -156,16 +175,12 @@ export const en = {
     'tenant. Individual collections can also be shared from their own page.',
   'settings.access.removeMember': 'Remove {name}',
   'settings.access.memberRoleAria': 'Role for {name}',
-  'settings.access.policyHeading': 'Sharing policy',
-  'settings.access.policy.invites.label': 'Members can share collections',
-  'settings.access.policy.invites.description':
-    'Editors may invite new people to collections they can edit',
-  'settings.access.policy.link.label': 'Link sharing',
-  'settings.access.policy.link.description':
-    'Allow view-only links for collections in this tenant',
-  'settings.access.policy.external.label': 'External sharing',
-  'settings.access.policy.external.description':
-    'Allow sharing with people outside your organisation',
+  'settings.access.policyNote':
+    'Access is controlled here, per person, and on each collection’s own page for link sharing. There are no tenant-wide sharing switches yet.',
+  'settings.access.remove.confirm.title': 'Remove {name}?',
+  'settings.access.remove.confirm.body':
+    'They lose access to this vault straight away. Their collections and items stay exactly as they are, and you can invite them back later.',
+  'settings.access.remove.confirm.ok': 'Remove access',
 
   'settings.account.data': 'Data',
   'settings.account.dataSub': '{items} items across {collections} collections',
@@ -236,7 +251,6 @@ export const en = {
 
   // --- progress (shared by the hero, the group cards and the tree) --------
   'progress.owned': '{ratio} owned',
-  'progress.ofCatalogued': 'of catalogued',
   'progress.missing': '{n} missing',
   'progress.listed': '· {n} listed',
   'progress.complete': 'Complete',
@@ -255,12 +269,15 @@ export const en = {
   'hero.ofTotal': '· {owned} / {total} in all',
   'hero.estimate': 'est',
   'hero.manageSharing': 'Manage sharing',
-  'hero.manage': '⚙ Manage',
+  'hero.manage': 'Manage',
   'hero.manageTitle': 'Collection settings — general, groups & sharing',
-  'hero.addItem': '+ Add item',
+  'hero.addItem': 'Add item',
+  // Said instead of a 0% bar and an "est. $0.00": at zero items every one of
+  // those figures is an artefact of dividing by nothing, not a measurement.
+  'hero.noMeasure.title': 'Nothing to measure yet',
 
   // --- group card --------------------------------------------------------
-  'groupCard.subGroups': '↳ {n} sub-groups',
+  'groupCard.subGroups': '{n} sub-groups',
   'groupCard.emptyWithTarget': '0 / {target} · nothing here yet',
   'groupCard.empty': 'No items yet',
   'groupCard.badgeTarget': 'Target {target}',
@@ -274,7 +291,11 @@ export const en = {
   'groupDashboard.filedHere.other': '{n} items filed here',
   'groupDashboard.newGroup': '+ New group',
   'group.none': 'No group',
-  'collection.noMatches': 'No items match — clear search or filters.',
+  'collection.noMatches': 'No items match',
+  'collection.noMatchesBody': 'Nothing here fits the filters and search in force.',
+  'collection.clearFilters': 'Clear filters',
+  'collection.empty': 'Nothing catalogued here yet',
+  'collection.emptyBody': 'Add the first item and it will show up in this list.',
   'groupDashboard.empty':
     'No sub-groups here yet. Create one to break this part of the collection down, or switch to the item views above.',
 
@@ -320,6 +341,66 @@ export const en = {
   'itemGrid.copies': '· {n} copies',
   'itemGrid.addItem': '+ Add item',
   'itemGrid.chipTitle': '{field}: {value}',
+  'item.noPhoto': 'No photo yet',
+
+  // --- item list columns, sorting & totals --------------------------------
+  'itemList.sortBy': 'Sort by {label}',
+  'itemList.sortedAsc': 'Sorted by {label}, ascending — click to reverse',
+  'itemList.sortedDesc': 'Sorted by {label}, descending — click to reverse',
+  'itemList.rows.one': '{n} row',
+  'itemList.rows.other': '{n} rows',
+  // Plural-safe in both languages on purpose: this string interpolates two
+  // counts and there is no room for a `plural()` call per half.
+  'itemList.footHeld': '{owned} owned · {copies} in hand',
+  'itemList.footAria': 'List totals',
+  'itemList.tableAria': 'Item table',
+  'columns.trigger': 'Columns ▾',
+  'columns.aria': 'Field columns',
+  'columns.showField': 'Show the {name} column',
+
+  // --- selection & bulk editing ------------------------------------------
+  'select.item': 'Select {name}',
+  'select.all': 'Select every item on screen',
+  'select.rangeHint': 'Hold Shift — with a click or the space bar — to select a range',
+  'bulk.aria': 'Bulk actions for the selected items',
+  'bulk.selected.one': '{n} item selected',
+  'bulk.selected.other': '{n} items selected',
+  'bulk.clear': 'Clear',
+  'bulk.showEdit': 'Edit fields',
+  'bulk.hideEdit': 'Close fields',
+  'bulk.apply': 'Apply',
+  'bulk.delete': 'Delete',
+  'bulk.leaveAlone': '— leave alone',
+  'bulk.values.none': 'none set',
+  'bulk.values.one': '1 value',
+  'bulk.values.other': '{n} values',
+  'bulk.clearField': 'Clear {label}',
+  'bulk.keepAsIs': 'Keep',
+  'bulk.keepAsIsAria': 'Leave {label} as it is on each item',
+  'bulk.field.group': 'Group',
+  'bulk.field.section': 'Section',
+  'bulk.field.year': 'Year',
+  'bulk.field.value': 'Value',
+  'bulk.field.addTag': 'Add tag',
+  'bulk.field.removeTag': 'Remove tag',
+  'bulk.field.copyStatus': 'Every copy',
+  'bulk.tagPlaceholder': 'tag',
+  'bulk.sectionOneGroup': 'Available once every selected item sits in the same group.',
+  'bulk.yearNoClear': 'Leave blank to keep each year as it is.',
+  'bulk.nothingToApply': 'Nothing changed — touch a field first.',
+  'bulk.applied.one': '{n} item updated',
+  'bulk.applied.other': '{n} items updated',
+  'bulk.applyFailed': 'Could not apply those changes.',
+  'bulk.deleted.one': '{n} item deleted',
+  'bulk.deleted.other': '{n} items deleted',
+  'bulk.deleteFailed': 'Could not delete those items.',
+  'bulk.confirm.title.one': 'Delete {n} item?',
+  'bulk.confirm.title.other': 'Delete {n} items?',
+  'bulk.confirm.body':
+    'They leave this collection along with their copies, photos and field values. This cannot be undone.',
+  'bulk.confirm.cancel': 'Cancel',
+  'bulk.confirm.delete.one': 'Delete {n} item',
+  'bulk.confirm.delete.other': 'Delete {n} items',
 
   // --- item page ---------------------------------------------------------
   'item.addPhoto': 'Add photo',
@@ -413,6 +494,68 @@ export const en = {
   'collSettings.groups.newGroupAria': 'New group name',
   'collSettings.groups.inParent': '↳ in {name}',
   'collSettings.groups.atRoot': '↳ at the top level',
+
+  // Moving a group. A picker rather than a drag: groups list alphabetically and
+  // nothing persists a position for one, so a drop *between* rows would mean
+  // nothing — and a list can leave out the targets it cannot accept.
+  'collSettings.groups.parent': 'Sits under',
+  'collSettings.groups.parentAria': 'Parent group of {name}',
+  'collSettings.groups.parentRoot': 'The top level',
+  'collSettings.groups.moveHeading': 'Before you move it',
+  'collSettings.groups.moveTo': 'Moving {name} under {parent}.',
+  'collSettings.groups.moveToRoot': 'Moving {name} to the top level.',
+  'collSettings.groups.moveGained': 'Fields it starts showing: {names}.',
+  'collSettings.groups.moveLost.one':
+    '1 item holds a value for «{name}», which this group will no longer display.',
+  'collSettings.groups.moveLost.other':
+    '{n} items hold a value for «{name}», which this group will no longer display.',
+  'collSettings.groups.moveLostNone':
+    '«{name}» is no longer declared here. No item in this branch holds a value for it.',
+  'collSettings.groups.moveDormant':
+    'Nothing is deleted: a value whose field is not declared stays on the item and shows again if you move the group back.',
+  'collSettings.groups.moveOrder': 'The items in this branch will follow {label}.',
+  'collSettings.groups.moveOrderNone':
+    'No group above this one declares an order, so this branch falls back to the default.',
+  'collSettings.groups.moveNothing': 'No fields and no ordering change.',
+  'collSettings.groups.moveClash': 'Another group here is already called {name}.',
+  'collSettings.groups.moveConfirm': 'Move it here',
+  'collSettings.groups.moveCancel': 'Leave it where it is',
+
+  // Deleting a group, and what happens to what is inside it.
+  'collSettings.groups.delete.title': 'Delete {name}?',
+  'collSettings.groups.delete.lede': 'Choose what happens to what is inside it.',
+  'collSettings.groups.delete.subGroups.one': '1 sub-group: {names}',
+  'collSettings.groups.delete.subGroups.other': '{n} sub-groups: {names}',
+  'collSettings.groups.delete.subGroupsMore': '{names} and {n} more',
+  'collSettings.groups.delete.items.one': '1 item, filed here or in a sub-group',
+  'collSettings.groups.delete.items.other': '{n} items, filed here or in sub-groups',
+  'collSettings.groups.delete.noItems': 'No items anywhere in this branch',
+  'collSettings.groups.delete.sections.one': '1 section, which goes with its group',
+  'collSettings.groups.delete.sections.other': '{n} sections, which go with their groups',
+  'collSettings.groups.delete.choiceAria': 'What happens to the contents of {name}',
+  'collSettings.groups.delete.reparent': 'Move the contents up',
+  'collSettings.groups.delete.reparentSub':
+    'Sub-groups and the items filed here move to {parent}. Recommended — it is the only choice that loses nothing.',
+  'collSettings.groups.delete.reparentSubRoot':
+    'Sub-groups move to the top level and the items filed here become unfiled. Recommended — it is the only choice that loses nothing.',
+  'collSettings.groups.delete.unfile': 'Unfile the items',
+  'collSettings.groups.delete.unfileSub':
+    'The sub-groups go. Every item lands in Unfiled, where you can file it again.',
+  'collSettings.groups.delete.deleteItems': 'Delete the items too',
+  'collSettings.groups.delete.deleteItemsSub.one': '1 item is destroyed with the group.',
+  'collSettings.groups.delete.deleteItemsSub.other': '{n} items are destroyed with the group.',
+  'collSettings.groups.delete.noUndo':
+    'This cannot be undone — the vault has no undo. Export the collection first if you want a copy to fall back on.',
+  'collSettings.groups.delete.exportFirst': 'Export this collection first',
+  'collSettings.groups.delete.exporting': 'Preparing the export…',
+  'collSettings.groups.delete.cancel': 'Cancel',
+  'collSettings.groups.delete.confirm': 'Delete the group',
+  'collSettings.groups.delete.confirmReparent': 'Delete the group, keep the contents',
+  'collSettings.groups.delete.confirmUnfile.one': 'Delete the group, unfile 1 item',
+  'collSettings.groups.delete.confirmUnfile.other': 'Delete the group, unfile {n} items',
+  'collSettings.groups.delete.confirmDelete.one': 'Delete the group and 1 item',
+  'collSettings.groups.delete.confirmDelete.other': 'Delete the group and {n} items',
+
   'collSettings.groups.finePrint1':
     'Renames apply as you type. Custom fields apply to every item in the group and its sub-groups, and the field type decides how it sorts.',
   'collSettings.groups.finePrintOrderBy': 'Order by',
@@ -420,7 +563,7 @@ export const en = {
     'is the default the collection uses when that group is open — sub-groups inherit it unless they set their own.',
   'collSettings.groups.finePrintTarget': 'Target',
   'collSettings.groups.finePrint3':
-    "is how many items the complete set has, when you know it — a 120-issue run, a 24-card set — so progress is measured against the series instead of against what you've catalogued so far. Leave it blank and it falls back. Groups that still contain items can't be deleted — move the items first.",
+    "is how many items the complete set has, when you know it — a 120-issue run, a 24-card set — so progress is measured against the series instead of against what you've catalogued so far. Leave it blank and it falls back. Moving a group changes which fields its items show and which order they follow, so the pane says what will change before you commit it; deleting one asks what happens to its contents.",
 
   'collSettings.sharing.emailPlaceholder': 'email@company.com',
   'collSettings.sharing.inviteRoleAria': 'Role for the invitation',
@@ -444,7 +587,10 @@ export const en = {
   'collSettings.general.export': 'Export this collection',
   'collSettings.general.exporting': 'Preparing…',
   'collSettings.general.delete': 'Delete collection',
-  'collSettings.done': 'Done',
+  // Not "Done": this page saves on a debounce, so the button never was the
+  // thing that saved. It navigates, and now it says so.
+  'collSettings.done': 'Back to the collection',
+  'collSettings.autosave': 'Every change here is saved as you make it.',
 
   'direction.asc': '↑ Asc',
   'direction.desc': '↓ Desc',
@@ -533,9 +679,9 @@ export const en = {
     'Couldn’t reach the Vault server. Check that the container is still running, then try again.',
 
   // --- toasts ------------------------------------------------------------
-  'toast.plan.pro': 'Welcome to Pro ✓',
-  'toast.plan.free': 'Switched to Free',
   'toast.member.roleUpdated': 'Role updated',
+  'toast.member.roleFailed': 'The role was not changed — the row has been put back',
+  'toast.member.removeFailed': 'Could not remove that person',
   'toast.member.ownerImmutable': "The owner can't be removed",
   'toast.member.removed': 'Access removed',
   'toast.export.done': 'Exported vault-export.zip ✓',
@@ -568,6 +714,7 @@ export const en = {
   'import.confirm': 'Import',
   'import.importing': 'Importing…',
   'toast.collection.created': 'Collection created — name it here',
+  'toast.collection.createFailed': 'Could not create the collection',
   'toast.collection.added': 'Added to your vault ✓',
   'toast.collection.addFailed': 'Could not add checklist',
   'toast.image.updated': 'Image updated ✓',
@@ -577,6 +724,9 @@ export const en = {
   'toast.photo.uploadFailed': 'Upload failed',
   'toast.copy.added': 'Copy added ✓',
   'toast.item.deleted': 'Item deleted',
+  'toast.item.restored': '“{name}” is back',
+  'toast.item.undoFailed':
+    'Couldn’t bring “{name}” back — the collection changed in the meantime. Reload and add it again.',
   'toast.order.saved': 'Order saved ✓',
   'toast.order.failed': 'Could not save the order',
   'toast.group.added': 'Group "{name}" added',
@@ -587,8 +737,13 @@ export const en = {
   'toast.collection.updated': 'Collection updated ✓',
   'toast.currency.saved': 'Currency updated ✓',
   'toast.currency.failed': "Couldn't change the currency — only an Owner can.",
-  'toast.group.hasItems': 'Group has items — move them first',
   'toast.group.removed': 'Group removed',
+  'toast.group.moved': 'Group "{name}" moved',
+  'toast.group.removedKeeping': 'Group removed — its contents moved up',
+  'toast.group.removedUnfiled.one': 'Group removed — 1 item is now unfiled',
+  'toast.group.removedUnfiled.other': 'Group removed — {n} items are now unfiled',
+  'toast.group.removedWithItems.one': 'Group and 1 item removed',
+  'toast.group.removedWithItems.other': 'Group and {n} items removed',
   'toast.field.removed': 'Field removed',
   'toast.field.duplicate': '"{name}" is already a field here',
   'toast.field.added': 'Field "{name}" added',
@@ -632,5 +787,63 @@ export const en = {
   'collSettings.groups.pickerAria': 'Groups in this collection',
   'collSettings.groups.noneYet': 'No groups yet',
   'collSettings.groups.nameLabel': 'Name',
-  'collSettings.groups.pickOne': 'Pick a group on the left to edit its name, its ordering, its fields and its sections.',
+  'collSettings.groups.pickOne': 'Pick a group on the left to edit its name, where it sits, its ordering, its fields and its sections.',
+  // --- toast chrome ---------------------------------------------------------
+  // The tone markers. Text, because status must never be carried by colour
+  // alone (rule 12) — and because a greyscale screenshot of a failure has to
+  // still read as a failure.
+  'toast.done': 'Done',
+  'toast.failed': 'Failed',
+  'toast.dismiss': 'Dismiss this message',
+  'toast.more': '+{n} more',
+  'toast.undo': 'Undo',
+
+  // --- confirmations -------------------------------------------------------
+  'item.delete.confirm.title': 'Delete this item?',
+  'item.delete.confirm.body':
+    '“{name}” leaves this collection, along with its copies, its field values and its photos. You can undo it straight afterwards.',
+  'item.delete.confirm.ok': 'Delete item',
+
+  // --- HTTP failures -------------------------------------------------------
+  // One sentence per class of failure, used when the server did not explain
+  // itself. Every one of them says what happened to the user's data, because
+  // that is the only question they are asking.
+  'error.network':
+    'Can’t reach the Vault server. Nothing was saved — check your connection and try again.',
+  'error.forbidden': 'You don’t have permission to do that.',
+  'error.notFound': 'That isn’t there any more — it may have been deleted somewhere else.',
+  'error.conflict': 'That clashes with something already saved. Nothing was changed.',
+  'error.precondition':
+    'This screen is out of step with the server, so the save was refused rather than risked. Reload and try again.',
+  'error.rateLimited': 'Too many requests. Wait a moment, then try again.',
+  'error.server': 'The server hit an error. Your change may not have been saved — try again.',
+  'error.unknown': 'Something went wrong (HTTP {status}). Try again in a moment.',
+
+  // --- responsive shell -----------------------------------------------------
+  'shell.skipToContent': 'Skip to content',
+  'nav.open': 'Open navigation',
+  'nav.close': 'Close navigation',
+  'nav.primaryAria': 'Main',
+
+  // --- ui-date-input --------------------------------------------------------
+  // The letters a date field shows for each part. Copy, not identifiers: a
+  // Portuguese year is spelled `aaaa`. `ui-date-input` puts them in the locale's
+  // own order, so nothing here says which comes first.
+  'ui.dateInput.day': 'dd',
+  'ui.dateInput.month': 'mm',
+  'ui.dateInput.year': 'yyyy',
+
+  // --- item form: summary and the commit bar --------------------------------
+  'itemForm.summaryHeading': 'Summary',
+  'itemForm.summaryOwnership': 'Ownership',
+  'itemForm.summaryOwned': 'Owned · {n}',
+  'itemForm.summaryWanted': 'Wantlist',
+  'itemForm.summaryPaid': 'Paid',
+  'itemForm.summaryEstimate': 'Est. value',
+  'itemForm.summaryPhotos': 'Photos',
+  'itemForm.summaryPhotoCount': '{n} of {max}',
+  'itemForm.summaryDestination': 'Files under',
+  'itemForm.unsaved': 'Unsaved changes',
+  'itemForm.leaveConfirm': 'This item has changes you have not saved. Leave anyway?',
+  'itemForm.copyAcquiredAria': 'Date copy #{n} was acquired',
 } as const;

@@ -10,9 +10,16 @@ import { ToastService } from '../../../../core/state/toast.service';
 import { currencyOf } from '../../../../core/utils/currency.util';
 import { VaultStore } from '../../../../core/state/vault.store';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
-import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
+import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiAvatarStack, UiButton, UiImageSlot, UiProgress } from '../../../../shared/ui';
+import {
+  UiAvatarStack,
+  UiButton,
+  UiEmpty,
+  UiIcon,
+  UiImageSlot,
+  UiProgress,
+} from '../../../../shared/ui';
 
 /**
  * Banner, identity and the headline numbers for whatever is open — the whole
@@ -22,7 +29,17 @@ import { UiAvatarStack, UiButton, UiImageSlot, UiProgress } from '../../../../sh
 @Component({
   selector: 'app-collection-hero',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, TPipe, UiAvatarStack, UiButton, UiImageSlot, UiProgress],
+  imports: [
+    RouterLink,
+    ItemValuePipe,
+    TPipe,
+    UiAvatarStack,
+    UiButton,
+    UiEmpty,
+    UiIcon,
+    UiImageSlot,
+    UiProgress,
+  ],
   templateUrl: './collection-hero.html',
   styleUrl: './collection-hero.scss',
 })
@@ -52,6 +69,22 @@ export class CollectionHero {
 
   /** True while a group narrows what the numbers describe. */
   protected readonly narrowed = computed(() => !!this.scopeName());
+
+  /**
+   * Nothing catalogued *and* no declared set — the one case where the whole
+   * numeric apparatus is meaningless rather than merely low.
+   *
+   * With a target, "0 / 30 · 0%" is a real measurement of a real set and the
+   * bar earns its place. Without one the denominator is the catalogued count,
+   * so the bar is 0 ÷ 0, "est." is a claim that the collection is worth zero
+   * (it is worth *unknown*, which is what `—` says), and "0 missing" is true
+   * only in the sense that nothing was ever asked for. Rendering all of it
+   * anyway is how a brand-new collection came to look like a broken one.
+   */
+  protected readonly blank = computed(() => {
+    const scope = this.scope();
+    return scope.catalogued === 0 && !scope.hasTarget;
+  });
 
   /** "12 / 120" against a target, "12 / 34" against what is catalogued. */
   protected readonly ratio = computed(() => {

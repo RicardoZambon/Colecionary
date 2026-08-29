@@ -1,55 +1,145 @@
 <ui-card>
-  <!-- Once, at the top: the columns do not change between sections, and
-       repeating them under every heading would double the chrome. -->
-  <div class="list-head" [class.list--manual]="manual()">
-    <span>{{ 'itemList.name' | t }}</span><span>{{ 'itemList.group' | t }}</span><span>{{ 'itemList.year' | t }}</span><span class="right">{{ 'itemList.copies' | t }}</span><span>{{ 'itemList.condition' | t }}</span><span class="right">{{ 'itemList.value' | t }}</span>
-  </div>
+  <!-- Only this container scrolls sideways. Eight declared fields cannot fit a
+       laptop beside the name, the group and two money columns, and the page
+       body must never scroll horizontally — so the table does, and the
+       checkbox and the name stay pinned so a row never loses its identity. -->
+  <div class="list-scroll" [style.--field-cols]="fields().length">
+    <div class="list-table" [class.list-table--fields]="fields().length > 0">
+      <!-- Once, at the top: the columns do not change between sections, and
+           repeating them under every heading would double the chrome. -->
+      <div class="list-head" [class.list--manual]="manual()">
+        <span class="pick" [attr.title]="'select.rangeHint' | t">
+          <ui-checkbox
+            [checked]="allSelected()"
+            [indeterminate]="someSelected()"
+            [ariaLabel]="'select.all' | t"
+            (picked)="allPicked.emit($event.checked)"
+          />
+        </span>
+        <div class="list-cells">
+          <button
+            type="button"
+            class="col col--sortable"
+            [attr.aria-sort]="ariaSort('name')"
+            [attr.aria-label]="sortTitle('name', 'itemList.name' | t)"
+            [title]="sortTitle('name', 'itemList.name' | t)"
+            (click)="sortByPicked.emit('name')"
+          >{{ 'itemList.name' | t }}<span class="col__arrow" aria-hidden="true">{{ sortArrow('name') }}</span></button>
+          <span class="col">{{ 'itemList.group' | t }}</span>
+          <button
+            type="button"
+            class="col col--sortable"
+            [attr.aria-sort]="ariaSort('year')"
+            [attr.aria-label]="sortTitle('year', 'itemList.year' | t)"
+            [title]="sortTitle('year', 'itemList.year' | t)"
+            (click)="sortByPicked.emit('year')"
+          >{{ 'itemList.year' | t }}<span class="col__arrow" aria-hidden="true">{{ sortArrow('year') }}</span></button>
+          <span class="col right">{{ 'itemList.copies' | t }}</span>
+          <span class="col">{{ 'itemList.condition' | t }}</span>
+          <!-- The group's declared fields sit between Cond and Value, so the
+               two right-aligned money columns stay adjacent. -->
+          @for (field of fields(); track field.name) {
+            <button
+              type="button"
+              class="col col--sortable"
+              [class.right]="rightAligned(field)"
+              [attr.aria-sort]="ariaSort(fieldKey(field))"
+              [attr.aria-label]="sortTitle(fieldKey(field), field.name)"
+              [title]="sortTitle(fieldKey(field), field.name)"
+              (click)="sortByPicked.emit(fieldKey(field))"
+            >{{ field.name }}<span class="col__arrow" aria-hidden="true">{{ sortArrow(fieldKey(field)) }}</span></button>
+          }
+          <button
+            type="button"
+            class="col col--sortable right"
+            [attr.aria-sort]="ariaSort('value')"
+            [attr.aria-label]="sortTitle('value', 'itemList.value' | t)"
+            [title]="sortTitle('value', 'itemList.value' | t)"
+            (click)="sortByPicked.emit('value')"
+          >{{ 'itemList.value' | t }}<span class="col__arrow" aria-hidden="true">{{ sortArrow('value') }}</span></button>
+        </div>
+      </div>
 
-  @for (chunk of chunks(); track chunk.id) {
-    @if (chunk.section || chunks().length > 1) {
-      <app-section-header
-        [name]="chunk.section?.name ?? ('section.none' | t)"
-        [stats]="sectionStats().get(chunk.id) ?? null"
-        [active]="activeSection() === chunk.id"
-        (toggle)="sectionToggled.emit(chunk.id)"
-      />
-    }
-
-    @for (entry of chunk.entries; track entry.item.id) {
-      <div
-        class="list-line"
-        [class.dragging]="drag.index() === entry.index"
-        [attr.draggable]="manual() ? true : null"
-        (dragstart)="drag.start($event, entry.index)"
-        (dragover)="drag.over($event)"
-        (drop)="onDrop($event, entry.index)"
-        (dragend)="drag.end()"
-      >
-        <a
-          class="list-row"
-          [class.list--manual]="manual()"
-          [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
-          queryParamsHandling="preserve"
-        >
-          <span class="name">
-            @if (fieldChip(entry.item); as chip) { <span class="field">{{ chip }}</span> }
-            {{ entry.item.name }}
-          </span>
-          <span class="group">{{ groupName(entry.item) }}</span>
-          <span class="year">{{ entry.item.year }}</span>
-          <span class="right copies" [class.copies--many]="entry.item.copies.length > 1">{{ entry.item.copies.length }}</span>
-          <span class="cond" [class]="'tone-' + badgeTone(entry.item)">{{ badgeLabel(entry.item) }}</span>
-          <span class="right value" [attr.title]="valueHint(entry.item)">{{ entry.item | itemValue: currency() }}</span>
-        </a>
-        @if (manual()) {
-          <ui-reorder
-            [label]="entry.item.name"
-            [first]="entry.index === 0"
-            [last]="entry.index === items().length - 1"
-            (moved)="moved.emit({ from: entry.index, to: entry.index + $event })"
+      @for (chunk of chunks(); track chunk.id) {
+        @if (chunk.section || chunks().length > 1) {
+          <app-section-header
+            [name]="chunk.section?.name ?? ('section.none' | t)"
+            [stats]="sectionStats().get(chunk.id) ?? null"
+            [active]="activeSection() === chunk.id"
+            (toggle)="sectionToggled.emit(chunk.id)"
           />
         }
-      </div>
+
+        @for (entry of chunk.entries; track entry.item.id) {
+          <div
+            class="list-line"
+            [class.dragging]="drag.index() === entry.index"
+            [class.selected]="isSelected(entry.item)"
+            [attr.draggable]="manual() ? true : null"
+            (dragstart)="drag.start($event, entry.index)"
+            (dragover)="drag.over($event)"
+            (drop)="onDrop($event, entry.index)"
+            (dragend)="drag.end()"
+          >
+            <!-- A sibling of the anchor, never inside it: a checkbox nested in
+                 an `<a>` is invalid HTML, and `ui-reorder` already establishes
+                 exactly this arrangement in the same wrapper. -->
+            <span class="pick">
+              <ui-checkbox
+                [checked]="isSelected(entry.item)"
+                [ariaLabel]="selectLabel(entry.item)"
+                (picked)="pick(entry.item, $event)"
+              />
+            </span>
+            <a
+              class="list-row"
+              [class.list--manual]="manual()"
+              [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
+              queryParamsHandling="preserve"
+            >
+              <span class="name">
+                @if (fieldChip(entry.item); as chip) { <span class="field">{{ chip }}</span> }
+                {{ entry.item.name }}
+              </span>
+              <span class="group">{{ groupName(entry.item) }}</span>
+              <span class="year">{{ entry.item.year }}</span>
+              <span class="right copies" [class.copies--many]="entry.item.copies.length > 1">{{ entry.item.copies.length }}</span>
+              <span class="cond" [class]="'tone-' + badgeTone(entry.item)">{{ badgeLabel(entry.item) }}</span>
+              @for (field of fields(); track field.name) {
+                <!-- An absence is `—`, never a blank cell: the same "unknown,
+                     not zero" distinction the value column makes. -->
+                @if (cell(entry.item, field); as value) {
+                  <span class="fieldcell" [class.right]="rightAligned(field)">{{ value }}</span>
+                } @else {
+                  <span class="fieldcell fieldcell--empty" [class.right]="rightAligned(field)">{{ 'value.none' | t }}</span>
+                }
+              }
+              <span class="right value" [attr.title]="valueHint(entry.item)">{{ entry.item | itemValue: currency() }}</span>
+            </a>
+            @if (manual()) {
+              <ui-reorder
+                [label]="entry.item.name"
+                [first]="entry.index === 0"
+                [last]="entry.index === items().length - 1"
+                (moved)="moved.emit({ from: entry.index, to: entry.index + $event })"
+              />
+            }
+          </div>
+        }
+      }
+    </div>
+  </div>
+
+  <!-- Outside the scrolling table on purpose: the totals describe the whole
+       list, and a figure parked 400px off the right edge describes nothing.
+       Money is per currency and never summed across them; inside one
+       collection that resolves to a single row. -->
+  <div class="list-foot">
+    <span class="list-foot__count">{{ rowsLabel() }}</span>
+    <span class="list-foot__held">{{ heldLabel() }}</span>
+    <span class="list-foot__spacer"></span>
+    @for (total of totals().totals; track total.currency) {
+      <span class="list-foot__value">{{ total.total | money: total.currency }}</span>
     }
-  }
+  </div>
 </ui-card>

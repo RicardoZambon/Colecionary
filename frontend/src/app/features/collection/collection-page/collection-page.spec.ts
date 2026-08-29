@@ -129,7 +129,9 @@ function collection(patch: Partial<Collection> = {}): Collection {
   };
 }
 
-async function mount(opts: { collection?: Collection; g?: string; v?: string } = {}) {
+async function mount(
+  opts: { collection?: Collection; g?: string; v?: string; cond?: string; own?: string } = {},
+) {
   const api = new FakeVaultApi();
   api.collections = [opts.collection ?? collection()];
 
@@ -149,6 +151,8 @@ async function mount(opts: { collection?: Collection; g?: string; v?: string } =
   fixture.componentRef.setInput('collectionId', 'c1');
   if (opts.g !== undefined) fixture.componentRef.setInput('g', opts.g);
   if (opts.v !== undefined) fixture.componentRef.setInput('v', opts.v);
+  if (opts.cond !== undefined) fixture.componentRef.setInput('cond', opts.cond);
+  if (opts.own !== undefined) fixture.componentRef.setInput('own', opts.own);
   fixture.detectChanges();
 
   const el = fixture.nativeElement as HTMLElement;
@@ -157,7 +161,13 @@ async function mount(opts: { collection?: Collection; g?: string; v?: string } =
       (n.textContent ?? '').trim(),
     );
 
-  return { el, fixture, headings };
+  // Scoped past the hero: the header has a compact note of its own when there
+  // is nothing to measure, and this is about the list's empty state.
+  const empty = () => el.querySelector('.layout__main ui-empty');
+  const emptyTitle = () => (empty()?.querySelector('.title')?.textContent ?? '').trim();
+  const emptyIcon = () => empty()?.querySelector('ui-icon')?.getAttribute('data-name') ?? null;
+
+  return { el, fixture, headings, empty, emptyTitle };
 }
 
 describe('CollectionPage — sections', () => {
@@ -230,5 +240,60 @@ describe('CollectionPage — sections', () => {
     // A section divides one group's list; at the root there is no group.
     const page = await mount({ v: 'grid' });
     expect(page.headings()).toEqual([]);
+  });
+});
+
+describe('CollectionPage — the two empty states', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+
+  it('tells an untouched empty collection that it is empty, not that it is filtered', async () => {
+    // The bug this pins: one message served both facts, so a collection nobody
+    // had filtered was told to "clear search or filters" it had never set —
+    // advice that cannot work, in front of a list that is empty for an entirely
+    // different reason.
+    const page = await mount({ collection: collection({ items: [], sections: [] }), v: 'grid' });
+
+    expect(page.emptyTitle()).toBe('Nothing catalogued here yet');
+  });
+
+  it('tells a filtered-to-nothing list that it is the filters', async () => {
+    const page = await mount({
+      collection: collection({ items: [item('i1', '')], sections: [] }),
+      v: 'grid',
+      // Nothing in the collection is Mint, so the filter empties the list while
+      // the collection itself plainly is not empty.
+      cond: 'Mint',
+    });
+
+    expect(page.emptyTitle()).toBe('No items match');
+  });
+
+  it('offers a way out of the filtered state, and clearing it brings the list back', async () => {
+    const page = await mount({
+      collection: collection({ items: [item('i1', '')], sections: [] }),
+      v: 'grid',
+      cond: 'Mint',
+    });
+
+    const clear = page.empty()!.querySelector('ui-button button') as HTMLButtonElement;
+    expect(clear.textContent!.trim()).toBe('Clear filters');
+
+    // The button navigates rather than mutating a signal, so what this asserts
+    // is that the affordance exists and is wired — the params it sends are
+    // pinned in browse-params.spec.ts.
+    expect(clear.disabled).toBe(false);
   });
 });

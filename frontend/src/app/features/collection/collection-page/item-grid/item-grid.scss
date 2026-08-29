@@ -16,9 +16,27 @@
     border-color: var(--accent);
   }
 
+  &--picked {
+    border-color: var(--accent);
+  }
+
+  /** Over the top-right corner, opposite the field chip. */
+  &__pick {
+    position: absolute;
+    top: var(--sp-2);
+    right: var(--sp-2);
+    z-index: 2;
+    display: flex;
+    padding: 2px;
+    border-radius: var(--radius);
+    background: var(--panel);
+  }
+
   &__img {
     height: 116px;
-    @include stripes;
+    /* A flat panel, not diagonal stripes: stripes now mean "loading" across the
+       app, and a permanent state must never wear a temporary one's clothes. */
+    background: var(--panel2);
     display: grid;
     place-items: center;
     font-family: var(--font-mono);
@@ -48,6 +66,14 @@
       inset: 0;
       background-size: cover;
     }
+  }
+
+  /** No photograph yet: a quiet mark, low enough not to compete with the name. */
+  &__nophoto {
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    opacity: 0.45;
   }
 
   /** The value the list is ordered by, so it needn't be repeated in the name. */

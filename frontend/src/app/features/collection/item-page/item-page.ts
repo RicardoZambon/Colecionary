@@ -5,6 +5,7 @@ import { ImagesApi } from '../../../core/api/images-api';
 import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { VaultConflictError } from '../../../core/api/vault-api';
+import { ConfirmService } from '../../../core/state/confirm.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CopyStatus, Item } from '../../../core/models';
@@ -28,7 +29,7 @@ import { conditionLabelKey, conditionTone, itemBadgeLabel, itemTone } from '../.
 import { ItemValuePipe } from '../../../shared/pipes/item-value.pipe';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import { TPipe } from '../../../shared/pipes/t.pipe';
-import { UiBadge, UiButton, UiCard, UiLightbox, UiSectionLabel } from '../../../shared/ui';
+import { UiBadge, UiButton, UiCard, UiEmpty, UiLightbox, UiSectionLabel } from '../../../shared/ui';
 
 /** Null for the default, so only a notable status shows up on a copy row. */
 const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
@@ -46,6 +47,7 @@ const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
     MoneyPipe,
     TPipe,
     UiBadge,
+    UiEmpty,
     UiButton,
     UiCard,
     UiLightbox,
@@ -61,6 +63,7 @@ export class ItemPage {
   protected readonly focus = inject(ImageFocusService);
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
   private readonly router = inject(Router);
 
   readonly collectionId = input.required<string>();
@@ -380,20 +383,82 @@ export class ItemPage {
     this.toast.flash(this.i18n.t('toast.copy.added'));
   }
 
+  /**
+   * Deletes the item — asking first, and offering it back afterwards.
+   *
+   * This was one unconfirmed click that destroyed an item and navigated away,
+   * with no dialog anywhere in the app and no undo anywhere either. Both halves
+   * are here now, and **undo is the more important one**: it is what allows the
+   * dialog to stay a single sentence rather than a form with a checkbox and a
+   * typed confirmation. A question that is cheap to answer wrongly is fine when
+   * the wrong answer is reversible.
+   *
+   * The item object is retained before the call, not read back afterwards — by
+   * then it is gone from the store — and it is the whole `Item`, so a restore
+   * brings back the copies, the tags, the field values, the group, the section
+   * and the photo ids. The image bytes were never touched by the delete, so the
+   * photos come back with it.
+   */
   protected async deleteItem(): Promise<void> {
     const item = this.item();
     if (!item) return;
+
+    const confirmed = await this.confirm.ask({
+      titleKey: 'item.delete.confirm.title',
+      bodyKey: 'item.delete.confirm.body',
+      bodyParams: { name: item.name },
+      confirmKey: 'item.delete.confirm.ok',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    const collectionId = this.collectionId();
+    // Held before the delete: after it, the store no longer has this item and
+    // there would be nothing left to put back.
+    const restorable = item;
+
     try {
-      await this.store.deleteItem(this.collectionId(), item.id);
-    } catch (err) {
+      await this.store.deleteItem(collectionId, item.id);
+    } catch {
       // Not navigating on a failed delete: leaving for a list that still shows
-      // the item would read as "it worked, but it is still there".
-      this.toast.flash(
-        err instanceof Error ? err.message : this.i18n.t('toast.item.deleteFailed'),
-      );
+      // the item would read as "it worked, but it is still there". The reason is
+      // already on screen — `errorInterceptor` reports every failed request —
+      // so this adds what only the page knows.
+      this.toast.error(this.i18n.t('toast.item.deleteFailed'));
       return;
     }
-    this.toast.flash(this.i18n.t('toast.item.deleted'));
-    void this.router.navigate(['/c', this.collectionId()], { queryParamsHandling: 'preserve' });
+
+    this.toast.flash(this.i18n.t('toast.item.deleted'), {
+      labelKey: 'toast.undo',
+      run: () => this.restoreItem(collectionId, restorable),
+    });
+    void this.router.navigate(['/c', collectionId], { queryParamsHandling: 'preserve' });
+  }
+
+  /**
+   * Puts a deleted item back, or says plainly that it could not.
+   *
+   * Two honest limits, both of them consequences of how the aggregate is
+   * versioned and ordered rather than of this method:
+   *
+   * - **A restore is a version-guarded write like any other.** The delete moved
+   *   the collection on and the store kept the token it answered with, so an
+   *   undo taken straight away goes through. If somebody else saved that
+   *   collection in between, the write is refused, `ConflictService` raises the
+   *   notice that explains it, and the item stays deleted — so this adds a toast
+   *   saying the undo itself failed, because "reload and try again" does not
+   *   bring an item back and the user must not be left assuming it did.
+   * - **Manual order is the array order of `collection.items`, and nothing
+   *   persists an index per item.** A restored item therefore lands at the end
+   *   of its group rather than in the row it came from. Everything else about it
+   *   is exactly as it was.
+   */
+  private async restoreItem(collectionId: string, item: Item): Promise<void> {
+    try {
+      await this.store.upsertItem(collectionId, item);
+      this.toast.success(this.i18n.t('toast.item.restored', { name: item.name }));
+    } catch {
+      this.toast.error(this.i18n.t('toast.item.undoFailed', { name: item.name }));
+    }
   }
 }

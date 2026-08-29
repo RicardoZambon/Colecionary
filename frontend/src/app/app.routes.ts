@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
+import { unsavedItemGuard } from './features/collection/item-form-page/unsaved-item.guard';
 import { setupCompletedGuard, setupGuard } from './core/setup/setup.guards';
 import { Shell } from './layout/shell/shell';
 
@@ -47,6 +48,7 @@ export const routes: Routes = [
       },
       {
         path: 'c/:collectionId/items/new',
+        canDeactivate: [unsavedItemGuard],
         loadComponent: () =>
           import('./features/collection/item-form-page/item-form-page').then(m => m.ItemFormPage),
       },
@@ -57,6 +59,7 @@ export const routes: Routes = [
       },
       {
         path: 'c/:collectionId/items/:itemId/edit',
+        canDeactivate: [unsavedItemGuard],
         loadComponent: () =>
           import('./features/collection/item-form-page/item-form-page').then(m => m.ItemFormPage),
       },

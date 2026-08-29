@@ -1,3 +1,5 @@
+@use '../../../styles/mixins' as *;
+
 :host {
   width: 226px;
   flex: none;
@@ -8,6 +10,55 @@
   gap: 20px;
   overflow-y: auto;
   background: var(--bg);
+}
+
+/*
+ * Below $bp-lg the column becomes an off-canvas drawer. `position: fixed` is
+ * load-bearing rather than stylistic: a translated-off-screen *absolute* box
+ * still counts towards the document's scrollable overflow, which is the very
+ * 455px-in-a-390px-viewport bug this whole change exists to remove. A fixed box
+ * contributes nothing.
+ */
+@include upto($bp-lg) {
+  :host {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(280px, 84vw);
+    z-index: var(--z-overlay);
+    box-shadow: var(--shadow);
+    transform: translateX(-100%);
+
+    @include motion-safe {
+      transition: transform var(--dur-mid) var(--ease-out);
+    }
+  }
+
+  :host(.drawer--open) {
+    transform: translateX(0);
+  }
+
+  .drawer-head {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: -12px;
+  }
+
+  /*
+   * A phone is a thumb, not a cursor. The rows keep their visual padding and
+   * gain the rest of the 44px as hit area — see the `--tap` block in
+   * styles.scss for why this is height rather than padding on most controls.
+   */
+  .nav-item {
+    min-height: var(--tap);
+    font-size: var(--fs-md);
+  }
+}
+
+/* Above the breakpoint the drawer's own chrome has nothing to do. */
+@include from($bp-lg) {
+  .drawer-head {
+    display: none;
+  }
 }
 
 .group {
@@ -50,9 +101,16 @@
     font-weight: 500;
   }
 
+  .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .count {
     font-size: 11px;
     opacity: 0.7;
+    flex: none;
   }
 }
 

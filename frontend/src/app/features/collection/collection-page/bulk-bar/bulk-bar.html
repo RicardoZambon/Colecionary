@@ -1,0 +1,216 @@
+<div class="bar__line">
+  <!-- The count is the one thing that changes without the user's hand on it —
+       a filter can narrow the selection out from under them — so it is the
+       live region rather than the whole bar. -->
+  <span class="bar__count" aria-live="polite">{{ countLabel() }}</span>
+  <span class="bar__spacer"></span>
+
+  <ui-button variant="ghost" size="sm" (click)="open.set(!open())">
+    {{ (open() ? 'bulk.hideEdit' : 'bulk.showEdit') | t }}
+  </ui-button>
+  <ui-button variant="danger" size="sm" (click)="removeRequested.emit()">
+    {{ 'bulk.delete' | t }}
+  </ui-button>
+  <ui-button variant="ghost" size="sm" (click)="cleared.emit()">
+    {{ 'bulk.clear' | t }}
+  </ui-button>
+</div>
+
+@if (open()) {
+  <div class="fields">
+    <!-- Group ------------------------------------------------------------ -->
+    <div class="row">
+      <span class="row__label">{{ 'bulk.field.group' | t }}</span>
+      <ui-select
+        class="compact row__control"
+        [options]="groupOptions()"
+        [value]="selectValue(GROUP)"
+        (valueChange)="pickSelect(GROUP, $event)"
+        [ariaLabel]="'bulk.field.group' | t"
+      />
+      @if (!touched(GROUP)) { <span class="row__hint">{{ groupHint() }}</span> }
+    </div>
+
+    <!-- Section: only where dividers exist, and only enabled once every
+         selected item is in one and the same group — a section belongs to
+         exactly one group, so with a mixed selection there is nothing to point
+         at. Disabled *with the reason showing*, never silently. -->
+    @if (groupsMixed()) {
+      <div class="row">
+        <span class="row__label">{{ 'bulk.field.section' | t }}</span>
+        <ui-select
+          class="compact row__control"
+          [options]="sectionOptions()"
+          [value]="selectValue(SECTION)"
+          [disabled]="true"
+          [ariaLabel]="'bulk.field.section' | t"
+        />
+        <span class="row__hint row__hint--why">{{ 'bulk.sectionOneGroup' | t }}</span>
+      </div>
+    } @else if (destinationSections().length) {
+      <div class="row">
+        <span class="row__label">{{ 'bulk.field.section' | t }}</span>
+        <ui-select
+          class="compact row__control"
+          [options]="sectionOptions()"
+          [value]="selectValue(SECTION)"
+          (valueChange)="pickSelect(SECTION, $event)"
+          [ariaLabel]="'bulk.field.section' | t"
+        />
+        @if (!touched(SECTION)) { <span class="row__hint">{{ sectionHint() }}</span> }
+      </div>
+    }
+
+    <!-- Year: no clear affordance on purpose. `Item.year` is a non-nullable
+         number with no way to spell "unknown", so a clear would have to write
+         a 0 into a column people read. -->
+    <div class="row">
+      <span class="row__label">{{ 'bulk.field.year' | t }}</span>
+      <ui-text-input
+        class="row__control"
+        type="number"
+        [value]="draft(YEAR).value"
+        (valueChange)="type(YEAR, $event)"
+        [placeholder]="'bulk.leaveAlone' | t"
+        [ariaLabel]="'bulk.field.year' | t"
+      />
+      @if (touched(YEAR)) {
+        <ui-button
+          variant="link"
+          size="sm"
+          [ariaLabel]="'bulk.keepAsIsAria' | t: { label: 'bulk.field.year' | t }"
+          (click)="reset(YEAR)"
+        >{{ 'bulk.keepAsIs' | t }}</ui-button>
+      } @else {
+        <span class="row__hint">{{ yearHint() }}</span>
+      }
+    </div>
+
+    <!-- Value ------------------------------------------------------------ -->
+    <div class="row">
+      <span class="row__label">{{ 'bulk.field.value' | t }}</span>
+      <ui-text-input
+        class="row__control"
+        type="number"
+        [value]="draft(VALUE).value"
+        (valueChange)="type(VALUE, $event)"
+        [placeholder]="'bulk.leaveAlone' | t"
+        [ariaLabel]="'bulk.field.value' | t"
+      />
+      <ui-button
+        variant="link"
+        size="sm"
+        [ariaLabel]="'bulk.clearField' | t: { label: 'bulk.field.value' | t }"
+        (click)="clearField(VALUE)"
+      >{{ 'bulk.clear' | t }}</ui-button>
+      @if (touched(VALUE)) {
+        <ui-button
+          variant="link"
+          size="sm"
+          [ariaLabel]="'bulk.keepAsIsAria' | t: { label: 'bulk.field.value' | t }"
+          (click)="reset(VALUE)"
+        >{{ 'bulk.keepAsIs' | t }}</ui-button>
+      } @else {
+        <span class="row__hint">{{ valueHint() }}</span>
+      }
+    </div>
+
+    <!-- The destination group's declared fields, own plus inherited. A field
+         the destination does not declare is *kept* on the item rather than
+         dropped; see `applyBulkPatch`. -->
+    @for (field of fields(); track field.name) {
+      <div class="row">
+        <span class="row__label">{{ field.name }}</span>
+        <ui-text-input
+          class="row__control"
+          [type]="inputType(field)"
+          [value]="draft(fieldKey(field.name)).value"
+          (valueChange)="type(fieldKey(field.name), $event)"
+          [placeholder]="'bulk.leaveAlone' | t"
+          [ariaLabel]="field.name"
+        />
+        <ui-button
+          variant="link"
+          size="sm"
+          [ariaLabel]="'bulk.clearField' | t: { label: field.name }"
+          (click)="clearField(fieldKey(field.name))"
+        >{{ 'bulk.clear' | t }}</ui-button>
+        @if (touched(fieldKey(field.name))) {
+          <ui-button
+            variant="link"
+            size="sm"
+            [ariaLabel]="'bulk.keepAsIsAria' | t: { label: field.name }"
+            (click)="reset(fieldKey(field.name))"
+          >{{ 'bulk.keepAsIs' | t }}</ui-button>
+        } @else {
+          <span class="row__hint">{{ fieldHint(field.name) }}</span>
+        }
+      </div>
+    }
+
+    <!-- Tags: add one, remove one. `wanted` is never touched either way —
+         `syncWantedTag` owns it, and it is derived from the copies. -->
+    <div class="row">
+      <span class="row__label">{{ 'bulk.field.addTag' | t }}</span>
+      <ui-text-input
+        class="row__control"
+        [value]="draft(ADD_TAG).value"
+        (valueChange)="type(ADD_TAG, $event)"
+        [placeholder]="'bulk.tagPlaceholder' | t"
+        [ariaLabel]="'bulk.field.addTag' | t"
+      />
+      @if (touched(ADD_TAG)) {
+        <ui-button
+          variant="link"
+          size="sm"
+          [ariaLabel]="'bulk.keepAsIsAria' | t: { label: 'bulk.field.addTag' | t }"
+          (click)="reset(ADD_TAG)"
+        >{{ 'bulk.keepAsIs' | t }}</ui-button>
+      }
+    </div>
+
+    <div class="row">
+      <span class="row__label">{{ 'bulk.field.removeTag' | t }}</span>
+      <ui-text-input
+        class="row__control"
+        [value]="draft(REMOVE_TAG).value"
+        (valueChange)="type(REMOVE_TAG, $event)"
+        [placeholder]="'bulk.tagPlaceholder' | t"
+        [ariaLabel]="'bulk.field.removeTag' | t"
+      />
+      @if (touched(REMOVE_TAG)) {
+        <ui-button
+          variant="link"
+          size="sm"
+          [ariaLabel]="'bulk.keepAsIsAria' | t: { label: 'bulk.field.removeTag' | t }"
+          (click)="reset(REMOVE_TAG)"
+        >{{ 'bulk.keepAsIs' | t }}</ui-button>
+      }
+    </div>
+
+    <!-- Copy status: the one thing about a copy that is bulk-editable, because
+         it is the only one that is idempotent per copy. Condition, price and
+         the rest belong to a physical object and would need this to pick one,
+         which the model has no way to express. -->
+    <div class="row">
+      <span class="row__label">{{ 'bulk.field.copyStatus' | t }}</span>
+      <ui-select
+        class="compact row__control"
+        [options]="statusOptions()"
+        [value]="selectValue(STATUS)"
+        (valueChange)="pickSelect(STATUS, $event)"
+        [ariaLabel]="'bulk.field.copyStatus' | t"
+      />
+      @if (!touched(STATUS)) { <span class="row__hint">{{ statusHint() }}</span> }
+    </div>
+
+    <div class="fields__actions">
+      @if (!canApply()) {
+        <span class="fields__note">{{ 'bulk.nothingToApply' | t }}</span>
+      }
+      <ui-button variant="primary" size="sm" [disabled]="!canApply()" (click)="apply()">
+        {{ 'bulk.apply' | t }}
+      </ui-button>
+    </div>
+  </div>
+}

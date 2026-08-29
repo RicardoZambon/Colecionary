@@ -1,0 +1,104 @@
+@use '../../../../../styles/mixins' as *;
+
+/**
+ * Sticky at the foot of the main column. It has to stay reachable while the
+ * list scrolls — a bar you have to scroll back to is a bar you stop using —
+ * and `--z-sticky` keeps it under every overlay, which is right: the delete
+ * dialog it opens must sit on top of it.
+ */
+:host {
+  position: sticky;
+  bottom: var(--sp-3);
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--panel);
+  border: var(--bw) solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.bar__line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.bar__count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.bar__spacer {
+  flex: 1;
+}
+
+.fields {
+  display: grid;
+  /* Two columns of rows on a wide window, one below it: eight fields stacked
+     single-file pushes the Apply button off the bottom of a laptop screen. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2) var(--sp-5);
+  padding-top: var(--sp-3);
+  border-top: var(--bw) solid var(--border);
+
+  @include upto($bp-lg) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+
+  &__label {
+    @include mono-label(var(--fs-xs), 0.08em);
+    text-transform: uppercase;
+    /* Fixed width so the controls line up down the column, but wrapping rather
+       than ellipsised: pt-BR runs ~20% longer and "TODOS OS EXEMPLARES" would
+       be cut to "TODOS OS EX…", which names nothing. Two short lines is the
+       honest answer. */
+    flex: 0 0 104px;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  &__control {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  &__hint {
+    flex: 0 0 auto;
+    font-size: var(--fs-xs);
+    color: var(--muted);
+
+    /* Why a control is off, not what is in it. It replaces the whole row's
+       worth of hint, so it may wrap. */
+    &--why {
+      flex: 1 1 100%;
+      white-space: normal;
+    }
+  }
+}
+
+.fields__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+}
+
+.fields__note {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}

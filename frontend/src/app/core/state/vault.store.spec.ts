@@ -14,6 +14,7 @@ import {
   UserProfile,
 } from '../models';
 import { ConflictService } from './conflict.service';
+import { I18nService } from '../i18n';
 import { VaultStore } from './vault.store';
 
 /**
@@ -29,6 +30,13 @@ class FakeVaultApi extends VaultApi {
   private readonly versions = new Map<string, number>();
   /** Every `If-Match` the store sent, in order. */
   readonly preconditions: string[] = [];
+  /**
+   * When set, every read fails with it — an outage, a 500, a CORS refusal. The
+   * one condition the shell used to render as "Loading…" for ever.
+   */
+  failReadsWith: Error | null = null;
+  /** How many times the store has asked for the collection list. */
+  reads = 0;
 
   /** Moves a collection on behind the store's back, as another tab would. */
   moveOn(id: string): void {
@@ -36,6 +44,8 @@ class FakeVaultApi extends VaultApi {
   }
 
   listCollections(): Observable<VersionedCollection[]> {
+    this.reads++;
+    if (this.failReadsWith) return throwError(() => this.failReadsWith);
     return of(
       structuredClone(this.collections).map(collection => {
         this.versions.set(collection.id, this.versions.get(collection.id) ?? 1);
@@ -252,5 +262,115 @@ describe('VaultStore versions', () => {
     await store.load();
     await store.updateCollection(collection({ name: 'After reloading' }));
     expect(store.collection('c1')!.name).toBe('After reloading');
+  });
+});
+
+describe('VaultStore load failures', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  /** Mounted without loading, so the failing first load is the subject. */
+  function bare() {
+    const api = new FakeVaultApi();
+    api.collections = [collection()];
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: VaultApi, useValue: api },
+      ],
+    });
+    return { api, store: TestBed.inject(VaultStore) };
+  }
+
+  it('records the failure instead of leaving the app loading for ever', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('Can’t reach the Vault server.');
+
+    // Still rejects: the conflict notice's "reload" button has to be able to
+    // tell whether it worked.
+    await expect(store.load()).rejects.toThrow();
+
+    // And now it is a *state*, which is the whole point — `loaded` stays false,
+    // so the shell must have something else to render, and this is it.
+    expect(store.loaded()).toBe(false);
+    expect(store.loadError()).toBe('Can’t reach the Vault server.');
+  });
+
+  it('falls back to its own words when the failure had none', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('');
+
+    await expect(store.load()).rejects.toThrow();
+    expect(store.loadError()).toBe(TestBed.inject(I18nService).t('shell.loadFailed.body'));
+  });
+
+  it('retries, and reports success by clearing the failure', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('offline');
+    await expect(store.load()).rejects.toThrow();
+
+    api.failReadsWith = null;
+    await expect(store.retryLoad()).resolves.toBe(true);
+
+    expect(store.loadError()).toBeNull();
+    expect(store.loaded()).toBe(true);
+    expect(store.collection('c1')).toBeDefined();
+  });
+
+  it('never rejects out of a retry, and puts the failure back when it fails again', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('still offline');
+    await expect(store.load()).rejects.toThrow();
+
+    // Called straight from a click: a rejection here would be exactly the
+    // silence this whole change is about.
+    await expect(store.retryLoad()).resolves.toBe(false);
+    expect(store.loadError()).toBe('still offline');
+    expect(store.retrying()).toBe(false);
+  });
+
+  it('will not run two retries at once', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('offline');
+    await expect(store.load()).rejects.toThrow();
+    const before = api.reads;
+
+    const first = store.retryLoad();
+    const second = store.retryLoad();
+    await Promise.all([first, second]);
+
+    // A second click while the first attempt is in flight is not a second
+    // attempt.
+    expect(api.reads).toBe(before + 1);
+  });
+
+  it('tells the status line what is actually going on', async () => {
+    const { api, store } = bare();
+    expect(store.syncState()).toBe('synced');
+
+    api.failReadsWith = new Error('offline');
+    await expect(store.load()).rejects.toThrow();
+    expect(store.syncState()).toBe('offline');
+    expect(store.syncStatusKey()).toBe('nav.sync.offline');
+
+    api.failReadsWith = null;
+    await store.retryLoad();
+    expect(store.syncState()).toBe('synced');
+
+    // A refused save outranks everything else: it is the one the user has to
+    // answer.
+    TestBed.inject(ConflictService).raise({ collectionId: 'c1', message: 'Changed elsewhere.' });
+    expect(store.syncStatusKey()).toBe('nav.sync.conflict');
+  });
+
+  it('never leaves the status line stuck on "saving" after a refused write', async () => {
+    const { api, store } = bare();
+    await store.load();
+    expect(store.syncState()).toBe('synced');
+
+    api.moveOn('c1');
+    // A refused write must not leave the status line stuck on "Saving…".
+    await expect(store.updateCollection(collection({ name: 'Stale' }))).rejects.toThrow();
+    expect(store.syncState()).toBe('conflict');
   });
 });

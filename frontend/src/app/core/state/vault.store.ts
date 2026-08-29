@@ -6,6 +6,7 @@ import { VaultApi, VaultConflictError, VersionedCollection } from '../api/vault-
 import { ConflictService } from './conflict.service';
 import { CurrencyService } from './currency.service';
 import { I18nService } from '../i18n/i18n.service';
+import { MessageKey } from '../i18n/messages';
 import { ToastService } from './toast.service';
 import { Collection, Item, Member, StoreListing, TenantSettings, UserProfile } from '../models';
 import { ownedValue } from '../utils/copies.util';
@@ -53,6 +54,63 @@ export class VaultStore {
   readonly tenantSettings = this.tenantSettingsState.asReadonly();
   readonly loaded = signal(false);
 
+  /**
+   * Why the initial load failed, or null.
+   *
+   * This exists because the alternative was the worst bug in the app. The shell
+   * gates the router outlet on `loaded()`, `load()` sets that only at its very
+   * end, and the caller swallowed the rejection — so an outage, a 500, a CORS
+   * refusal or a timeout left the user reading the word "Loading…" for as long
+   * as they were prepared to wait, with nothing on screen, nothing in the
+   * console and no way forward. A failed load is now a *state*, which is what
+   * makes it possible to render it and to offer {@link retryLoad}.
+   *
+   * A string rather than a boolean: the server usually explains itself, and
+   * "Can't reach the Vault server" and "You don't have access to this vault" are
+   * not the same problem for the person reading it.
+   */
+  readonly loadError = signal<string | null>(null);
+
+  /** True while a retry is in flight, so the button can say so and go quiet. */
+  readonly retrying = signal(false);
+
+  /**
+   * How many writes are in flight. Not exposed raw — {@link syncState} is what
+   * the UI reads.
+   */
+  private readonly pendingWrites = signal(0);
+
+  /**
+   * What the sidebar's status line is actually allowed to claim.
+   *
+   * It used to be the hardcoded string `'● synced · v0.1 mock API'`: a
+   * decorative dot that never changed, next to a claim about a mock API that
+   * has not existed since the .NET backend landed, in the one part of the chrome
+   * whose entire job is to say whether the user's work is safe. Now it is
+   * derived, and every one of the four states can be reached:
+   *
+   * - `conflict` — a save was refused; `ConflictService` has the details.
+   * - `offline` — the load failed and this app is showing nothing, or stale
+   *   data.
+   * - `saving` — a write is in flight.
+   * - `synced` — nothing outstanding.
+   *
+   * Order matters: a conflict outranks a failed load outranks a write in
+   * flight, because that is the order in which the user needs to hear about
+   * them.
+   */
+  readonly syncState = computed<'synced' | 'saving' | 'offline' | 'conflict'>(() => {
+    if (this.conflicts.pending()) return 'conflict';
+    if (this.loadError()) return 'offline';
+    if (this.pendingWrites() > 0) return 'saving';
+    return 'synced';
+  });
+
+  /** The status line's label, as a key — never a dot on its own (rule 12). */
+  readonly syncStatusKey = computed<MessageKey>(
+    () => `nav.sync.${this.syncState()}` as MessageKey,
+  );
+
   /** Global item search text (bound to the top-bar input). */
   readonly query = signal('');
 
@@ -99,24 +157,70 @@ export class VaultStore {
     this.collections().reduce((acc, c) => acc + c.groups.length, 0),
   );
 
+  /**
+   * Fills the store from the API. Records the failure and rethrows.
+   *
+   * Both halves matter. The rethrow is what lets the conflict notice's "reload"
+   * button know whether it worked; {@link loadError} is what lets the shell
+   * render a failure at all, instead of gating the router outlet on a `loaded`
+   * flag that a failed load leaves false for ever.
+   *
+   * `loaded` is still set only at the end, on purpose: half a vault on screen is
+   * worse than a message saying it did not load. What changed is that the other
+   * outcome is now visible.
+   */
   async load(): Promise<void> {
-    const [collections, listings, members, profile, settings] = await Promise.all([
-      firstValueFrom(this.api.listCollections()),
-      firstValueFrom(this.api.listStoreListings()),
-      firstValueFrom(this.api.listTenantMembers()),
-      firstValueFrom(this.api.getProfile()),
-      firstValueFrom(this.api.getTenantSettings()),
-    ]);
-    // Cleared and rebuilt, never merged: a version left over from before a
-    // reload describes a document nobody is holding any more.
-    this.versions.clear();
-    this.collectionsState.set(collections.map(v => this.remember(v)));
-    this.storeListingsState.set(listings);
-    this.tenantMembersState.set(members);
-    this.profileState.set(profile);
-    this.tenantSettingsState.set(settings);
-    this.currencies.apply(settings.defaultCurrency);
-    this.loaded.set(true);
+    try {
+      const [collections, listings, members, profile, settings] = await Promise.all([
+        firstValueFrom(this.api.listCollections()),
+        firstValueFrom(this.api.listStoreListings()),
+        firstValueFrom(this.api.listTenantMembers()),
+        firstValueFrom(this.api.getProfile()),
+        firstValueFrom(this.api.getTenantSettings()),
+      ]);
+      // Cleared and rebuilt, never merged: a version left over from before a
+      // reload describes a document nobody is holding any more.
+      this.versions.clear();
+      this.collectionsState.set(collections.map(v => this.remember(v)));
+      this.storeListingsState.set(listings);
+      this.tenantMembersState.set(members);
+      this.profileState.set(profile);
+      this.tenantSettingsState.set(settings);
+      this.currencies.apply(settings.defaultCurrency);
+      this.loadError.set(null);
+      this.loaded.set(true);
+    } catch (err) {
+      // The server's own sentence when there was one — `HttpVaultApi` has
+      // already localized it — and ours only as a floor.
+      this.loadError.set(
+        err instanceof Error && err.message ? err.message : this.i18n.t('shell.loadFailed.body'),
+      );
+      throw err;
+    }
+  }
+
+  /**
+   * Tries the load again, and answers whether it worked.
+   *
+   * Swallows the rejection because this one is called straight from a click:
+   * the outcome is already on screen either way — the vault, or the same
+   * message with the button live again — and a rejected promise from a template
+   * binding is exactly the silence this whole change is about.
+   */
+  async retryLoad(): Promise<boolean> {
+    if (this.retrying()) return false;
+    this.retrying.set(true);
+    // Cleared up front so the shell shows "loading" rather than the stale
+    // failure while the second attempt is in flight.
+    this.loadError.set(null);
+    try {
+      await this.load();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      this.retrying.set(false);
+    }
   }
 
   collection(id: string | null | undefined): Collection | undefined {
@@ -134,9 +238,15 @@ export class VaultStore {
 
   // --- collections ---
 
+  /**
+   * Creates a collection. Rejects if the server refused it, and local state is
+   * left exactly as it was — the new collection is appended only from what came
+   * back, never optimistically, so a failure cannot leave a phantom row in the
+   * sidebar that vanishes on the next reload.
+   */
   async createCollection(name: string, description: string): Promise<Collection> {
     const created = this.remember(
-      await firstValueFrom(this.api.createCollection({ name, description })),
+      await this.write(firstValueFrom(this.api.createCollection({ name, description }))),
     );
     this.collectionsState.update(all => [...all, created]);
     return created;
@@ -159,12 +269,12 @@ export class VaultStore {
     // an await would quote a version that a write finishing in between had
     // already moved, and the guard would pass exactly when it should not.
     const version = this.versionFor(updated.id);
-    const saved = await this.guard(updated.id, this.api.updateCollection(updated, version));
+    const saved = await this.write(this.guard(updated.id, this.api.updateCollection(updated, version)));
     this.replace(this.remember(saved));
   }
 
   async deleteCollection(id: string): Promise<void> {
-    await firstValueFrom(this.api.deleteCollection(id));
+    await this.write(firstValueFrom(this.api.deleteCollection(id)));
     this.versions.delete(id);
     this.collectionsState.update(all => all.filter(c => c.id !== id));
   }
@@ -218,7 +328,9 @@ export class VaultStore {
    */
   async upsertItem(collectionId: string, item: Item): Promise<void> {
     const version = this.versionFor(collectionId);
-    const saved = await this.guard(collectionId, this.api.upsertItem(collectionId, item, version));
+    const saved = await this.write(
+      this.guard(collectionId, this.api.upsertItem(collectionId, item, version)),
+    );
     this.versions.set(collectionId, saved.version);
     this.collectionsState.update(all =>
       all.map(c => {
@@ -238,7 +350,7 @@ export class VaultStore {
     // Unguarded on the server, but it still moves the version — so the token it
     // answers with has to be kept, or the next save would be refused for a
     // change this app made itself.
-    const version = await firstValueFrom(this.api.deleteItem(collectionId, itemId));
+    const version = await this.write(firstValueFrom(this.api.deleteItem(collectionId, itemId)));
     this.versions.set(collectionId, version);
     this.collectionsState.update(all =>
       all.map(c => (c.id === collectionId ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c)),
@@ -247,24 +359,53 @@ export class VaultStore {
 
   // --- tenant / profile ---
 
+  /**
+   * Replaces the member list. Rejects on refusal — a role change is the classic
+   * write whose *only* visible effect is the control the user just touched, so
+   * the caller has to know, and the caller has to put the row back.
+   */
   async updateTenantMembers(members: Member[]): Promise<void> {
-    const saved = await firstValueFrom(this.api.updateTenantMembers(members));
+    const saved = await this.write(firstValueFrom(this.api.updateTenantMembers(members)));
     this.tenantMembersState.set(saved);
   }
 
   async updateProfile(profile: UserProfile): Promise<void> {
-    const saved = await firstValueFrom(this.api.updateProfile(profile));
+    const saved = await this.write(firstValueFrom(this.api.updateProfile(profile)));
     this.profileState.set(saved);
   }
 
   /** Owner-only on the server; the caller surfaces the rejection. */
   async updateTenantSettings(settings: TenantSettings): Promise<void> {
-    const saved = await firstValueFrom(this.api.updateTenantSettings(settings));
+    const saved = await this.write(firstValueFrom(this.api.updateTenantSettings(settings)));
     this.tenantSettingsState.set(saved);
     this.currencies.apply(saved.defaultCurrency);
   }
 
   // --- versions ---
+
+  /**
+   * Runs one write, counted, and lets the failure through.
+   *
+   * The counter is what makes {@link syncState} — and therefore the status line
+   * — tell the truth about "saving", and the `finally` is why it can never get
+   * stuck there: every path out of a write, including a rejection, decrements.
+   *
+   * It reports nothing. Reporting a failed HTTP call is `errorInterceptor`'s
+   * job, in one voice, for every request in the app; a second message here
+   * would be the same failure said twice in vaguer words. And it deliberately
+   * rethrows rather than swallowing: only the caller knows whether the right
+   * answer is to keep a form, stay on the page or put a control back, and a
+   * store that resolved successfully on a refused write would take that
+   * decision away from all of them.
+   */
+  private async write<T>(work: Promise<T>): Promise<T> {
+    this.pendingWrites.update(n => n + 1);
+    try {
+      return await work;
+    } finally {
+      this.pendingWrites.update(n => n - 1);
+    }
+  }
 
   /** Records a collection's version and hands back the document. */
   private remember(versioned: VersionedCollection): Collection {

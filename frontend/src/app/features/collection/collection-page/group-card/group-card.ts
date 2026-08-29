@@ -4,9 +4,16 @@ import { RouterLink } from '@angular/router';
 import { I18nService } from '../../../../core/i18n';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
 import { groupLinkParams } from '../../browse-params';
-import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
+import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { MosaicTile, UiBadge, UiCard, UiMosaic, UiProgress } from '../../../../shared/ui';
+import {
+  MosaicTile,
+  UiBadge,
+  UiCard,
+  UiEmpty,
+  UiMosaic,
+  UiProgress,
+} from '../../../../shared/ui';
 import { BadgeTone } from '../../../../shared/ui/badge/badge';
 import { VaultStore } from '../../../../core/state/vault.store';
 
@@ -22,7 +29,7 @@ import { VaultStore } from '../../../../core/state/vault.store';
 @Component({
   selector: 'app-group-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, TPipe, UiBadge, UiCard, UiMosaic, UiProgress],
+  imports: [RouterLink, ItemValuePipe, TPipe, UiBadge, UiCard, UiEmpty, UiMosaic, UiProgress],
   templateUrl: './group-card.html',
   styleUrl: './group-card.scss',
 })
@@ -47,7 +54,13 @@ export class GroupCard {
 
   protected readonly empty = computed(() => this.stats().catalogued === 0);
 
-  /** "12 / 120" against a target, "12 / 34" against what is catalogued. */
+  /**
+   * "12 / 120" against a target, "12 / 34" against what is catalogued.
+   *
+   * Spoken, not printed: the visible line is `progressText()`, a sentence that
+   * says the same thing grammatically. This form survives because the
+   * `aria-label` reads best as a compact ratio after the group's name.
+   */
   protected readonly ratio = computed(() => `${this.stats().owned} / ${this.stats().denominator}`);
 
   protected readonly badge = computed<{ tone: BadgeTone; label: string } | null>(() => {

@@ -1,11 +1,24 @@
 @use '../../../../styles/mixins' as *;
 
+/* One name for the page gutter, because the sticky bar has to bleed to exactly
+   the same edge and a second literal would drift from the first. */
 :host {
+  --page-x: var(--sp-8);
+
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 24px 30px;
+  padding: var(--sp-6) var(--page-x);
   max-width: 980px;
+}
+
+@include upto($bp-md) {
+  :host {
+    --page-x: var(--sp-4);
+
+    padding: var(--sp-4) var(--page-x) var(--sp-2);
+    gap: var(--sp-3);
+  }
 }
 
 .back {
@@ -18,33 +31,93 @@ h1 {
   margin: 0;
 }
 
+/*
+ * A grid rather than a wrapping flex row. The flex version needed the form to
+ * declare `min-width: 360px` to stop it collapsing, which is also what made it
+ * overflow a phone — a 300px column plus a 360px minimum plus 26px of gap
+ * cannot fit 390px, so the row simply stuck out. `minmax(0, 1fr)` says the same
+ * thing about the form ("take the rest") without ever claiming a floor.
+ */
 .layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
   gap: 26px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: start;
 }
 
-.photos {
-  width: 300px;
-  flex: none;
+.side {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  position: sticky;
+  top: 0;
 }
 
 .form {
-  flex: 1;
-  min-width: 360px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .pair {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
+}
+
+/* One column below the breakpoint, and the summary stops following the scroll:
+   sticking a card to the top of a single-column phone layout means it sits on
+   top of the form. */
+@include upto($bp-lg) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-4);
+  }
+
+  .side {
+    position: static;
+  }
+}
+
+.summary {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__heading {
+    @include mono-label;
+    text-transform: uppercase;
+  }
+
+  &__rows {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 5px 12px;
+    margin: 0;
+    font-size: var(--fs-sm);
+
+    dt {
+      @include mono-label(9.5px);
+      text-transform: uppercase;
+      align-self: center;
+    }
+
+    dd {
+      margin: 0;
+      text-align: right;
+      font-weight: 600;
+      color: var(--text);
+      overflow-wrap: anywhere;
+
+      /* A group name is data, not a figure — it should not shout like one. */
+      &.destination {
+        font-weight: 500;
+        color: var(--text2);
+      }
+    }
+  }
 }
 
 .copies {
@@ -105,7 +178,7 @@ h1 {
 
   &__fields {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px;
   }
 
@@ -119,7 +192,9 @@ h1 {
   }
 }
 
-@media (max-width: 720px) {
+/* Migrated off a magic 720px onto the shared scale — four stylesheets used to
+   break at four different widths, none of them the same. */
+@include upto($bp-md) {
   .copies__fields {
     grid-template-columns: 1fr;
   }
@@ -138,7 +213,7 @@ h1 {
 
   &__row {
     display: grid;
-    grid-template-columns: 1fr 1.4fr;
+    grid-template-columns: minmax(80px, 1fr) minmax(0, 1.4fr);
     gap: 10px;
     align-items: center;
 
@@ -164,11 +239,74 @@ h1 {
   }
 }
 
+/*
+ * The commit bar. `position: sticky; bottom: 0` inside `.main`, which is the
+ * scroll container, so it rides the bottom edge of the viewport for as long as
+ * the form is on screen and settles at the end of it. The negative inline
+ * margin bleeds it to the page gutter, so content scrolling underneath does not
+ * show through the sides.
+ */
 .actions {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-sticky);
   display: flex;
+  align-items: center;
   gap: 10px;
   justify-content: flex-end;
-  padding-top: 4px;
+  margin-top: var(--sp-2);
+  padding: var(--sp-3) 0;
+  background: var(--bg);
+  border-top: var(--bw) solid var(--border);
+
+  &__state {
+    @include mono-label(10px);
+    margin-right: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    /* Reserves the line so the bar does not jump the first time it appears. */
+    min-height: 1em;
+
+    .dot {
+      color: var(--warn);
+      font-size: 9px;
+    }
+  }
+}
+
+/*
+ * Single column below the breakpoint, so the bar now spans the whole content
+ * width and can bleed to the page gutter — on the two-column desktop layout it
+ * lives in the right-hand column and a negative margin would slide it under the
+ * summary card.
+ */
+@include upto($bp-lg) {
+  .actions {
+    margin-inline: calc(var(--page-x) * -1);
+    padding-inline: var(--page-x);
+  }
+}
+
+@include upto($bp-sm) {
+  /* Two buttons and a status line do not fit 358px in Portuguese. The state
+     line takes the first row and the buttons the second, full width. */
+  .actions {
+    flex-wrap: wrap;
+
+    &__state {
+      flex: 1 0 100%;
+      margin-right: 0;
+    }
+
+    ui-button {
+      flex: 1;
+
+      ::ng-deep .btn {
+        width: 100%;
+      }
+    }
+  }
 }
 
 .missing {

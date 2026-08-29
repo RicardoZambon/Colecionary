@@ -1,4 +1,18 @@
 @use 'styles/themes';
+@use 'styles/mixins' as *;
+
+:root {
+  /**
+   * The minimum comfortable touch target, per WCAG 2.5.5 / the platform HIGs.
+   *
+   * It lives here rather than in `_themes.scss` because it is not a theme's
+   * business: a target is 44px in Paperwhite and in Synthwave alike. Nothing in
+   * the app is allowed to render a control smaller than this below `$bp-lg`,
+   * and a few controls — the reframe pip, which sits *on* the thing it edits
+   * and so has no room to grow visually — owe it at every width.
+   */
+  --tap: 44px;
+}
 
 * {
   box-sizing: border-box;
@@ -41,9 +55,36 @@ textarea::placeholder {
   opacity: 1;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+/**
+ * The one focus treatment in the app.
+ *
+ * Two things here are load-bearing, and both replace a rule that looked fine
+ * and was invisible exactly where it mattered.
+ *
+ * **`outline-offset` is positive.** It used to be `-1px`, which draws the ring
+ * *inside* the element's own border box — so on an accent-filled surface (the
+ * active nav item, a primary button, a selected chip) it was accent-on-accent
+ * and simply not there, and on a 20px reframe pip or a 24px chip the border
+ * swallowed it. Pushing the ring outward is most of the fix on its own: the
+ * offset gap falls outside the border box, so it shows the page ground rather
+ * than the control's own fill, and the accent ring lands on that ground.
+ *
+ * **A ground-coloured halo fills that gap explicitly**, for the case the offset
+ * alone does not cover: a control sitting on a surface that is itself
+ * accent-tinted, where the gap would show accent too. Two rings — accent
+ * outside, ground inside — read on any fill in all seven themes with nothing
+ * having to opt in.
+ *
+ * The pseudo-class is written three times on purpose. Angular injects component
+ * styles into `<head>` *after* this file, and a component's own
+ * `box-shadow` — `.btn--primary` carries one — scopes to
+ * `.btn--primary[_ngcontent-…]`, two class-level selectors. A bare
+ * `:focus-visible` is one and loses the tie on source order, which would leave
+ * the halo off precisely the accent-backed buttons it exists for.
+ */
+:focus-visible:focus-visible:focus-visible {
+  @include focus-ring;
+  box-shadow: 0 0 0 var(--focus-offset) var(--bg);
 }
 
 /* Drag-to-reorder affordances, shared by every sortable list. */
@@ -53,4 +94,177 @@ textarea::placeholder {
 
 .dragging {
   opacity: 0.45;
+}
+
+/* ==========================================================================
+ * Motion
+ *
+ * Five uses, and no more. Everything here is `transform` or `opacity` only —
+ * the two properties a compositor can animate without laying the page out
+ * again — and everything is inside `motion-safe`, so a user who asked the OS
+ * for less motion gets the end state with no travel.
+ *
+ * Three of the five are here rather than in the component, because the
+ * components they belong to (`ui-card`, `ui-button`, `ui-chip`) are the shared
+ * library and this is a cross-cutting layer; the drawer slide lives with the
+ * drawer in `sidebar.scss` and the skip link with the shell.
+ *
+ * 1. card lift        — a card that can be opened rises towards the pointer
+ * 2. press            — the app had 25 `:hover` rules and *zero* `:active`.
+ *                       On a touch screen hover does not exist, so a control
+ *                       that does not visibly take the press reads as broken,
+ *                       and the user taps it again. This is functional, not
+ *                       decoration.
+ * 3. chip transition  — a filter toggling on or off
+ * 4. drawer slide     — sidebar.scss, with the scrim's fade below
+ * 5. skip-link reveal — shell.ts: it slides in from above the viewport
+ *
+ * The sixth candidate, the group tree's disclosure, is deliberately **not**
+ * here: the twisty swaps the glyph `▸` for `▾` rather than rotating one
+ * element, and a text swap is not something `transform` can animate. Doing it
+ * properly means changing `group-tree.html` to render one caret and rotate it,
+ * which is not this change's file.
+ * ========================================================================== */
+
+@include motion-safe {
+  /*
+   * 1. Card lift. `.interactive` is doubled for the same reason `.btn` is
+   * below: `ui-card` scopes its own transition to `[_nghost-…].interactive`,
+   * two class-level selectors, and a single-class rule loses the tie on source
+   * order — the lift would jump rather than rise. The component's border fade
+   * is restated here because a `transition` list replaces, it does not merge.
+   */
+  ui-card.interactive.interactive {
+    transition: transform var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  ui-card.interactive:hover,
+  a:hover > ui-card {
+    transform: translateY(-2px);
+  }
+
+  /*
+   * 2. Press, and 3. chip.
+   *
+   * `.btn` and `.chip` are written twice each. `transition` is a single
+   * property, so adding `transform` to a control that already animates its
+   * border means *replacing* the component's declaration — and
+   * `.btn[_ngcontent-…]` is two class-level selectors, injected after this
+   * file. `ui-button > button.btn` is one and loses the tie on source order,
+   * silently: the `:active` transform still applies (nothing else declares it)
+   * but it snaps instead of easing, which is the one part a reviewer would
+   * never see in a screenshot. The doubled class is the smallest way to
+   * outrank it without reaching into files this change does not own; the right
+   * fix is a `transform` in `ui-button`'s and `ui-chip`'s own transition list.
+   */
+  ui-button > button.btn.btn,
+  ui-chip > button.chip.chip,
+  ui-chip > a.chip.chip {
+    transition: transform var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  .nav-item,
+  .theme-trigger,
+  .avatar-trigger,
+  .view-toggle button {
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+
+  ui-button > button:active:not(:disabled),
+  ui-chip > button:active,
+  ui-chip > a:active,
+  .nav-item:active,
+  .theme-trigger:active,
+  .avatar-trigger:active,
+  .view-toggle button:active {
+    transform: scale(0.97);
+  }
+}
+
+/* ==========================================================================
+ * Touch targets
+ *
+ * Below `$bp-lg` every control the audit found under 44px is brought up to it.
+ * The rules live here rather than in the components for one reason: `ui-button`,
+ * `ui-chip`, `ui-image-slot` and the collection toolbar are not this change's
+ * files, and a hit area is a property of the *pointer*, not of the button — it
+ * belongs to the layer that knows how wide the screen is.
+ *
+ * Most controls take `min-height`, which grows the box. Two cannot afford to:
+ * the chips in a filter row and the reframe pip, which sits on top of a
+ * photograph it must not cover. Those get an absolutely positioned `::after`
+ * instead — the *target* grows to 44px while the painted pill or circle stays
+ * exactly the size it was.
+ * ========================================================================== */
+
+@include upto($bp-lg) {
+  ui-button > button,
+  ui-date-input input,
+  .view-toggle button,
+  .theme-row,
+  .signout,
+  /* Page-local chrome that belongs to other stylesheets. Reached from here
+     rather than edited there because a hit area is a property of the pointer,
+     not of the control — and because 44px is stated exactly once. */
+  .panel-toggle,
+  .sort-trigger,
+  .manage,
+  .toast__close {
+    min-height: var(--tap);
+  }
+
+  /*
+   * A square control needs the *width* too — a 30px-wide avatar or view-mode
+   * button is a 30px target however tall it is. Both classes are named on
+   * purpose: `.btn[…] .btn--icon[…]` is what the component's own `min-width:
+   * 20px` scopes to, and a selector with fewer class-level parts than that
+   * loses, silently, to source order.
+   */
+  ui-button > button.btn.btn--icon,
+  .view-toggle button,
+  .toast__close {
+    min-width: var(--tap);
+  }
+
+  /* A chip row is horizontal and dense; 44px-tall pills would turn a filter
+     bar into a wall. Grow the target, keep the pill. */
+  ui-chip > button,
+  ui-chip > a {
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: var(--tap);
+      transform: translateY(-50%);
+    }
+  }
+}
+
+/**
+ * The reframe pip is 20×20 at every width and has to stay that way — it is an
+ * overlay on the photograph it edits, and a 44px disc would hide the corner the
+ * user is trying to judge. So it is the one control whose target is *always*
+ * bigger than its paint, at every viewport, phone or desktop: a 20px target is
+ * not a desktop-only problem, it is just a smaller one there.
+ */
+button.reframe {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--tap);
+    height: var(--tap);
+    transform: translate(-50%, -50%);
+  }
 }

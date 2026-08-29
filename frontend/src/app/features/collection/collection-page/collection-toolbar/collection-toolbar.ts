@@ -1,10 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, model } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  model,
+  output,
+} from '@angular/core';
 
 import { I18nService, MessageKey } from '../../../../core/i18n';
 import { GroupField, GroupSort } from '../../../../core/models';
 import { DEFAULT_SORT, sortChoices, sortLabel } from '../../../../core/utils/sort.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiDropdown } from '../../../../shared/ui';
+import { UiCheckbox, UiDropdown } from '../../../../shared/ui';
 import { ViewMode } from '../view-mode';
 
 /** A row in the sort menu. A null `sort` means "follow the group's default". */
@@ -28,7 +36,7 @@ function sortId(sort: GroupSort): string {
 @Component({
   selector: 'app-collection-toolbar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiDropdown],
+  imports: [TPipe, UiCheckbox, UiDropdown],
   templateUrl: './collection-toolbar.html',
   styleUrl: './collection-toolbar.scss',
 })
@@ -42,12 +50,32 @@ export class CollectionToolbar {
   /** True while a search is forcing the item grid, whatever the view says. */
   readonly searching = input(false);
 
+  /**
+   * Field columns the user has hidden in this group. A preference, not URL
+   * state — see `column-prefs.ts`.
+   */
+  readonly hiddenColumns = input<ReadonlySet<string>>(new Set());
+
   /** Null means "use the selected group's configured order". */
   readonly sortOverride = model<GroupSort | null>(null);
   readonly view = model.required<ViewMode>();
 
+  readonly columnToggled = output<{ name: string; visible: boolean }>();
+
   /** Nothing to order when the pane shows group cards rather than items. */
   protected readonly showSort = computed(() => this.view() !== 'dashboard');
+
+  /**
+   * Only the table has columns, and only a group that declares fields has any
+   * to choose between — a picker offering nothing is worse than no picker.
+   */
+  protected readonly showColumns = computed(
+    () => this.view() === 'list' && this.fields().length > 0,
+  );
+
+  protected isColumnVisible(name: string): boolean {
+    return !this.hiddenColumns().has(name);
+  }
 
   protected readonly effectiveSort = computed<GroupSort>(
     () => this.sortOverride() ?? this.groupSort() ?? DEFAULT_SORT,

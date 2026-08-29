@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { I18nService } from '../../../../core/i18n';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiProgress, UiSectionLabel } from '../../../../shared/ui';
+import { UiEmpty, UiProgress, UiSectionLabel } from '../../../../shared/ui';
 
 /**
  * The divider between two runs of a group's item list.
@@ -20,7 +20,7 @@ import { UiProgress, UiSectionLabel } from '../../../../shared/ui';
 @Component({
   selector: 'app-section-header',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiProgress, UiSectionLabel],
+  imports: [TPipe, UiEmpty, UiProgress, UiSectionLabel],
   templateUrl: './section-header.html',
   styleUrl: './section-header.scss',
 })

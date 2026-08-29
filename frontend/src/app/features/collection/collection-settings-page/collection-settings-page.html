@@ -69,6 +69,56 @@
               />
             </div>
 
+            <!-- Where the group sits. A picker rather than a drag: groups list
+                 alphabetically and nothing persists a position for one, so a
+                 drop *between* rows would mean nothing, and only a drop *onto*
+                 a row would count — an invisible affordance that would then
+                 also owe a keyboard path. A select is keyboard-native and can
+                 omit the targets it cannot accept. -->
+            <div class="detail__parent">
+              <span class="fields-label">{{ 'collSettings.groups.parent' | t }}</span>
+              <ui-select
+                class="compact parent"
+                [ariaLabel]="'collSettings.groups.parentAria' | t: { name: sel.node.name }"
+                [options]="sel.parentOptions"
+                [value]="sel.parentValue"
+                (valueChange)="onParentPicked(sel.node.id, $event)"
+              />
+            </div>
+
+            @if (moveImpact(); as move) {
+              <div class="move-preview" role="status">
+                <span class="fields-label">{{ 'collSettings.groups.moveHeading' | t }}</span>
+                <p class="move-preview__head">{{ move.heading }}</p>
+                <ul class="move-preview__list">
+                  @if (move.gained) {
+                    <li>{{ move.gained }}</li>
+                  }
+                  @for (line of move.lost; track line) {
+                    <li class="move-preview__lost">{{ line }}</li>
+                  }
+                  @if (move.order) {
+                    <li>{{ move.order }}</li>
+                  }
+                  @if (move.nothing) {
+                    <li>{{ move.nothing }}</li>
+                  }
+                </ul>
+                @if (move.dormant) {
+                  <p class="move-preview__note">{{ move.dormant }}</p>
+                }
+                @if (move.clash) {
+                  <p class="move-preview__clash">{{ move.clash }}</p>
+                }
+                <div class="move-preview__actions">
+                  <ui-button size="sm" variant="ghost" (click)="cancelParentMove()"
+                    >{{ 'collSettings.groups.moveCancel' | t }}</ui-button>
+                  <ui-button size="sm" (click)="commitParentMove()"
+                    >{{ 'collSettings.groups.moveConfirm' | t }}</ui-button>
+                </div>
+              </div>
+            }
+
             <div class="detail__order">
               <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
               <ui-select
@@ -323,9 +373,23 @@
     }
   }
 
+  <!-- Anchored, and named after what it does. The page saves on a debounce, so
+       "Done" was describing navigation while looking like a save button. -->
   <div class="done-row">
+    <span class="done-row__note">{{ 'collSettings.autosave' | t }}</span>
     <ui-button (click)="done()">{{ 'collSettings.done' | t }}</ui-button>
   </div>
+
+  @if (deletingGroupId(); as deleting) {
+    <app-group-delete-dialog
+      [collection]="d"
+      [groupId]="deleting"
+      [exporting]="exporting()"
+      (confirmed)="applyDeletion($event)"
+      (dismissed)="deletingGroupId.set(null)"
+      (exportRequested)="exportCollection()"
+    />
+  }
 } @else {
   <div class="missing">
     {{ 'common.collectionNotFound' | t }}

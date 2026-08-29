@@ -1,3 +1,20 @@
+<!--
+  The drawer's only opener, and the first thing in the topbar so it is also the
+  first control after the skip link. Hidden above $bp-lg, where the sidebar is a
+  permanent column and a toggle would control nothing.
+
+  `id`, `aria-expanded` and `aria-controls` belong on the real <button> inside
+  `ui-button`, which has no inputs for them yet — `reflectAria()` puts them
+  there. See the note on that method.
+-->
+<ui-button
+  #hamburger
+  class="hamburger"
+  variant="icon"
+  [ariaLabel]="'nav.open' | t"
+  (click)="layout.toggleNav()"
+>☰</ui-button>
+
 <a class="brand" routerLink="/dashboard">
   <span class="brand__mark"><ui-icon name="diamond" [size]="12" /></span>Vault
 </a>

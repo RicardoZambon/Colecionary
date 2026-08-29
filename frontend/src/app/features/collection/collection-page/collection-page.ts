@@ -1,11 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 
-import { I18nService } from '../../../core/i18n';
+import { I18nService, MessageKey } from '../../../core/i18n';
 import { VaultConflictError } from '../../../core/api/vault-api';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
-import { Condition, GroupNode, GroupSort, Item } from '../../../core/models';
+import { Collection, Condition, GroupNode, GroupSort, Item } from '../../../core/models';
 import { BrowseCriteria, OwnFilter, visibleItems } from '../../../core/utils/browse.util';
 import {
   UNGROUPED_ID,
@@ -36,6 +36,7 @@ import {
 } from '../../../core/utils/sort.util';
 import {
   conditionParams,
+  nextSortFor,
   ownParams,
   readCondition,
   readOwn,
@@ -51,8 +52,22 @@ import { GroupBreadcrumb } from './group-breadcrumb/group-breadcrumb';
 import { GroupDashboard } from './group-dashboard/group-dashboard';
 import { GroupTree } from './group-tree/group-tree';
 import { ItemGrid } from './item-grid/item-grid';
-import { ItemList } from './item-list/item-list';
+import { ItemList, RowPick } from './item-list/item-list';
+import { BulkBar } from './bulk-bar/bulk-bar';
+import { BulkPatch, applyBulkPatch, removeItems } from './bulk-patch';
+import {
+  EMPTY_SELECTION,
+  SelectionState,
+  allSelected as isAllSelected,
+  someSelected as isSomeSelected,
+  extendTo,
+  selectedIn,
+  setAll,
+  toggle as toggleSelection,
+} from './item-selection';
+import { readHidden, toggleHidden, visibleFields, writeHidden } from './column-prefs';
 import { TPipe } from '../../../shared/pipes/t.pipe';
+import { UiButton, UiDialog, UiEmpty } from '../../../shared/ui';
 import { ViewMode, resolveView, viewParam } from './view-mode';
 import {
   initialExpanded,
@@ -82,6 +97,10 @@ const WIDE_ENOUGH = '(min-width: 1200px)';
     GroupTree,
     ItemGrid,
     ItemList,
+    BulkBar,
+    UiButton,
+    UiDialog,
+    UiEmpty,
   ],
   templateUrl: './collection-page.html',
   styleUrl: './collection-page.scss',
@@ -120,6 +139,24 @@ export class CollectionPage {
   /** Null means "use the selected group's configured order". */
   protected readonly sortOverride = computed(() => readSort(this.sort(), this.dir()));
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
+
+  /**
+   * Which rows a bulk action applies to. A signal and **not** URL state — the
+   * whole argument is written down in `item-selection.ts`, and a future reader
+   * who "fixes" this by moving it into `?sel=` will have shipped a shareable
+   * link that arrives with forty rows ticked in front of a delete button.
+   *
+   * It survives a filter change because a query-param navigation does not
+   * recreate this component, and every reader intersects it with what is
+   * actually visible.
+   */
+  protected readonly selection = signal<SelectionState>(EMPTY_SELECTION);
+
+  /** Field columns the user hid, per collection and group. localStorage. */
+  protected readonly hiddenColumns = signal<ReadonlySet<string>>(new Set());
+
+  /** True while the delete confirmation is up. */
+  protected readonly confirmingDelete = signal(false);
   protected readonly treeExpanded = signal<ReadonlySet<string>>(new Set());
   protected readonly treeCollapsed = signal(false);
 
@@ -131,8 +168,29 @@ export class CollectionPage {
   private readonly pendingOrder = signal<{ id: string; items: Item[] } | null>(null);
   private orderTimer: ReturnType<typeof setTimeout> | undefined;
   private restoredFor: string | null = null;
+  private selectionFor: string | null = null;
+  private columnsFor: string | null = null;
 
   constructor() {
+    // A selection describes rows of one collection. Carrying it across would
+    // point a destructive bar at ids that mean nothing here.
+    effect(() => {
+      const id = this.collectionId();
+      if (this.selectionFor === id) return;
+      this.selectionFor = id;
+      this.selection.set(EMPTY_SELECTION);
+      this.confirmingDelete.set(false);
+    });
+
+    // Column preferences are per collection *and* per group, because the field
+    // set is (`fieldsFor` merges down the ancestor path).
+    effect(() => {
+      const key = `${this.collectionId()}.${this.groupKey()}`;
+      if (this.columnsFor === key) return;
+      this.columnsFor = key;
+      this.hiddenColumns.set(readHidden(this.collectionId(), this.groupKey()));
+    });
+
     // Restore the tree once per collection, seeding it with the path to the
     // group in the URL so it opens showing where you are.
     effect(() => {
@@ -258,6 +316,16 @@ export class CollectionPage {
 
   /** Custom fields available in the current group, own plus inherited. */
   protected readonly groupFields = computed(() => fieldsFor(this.groups(), this.g() ?? null));
+
+  /** `''` for the collection root and the unfiled bucket — neither is a group. */
+  protected readonly groupKey = computed(() =>
+    this.g() === UNGROUPED_ID ? '' : this.g() ?? '',
+  );
+
+  /** The field columns the table renders: declared, minus the ones hidden. */
+  protected readonly visibleColumns = computed(() =>
+    visibleFields(this.groupFields(), this.hiddenColumns()),
+  );
   protected readonly groupSort = computed(() => sortFor(this.groups(), this.g() ?? null));
   protected readonly effectiveSort = computed<GroupSort>(
     () => this.sortOverride() ?? this.groupSort() ?? DEFAULT_SORT,
@@ -327,8 +395,137 @@ export class CollectionPage {
     chunkBySection(this.items(), this.groupSections(), !this.filtering()),
   );
 
+  // --- selection ----------------------------------------------------------
+
+  /** The visible list's ids, in the order the screen shows them. */
+  private readonly visibleIds = computed(() => this.items().map(item => item.id));
+
+  /**
+   * The selected ids **intersected with what is visible**. Every action and the
+   * bar's own count read this and never the stored set, so a bulk edit cannot
+   * reach a row the user cannot see — and narrowing a filter does not destroy
+   * the selection, it only hides part of it.
+   */
+  protected readonly selectedIds = computed(
+    () => new Set(selectedIn(this.selection(), this.visibleIds())),
+  );
+
+  protected readonly selectedItems = computed(() =>
+    this.items().filter(item => this.selectedIds().has(item.id)),
+  );
+
+  protected readonly selectionCount = computed(() => this.selectedIds().size);
+  protected readonly headerAllSelected = computed(() =>
+    isAllSelected(this.selection(), this.visibleIds()),
+  );
+  protected readonly headerSomeSelected = computed(() =>
+    isSomeSelected(this.selection(), this.visibleIds()),
+  );
+
+  protected readonly deleteTitle = computed(() =>
+    this.i18n.plural(this.selectionCount(), 'bulk.confirm.title.one', 'bulk.confirm.title.other'),
+  );
+  protected readonly deleteConfirmLabel = computed(() =>
+    this.i18n.plural(
+      this.selectionCount(),
+      'bulk.confirm.delete.one',
+      'bulk.confirm.delete.other',
+    ),
+  );
+
+  protected pickRow(pick: RowPick): void {
+    this.selection.update(state =>
+      pick.shift
+        ? extendTo(state, this.visibleIds(), pick.id, pick.checked)
+        : toggleSelection(state, pick.id, pick.checked),
+    );
+  }
+
+  protected pickAll(checked: boolean): void {
+    this.selection.update(state => setAll(state, this.visibleIds(), checked));
+  }
+
+  protected clearSelection(): void {
+    this.selection.set(EMPTY_SELECTION);
+  }
+
+  protected toggleColumn(change: { name: string; visible: boolean }): void {
+    const next = toggleHidden(this.hiddenColumns(), change.name, change.visible);
+    this.hiddenColumns.set(next);
+    writeHidden(this.collectionId(), this.groupKey(), next);
+  }
+
+  // --- bulk writes --------------------------------------------------------
+
+  /**
+   * One full-document PUT per bulk operation, never N item writes.
+   *
+   * `updateCollection` reads the version synchronously before its first await
+   * and the server merges every item under that one `If-Match`, so this is
+   * atomic: it all lands or none of it does. N `upsertItem` calls would each
+   * bump the collection's version, making forty strictly-sequential
+   * round-trips where a failure at item 7 is unrecoverable and a competing
+   * writer refuses the rest with a 412 the user cannot map onto "which 22 got
+   * through".
+   */
+  protected async applyBulk(patch: BulkPatch): Promise<void> {
+    const collection = this.collection();
+    const ids = this.selectedIds();
+    if (!collection || !ids.size) return;
+
+    const items = applyBulkPatch(this.sourceItems(), ids, patch, {
+      groups: collection.groups,
+      sections: collection.sections,
+    });
+    await this.writeItems(collection, items, ids.size, 'bulk.applied.one', 'bulk.applied.other', 'bulk.applyFailed');
+  }
+
+  /**
+   * The same PUT with the rows filtered out. Deliberately not N `deleteItem`
+   * calls: that endpoint carries no precondition at all, which is right for one
+   * deliberate deletion and wrong for a forty-item sweep.
+   */
+  protected async deleteSelected(): Promise<void> {
+    const collection = this.collection();
+    const ids = this.selectedIds();
+    this.confirmingDelete.set(false);
+    if (!collection || !ids.size) return;
+
+    const items = removeItems(this.sourceItems(), ids);
+    await this.writeItems(collection, items, ids.size, 'bulk.deleted.one', 'bulk.deleted.other', 'bulk.deleteFailed');
+  }
+
+  private async writeItems(
+    collection: Collection,
+    items: Item[],
+    count: number,
+    one: MessageKey,
+    other: MessageKey,
+    failed: MessageKey,
+  ): Promise<void> {
+    // The payload was built from `sourceItems`, which already includes any
+    // unsaved manual reorder — so the debounced write is redundant, and letting
+    // it fire afterwards would put the pre-edit items back and undo this.
+    clearTimeout(this.orderTimer);
+    this.pendingOrder.set(null);
+
+    try {
+      await this.store.updateCollection({ ...collection, items });
+    } catch (err) {
+      // A conflict keeps the selection *and* the draft: the bar is still
+      // mounted, so nothing the user typed is lost, and the shell's notice says
+      // more about a 412 than a toast could. Everything else gets a toast.
+      if (!(err instanceof VaultConflictError)) {
+        this.toast.flash(err instanceof Error ? err.message : this.i18n.t(failed));
+      }
+      return;
+    }
+    this.clearSelection();
+    this.toast.flash(this.i18n.plural(count, one, other));
+  }
+
   /** Whether anything is narrowing the list beyond the group itself. */
-  private readonly filtering = computed(
+  protected readonly filtering = computed(
     () =>
       !!this.condition() ||
       !!this.ownFilter() ||
@@ -430,6 +627,15 @@ export class CollectionPage {
   }
 
   /**
+   * A column header. Compared against the *effective* order, not the override,
+   * so the first click on the column a group already sorts by reverses it
+   * instead of appearing to do nothing.
+   */
+  protected sortByColumn(by: string): void {
+    this.narrow(sortParams(nextSortFor(this.effectiveSort(), by)));
+  }
+
+  /**
    * Clicking a heading narrows to that run; clicking the active one widens
    * back. A toggle rather than a link, because a section is a filter and not a
    * destination — and because the heading is the only affordance there is.
@@ -444,6 +650,19 @@ export class CollectionPage {
    * toggles. The URL still holds them, so leaving for an item and coming back
    * lands on the same list.
    */
+  /**
+   * Drops every filter at once, leaving the group and the order alone.
+   *
+   * The global search box lives in the top bar and is not a query param, so it
+   * has to be cleared through the store — an empty state offering to clear the
+   * filters while a stale search kept the list empty would be a dead end
+   * wearing the clothes of a way out.
+   */
+  protected clearFilters(): void {
+    this.store.query.set('');
+    this.narrow({ ...conditionParams(null), ...ownParams(null), ...sectionParams(null) });
+  }
+
   private narrow(queryParams: Params): void {
     void this.router.navigate([], {
       relativeTo: this.route,

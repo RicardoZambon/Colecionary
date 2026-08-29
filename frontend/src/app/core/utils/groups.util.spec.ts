@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { GroupField, GroupNode } from '../models';
 import { UNGROUPED_ID } from './group-stats.util';
 import {
+  canReparent,
   childrenOf,
   fieldsFor,
   flattenTree,
@@ -121,9 +122,63 @@ describe('groups.util', () => {
     });
   });
 
-  it('collects the full subtree including the root id', () => {
-    expect(subtreeIds(TREE, 'cards')).toEqual(['cards', 'rare', 'regular']);
-    expect(subtreeIds(TREE, 'games')).toEqual(['games']);
+  describe('subtreeIds', () => {
+    it('collects the full subtree including the root id', () => {
+      expect(subtreeIds(TREE, 'cards')).toEqual(['cards', 'rare', 'regular']);
+      expect(subtreeIds(TREE, 'games')).toEqual(['games']);
+    });
+
+    it('terminates on a parentId cycle instead of recursing forever', () => {
+      // No foreign key on parentId, so this shape is representable — and
+      // `canReparent` asks this walk a question about a graph that may already
+      // be broken, so it has to answer rather than blow the stack.
+      const cyclic: GroupNode[] = [
+        { id: 'a', name: 'A', parentId: 'b', fields: [], sort: null, target: null },
+        { id: 'b', name: 'B', parentId: 'a', fields: [], sort: null, target: null },
+      ];
+      expect(subtreeIds(cyclic, 'a').sort()).toEqual(['a', 'b']);
+    });
+
+    it('survives a group that is its own parent', () => {
+      const selfish: GroupNode[] = [
+        { id: 'a', name: 'A', parentId: 'a', fields: [], sort: null, target: null },
+      ];
+      expect(subtreeIds(selfish, 'a')).toEqual(['a']);
+    });
+  });
+
+  describe('canReparent', () => {
+    it('always allows the root — a group with no parent is a legal group', () => {
+      expect(canReparent(TREE, 'rare', null)).toBe(true);
+    });
+
+    it('allows any group outside the moved subtree', () => {
+      expect(canReparent(TREE, 'rare', 'games')).toBe(true);
+      expect(canReparent(TREE, 'games', 'rare')).toBe(true);
+    });
+
+    it('refuses a parent that does not exist', () => {
+      // A dangling parentId has no graceful reading: `childrenOf(groups, null)`
+      // never reaches the orphaned branch, so the group would vanish from the
+      // tree while its items still counted in the collection total.
+      expect(canReparent(TREE, 'rare', 'deleted')).toBe(false);
+    });
+
+    it('refuses the group itself, and every descendant of it', () => {
+      expect(canReparent(TREE, 'cards', 'cards')).toBe(false);
+      expect(canReparent(TREE, 'cards', 'rare')).toBe(false);
+      expect(canReparent(TREE, 'cards', 'regular')).toBe(false);
+    });
+
+    it('answers on a tree that is already cyclic instead of hanging', () => {
+      const cyclic: GroupNode[] = [
+        { id: 'a', name: 'A', parentId: 'b', fields: [], sort: null, target: null },
+        { id: 'b', name: 'B', parentId: 'a', fields: [], sort: null, target: null },
+        { id: 'c', name: 'C', parentId: null, fields: [], sort: null, target: null },
+      ];
+      expect(canReparent(cyclic, 'a', 'c')).toBe(true);
+      expect(canReparent(cyclic, 'a', 'b')).toBe(false);
+    });
   });
 
   it('builds the root → leaf path', () => {

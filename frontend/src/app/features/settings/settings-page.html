@@ -9,6 +9,7 @@
         <div class="heading">{{ 'settings.plan.heading' | t }}</div>
         <p class="sub">{{ planSub() }}</p>
       </div>
+      <p class="sub">{{ 'settings.plan.billingNote' | t }}</p>
       <div class="plans">
         @for (plan of plans; track plan.id) {
           <ui-card class="plan" [class.plan--active]="store.profile()?.plan === plan.id">
@@ -23,10 +24,13 @@
             </div>
             @if (store.profile()?.plan === plan.id) {
               <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.current' | t }}</ui-button>
-            } @else if (plan.id === 'pro') {
-              <ui-button [block]="true" (click)="choosePlan('pro')">{{ 'settings.plan.upgrade' | t }}</ui-button>
             } @else {
-              <ui-button variant="ghost" [block]="true" (click)="choosePlan('free')">{{ 'settings.plan.downgrade' | t }}</ui-button>
+              <!-- Disabled, and it says why. This used to be a live button that
+                   set the plan from the browser and toasted a welcome; there is
+                   no billing behind it and nothing in the app is gated on the
+                   plan, so an enabled control here would be a receipt for a
+                   purchase that never happened. -->
+              <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.unavailable' | t }}</ui-button>
             }
           </ui-card>
         }
@@ -42,7 +46,7 @@
         </p>
       </div>
       <ui-card class="members">
-        @for (member of store.tenantMembers(); track member.email) {
+        @for (member of store.tenantMembers(); track member.email + '#' + memberRev()) {
           <div class="member-row">
             <ui-avatar [initials]="member.initials" />
             <span class="who">
@@ -67,22 +71,14 @@
         }
       </ui-card>
 
-      <div class="heading">{{ 'settings.access.policyHeading' | t }}</div>
-      <ui-card class="policies">
-        @for (policy of policyDefs; track policy.key) {
-          <div class="policy-row">
-            <span class="who">
-              <span class="name">{{ policy.label | t }}</span>
-              <span class="email">{{ policy.description | t }}</span>
-            </span>
-            <ui-toggle
-              [ariaLabel]="policy.label | t"
-              [on]="policies()[policy.key]"
-              (onChange)="togglePolicy(policy.key)"
-            />
-          </div>
-        }
-      </ui-card>
+      <!-- The three "sharing policy" toggles that used to sit here are gone.
+           They were held in a component signal, had no field on the wire, were
+           never sent anywhere and reset on navigation — security-shaped
+           switches that did nothing at all. What actually controls access today
+           is the member list above and a collection's own link sharing, and
+           saying so is more honest than three switches that only look like
+           settings. -->
+      <p class="sub">{{ 'settings.access.policyNote' | t }}</p>
     </section>
   }
   @case ('account') {

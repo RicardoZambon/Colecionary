@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Condition, GroupNode, Item, ItemCopy, Section } from '../models';
-import { NO_FILTERS, neighbours, scopeItems, visibleItems } from './browse.util';
+import { NO_FILTERS, matchesQuery, neighbours, scopeItems, visibleItems } from './browse.util';
 import { UNGROUPED_ID } from './group-stats.util';
 import { UNSECTIONED_ID } from './sections.util';
 
@@ -113,6 +113,16 @@ describe('browse.util', () => {
       expect(ids(list)).toEqual(['charizard', 'alakazam']);
     });
 
+    it('finds an item by a custom field value, not only by its name', () => {
+      // The cataloguer's most frequent lookup is a catalogue number, which is
+      // precisely a custom field — the one place the old search could not see.
+      const numbered = [
+        { ...item('charizard', 'rare'), custom: [{ key: 'Número', value: '004-A' }] },
+        item('alakazam', 'rare'),
+      ];
+      expect(ids(visibleItems(numbered, GROUPS, { ...ALL, query: '004' }))).toEqual(['charizard']);
+    });
+
     it('leaves the array it was given untouched', () => {
       const original = ids(ITEMS);
       visibleItems(ITEMS, GROUPS, { ...ALL, sort: { by: 'name', direction: 'asc' } });
@@ -211,6 +221,40 @@ describe('browse.util', () => {
       expect(visibleItems(ITEMS, GROUPS, criteria(), []).map(i => i.id)).toEqual(
         visibleItems(ITEMS, GROUPS, criteria()).map(i => i.id),
       );
+    });
+  });
+
+  describe('matchesQuery', () => {
+    const subject = {
+      ...item('Charizard', 'rare'),
+      description: 'Holo, first edition',
+      tags: ['graded', 'holo'],
+      custom: [
+        { key: 'Número', value: '004-A' },
+        { key: 'Set', value: 'Base' },
+      ],
+    };
+
+    it('matches an empty query, so no search means no filter', () => {
+      expect(matchesQuery(subject, '')).toBe(true);
+    });
+
+    it('matches the name, the description, a tag and a field value', () => {
+      // The needle arrives already trimmed and lower-cased — folding it once at
+      // the call site rather than once per item.
+      expect(matchesQuery(subject, 'chariz')).toBe(true);
+      expect(matchesQuery(subject, 'first edition')).toBe(true);
+      expect(matchesQuery(subject, 'graded')).toBe(true);
+      expect(matchesQuery(subject, '004-a')).toBe(true);
+    });
+
+    it('does not match a field name, only its value', () => {
+      // A group declaring "Número" would otherwise make every item match "núm".
+      expect(matchesQuery(subject, 'número')).toBe(false);
+    });
+
+    it('is false when nothing on the item holds it', () => {
+      expect(matchesQuery(subject, 'blastoise')).toBe(false);
     });
   });
 });

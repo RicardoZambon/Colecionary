@@ -122,12 +122,24 @@ export class DashboardPage {
     );
   }
 
+  /**
+   * Creates an empty collection and opens it for naming.
+   *
+   * The `catch` is the point: this is `await`ed straight from a click, so a
+   * refused create used to reject into nothing — an unhandled promise, no
+   * message, and a button that looked broken. Nothing is navigated to on a
+   * failure either, since the collection it would open does not exist.
+   */
   protected async newCollection(): Promise<void> {
-    const created = await this.store.createCollection(
-      this.i18n.t('dashboard.newCollectionName'),
-      '',
-    );
-    this.toast.flash(this.i18n.t('toast.collection.created'));
+    let created;
+    try {
+      created = await this.store.createCollection(this.i18n.t('dashboard.newCollectionName'), '');
+    } catch {
+      // `errorInterceptor` has already said *why*; this says what it was for.
+      this.toast.error(this.i18n.t('toast.collection.createFailed'));
+      return;
+    }
+    this.toast.success(this.i18n.t('toast.collection.created'));
     void this.router.navigate(['/c', created.id, 'settings'], { queryParams: { tab: 'general' } });
   }
 }

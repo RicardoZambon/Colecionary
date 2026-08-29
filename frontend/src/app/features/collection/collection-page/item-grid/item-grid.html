@@ -25,7 +25,17 @@
         (dragend)="drag.end()"
         [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
         queryParamsHandling="preserve"
+        [class.item-card--picked]="isSelected(entry.item)"
       >
+        <!-- Over the corner, and swallowing its own click: the card is the
+             link, so without that a tick would navigate. -->
+        <span class="item-card__pick" (click)="contain($event)">
+          <ui-checkbox
+            [checked]="isSelected(entry.item)"
+            [ariaLabel]="selectLabel(entry.item)"
+            (picked)="pick(entry.item, $event)"
+          />
+        </span>
         <div class="item-card__img" [class.dim]="!isOwned(entry.item)">
           @if (fieldChip(entry.item); as chip) {
             <span class="item-card__chip">
@@ -42,7 +52,15 @@
               [style.background-position]="focus.position(entry.item.photoIds[0])"
             ></div>
           } @else {
-            img: {{ entry.item.img }}
+            <!-- No photograph yet. A quiet mark on a flat panel, not the
+                 filename this used to print on a diagonal-striped tile — that
+                 was a debug line, in English, on the primary browsing surface. -->
+            <span
+              class="item-card__nophoto"
+              role="img"
+              [attr.aria-label]="'item.noPhoto' | t"
+              [title]="'item.noPhoto' | t"
+            ><ui-icon name="diamond" [size]="26" /></span>
           }
         </div>
         <div class="item-card__body">

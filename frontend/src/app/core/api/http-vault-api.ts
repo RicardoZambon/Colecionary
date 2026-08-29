@@ -3,8 +3,9 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, throwError } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
+import { I18nService } from '../i18n';
 import { Collection, Item, Member, StoreListing, TenantSettings, UserProfile } from '../models';
-import { problemMessage } from './problem-details';
+import { httpErrorMessage } from './error.interceptor';
 import { VaultApi, VaultConflictError, VersionedCollection, VersionedItem } from './vault-api';
 
 /**
@@ -22,6 +23,7 @@ import { VaultApi, VaultConflictError, VersionedCollection, VersionedItem } from
 @Injectable({ providedIn: 'root' })
 export class HttpVaultApi extends VaultApi {
   private readonly http = inject(HttpClient);
+  private readonly i18n = inject(I18nService);
   private readonly base = environment.apiBaseUrl;
 
   listCollections(): Observable<VersionedCollection[]> {
@@ -122,7 +124,10 @@ export class HttpVaultApi extends VaultApi {
     return source.pipe(
       catchError((error: unknown) => {
         if (error instanceof HttpErrorResponse) {
-          const message = problemMessage(error) ?? 'Something went wrong';
+          // Localized, and worded identically to the global report — the
+          // fallback used to be the hardcoded English 'Something went wrong',
+          // in the one spot a user is most likely to read it.
+          const message = httpErrorMessage(error, this.i18n.t);
           // 412 alone. A 428 means this client failed to send a precondition at
           // all, which is a bug here and not a race the user can do anything
           // about — telling them "somebody else edited this" would be a lie.

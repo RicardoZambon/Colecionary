@@ -75,3 +75,25 @@
     }
   }
 }
+
+.col-head {
+  @include mono-label(var(--fs-xs), 0.1em);
+  text-transform: uppercase;
+  padding: 4px 10px 2px;
+}
+
+.col-option {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--panel2);
+  }
+}

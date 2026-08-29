@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { UNSECTIONED_ID } from '../../core/utils/sections.util';
 import {
   groupLinkParams,
+  nextSortFor,
   readCondition,
   readCriteria,
   readOwn,
@@ -105,6 +106,44 @@ describe('browse-params', () => {
     it('round-trips through the URL, and clears with null', () => {
       expect(sectionParams('bronze')).toEqual({ s: 'bronze' });
       expect(sectionParams(null)).toEqual({ s: null });
+    });
+  });
+  describe('nextSortFor', () => {
+    it('opens a fresh column ascending, and money descending', () => {
+      // A name column answers "where is X"; a value column answers "what is
+      // the expensive one".
+      expect(nextSortFor({ by: 'name', direction: 'asc' }, 'year')).toEqual({
+        by: 'year',
+        direction: 'asc',
+      });
+      expect(nextSortFor({ by: 'name', direction: 'asc' }, 'value')).toEqual({
+        by: 'value',
+        direction: 'desc',
+      });
+      expect(nextSortFor({ by: 'name', direction: 'asc' }, 'field:Número')).toEqual({
+        by: 'field:Número',
+        direction: 'asc',
+      });
+    });
+
+    it('reverses the column already in force', () => {
+      expect(nextSortFor({ by: 'year', direction: 'asc' }, 'year')).toEqual({
+        by: 'year',
+        direction: 'desc',
+      });
+      expect(nextSortFor({ by: 'year', direction: 'desc' }, 'year')).toEqual({
+        by: 'year',
+        direction: 'asc',
+      });
+    });
+
+    it('reverses a group-declared order on the first click', () => {
+      // The caller passes the *effective* sort, so clicking the column a group
+      // already sorts by flips it instead of appearing to do nothing.
+      expect(nextSortFor({ by: 'field:Número', direction: 'asc' }, 'field:Número')).toEqual({
+        by: 'field:Número',
+        direction: 'desc',
+      });
     });
   });
 });

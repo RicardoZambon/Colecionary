@@ -16,12 +16,28 @@ import {
   Section,
   SortDirection,
 } from '../../../core/models';
-import { childrenOf, fieldsFor, pathOf, sortFor, subtreeIds } from '../../../core/utils/groups.util';
+import {
+  canReparent,
+  childrenOf,
+  fieldsFor,
+  flattenTree,
+  groupById,
+  pathOf,
+  sortFor,
+  subtreeIds,
+} from '../../../core/utils/groups.util';
+import {
+  GroupDeletePlan,
+  GroupDisposition,
+  groupDeletePlan,
+} from '../../../core/utils/group-delete.util';
+import { groupMoveImpact } from '../../../core/utils/group-move.util';
 import { sectionsOf } from '../../../core/utils/sections.util';
 import { moveInList } from '../../../core/utils/sort.util';
 import { SUPPORTED_CURRENCIES, currencyLabel, isCurrencyCode } from '../../../core/utils/money.util';
 import { fieldSortKey, sortByOptions, sortLabel } from '../../../core/utils/sort.util';
 import { TPipe } from '../../../shared/pipes/t.pipe';
+import { GroupDeleteDialog } from './group-delete-dialog/group-delete-dialog';
 import { GroupPicker } from './group-picker/group-picker';
 import {
   SelectOption,
@@ -68,6 +84,13 @@ const DIRECTION_KEYS: { value: SortDirection; label: MessageKey }[] = [
 /** Sentinel for "this group defines no ordering of its own". */
 const INHERIT = 'inherit';
 
+/**
+ * The parent picker's value for "no parent". A group id can never be empty, so
+ * the empty string is unambiguous — and it is the same spelling an item uses for
+ * "no group", which keeps one meaning for one character across the app.
+ */
+const ROOT_PARENT = '';
+
 const PERSIST_DEBOUNCE_MS = 400;
 
 /**
@@ -82,7 +105,7 @@ const PERSIST_DEBOUNCE_MS = 400;
   // and at 720px the editor gets 450 of them, which is where a section's name,
   // count, target and four buttons stop fitting on one line.
   host: { '[class.wide]': "activeTab() === 'groups'" },
-  imports: [RouterLink, TPipe, GroupPicker, UiAvatar, UiButton, UiCard, UiField, UiSelect, UiTabs, UiTextInput, UiTextarea, UiToggle],
+  imports: [RouterLink, TPipe, GroupDeleteDialog, GroupPicker, UiAvatar, UiButton, UiCard, UiField, UiSelect, UiTabs, UiTextInput, UiTextarea, UiToggle],
   templateUrl: './collection-settings-page.html',
   styleUrl: './collection-settings-page.scss',
 })
@@ -143,6 +166,17 @@ export class CollectionSettingsPage {
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
   protected readonly pendingFieldGroupId = signal<string | null>(null);
   protected readonly pendingSectionGroupId = signal<string | null>(null);
+  /**
+   * A parent chosen in the picker but not yet applied, so the pane can say what
+   * the move will change before it changes it. A move rewrites which fields
+   * every item in the branch displays and which order they follow, and nothing
+   * afterwards looks broken — so the preview is the feature, not decoration.
+   */
+  protected readonly pendingParent = signal<{ groupId: string; parentId: string | null } | null>(
+    null,
+  );
+  /** The group whose deletion is being confirmed, if any. */
+  protected readonly deletingGroupId = signal<string | null>(null);
   protected readonly pendingFieldType = signal<GroupFieldType>('text');
   protected readonly inviteEmail = signal('');
   protected readonly inviteRole = signal<string>('Viewer');
@@ -155,6 +189,7 @@ export class CollectionSettingsPage {
 
   private persistTimer: ReturnType<typeof setTimeout> | undefined;
   private draftFor: string | null = null;
+  private autoSelectedFor: string | null = null;
 
   constructor() {
     effect(() => {
@@ -177,6 +212,31 @@ export class CollectionSettingsPage {
       const next = new Set(this.pickerExpanded());
       for (const node of pathOf(draft.groups, id)) next.add(node.id);
       this.pickerExpanded.set(next);
+    });
+
+    // Land on a group rather than on an empty pane. Arriving with no `?g=` used
+    // to show an invitation beside a tree, which is a screen whose entire
+    // content is an instruction — and the first group is the one the tree
+    // already puts under the cursor. Once per collection, so clearing the
+    // selection by hand (or by deleting the group) stays cleared.
+    effect(() => {
+      const draft = this.draft();
+      if (!draft || this.activeTab() !== 'groups' || this.g()) return;
+      if (this.autoSelectedFor === draft.id) return;
+      const first = childrenOf(draft.groups, null)[0];
+      if (!first) return;
+      this.autoSelectedFor = draft.id;
+      // Replaces, so back means "the page I came from" rather than "the same
+      // page without a selection".
+      this.select(first.id, true);
+    });
+
+    // A pending move belongs to the group that was on screen when it was
+    // chosen. Selecting another group abandons it rather than carrying it over.
+    effect(() => {
+      const id = this.g() ?? null;
+      const pending = this.pendingParent();
+      if (pending && pending.groupId !== id) this.pendingParent.set(null);
     });
   }
 
@@ -229,10 +289,33 @@ export class CollectionSettingsPage {
     const own = draft.items.filter(i => i.groupId === node.id);
     const children = childrenOf(draft.groups, node.id);
 
+    const pending = this.pendingParent();
     return {
       node,
       count: this.subtreeCounts().get(node.id) ?? 0,
       childCount: children.length,
+      /**
+       * Where the group could sit. The illegal targets are omitted rather than
+       * refused after the fact — itself and its own descendants, which
+       * `canReparent` decides — because a `<select>` can leave out what it
+       * cannot accept, and a drop target cannot.
+       */
+      parentOptions: [
+        { value: ROOT_PARENT, label: this.i18n.t('collSettings.groups.parentRoot') },
+        ...flattenTree(draft.groups)
+          .filter(row => canReparent(draft.groups, node.id, row.node.id))
+          .map(row => ({
+            value: row.node.id,
+            // The same indent the item form's group picker uses, so one
+            // hierarchy reads the same way wherever it is offered.
+            label: (row.depth ? '   '.repeat(row.depth) + '↳ ' : '') + row.node.name,
+          })),
+      ] satisfies SelectOption[],
+      /** The pending choice while one is being weighed up; otherwise the truth. */
+      parentValue:
+        pending && pending.groupId === node.id
+          ? (pending.parentId ?? ROOT_PARENT)
+          : (node.parentId ?? ROOT_PARENT),
       sections: sectionsOf(draft.sections, node.id).map(section => ({
         section,
         count: own.filter(i => i.sectionId === section.id).length,
@@ -271,6 +354,62 @@ export class CollectionSettingsPage {
         },
         ...sortByOptions(fields, this.i18n.t),
       ] satisfies SelectOption[],
+    };
+  });
+
+  /**
+   * What the pending move would change, in sentences.
+   *
+   * Null when nothing is pending. Everything here is a consequence of two
+   * inheritance rules — `fieldsFor` merges the whole ancestor path, `sortFor`
+   * takes the nearest ancestor that sets one — so a move that looks like
+   * dragging a folder quietly re-declares what every item in the branch shows.
+   * The values themselves survive: a `custom` entry is keyed by field name and
+   * simply stops being displayed, which is why the move is reversible and why
+   * the copy says so.
+   */
+  protected readonly moveImpact = computed(() => {
+    const pending = this.pendingParent();
+    const draft = this.draft();
+    const node = this.selectedGroup();
+    if (!pending || !draft || !node || pending.groupId !== node.id) return null;
+
+    const impact = groupMoveImpact(draft, node.id, pending.parentId);
+    const parent = pending.parentId ? groupById(draft.groups, pending.parentId) : undefined;
+    const t = this.i18n.t;
+
+    return {
+      heading: parent
+        ? t('collSettings.groups.moveTo', { name: node.name, parent: parent.name })
+        : t('collSettings.groups.moveToRoot', { name: node.name }),
+      gained: impact.gained.length
+        ? t('collSettings.groups.moveGained', { names: impact.gained.join(', ') })
+        : '',
+      lost: impact.lost.map(field =>
+        field.holders
+          ? t(
+              field.holders === 1
+                ? 'collSettings.groups.moveLost.one'
+                : 'collSettings.groups.moveLost.other',
+              { n: field.holders, name: field.name },
+            )
+          : t('collSettings.groups.moveLostNone', { name: field.name }),
+      ),
+      dormant: impact.lost.some(field => field.holders > 0)
+        ? t('collSettings.groups.moveDormant')
+        : '',
+      order: !impact.orderChanges
+        ? ''
+        : impact.order
+          ? t('collSettings.groups.moveOrder', { label: sortLabel(impact.order, t) })
+          : t('collSettings.groups.moveOrderNone'),
+      clash: impact.siblingClash
+        ? t('collSettings.groups.moveClash', { name: impact.siblingClash })
+        : '',
+      nothing:
+        !impact.gained.length && !impact.lost.length && !impact.orderChanges
+          ? t('collSettings.groups.moveNothing')
+          : '',
     };
   });
 
@@ -395,28 +534,107 @@ export class CollectionSettingsPage {
     }));
   }
 
-  protected removeGroup(id: string): void {
+  // --- moving a group ---
+
+  /**
+   * Records a candidate parent. It is not applied yet: the pane first says what
+   * the move changes, because a move silently re-declares the fields and the
+   * order of every item in the branch and nothing afterwards looks wrong.
+   *
+   * An illegal target cannot arrive here — the picker never offers one — but the
+   * guard runs anyway: this is a query param away from being user input.
+   */
+  protected onParentPicked(groupId: string, raw: string): void {
     const draft = this.draft();
     if (!draft) return;
-    const ids = subtreeIds(draft.groups, id);
-    if (draft.items.some(i => ids.includes(i.groupId))) {
-      this.toast.flash(this.i18n.t('toast.group.hasItems'));
+    const parentId = raw === ROOT_PARENT ? null : raw;
+    if ((groupById(draft.groups, groupId)?.parentId ?? null) === parentId) {
+      this.pendingParent.set(null);
       return;
     }
-    // The sections go with the groups. A section belongs to exactly one group,
-    // so one whose group is gone can never be reached again — and leaving it
-    // behind is not harmless: it rides every PUT from here on, and `sectionsOf`
-    // would hand it back the day a new group is created with the same id.
-    this.mutate(d => ({
-      ...d,
-      groups: d.groups.filter(g => !ids.includes(g.id)),
-      sections: d.sections.filter(s => !ids.includes(s.groupId)),
-    }));
-    this.toast.flash(this.i18n.t('toast.group.removed'));
-    // The detail pane was showing it. Leaving `?g=` pointing at a group that no
-    // longer exists would render the empty state anyway, but the URL would keep
-    // claiming a selection that is gone.
-    if (ids.includes(this.g() ?? '')) this.select(null);
+    if (!canReparent(draft.groups, groupId, parentId)) return;
+    this.pendingParent.set({ groupId, parentId });
+  }
+
+  /**
+   * Applies the pending move, through the same debounced draft path as every
+   * other edit here — so it is one guarded full-document PUT, not a special
+   * case.
+   *
+   * Sections and items need no migration: a move changes the group's parent, not
+   * its id, so every section still points at the group it always pointed at and
+   * every item still points at the same section. Nothing here should ever grow a
+   * loop that "fixes" them.
+   */
+  protected commitParentMove(): void {
+    const pending = this.pendingParent();
+    const draft = this.draft();
+    this.pendingParent.set(null);
+    if (!pending || !draft) return;
+    if (!canReparent(draft.groups, pending.groupId, pending.parentId)) return;
+    const name = groupById(draft.groups, pending.groupId)?.name ?? '';
+    this.mutateGroup(pending.groupId, g => ({ ...g, parentId: pending.parentId }));
+    // Re-seed the picker: the branch the group just landed in is folded, so
+    // without this the selected group is nowhere on screen.
+    this.expandedFor = null;
+    this.toast.flash(this.i18n.t('toast.group.moved', { name }));
+  }
+
+  protected cancelParentMove(): void {
+    this.pendingParent.set(null);
+  }
+
+  // --- deleting a group ---
+
+  /**
+   * Opens the confirmation. It used to refuse outright whenever any item existed
+   * in the subtree ("move them first"), which was safe and also a dead end —
+   * nothing in the app moved items in bulk — while an empty branch was deleted
+   * silently, unconfirmed, with no count shown.
+   */
+  protected removeGroup(id: string): void {
+    this.deletingGroupId.set(id);
+  }
+
+  /**
+   * Applies one disposition. Every count the dialog showed and the graph saved
+   * here come out of the same `groupDeletePlan` call, so the number read and the
+   * change made cannot disagree.
+   */
+  protected applyDeletion(disposition: GroupDisposition): void {
+    const draft = this.draft();
+    const id = this.deletingGroupId();
+    this.deletingGroupId.set(null);
+    if (!draft || !id) return;
+
+    const plan = groupDeletePlan(draft, id, disposition);
+    if (!plan.groupIds.length) return;
+    this.mutate(d => ({ ...d, ...plan.result }));
+    this.toast.flash(this.deletionToast(disposition, plan));
+    // Leaving `?g=` on a group that no longer exists renders the empty state
+    // anyway, but the URL would go on claiming a selection that is gone. Under
+    // "keep the contents" a selected sub-group survives, so only the ids the
+    // plan actually removed count.
+    if (plan.groupIds.includes(this.g() ?? '')) this.select(null);
+  }
+
+  private deletionToast(disposition: GroupDisposition, plan: GroupDeletePlan): string {
+    if (!plan.itemCount && !plan.subGroupNames.length) {
+      return this.i18n.t('toast.group.removed');
+    }
+    if (disposition === 'reparent') return this.i18n.t('toast.group.removedKeeping');
+    if (!plan.itemCount) return this.i18n.t('toast.group.removed');
+    return disposition === 'unfile'
+      ? this.i18n.plural(
+          plan.itemCount,
+          'toast.group.removedUnfiled.one',
+          'toast.group.removedUnfiled.other',
+        )
+      : this.i18n.plural(
+          plan.itemCount,
+          'toast.group.removedWithItems.one',
+          'toast.group.removedWithItems.other',
+        );
   }
 
   protected newGroupKeydown(event: KeyboardEvent): void {
@@ -450,10 +668,11 @@ export class CollectionSettingsPage {
   }
 
   /** Moves the selection, which is a query param like every other bit of state. */
-  private select(groupId: string | null): void {
+  private select(groupId: string | null, replaceUrl = false): void {
     void this.router.navigate([], {
       queryParams: { tab: 'groups', g: groupId },
       queryParamsHandling: 'merge',
+      replaceUrl,
     });
   }
 

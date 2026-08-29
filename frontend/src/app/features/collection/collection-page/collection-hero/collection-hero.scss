@@ -82,7 +82,8 @@
   flex-direction: column;
   gap: 6px;
   justify-content: center;
-  min-width: 210px;
+  min-width: 232px;
+  max-width: 320px;
   border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 7px 12px;
@@ -90,26 +91,26 @@
 
   &__row {
     display: flex;
+    align-items: baseline;
     justify-content: space-between;
-    gap: 12px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    color: var(--muted);
+    gap: var(--sp-3);
+    font-size: var(--fs-xs);
+    color: var(--muted-strong);
 
+    /* Body face, not mono: this is a sentence now, and mono at tracking makes a
+       sentence cost twice the width to read half as fast. The numbers beside it
+       keep the mono. */
+    .sentence {
+      line-height: 1.35;
+    }
+
+    /* The type variant of the accent. The raw --accent is picked to be visible
+       as a bar fill; as 11px type it measures 3.90:1 on Zine's paper ground. */
     .pct {
-      color: var(--accent);
+      font-family: var(--font-mono);
+      color: var(--accent-strong);
       font-weight: 700;
-    }
-
-    .copies-note {
-      color: var(--text2);
-    }
-
-    /* Says out loud that the denominator is only what has been catalogued, so
-       a 100% bar cannot be mistaken for a finished set. */
-    .soft-note {
-      color: var(--muted);
+      flex: none;
     }
   }
 
@@ -118,9 +119,9 @@
     gap: 5px;
     flex-wrap: wrap;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.06em;
-    color: var(--muted);
+    color: var(--muted-strong);
 
     .missing {
       color: var(--warn);
@@ -145,7 +146,29 @@
   background: var(--bg);
 
   .value {
-    color: var(--accent2);
+    color: var(--accent2-strong);
     font-weight: 700;
   }
+}
+
+/* The zero-item hero: one message where five dead widgets used to be. It sits
+   in the same slot as the progress and value boxes, so the row does not jump
+   when the first item lands. */
+.blank {
+  flex: 1;
+  min-width: 232px;
+  /* Held to about two lines of body copy. The header is bottom-aligned, so a
+     taller block grows upward into the banner artwork rather than downward. */
+  max-width: 360px;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg);
+}
+
+/* An icon inside a projected button label. `ui-button` renders plain inline
+   content, so the row is made here — the span belongs to this template, which
+   is why this component's scoped styles reach it. */
+.btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
 }

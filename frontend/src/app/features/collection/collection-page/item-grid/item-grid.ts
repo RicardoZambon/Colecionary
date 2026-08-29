@@ -11,9 +11,10 @@ import { SectionChunk } from '../../../../core/utils/sections.util';
 import { fieldValue } from '../../../../core/utils/sort.util';
 import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiBadge, UiCard, UiReorder } from '../../../../shared/ui';
+import { UiBadge, UiCard, UiCheckbox, UiIcon, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
+import { RowPick } from '../item-list/item-list';
 import { SectionHeader } from '../section-header/section-header';
 import { VaultStore } from '../../../../core/state/vault.store';
 
@@ -25,7 +26,17 @@ import { VaultStore } from '../../../../core/state/vault.store';
 @Component({
   selector: 'app-item-grid',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, ItemValuePipe, TPipe, SectionHeader, UiBadge, UiCard, UiReorder],
+  imports: [
+    RouterLink,
+    ItemValuePipe,
+    TPipe,
+    SectionHeader,
+    UiBadge,
+    UiCard,
+    UiCheckbox,
+    UiIcon,
+    UiReorder,
+  ],
   templateUrl: './item-grid.html',
   styleUrl: './item-grid.scss',
 })
@@ -61,13 +72,41 @@ export class ItemGrid {
   /** Group id → name. A Map rather than a function, so OnPush can memoise. */
   readonly groupNames = input.required<ReadonlyMap<string, string>>();
 
+  /** Which visible cards are selected. Shared with the table, row for row. */
+  readonly selectedIds = input<ReadonlySet<string>>(new Set());
+
   readonly moved = output<{ from: number; to: number }>();
   readonly sectionToggled = output<string>();
+  readonly picked = output<RowPick>();
 
   protected readonly drag = new DragOrder(() => this.manual());
 
   protected isOwned(item: Item): boolean {
     return isOwned(item);
+  }
+
+  protected isSelected(item: Item): boolean {
+    return this.selectedIds().has(item.id);
+  }
+
+  protected selectLabel(item: Item): string {
+    return this.i18n.t('select.item', { name: item.name });
+  }
+
+  /**
+   * The card itself carries the routerLink, so the checkbox has to swallow its
+   * own click — otherwise ticking a card opens it. Exactly what `ui-reorder`
+   * does with the buttons it overlays, and for the same reason.
+   */
+  protected contain(event: Event): void {
+    event.stopPropagation();
+  }
+
+  /** Same contract as the table's; see `ItemList.pick` for the shift path. */
+  protected pick(item: Item, event: { checked: boolean; shift: boolean }): void {
+    const already = this.isSelected(item);
+    const checked = event.checked === already ? !already : event.checked;
+    this.picked.emit({ id: item.id, checked, shift: event.shift });
   }
 
   /** Explains the `≈` on a card whose value is a price paid, not an estimate. */

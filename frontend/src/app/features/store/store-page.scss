@@ -8,6 +8,13 @@
   max-width: 1080px;
 }
 
+@include upto($bp-md) {
+  :host {
+    padding: var(--sp-4) var(--sp-4) var(--sp-8);
+    gap: var(--sp-4);
+  }
+}
+
 h1 {
   @include display-heading;
   margin: 0;
@@ -21,7 +28,9 @@ h1 {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  /* 300px did not fit a 390px screen once the padding was paid for; a listing
+     card reads fine at 260 and the track still grows to fill. */
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
 }
 

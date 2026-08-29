@@ -7,11 +7,23 @@
   box-shadow: var(--shadow);
 }
 
-@mixin mono-label($size: 10px, $tracking: 0.13em) {
+/**
+ * The small tracked mono heading used for every micro-label in the app.
+ *
+ * Both defaults are load-bearing. The colour is `--muted-strong`, not `--muted`:
+ * these labels carry information — a count, a ratio, the name of a column — and
+ * `--muted` is the decorative grey, which measures 2.4–4.4:1 depending on the
+ * theme and surface. The size is `--fs-xs` (11px) rather than the 10px it was,
+ * because at 10px the tracking that makes these read as headings is also what
+ * stops them being read at all.
+ *
+ * Sixteen call sites inherit both, which is the point of the default.
+ */
+@mixin mono-label($size: var(--fs-xs), $tracking: 0.13em) {
   font-family: var(--font-mono);
   font-size: $size;
   letter-spacing: $tracking;
-  color: var(--muted);
+  color: var(--muted-strong);
 }
 
 @mixin display-heading {

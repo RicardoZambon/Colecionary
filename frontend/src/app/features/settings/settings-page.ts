@@ -9,11 +9,12 @@ import {
   ReplaceDecision,
 } from '../../core/api/archive-api';
 import { I18nService, MessageKey } from '../../core/i18n';
+import { ConfirmService } from '../../core/state/confirm.service';
 import { ThemeService } from '../../core/state/theme.service';
 import { ToastService } from '../../core/state/toast.service';
 import { ImportDialog } from './import-dialog/import-dialog';
 import { VaultStore } from '../../core/state/vault.store';
-import { MemberRole, PlanId } from '../../core/models';
+import { MemberRole } from '../../core/models';
 import { saveFile } from '../../core/utils/download.util';
 import { CurrencyCode, SUPPORTED_CURRENCIES, currencyLabel } from '../../core/utils/money.util';
 import {
@@ -25,7 +26,6 @@ import {
   UiFlag,
   UiSelect,
   UiTabs,
-  UiToggle,
 } from '../../shared/ui';
 import { TPipe } from '../../shared/pipes/t.pipe';
 
@@ -36,40 +36,36 @@ const TAB_KEYS: { id: string; label: MessageKey }[] = [
   { id: 'account', label: 'settings.tab.account' },
 ];
 
+/** The first tab, and what an unrecognised `?tab=` resolves to. */
+const DEFAULT_TAB = TAB_KEYS[0].id;
+
+/**
+ * The tab a `?tab=` names, or the first one.
+ *
+ * The query string is untrusted input (rule 11) and this page used to take it
+ * straight into a signal, so `?tab=sharing` rendered the default panel while
+ * `aria-selected="true"` sat on nothing at all — the tablist claimed a
+ * selection that did not exist, which is worse for a screen reader than for
+ * anyone else. Same shape as `resolveGroupId` and `resolveSectionId`: anything
+ * that does not resolve collapses to the one safe value, and the caller cannot
+ * tell the difference between "absent" and "nonsense" because there is no
+ * useful difference.
+ */
+export function resolveTabId(id: string | null | undefined): string {
+  if (!id) return DEFAULT_TAB;
+  return TAB_KEYS.some(t => t.id === id) ? id : DEFAULT_TAB;
+}
+
 const ROLE_KEYS: { value: MemberRole; label: MessageKey }[] = [
   { value: 'Owner', label: 'role.owner' },
   { value: 'Editor', label: 'role.editor' },
   { value: 'Viewer', label: 'role.viewer' },
 ];
 
-interface PolicyDef {
-  key: 'invites' | 'link' | 'external';
-  label: MessageKey;
-  description: MessageKey;
-}
-
-const POLICIES: PolicyDef[] = [
-  {
-    key: 'invites',
-    label: 'settings.access.policy.invites.label',
-    description: 'settings.access.policy.invites.description',
-  },
-  {
-    key: 'link',
-    label: 'settings.access.policy.link.label',
-    description: 'settings.access.policy.link.description',
-  },
-  {
-    key: 'external',
-    label: 'settings.access.policy.external.label',
-    description: 'settings.access.policy.external.description',
-  },
-];
-
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiSelect, UiTabs, UiToggle, ImportDialog],
+  imports: [TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiSelect, UiTabs, ImportDialog],
   templateUrl: './settings-page.html',
   styleUrl: './settings-page.scss',
 })
@@ -78,13 +74,13 @@ export class SettingsPage {
   protected readonly theme = inject(ThemeService);
   protected readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
   private readonly router = inject(Router);
   private readonly archives = inject(ArchiveApi);
 
   readonly tab = input<string>('appearance');
 
   protected readonly plans = PLANS;
-  protected readonly policyDefs = POLICIES;
 
   // Label tables are computed, not module constants: the language can change
   // while the page is open and these have to follow it.
@@ -103,15 +99,36 @@ export class SettingsPage {
       .sort((a, b) => a.label.localeCompare(b.label, locale));
   });
 
-  protected readonly activeTab = signal('appearance');
-  protected readonly policies = signal<Record<PolicyDef['key'], boolean>>({
-    invites: true,
-    link: true,
-    external: false,
-  });
+  protected readonly activeTab = signal(DEFAULT_TAB);
+
+  /**
+   * Bumped to force the member rows to be rebuilt from store state.
+   *
+   * A `<select>` the user has just changed holds their choice in the DOM, and
+   * `[value]` is bound to the *store's* role — which a refused write leaves
+   * untouched. Angular therefore has nothing to re-render and the select keeps
+   * showing a role the server rejected: the screen and the server disagree, and
+   * nothing says so. Changing the `track` key destroys the row and builds a
+   * fresh one, which is the only thing that reliably puts a native control back
+   * where the model says it should be.
+   */
+  protected readonly memberRev = signal(0);
 
   constructor() {
-    effect(() => this.activeTab.set(this.tab() || 'appearance'));
+    effect(() => {
+      const resolved = resolveTabId(this.tab());
+      this.activeTab.set(resolved);
+      // A `?tab=` nobody can honour is corrected in place rather than left in
+      // the address bar describing a screen that is not showing: `replaceUrl`
+      // so the bad value does not become a Back-button destination.
+      if (this.tab() && this.tab() !== resolved) {
+        void this.router.navigate([], {
+          queryParams: { tab: resolved },
+          queryParamsHandling: 'merge',
+          replaceUrl: true,
+        });
+      }
+    });
   }
 
   protected readonly planSub = computed(() =>
@@ -133,28 +150,40 @@ export class SettingsPage {
     if (!current || current.defaultCurrency === code) return;
     try {
       await this.store.updateTenantSettings({ defaultCurrency: code as CurrencyCode });
-      this.toast.flash(this.i18n.t('toast.currency.saved'));
+      this.toast.success(this.i18n.t('toast.currency.saved'));
     } catch {
-      this.toast.flash(this.i18n.t('toast.currency.failed'));
+      this.toast.error(this.i18n.t('toast.currency.failed'));
     }
   }
 
-  protected async choosePlan(plan: PlanId): Promise<void> {
-    const profile = this.store.profile();
-    if (!profile || profile.plan === plan) return;
-    await this.store.updateProfile({ ...profile, plan });
-    this.toast.flash(this.i18n.t(plan === 'pro' ? 'toast.plan.pro' : 'toast.plan.free'));
-  }
-
-  protected togglePolicy(key: PolicyDef['key']): void {
-    this.policies.update(all => ({ ...all, [key]: !all[key] }));
-  }
+  /*
+   * `choosePlan` is gone, and nothing replaced it.
+   *
+   * It let the client PUT its own `plan` to `pro` — no payment, no entitlement,
+   * no audit trail — and then toasted "Welcome to Pro ✓". Nothing in the app
+   * gates a single feature on the plan, so the button changed one string in the
+   * profile and told the user they had bought something. A button that lies
+   * about a purchase is not a stub, it is a false receipt, and the honest
+   * version of an unimplemented paywall is to say it is unimplemented: the plan
+   * cards stay as a description of the tiers, the current one is marked, and the
+   * other one carries a disabled control that says billing is not available yet.
+   */
 
   protected async setMemberRole(email: string, role: string): Promise<void> {
-    await this.store.updateTenantMembers(
-      this.store.tenantMembers().map(m => (m.email === email ? { ...m, role: role as MemberRole } : m)),
-    );
-    this.toast.flash(this.i18n.t('toast.member.roleUpdated'));
+    const previous = this.store.tenantMembers();
+    try {
+      await this.store.updateTenantMembers(
+        previous.map(m => (m.email === email ? { ...m, role: role as MemberRole } : m)),
+      );
+    } catch {
+      // The select is still showing the role the user picked and the server
+      // kept the old one. Rebuild the row so the screen agrees with storage
+      // again, and say so — the interceptor reported *why*, this says *what*.
+      this.memberRev.update(n => n + 1);
+      this.toast.error(this.i18n.t('toast.member.roleFailed'));
+      return;
+    }
+    this.toast.success(this.i18n.t('toast.member.roleUpdated'));
   }
 
   protected async removeMember(email: string): Promise<void> {
@@ -163,8 +192,25 @@ export class SettingsPage {
       this.toast.flash(this.i18n.t('toast.member.ownerImmutable'));
       return;
     }
-    await this.store.updateTenantMembers(this.store.tenantMembers().filter(m => m.email !== email));
-    this.toast.flash(this.i18n.t('toast.member.removed'));
+
+    const confirmed = await this.confirm.ask({
+      titleKey: 'settings.access.remove.confirm.title',
+      bodyKey: 'settings.access.remove.confirm.body',
+      bodyParams: { name: member.name },
+      confirmKey: 'settings.access.remove.confirm.ok',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      await this.store.updateTenantMembers(
+        this.store.tenantMembers().filter(m => m.email !== email),
+      );
+    } catch {
+      this.toast.error(this.i18n.t('toast.member.removeFailed'));
+      return;
+    }
+    this.toast.success(this.i18n.t('toast.member.removed'));
   }
 
   protected readonly exporting = signal(false);

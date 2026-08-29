@@ -7,7 +7,10 @@
   }}</h1>
 
   <div class="layout">
-    <div class="photos">
+    <!-- The photos and the running summary share the narrow column: the
+         dropzone is 300px tall and the page is ~900px, so this column used to
+         be two thirds empty. -->
+    <aside class="side">
       <ui-photo-manager
         [photoIds]="photoIds()"
         [max]="maxPhotos"
@@ -15,7 +18,33 @@
         (changed)="setPhotos($event)"
         (framed)="reframe($event)"
       />
-    </div>
+
+      <ui-card class="summary">
+        <div class="summary__heading">{{ 'itemForm.summaryHeading' | t }}</div>
+        <dl class="summary__rows">
+          <dt>{{ 'itemForm.summaryOwnership' | t }}</dt>
+          <dd>
+            {{
+              owned()
+                ? ('itemForm.summaryOwned' | t: { n: copies().length })
+                : ('itemForm.summaryWanted' | t)
+            }}
+          </dd>
+
+          <dt>{{ 'itemForm.summaryPaid' | t }}</dt>
+          <dd>{{ paid() | money: currency() }}</dd>
+
+          <dt>{{ 'itemForm.summaryEstimate' | t }}</dt>
+          <dd>{{ estimate() | money: currency() }}</dd>
+
+          <dt>{{ 'itemForm.summaryPhotos' | t }}</dt>
+          <dd>{{ 'itemForm.summaryPhotoCount' | t: { n: photoIds().length, max: maxPhotos } }}</dd>
+
+          <dt>{{ 'itemForm.summaryDestination' | t }}</dt>
+          <dd class="destination">{{ destination() }}</dd>
+        </dl>
+      </ui-card>
+    </aside>
 
     <form class="form" (submit)="$event.preventDefault(); save()">
       <ui-field [label]="'itemForm.name' | t">
@@ -95,9 +124,12 @@
                 />
               </ui-field>
               <ui-field [label]="'itemForm.acquired' | t">
-                <ui-text-input
+                <!-- Not a bare type="date": that follows the *browser's* locale
+                     and shows mm/dd/yyyy inside a Portuguese UI, which does not
+                     fail — it records the wrong date. -->
+                <ui-date-input
                   variant="subtle"
-                  type="date"
+                  [ariaLabel]="'itemForm.copyAcquiredAria' | t: { n: $index + 1 }"
                   [value]="copy.acquiredOn"
                   (valueChange)="patchCopy($index, { acquiredOn: $event })"
                 />
@@ -143,7 +175,16 @@
         </div>
       </ui-card>
 
+      <!-- Sticky, because Save used to sit below the fold of a page tall enough
+           to scroll on every screen: the control that commits the work was the
+           one control you had to go looking for. The dirty flag is beside it so
+           "did that take?" is answerable without scrolling back up. -->
       <div class="actions">
+        <span class="actions__state" aria-live="polite">
+          @if (dirty()) {
+            <span class="dot" aria-hidden="true">●</span>{{ 'itemForm.unsaved' | t }}
+          }
+        </span>
         <ui-button variant="ghost" (click)="cancel()">{{ 'itemForm.cancel' | t }}</ui-button>
         <ui-button type="submit">{{ 'itemForm.save' | t }}</ui-button>
       </div>

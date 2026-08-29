@@ -32,6 +32,8 @@
         [searching]="searching()"
         [sortOverride]="sortOverride()"
         (sortOverrideChange)="setSortOverride($event)"
+        [hiddenColumns]="hiddenColumns()"
+        (columnToggled)="toggleColumn($event)"
         [view]="view()"
         (viewChange)="setView($event)"
       />
@@ -84,8 +86,16 @@
             [manual]="manual()"
             [sortFieldName]="sortFieldName()"
             [groupNames]="groupNames()"
+            [fields]="visibleColumns()"
+            [sort]="effectiveSort()"
+            [selectedIds]="selectedIds()"
+            [allSelected]="headerAllSelected()"
+            [someSelected]="headerSomeSelected()"
             (moved)="moveItem($event.from, $event.to)"
             (sectionToggled)="toggleSection($event)"
+            (picked)="pickRow($event)"
+            (allPicked)="pickAll($event)"
+            (sortByPicked)="sortByColumn($event)"
           />
         }
         @default {
@@ -98,17 +108,83 @@
             [manual]="manual()"
             [sortFieldName]="sortFieldName()"
             [groupNames]="groupNames()"
+            [selectedIds]="selectedIds()"
             (moved)="moveItem($event.from, $event.to)"
             (sectionToggled)="toggleSection($event)"
+            (picked)="pickRow($event)"
           />
         }
       }
 
       @if (view() !== 'dashboard' && items().length === 0) {
-        <div class="empty">{{ 'collection.noMatches' | t }}</div>
+        <!-- Two different facts, and they used to share one message: an
+             untouched, genuinely empty collection was told to clear filters it
+             had never set. `filtering()` is the only thing that tells them
+             apart, so it decides which of the two this is. -->
+        @if (filtering()) {
+          <ui-empty
+            icon="search"
+            [title]="'collection.noMatches' | t"
+            [body]="'collection.noMatchesBody' | t"
+          >
+            <ui-button variant="ghost" size="sm" emptyActions (click)="clearFilters()">
+              {{ 'collection.clearFilters' | t }}
+            </ui-button>
+          </ui-empty>
+        } @else {
+          <ui-empty
+            icon="tag"
+            [title]="'collection.empty' | t"
+            [body]="'collection.emptyBody' | t"
+          >
+            <ui-button
+              size="sm"
+              emptyActions
+              [routerLink]="['/c', coll.id, 'items', 'new']"
+              queryParamsHandling="preserve"
+            >
+              {{ 'hero.addItem' | t }}
+            </ui-button>
+          </ui-empty>
+        }
+      }
+
+      <!-- Rendered here rather than by the table, because the card grid needs
+           the identical bar and neither view knows about the other. Sticky at
+           the foot of the main column. -->
+      @if (selectionCount() > 0) {
+        <app-bulk-bar
+          [items]="selectedItems()"
+          [groups]="groups()"
+          [sections]="sections()"
+          (applied)="applyBulk($event)"
+          (removeRequested)="confirmingDelete.set(true)"
+          (cleared)="clearSelection()"
+        />
       }
     </div>
   </div>
+
+  <!-- Guarded on the count as well as the flag: a filter change can empty the
+       selection out from under an open dialog, and "Delete 0 items" is not a
+       question worth asking. -->
+  @if (confirmingDelete() && selectionCount() > 0) {
+    <ui-dialog
+      [title]="deleteTitle()"
+      describedBy="bulk-delete-why"
+      (dismissed)="confirmingDelete.set(false)"
+    >
+      <p id="bulk-delete-why">{{ 'bulk.confirm.body' | t }}</p>
+      <ng-container dlgActions>
+        <ui-button variant="ghost" (click)="confirmingDelete.set(false)">
+          {{ 'bulk.confirm.cancel' | t }}
+        </ui-button>
+        <ui-button variant="danger" (click)="deleteSelected()">
+          {{ deleteConfirmLabel() }}
+        </ui-button>
+      </ng-container>
+    </ui-dialog>
+  }
 } @else {
   <div class="missing">
     {{ 'common.collectionNotFound' | t }}

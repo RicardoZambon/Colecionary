@@ -90,11 +90,39 @@ export function visibleItems(
       (!criteria.condition || item.copies.some(c => c.condition === criteria.condition)) &&
       (!criteria.own || (criteria.own === 'owned' ? isOwned(item) : !isOwned(item))) &&
       (!criteria.sectionId || inSection(item, criteria.sectionId, rank)) &&
-      (!query || item.name.toLowerCase().includes(query)),
+      matchesQuery(item, query),
   );
 
   const sort = criteria.sort ?? sortFor(groups, criteria.groupId) ?? DEFAULT_SORT;
   return sortItems(filtered, sort, fieldsFor(groups, criteria.groupId), rank);
+}
+
+/**
+ * Whether an item answers a search.
+ *
+ * Name, description, tags and every custom field value. Restricting this to the
+ * name was the wrong default for the app's most frequent lookup: a cataloguer
+ * types a catalogue number, and a catalogue number is precisely a custom
+ * field — the one place the old search could not see. Description and tags come
+ * along because they are the other two things already typed about an item, and
+ * a search that finds fewer things than the data holds reads as broken rather
+ * than as precise.
+ *
+ * Field *names* are not searched, only their values. A group that declares
+ * "Número" would otherwise make every one of its items match "num".
+ *
+ * `query` must already be trimmed and lower-cased — this runs once per item per
+ * keystroke, and folding the needle here instead of at the call site would fold
+ * it once per item too.
+ */
+export function matchesQuery(item: Item, query: string): boolean {
+  if (!query) return true;
+  return (
+    item.name.toLowerCase().includes(query) ||
+    item.description.toLowerCase().includes(query) ||
+    item.tags.some(tag => tag.toLowerCase().includes(query)) ||
+    item.custom.some(field => field.value.toLowerCase().includes(query))
+  );
 }
 
 /**

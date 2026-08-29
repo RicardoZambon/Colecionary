@@ -22,7 +22,12 @@
       />
     }
     @if (s.catalogued === 0) {
-      <span class="sec__empty">{{ 'section.empty' | t }}</span>
+      <ui-empty
+        class="sec__empty"
+        [compact]="true"
+        icon="tag"
+        [title]="'section.empty' | t"
+      />
     }
   }
 </div>

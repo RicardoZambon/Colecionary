@@ -1,22 +1,92 @@
 @use '../../../../../styles/mixins' as *;
 
-.list-line {
-  position: relative;
+/**
+ * Only this box scrolls sideways. A group may declare eight fields and every
+ * one of them earns a column, which no laptop fits beside the name, the group
+ * and two money columns — but the page body must never scroll horizontally.
+ */
+.list-scroll {
+  overflow-x: auto;
+}
+
+/**
+ * The table's own width, so every row resolves its columns against the same
+ * number and they stay aligned however far it is scrolled. Derived from
+ * `--field-cols` rather than from `max-content`, which would let one long item
+ * name decide how wide the whole table is.
+ */
+.list-table {
+  --check-w: 34px;
+  --field-w: 104px;
+  /* One row background, read by the row itself and by the two sticky cells
+     that have to hide what scrolls under them. */
+  --row-bg: var(--panel);
+  min-width: calc(620px + var(--field-cols, 0) * (var(--field-w) + var(--sp-2)));
 }
 
 .list-head,
+.list-line {
+  display: grid;
+  grid-template-columns: var(--check-w) minmax(0, 1fr);
+  align-items: center;
+}
+
+.list-line {
+  position: relative;
+
+  &:hover,
+  &.selected {
+    --row-bg: var(--panel2);
+  }
+}
+
+/**
+ * The checkbox and the name stay put while the fields scroll past: a row that
+ * loses its identity halfway across is unreadable, and the checkbox is the
+ * control the whole bulk bar depends on. Both need an opaque background of
+ * their own, or the cells they cover show through.
+ */
+.pick {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  background: var(--row-bg);
+}
+
+.list-cells,
 .list-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 70px 56px 90px 90px;
-  gap: 10px;
-  padding: 9px 16px;
+  /* Name · Group · Year · Copies · Cond · Value. The left padding lives on the
+     sticky checkbox cell instead, so the two line up when scrolled. */
+  grid-template-columns: minmax(150px, 2fr) 100px 56px 48px 80px 88px;
+  gap: var(--sp-2);
+  padding: 9px var(--sp-4) 9px 0;
   align-items: center;
+}
 
-  // Manual mode keeps the columns and just clears room for the floating
-  // move buttons on the right.
-  &.list--manual {
-    padding-right: 78px;
+/**
+ * With fields declared, they slot in between Cond and Value — so the two
+ * right-aligned money columns stay adjacent. The `repeat(var(…))` is why this
+ * lives behind a modifier class: `repeat(0, …)` is invalid CSS and would throw
+ * the whole declaration away, collapsing the table.
+ */
+.list-table--fields {
+  .list-cells,
+  .list-row {
+    grid-template-columns:
+      minmax(150px, 2fr) 100px 56px 48px 80px
+      repeat(var(--field-cols), minmax(var(--field-w), 1fr)) 88px;
   }
+}
+
+// Manual mode keeps the columns and just clears room for the floating move
+// buttons on the right.
+.list-row.list--manual {
+  padding-right: 78px;
 }
 
 .list-head {
@@ -25,19 +95,72 @@
   border-bottom: var(--bw) solid var(--border);
 }
 
-.list-row {
-  padding: 11px 16px;
-  font-size: 12.5px;
-  border-bottom: 1px solid var(--border);
+.col {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/**
+ * A header that reorders the list is a button, not a decorated label — the same
+ * reason the section heading is one. Ordering was previously only reachable
+ * through the dropdown, which is still there and still the only way to reach
+ * "manual" and "recently added".
+ */
+.col--sortable {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
   color: inherit;
+  cursor: pointer;
+  text-align: inherit;
 
   &:hover {
-    background: var(--panel2);
+    color: var(--accent);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  &.right {
+    text-align: right;
+  }
+}
+
+.col__arrow {
+  color: var(--accent);
+  margin-left: 3px;
+}
+
+.list-row {
+  font-size: 12.5px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  background: var(--row-bg);
+
+  &:hover {
     text-decoration: none;
   }
 
   .name {
     font-weight: 600;
+    /* Pinned beside the checkbox, and opaque for the same reason. */
+    position: sticky;
+    left: var(--check-w);
+    z-index: 1;
+    background: var(--row-bg);
+    padding-right: var(--sp-1);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .group {
@@ -45,6 +168,20 @@
   }
 
   .year {
+    color: var(--muted);
+  }
+
+  .group,
+  .fieldcell {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A declared field the item has no value for. Muted rather than blank: the
+     data says "unknown", and an empty cell reads as a rendering fault. */
+  .fieldcell--empty {
     color: var(--muted);
   }
 
@@ -89,6 +226,32 @@
   }
 
   .value {
+    font-weight: 700;
+    color: var(--accent2);
+  }
+}
+
+/** What the list adds up to, under the last row. */
+.list-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border-top: var(--bw) solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+
+  &__count {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text2);
+  }
+
+  &__spacer {
+    flex: 1;
+  }
+
+  &__value {
     font-weight: 700;
     color: var(--accent2);
   }

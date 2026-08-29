@@ -8,6 +8,14 @@
   max-width: 1080px;
 }
 
+/* 30px of side padding is 15% of a phone screen. */
+@include upto($bp-md) {
+  :host {
+    padding: var(--sp-4) var(--sp-4) var(--sp-8);
+    gap: var(--sp-4);
+  }
+}
+
 h1 {
   @include display-heading;
   margin: 0;
@@ -19,9 +27,18 @@ h1 {
   margin: 6px 0 0;
 }
 
+/*
+ * Intrinsic, not counted. `repeat(4, 1fr)` divides whatever width there is by
+ * four, which at 390px is a 48px tile — the stat row rendered as
+ * "IT / 32 / em 10 col", clipped mid-word. `auto-fit` + `minmax` states the
+ * only thing that is actually true about a tile (it needs ~200px to hold a
+ * label and a figure) and lets the column count follow from that: four across
+ * on a desktop, two on a tablet, one on a phone, with no breakpoint to keep in
+ * step. `store-page.scss` already worked this way.
+ */
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 14px;
 }
 
@@ -68,9 +85,13 @@ h1 {
   gap: 12px;
 }
 
+/*
+ * `auto-fill` rather than `auto-fit` here: a vault with one collection should
+ * show one card the size of a card, not one card stretched across the page.
+ */
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 14px;
 }
 

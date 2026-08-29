@@ -1,5 +1,9 @@
-<nav class="group">
-  <a class="nav-item" routerLink="/dashboard" routerLinkActive="active">
+<div class="drawer-head">
+  <ui-button variant="icon" [ariaLabel]="'nav.close' | t" (click)="dismiss()">✕</ui-button>
+</div>
+
+<nav class="group" [attr.aria-label]="'nav.primaryAria' | t">
+  <a #firstLink class="nav-item" routerLink="/dashboard" routerLinkActive="active">
     <ui-icon name="home" />{{ 'nav.dashboard' | t }}
   </a>
   <a class="nav-item" routerLink="/store" routerLinkActive="active">
@@ -7,7 +11,7 @@
   </a>
 </nav>
 
-<nav class="group">
+<nav class="group" [attr.aria-label]="'nav.collections' | t">
   <div class="heading">{{ 'nav.collections' | t }}</div>
   @for (collection of store.collections(); track collection.id) {
     <a class="nav-item nav-item--split" [routerLink]="['/c', collection.id]" routerLinkActive="active">

@@ -22,23 +22,6 @@ h1 {
   margin: 0;
 }
 
-/*
- * The anchor twin of ui-button's link variant. It stays a real <a> because it
- * navigates — middle-click, open-in-new-tab and the status bar all depend on
- * that, and a button pretending to be a link takes those away. Only the four
- * declarations that make it look the same live here.
- */
-a.link {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
 .general {
   display: flex;
   flex-direction: column;
@@ -55,16 +38,28 @@ a.link {
   flex-direction: column;
   overflow: visible;
 
+  /*
+   * Wraps rather than breaking: a tracked-out uppercase micro-heading beside a
+   * link in a 260px column ran out of room and split BOTH labels over two
+   * lines each. Given a line apiece they stay readable.
+   */
   &__head {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: baseline;
-    padding-bottom: 8px;
+    gap: var(--sp-1) var(--sp-2);
+    padding-bottom: var(--sp-2);
 
     .heading {
       @include mono-label;
       // Uppercase is presentation — the dictionary keeps sentence case.
       text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    ui-button {
+      white-space: nowrap;
     }
   }
 }
@@ -94,9 +89,17 @@ a.link {
     font-size: 11px;
     color: var(--muted);
   }
+
+  /* Wide enough for a five-digit run, narrow enough to read as a number rather
+     than as another dropdown. */
+  .target {
+    flex: none;
+    width: 78px;
+  }
 }
 
 .detail__name,
+.detail__parent,
 .detail__order,
 .detail__fields,
 .detail__sections {
@@ -107,7 +110,7 @@ a.link {
   padding: 10px 0 0;
 
   .fields-label {
-    @include mono-label(9px, 0.1em);
+    @include mono-label(var(--fs-xs), 0.1em);
     text-transform: uppercase;
   }
 }
@@ -127,6 +130,62 @@ a.link {
   }
 }
 
+.detail__parent {
+  .parent {
+    flex: 1;
+    min-width: 170px;
+  }
+}
+
+/*
+ * The preview a move has to survive before it commits. `fieldsFor` merges the
+ * whole ancestor path and `sortFor` takes the nearest ancestor that sets one,
+ * so a move re-declares what every item in the branch shows — and nothing
+ * afterwards looks broken, which is exactly why it is stated up front.
+ */
+.move-preview {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  border: var(--bw) solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--panel2);
+  font-size: var(--fs-sm);
+
+  &__head {
+    margin: var(--sp-1) 0 var(--sp-2);
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  &__list {
+    margin: 0;
+    padding-left: var(--sp-5);
+    color: var(--text2);
+  }
+
+  &__lost {
+    color: var(--warn);
+  }
+
+  &__note {
+    margin: var(--sp-2) 0 0;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+  }
+
+  &__clash {
+    margin: var(--sp-2) 0 0;
+    color: var(--warn);
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+    margin-top: var(--sp-3);
+  }
+}
+
 .detail__order {
   .order-by {
     min-width: 170px;
@@ -134,12 +193,6 @@ a.link {
 
   .direction {
     min-width: 86px;
-  }
-
-  /* Wide enough for a five-digit run, narrow enough to read as a number
-     rather than as another dropdown. */
-  .target {
-    width: 78px;
   }
 
   .fields-label.spaced {
@@ -179,11 +232,6 @@ a.link {
 }
 
 .field-chip {
-  .remove {
-    font-size: 11px;
-    width: auto;
-  }
-
   .type {
     width: 110px;
     flex: none;
@@ -313,9 +361,25 @@ a.link {
   gap: 12px;
 }
 
+/* Anchored to the bottom of the scroll area rather than floating after however
+   much content the active tab happened to have. The note beside it is the
+   honest half: this page saves on a debounce, so the button navigates. */
 .done-row {
+  position: sticky;
+  bottom: 0;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: auto;
+  padding: var(--sp-3) 0;
+  background: var(--bg);
+  border-top: var(--bw) solid var(--border);
+
+  &__note {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
 }
 
 .missing {
@@ -323,48 +387,39 @@ a.link {
   font-size: 13px;
 }
 
-.section-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 4px 3px 10px;
-  border: 1px solid var(--border);
-  /* Not the pill radius the field chips use: at full width a pill reads as a
-     button, and these rows are not clickable. */
-  border-radius: var(--radius);
-  background: var(--panel);
-
-  /* No max-width here on purpose — `.rename` flexes at the pane level, so the
-     name takes whatever the fixed columns to its right leave. */
-  .count {
-    width: 56px;
-    flex: none;
-    text-align: right;
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    color: var(--muted);
-  }
-
-  .target {
-    width: 78px;
-    flex: none;
-  }
-
+/* Only what differs: the row's frame and its fixed columns are both declared
+   once, above. No max-width on the name on purpose — `.rename` flexes at the
+   pane level, so it takes whatever the columns to its right leave. */
+.section-chip .count {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
 }
 
-/* Master–detail. 240px is enough for four levels of indent plus a name before
-   it truncates; below 900px the two stack, because a 240px column beside a
-   detail pane on a phone leaves neither of them usable. */
+/* Master–detail. 280px is enough for four levels of indent plus a name before
+   it truncates; below $bp-lg the two stack, because that column beside a detail
+   pane on a phone leaves neither of them usable.
+
+   `stretch`, not `start`: the two cards used to size to their own content, so a
+   two-group tree next to a long editor left a several-hundred-pixel void below
+   both of them. The floor keeps the pane from collapsing when the editor is the
+   short one instead. */
 .groups-split {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: stretch;
+  min-height: 60vh;
 }
 
-@media (max-width: 900px) {
+.groups-split__tree,
+.groups-split__detail {
+  align-self: stretch;
+}
+
+@include upto($bp-lg) {
   .groups-split {
     grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
   }
 }
 

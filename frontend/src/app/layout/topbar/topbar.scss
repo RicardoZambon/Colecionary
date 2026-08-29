@@ -1,3 +1,5 @@
+@use '../../../styles/mixins' as *;
+
 :host {
   display: flex;
   align-items: center;
@@ -6,6 +8,14 @@
   background: var(--panel);
   border-bottom: var(--bw) solid var(--border);
   flex: none;
+}
+
+.hamburger {
+  flex: none;
+  /* Above the breakpoint the sidebar is a permanent column, so the toggle would
+     control nothing. `display: none` rather than `visibility` — an invisible
+     button is still a tab stop. */
+  display: none;
 }
 
 .brand {
@@ -47,6 +57,7 @@
 
 .search {
   width: 240px;
+  min-width: 0;
 
   ::ng-deep input {
     padding: 7px 12px;
@@ -188,5 +199,60 @@
     border-color: var(--accent);
     color: var(--accent);
     text-decoration: none;
+  }
+}
+
+/* NOTE: this block sits at the end of the file on purpose — `display: none`
+   below only sticks if it comes after the `.gear { display: grid }` rule it
+   overrides, since the two have equal specificity. */
+/*
+ * The bar is a single row of eight controls, which is a row that cannot fit a
+ * phone. `flex-wrap` is what makes it degrade instead of overflow: anything
+ * that no longer fits drops to the next line rather than pushing the document
+ * 65px wider than the viewport. The search box is sent to that next line
+ * deliberately (it wants the full width anyway), and the two items that carry
+ * no unique information here — the crumb, which repeats the URL, and the gear,
+ * which repeats the drawer's Settings row — are dropped so the bar stays two
+ * rows tall.
+ */
+@include upto($bp-lg) {
+  :host {
+    flex-wrap: wrap;
+    row-gap: var(--sp-2);
+    gap: 10px;
+    padding: var(--sp-2) var(--sp-3);
+  }
+
+  .hamburger {
+    display: inline-block;
+  }
+
+  .crumb,
+  .gear {
+    display: none;
+  }
+
+  .search {
+    order: 10;
+    flex: 1 1 100%;
+    width: auto;
+  }
+
+  /* Thumb-sized chrome. Width matters as much as height for the square ones:
+     a 30px-wide avatar button is a 30px target however tall it is. */
+  .theme-trigger,
+  .avatar-trigger,
+  .brand {
+    min-height: var(--tap);
+  }
+
+  .avatar-trigger {
+    min-width: var(--tap);
+    display: grid;
+    place-items: center;
+  }
+
+  .search ::ng-deep input {
+    min-height: var(--tap);
   }
 }

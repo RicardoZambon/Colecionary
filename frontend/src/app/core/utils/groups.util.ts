@@ -34,13 +34,48 @@ export function resolveGroupId(groups: GroupNode[], id: string | null | undefine
   return groupById(groups, id)?.id ?? '';
 }
 
-/** The given group id plus every descendant id. */
+/**
+ * The given group id plus every descendant id.
+ *
+ * Guarded against a cycle, like `visibleTree`, `statsIndex` and `pathOf`:
+ * `parentId` carries no foreign key, so a node pointing at its own descendant
+ * is representable, and an unguarded walk recurses until the stack gives out.
+ * {@link canReparent} depends on this terminating — the guard is what makes the
+ * picker's "is this target legal?" question answerable on a graph that is
+ * already broken.
+ */
 export function subtreeIds(groups: GroupNode[], id: string): string[] {
-  const out = [id];
-  for (const child of groups.filter(g => g.parentId === id)) {
-    out.push(...subtreeIds(groups, child.id));
-  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (current: string) => {
+    if (seen.has(current)) return;
+    seen.add(current);
+    out.push(current);
+    for (const child of groups.filter(g => g.parentId === current)) walk(child.id);
+  };
+  walk(id);
   return out;
+}
+
+/**
+ * Whether `id` may be filed under `parentId` — the whole rule for moving a
+ * group, in one place.
+ *
+ * `null` is the root and is always legal. Anything else has to exist and must
+ * not sit inside the moved group's own subtree: a group cannot become its own
+ * descendant, and `subtreeIds` includes `id` itself, so a group cannot become
+ * its own parent either.
+ *
+ * The parent picker filters its options through this rather than validating
+ * after the gesture, so an illegal target is never offered. That is the reason
+ * a move is a `<select>` and not a drag: a list can omit what it cannot accept.
+ * The same guard runs on the reparenting the delete dialog does, so the two
+ * paths cannot drift apart.
+ */
+export function canReparent(groups: GroupNode[], id: string, parentId: string | null): boolean {
+  if (parentId === null) return true;
+  if (!groupById(groups, parentId)) return false;
+  return !subtreeIds(groups, id).includes(parentId);
 }
 
 /** Root → …

@@ -46,7 +46,7 @@ import {
     <div class="scrim" (click)="dismissed.emit()"></div>
     <div
       class="panel"
-      role="dialog"
+      [attr.role]="role()"
       aria-modal="true"
       [attr.aria-labelledby]="titleId"
       [attr.aria-describedby]="describedBy() || null"
@@ -165,6 +165,13 @@ export class UiDialog {
   readonly title = input.required<string>();
   /** Id of the element inside the body that names the consequence, if any. */
   readonly describedBy = input('');
+  /**
+   * `alertdialog` for the ones that interrupt to ask about a consequence — a
+   * destructive confirmation, chiefly. It makes assistive technology announce
+   * the body along with the name, which for those is the whole message. Plain
+   * `dialog` otherwise, and that stays the default.
+   */
+  readonly role = input<'dialog' | 'alertdialog'>('dialog');
 
   /** Escape, or a click on the scrim. Always means "nothing happened". */
   readonly dismissed = output<void>();

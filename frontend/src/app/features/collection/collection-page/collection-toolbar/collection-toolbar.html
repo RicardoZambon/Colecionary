@@ -24,6 +24,27 @@
   </ui-dropdown>
 }
 
+@if (showColumns()) {
+  <ui-dropdown [width]="220">
+    <button ddTrigger type="button" class="sort-trigger">{{ 'columns.trigger' | t }}</button>
+    <ng-container ddPanel>
+      <span class="col-head">{{ 'columns.aria' | t }}</span>
+      <!-- Stays open across several toggles: hiding three of eight columns is
+           one decision, not three trips to a menu. -->
+      @for (field of fields(); track field.name) {
+        <label class="col-option">
+          <ui-checkbox
+            [checked]="isColumnVisible(field.name)"
+            [ariaLabel]="'columns.showField' | t: { name: field.name }"
+            (picked)="columnToggled.emit({ name: field.name, visible: $event.checked })"
+          />
+          <span>{{ field.name }}</span>
+        </label>
+      }
+    </ng-container>
+  </ui-dropdown>
+}
+
 <div class="view-toggle" role="group" [attr.aria-label]="'toolbar.viewAria' | t">
   @for (option of views; track option.id) {
     <button
