@@ -33,6 +33,7 @@ dotnet format --verify-no-changes
 npm start        # dev server → http://localhost:4200 (expects the API on 5100)
 npm test         # vitest unit tests
 npm run build    # production build (must pass before merging)
+npm run verify:browser   # Playwright checks against a running dev server
 ```
 
 Demo login: `marcus@example.com` / `vault-demo` (also `ana@` Editor, `dev@` Viewer).
@@ -275,7 +276,11 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
 12. **Accessibility.** Real `<a>`/`<button>` for clickables, visible
    `:focus-visible`, status never communicated by color alone. Anything
    draggable also needs a keyboard path (`ui-reorder`, `ui-image-focus`).
-13. **Verify before merging:** `npm run build` clean (warnings included — the
+13. **Verify before merging:** `npm run verify:browser` green against a running
+   dev server (it makes the checks only a browser can — first paint, no toast
+   while idle, `scrollWidth === clientWidth` at 390/768/900, the nav drawer's
+   aria and focus contract — and **add to it whenever you find a defect the
+   unit suite could not have caught**), `npm run build` clean (warnings included — the
    6 kB per-component style budget is real), unit tests green, and the
    affected flows exercised in the browser in at least one dark theme **and in
    Portuguese** — it runs ~20% longer than English, so that is where text
