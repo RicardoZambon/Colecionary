@@ -320,6 +320,22 @@ column with no breakpoint at all. These rules are what stop that recurring.
   chip in a dense filter row, a selection checkbox in a table, the reframe pip
   that sits on the photograph it edits), grow the **target** with an absolutely
   positioned `::after`. The reframe pip owes 44px at every width.
+- **A card in a grid row must fill the row, and `height: 100%` is not how you
+  get there.** A percentage height resolves against the parent's height, so it
+  stops at the first ancestor with `height: auto` — a wrapping `<a>` is enough
+  to break the chain, and the symptom is a bordered panel that ends short of
+  its neighbours inside a host the grid already stretched correctly. Use flex
+  all the way down (`:host { display: flex }`, the link `flex: 1`, the card
+  `flex: 1`), and give the card's body `flex: 1` so the slack falls after the
+  last line rather than between the cover and the name. That is what aligns the
+  foot rows of a row, which is the difference between a grid and a pile.
+- **Two adjacent elements in an Angular template have no space between them.**
+  The compiler runs with `preserveWhitespaces: false` and drops the
+  whitespace-only node, so `<span>A</span> <span>B</span>` renders `AB`. Use a
+  flex `gap`; never a `&nbsp;`, and never bake a leading space into a
+  translated string — a space that has to survive a template is a space that
+  eventually will not. This is why some `progress.*` keys carry a leading `·`,
+  and it is why one of them rendered as `coleção· 24`.
 - **A cross-cutting rule that must outrank component styles needs extra
   class-level specificity.** Angular injects component styles into `<head>`
   *after* `styles.scss`, and `.btn[_ngcontent-…]` is two class-level selectors,

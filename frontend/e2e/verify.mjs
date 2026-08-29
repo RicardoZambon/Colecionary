@@ -170,6 +170,30 @@ if (collection) {
   }
 }
 
+// Group cards share a grid row, so the bordered panel inside each one has to
+// fill the row's height — not merely the host box the grid stretched. Pure
+// layout: no unit test can see it, and the failure looks like carelessness.
+if (collection) {
+  await page.goto(`${BASE}${collection}`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1200);
+  const rows = await page.evaluate(() => {
+    const R = Math.round;
+    const out = {};
+    for (const card of document.querySelectorAll('app-group-card')) {
+      const host = card.getBoundingClientRect();
+      const panel = card.querySelector('ui-card')?.getBoundingClientRect();
+      (out[R(host.top)] ||= []).push(panel ? R(panel.height) : null);
+    }
+    return Object.entries(out).map(([top, heights]) => ({ top, heights }));
+  });
+  const ragged = rows.filter(r => new Set(r.heights).size > 1);
+  check(
+    'group cards fill their grid row',
+    ragged.length === 0,
+    ragged.length ? ragged.map(r => `row@${r.top} ${r.heights.join('/')}`).join(', ') : `${rows.length} rows uniform`,
+  );
+}
+
 // The nav drawer's focus contract. A drawer that traps focus, or loses it, is
 // worse than no drawer — and none of this is observable without a viewport.
 const phone = await browser.newContext({
