@@ -106,6 +106,12 @@
   <data name="SortKeyInvalid" xml:space="preserve">
     <value>A chave de ordenação precisa ser uma chave nativa ou 'field:&lt;nome do campo&gt;'.</value>
   </data>
+  <data name="GroupParentMustExist" xml:space="preserve">
+    <value>O grupo pai precisa ser um grupo presente no mesmo documento da coleção.</value>
+  </data>
+  <data name="GroupParentCycle" xml:space="preserve">
+    <value>Um grupo não pode ficar dentro de si mesmo.</value>
+  </data>
   <data name="TooManyPhotos" xml:space="preserve">
     <value>Um item pode ter no máximo 8 fotos.</value>
   </data>

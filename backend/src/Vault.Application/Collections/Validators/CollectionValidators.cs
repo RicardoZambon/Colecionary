@@ -187,6 +187,20 @@ public sealed class CollectionDtoValidator : AbstractValidator<CollectionDto>
             .When(c => c.Currency is not null)
             .WithMessage(_ => Messages.CurrencyInvalid);
         RuleForEach(c => c.Groups).SetValidator(groupValidator);
+        // The one place where a dangling reference IS refused, and the asymmetry
+        // with sections and items is deliberate. Their references are allowed to
+        // dangle because they degrade gracefully: an item pointing at a deleted
+        // section simply reads as "no section", which is a legitimate
+        // intermediate state of a full-document PUT. A ParentId has no graceful
+        // reading. `childrenOf(groups, null)` walks down from the roots and never
+        // reaches an orphaned or looped branch, so every group in it silently
+        // disappears from the tree, from the sidebar and from the parent picker
+        // — while its items go on counting in the collection's totals. There is
+        // no screen on which the user could even see the damage, let alone undo
+        // it, which is what makes this one worth a 400.
+        RuleFor(c => c.Groups)
+            .Must(NoDanglingParents).WithMessage(_ => Messages.GroupParentMustExist)
+            .Must(NoParentCycles).WithMessage(_ => Messages.GroupParentCycle);
         // Ids have to be distinct here and not merely on the way in: the graph
         // merge keys its replacement list by id, so a duplicate would fail deep
         // inside persistence as a 500 instead of as the 400 it is.
@@ -196,5 +210,46 @@ public sealed class CollectionDtoValidator : AbstractValidator<CollectionDto>
         RuleForEach(c => c.Sections).SetValidator(sectionValidator);
         RuleForEach(c => c.Items).SetValidator(itemValidator);
         RuleForEach(c => c.Members).SetValidator(memberValidator);
+    }
+
+    /// <summary>A null ParentId is the root; anything else has to be in this document.</summary>
+    private static bool NoDanglingParents(IReadOnlyList<GroupNodeDto> groups)
+    {
+        var ids = groups.Select(g => g.Id).ToHashSet(StringComparer.Ordinal);
+        return groups.All(g => g.ParentId is null || ids.Contains(g.ParentId));
+    }
+
+    /// <summary>
+    /// Walks each group's ancestor chain and refuses one that comes back round.
+    /// Quadratic in the worst case, which a collection-scoped group tree can
+    /// afford; the alternative is a graph colouring that reads far worse for a
+    /// list whose length is measured in dozens.
+    /// </summary>
+    private static bool NoParentCycles(IReadOnlyList<GroupNodeDto> groups)
+    {
+        var parents = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var group in groups)
+        {
+            parents[group.Id] = group.ParentId;
+        }
+
+        foreach (var start in parents.Keys)
+        {
+            // Seeded with the starting id, so a group that is its own parent —
+            // or its own grandparent — is caught by the same check.
+            var seen = new HashSet<string>(StringComparer.Ordinal) { start };
+            var current = parents[start];
+            while (current is not null && parents.TryGetValue(current, out var next))
+            {
+                if (!seen.Add(current))
+                {
+                    return false;
+                }
+
+                current = next;
+            }
+        }
+
+        return true;
     }
 }

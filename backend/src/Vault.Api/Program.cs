@@ -168,7 +168,20 @@ static WebApplication BuildConfiguredApplication(WebApplicationBuilder builder, 
 
     // Deny-by-default: every endpoint requires an authenticated user unless
     // explicitly [AllowAnonymous].
-    builder.Services.AddAuthorization(options => options.FallbackPolicy = options.DefaultPolicy);
+    //
+    // Authentication is only half of it. The role policies are the other half,
+    // and until they existed a Viewer's token was accepted by every write in
+    // the application — the claim was on the principal and read by nobody.
+    builder.Services.AddAuthorization(options =>
+    {
+        options.FallbackPolicy = options.DefaultPolicy;
+        options.AddPolicy(
+            VaultPolicies.CanWrite,
+            policy => policy.RequireAuthenticatedUser().RequireRole(VaultPolicies.WriteRoles));
+        options.AddPolicy(
+            VaultPolicies.CanAdminister,
+            policy => policy.RequireAuthenticatedUser().RequireRole(VaultPolicies.AdminRoles));
+    });
 
     const string frontendCorsPolicy = "frontend";
     builder.Services.AddCors(options => options.AddPolicy(frontendCorsPolicy, policy =>

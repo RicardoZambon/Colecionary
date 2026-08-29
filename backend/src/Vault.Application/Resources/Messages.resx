@@ -117,6 +117,12 @@
   <data name="SortKeyInvalid" xml:space="preserve">
     <value>Sort key must be a built-in key or 'field:&lt;field name&gt;'.</value>
   </data>
+  <data name="GroupParentMustExist" xml:space="preserve">
+    <value>Every group's parent must be a group in the same collection document.</value>
+  </data>
+  <data name="GroupParentCycle" xml:space="preserve">
+    <value>Groups cannot be nested inside themselves.</value>
+  </data>
   <data name="TooManyPhotos" xml:space="preserve">
     <value>An item can have at most 8 photos.</value>
   </data>

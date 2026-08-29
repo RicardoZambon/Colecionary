@@ -1,5 +1,7 @@
+using System.Globalization;
 using Vault.Application.Collections.Dtos;
 using Vault.Application.Collections.Validators;
+using Vault.Application.Resources;
 
 namespace Vault.UnitTests;
 
@@ -270,6 +272,89 @@ public class ValidatorTests
             Sections: [new SectionDto("s1", "g1", "Bronze"), new SectionDto("s1", "g1", "Prata")]);
 
         Assert.False(CollectionValidator().Validate(collection).IsValid);
+    }
+
+    // --- the group tree (a move is a UI feature; this is its server-side half) ---
+
+    private static CollectionDto Tree(params GroupNodeDto[] groups) =>
+        new("c1", "Comics", string.Empty, groups, [], [], LinkShare: true);
+
+    [Fact]
+    public void Groups_AcceptAWellFormedTree()
+    {
+        var collection = Tree(
+            new GroupNodeDto("revistas", "Revistas", null, []),
+            new GroupNodeDto("marvel", "Marvel", "revistas", []),
+            new GroupNodeDto("ultimate", "Ultimate", "marvel", []));
+
+        Assert.True(CollectionValidator().Validate(collection).IsValid);
+    }
+
+    [Fact]
+    public void Groups_RejectAParentThatIsNotInThePayload()
+    {
+        // Deliberately unlike a section's or an item's reference, which are
+        // allowed to dangle because they read as "none". A ParentId has no such
+        // reading: the tree is walked down from the roots, so an orphaned branch
+        // vanishes from the sidebar and from the parent picker while its items
+        // still count in the collection's totals.
+        var collection = Tree(new GroupNodeDto("marvel", "Marvel", "gone", []));
+
+        var result = CollectionValidator().Validate(collection);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            e => e.ErrorMessage == Messages.In(nameof(Messages.GroupParentMustExist), CultureInfo.CurrentUICulture));
+    }
+
+    [Fact]
+    public void Groups_RejectAParentIdCycle()
+    {
+        var collection = Tree(
+            new GroupNodeDto("a", "A", "b", []),
+            new GroupNodeDto("b", "B", "a", []));
+
+        var result = CollectionValidator().Validate(collection);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            e => e.ErrorMessage == Messages.In(nameof(Messages.GroupParentCycle), CultureInfo.CurrentUICulture));
+    }
+
+    [Fact]
+    public void Groups_RejectAGroupThatIsItsOwnParent()
+    {
+        var collection = Tree(new GroupNodeDto("a", "A", "a", []));
+
+        Assert.False(CollectionValidator().Validate(collection).IsValid);
+    }
+
+    [Fact]
+    public void Groups_RejectALoopThatNoRootReaches()
+    {
+        // The dangerous shape: a legitimate tree beside a two-group loop. Every
+        // ParentId resolves, nothing is orphaned, and the loop is still
+        // unreachable from any root.
+        var collection = Tree(
+            new GroupNodeDto("revistas", "Revistas", null, []),
+            new GroupNodeDto("a", "A", "b", []),
+            new GroupNodeDto("b", "B", "a", []));
+
+        Assert.False(CollectionValidator().Validate(collection).IsValid);
+    }
+
+    [Fact]
+    public void Groups_AnswerInThePtBrCultureWhenAsked()
+    {
+        // The messages are localized like every other one; the test goes through
+        // the resource so it never becomes a second copy of the translation.
+        var ptBr = new CultureInfo("pt-BR");
+        Assert.NotNull(Messages.In(nameof(Messages.GroupParentCycle), ptBr));
+        Assert.NotEqual(
+            Messages.In(nameof(Messages.GroupParentCycle), CultureInfo.InvariantCulture),
+            Messages.In(nameof(Messages.GroupParentCycle), ptBr));
     }
 
     private static CollectionDtoValidator CollectionValidator() =>
