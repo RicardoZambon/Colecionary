@@ -35,7 +35,8 @@ public static class Messages
         nameof(ProblemPreconditionRequired), nameof(ProblemPreconditionFailed),
         nameof(IfMatchRequired), nameof(CollectionChangedElsewhere),
         nameof(FieldNamesMustBeUnique), nameof(FieldTypeInvalid), nameof(TargetOutOfRange),
-        nameof(SortDirectionInvalid), nameof(SortKeyInvalid), nameof(TooManyPhotos),
+        nameof(SortDirectionInvalid), nameof(SortKeyInvalid),
+        nameof(GroupParentMustExist), nameof(GroupParentCycle), nameof(TooManyPhotos),
         nameof(TooManyCopies), nameof(CopyIdsMustBeUnique), nameof(SectionIdsMustBeUnique),
         nameof(ConditionInvalid),
         nameof(CopyStatusInvalid), nameof(AcquiredOnImplausible), nameof(RoleInvalid),
@@ -87,6 +88,8 @@ public static class Messages
     public static string TargetOutOfRange => Get(nameof(TargetOutOfRange));
     public static string SortDirectionInvalid => Get(nameof(SortDirectionInvalid));
     public static string SortKeyInvalid => Get(nameof(SortKeyInvalid));
+    public static string GroupParentMustExist => Get(nameof(GroupParentMustExist));
+    public static string GroupParentCycle => Get(nameof(GroupParentCycle));
     public static string TooManyPhotos => Get(nameof(TooManyPhotos));
     public static string TooManyCopies => Get(nameof(TooManyCopies));
     public static string CopyIdsMustBeUnique => Get(nameof(CopyIdsMustBeUnique));

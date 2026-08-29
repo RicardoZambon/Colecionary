@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Vault.Api.Infrastructure;
 using Vault.Application.Images;
 using Vault.Application.Images.Dtos;
 using Vault.Application.Resources;
@@ -11,6 +12,7 @@ namespace Vault.Api.Controllers;
 [Route("api/images")]
 public class ImagesController(ImageService images) : ControllerBase
 {
+    [Authorize(Policy = VaultPolicies.CanWrite)]
     [HttpPost]
     [RequestSizeLimit(ImageService.MaxBytes + 1024 * 1024)]
     public async Task<ActionResult<ImageUploadResponse>> Upload(IFormFile? file, CancellationToken ct)
@@ -83,6 +85,7 @@ public class ImagesController(ImageService images) : ControllerBase
     /// picture. The bytes are untouched, so the id — and its cached URL — stay
     /// valid.
     /// </remarks>
+    [Authorize(Policy = VaultPolicies.CanWrite)]
     [HttpPut("{id:guid}/focal")]
     public async Task<ActionResult<ImageMetaDto>> SetFocal(
         Guid id,

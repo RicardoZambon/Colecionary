@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { I18nService } from '../../../../core/i18n';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiProgress, UiSectionLabel } from '../../../../shared/ui';
+import { UiEmpty, UiProgress, UiSectionLabel } from '../../../../shared/ui';
 
 /**
  * The divider between two runs of a group's item list.
@@ -20,7 +20,7 @@ import { UiProgress, UiSectionLabel } from '../../../../shared/ui';
 @Component({
   selector: 'app-section-header',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiProgress, UiSectionLabel],
+  imports: [TPipe, UiEmpty, UiProgress, UiSectionLabel],
   templateUrl: './section-header.html',
   styleUrl: './section-header.scss',
 })
@@ -43,15 +43,20 @@ export class SectionHeader {
   protected readonly progressText = computed(() => {
     const stats = this.stats();
     if (!stats) return '';
+    // `catalogued` carries the agreement; `owned` and `target` agree with
+    // nothing and travel as plain params.
     return stats.hasTarget
-      ? this.i18n.t('progress.textTarget', {
-          owned: stats.owned,
-          catalogued: stats.catalogued,
-          target: stats.target!,
-        })
-      : this.i18n.t('progress.textNoTarget', {
-          owned: stats.owned,
-          catalogued: stats.catalogued,
-        });
+      ? this.i18n.plural(
+          stats.catalogued,
+          'progress.textTarget.one',
+          'progress.textTarget.other',
+          { owned: stats.owned, target: stats.target! },
+        )
+      : this.i18n.plural(
+          stats.catalogued,
+          'progress.textNoTarget.one',
+          'progress.textNoTarget.other',
+          { owned: stats.owned },
+        );
   });
 }

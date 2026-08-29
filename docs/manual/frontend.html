@@ -21,7 +21,9 @@
   <code>ui-*</code> como fonte única de elementos, a URL como estado, e nenhuma
   string visível dentro de componente. As regras normativas completas estão em
   <a href="../frontend-standards.md">docs/frontend-standards.md</a>; aqui está
-  como o código está organizado hoje.
+  como o código está organizado hoje — incluindo a casca responsiva, os três
+  estados de carga da casca e por que o contraste da paleta virou aritmética de
+  teste em vez de item de revisão.
 </p>
 
 <h2 id="paginas">Páginas e rotas</h2>
@@ -47,9 +49,237 @@
 <p>
   Todas são <code>loadComponent</code> (lazy). Params de rota e query chegam como
   inputs via <code>withComponentInputBinding()</code>. O <code>Shell</code>
-  hospeda topbar, sidebar e os três outlets globais:
-  <code>ui-toast</code>, <code>ui-image-focus</code> e
-  <code>app-conflict-notice</code>.
+  hospeda o link de salto, a topbar, a sidebar e <strong>quatro</strong> outlets
+  globais, nesta ordem de empilhamento: <code>ui-toast</code>,
+  <code>app-conflict-notice</code> (sobrevive ao toast — é a única mensagem que
+  diz que um save <em>não</em> aconteceu), <code>ui-confirm</code> (modal, acima
+  das duas) e <code>ui-image-focus</code>.
+</p>
+
+<p>
+  As duas rotas do formulário de item — <code>items/new</code> e
+  <code>items/:itemId/edit</code> — carregam <code>canDeactivate:
+  [unsavedItemGuard]</code>. É o mesmo componente nas duas, e os rascunhos vivem
+  em signals dele: sair da página <strong>era</strong> destruí-los sem toast e sem
+  undo, numa tela a um clique de qualquer coleção da sidebar. O guard chama
+  <code>ItemFormPage.canLeave()</code>, que usa o <code>confirm()</code> nativo do
+  navegador e não o <code>ui-dialog</code> — <code>CanDeactivate</code> tem de
+  responder de forma síncrona, e a alternativa era estacionar meia navegação
+  dentro do estado do componente cuja única função é não perder dados
+  (<a href="decisions.html">ADR-59</a>).
+</p>
+
+<h2 id="shell">A casca responsiva</h2>
+
+<p>
+  A casca é topbar + sidebar + <code>&lt;main&gt;</code>, e até esta mudança ela
+  só existia numa largura. O app era desktop-only de verdade: quatro
+  <code>@media</code> espalhadas por vinte e três stylesheets, em quatro larguras
+  sem coordenação nenhuma, e a sidebar era uma coluna de 226px fixos sem
+  breakpoint. <strong>O documento transbordava um viewport de 390px em até 107px
+  em todas as telas</strong> — não uma, todas.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 700 240" role="img" aria-labelledby="shell-t">
+      <title id="shell-t">A casca acima e abaixo de $bp-lg</title>
+      <desc>Acima do breakpoint a sidebar é uma coluna ao lado do main; abaixo
+      dele ela é uma gaveta fixa fora da tela, com scrim.</desc>
+
+      <text class="t b" x="8" y="16">&gt; 900px — coluna</text>
+      <rect class="box" x="8" y="26" width="300" height="26" rx="4"/>
+      <text class="t s mid" x="158" y="43">app-topbar</text>
+      <rect class="box accent" x="8" y="58" width="86" height="120" rx="4"/>
+      <text class="t s mid" x="51" y="112">app-sidebar</text>
+      <text class="t s mid" x="51" y="128">226px</text>
+      <rect class="box" x="100" y="58" width="208" height="120" rx="4"/>
+      <text class="t s mid" x="204" y="112">main#main-content</text>
+      <text class="t s mid" x="158" y="200">tabindex=&quot;-1&quot; — alvo do link de salto</text>
+
+      <path class="ln dashed" d="M336 10 V230"/>
+
+      <text class="t b" x="364" y="16">&lt;= 900px — gaveta</text>
+      <rect class="box" x="364" y="26" width="300" height="26" rx="4"/>
+      <text class="t s" x="372" y="43">☰ toggle</text>
+      <text class="t s" x="470" y="43">app-topbar</text>
+      <rect class="box dashed" x="300" y="58" width="60" height="120" rx="4"/>
+      <text class="t s mid" x="330" y="112">gaveta</text>
+      <text class="t s mid" x="330" y="128">fora</text>
+      <rect class="box" x="364" y="58" width="300" height="120" rx="4"/>
+      <text class="t s mid" x="514" y="105">main — 100% da largura</text>
+      <text class="t s mid" x="514" y="123">nenhum overflow horizontal</text>
+      <path class="ln accent" d="M360 118 H420"/><polygon class="fill-accent" points="420,118 412,114 412,122"/>
+      <text class="t s" x="364" y="200">fechada: position fixed + aria-hidden + inert</text>
+      <text class="t s" x="364" y="216">aberta: translateX(0) + scrim &lt;button&gt;</text>
+    </svg>
+  </div>
+</figure>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Peça</th><th>Onde</th><th>O que faz abaixo de <code>$bp-lg</code></th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>LayoutService</code></td>
+      <td><code>core/state/layout.service.ts</code></td>
+      <td><code>navOpen</code> (a gaveta está aberta?) e <code>compact</code>
+          (a largura pede gaveta?)</td>
+    </tr>
+    <tr>
+      <td><code>Topbar</code></td>
+      <td><code>layout/topbar/</code></td>
+      <td>Ganha o ☰, com <code>controlId</code>,
+          <code>ariaExpanded</code> e <code>ariaControls</code> no
+          <code>&lt;button&gt;</code> interno</td>
+    </tr>
+    <tr>
+      <td><code>Sidebar</code></td>
+      <td><code>layout/sidebar/</code></td>
+      <td>Vira gaveta <code>position: fixed</code>,
+          <code>translateX(-100%)</code>, <code>aria-hidden</code> +
+          <code>inert</code> quando fechada</td>
+    </tr>
+    <tr>
+      <td><code>nav-focus.ts</code></td>
+      <td><code>layout/</code></td>
+      <td>Dois ids (<code>NAV_TOGGLE_ID</code>, <code>NAV_DRAWER_ID</code>) e
+          <code>focusNavToggle(doc)</code> — o contrato mínimo entre três
+          componentes que não podem trocar <code>ElementRef</code></td>
+    </tr>
+    <tr>
+      <td>Scrim</td>
+      <td><code>Shell</code></td>
+      <td>Um <code>&lt;button&gt;</code> real, renderizado só com a gaveta
+          aberta, com <code>aria-label</code> e <code>aria-controls</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout danger">
+  <span class="label"><code>position: fixed</code>, nunca <code>absolute</code></span>
+  <p>
+    Esse é o detalhe que resolve o transbordo, e é fácil “simplificar” de volta.
+    Uma caixa <code>absolute</code> transladada para fora da tela
+    <strong>continua contando na largura rolável do documento</strong> — os 280px
+    da gaveta ficariam lá, e a página rolaria de lado exibindo nada. Uma caixa
+    <code>fixed</code> não contribui em nada. O sintoma correspondente está em
+    <a href="operations.html#troubleshooting">Sintomas e causas</a>.
+  </p>
+</div>
+
+<p>
+  <strong>O breakpoint é duplicado de propósito.</strong>
+  <code>COMPACT_QUERY = '(max-width: 900px)'</code> em
+  <code>layout.service.ts</code> tem de ficar igual a <code>$bp-lg</code> em
+  <code>styles/_mixins.scss</code>. Uma media query não pode ser lida por script,
+  e a parte que o CSS não sabe expressar é justamente a que importa: uma gaveta
+  <em>escondida</em> precisa sair também da árvore de acessibilidade e da ordem de
+  tabulação. Os dois se separando dá uma gaveta visível e <code>aria-hidden</code>
+  ao mesmo tempo — ou uma dúzia de paradas de tabulação invisíveis na frente do
+  conteúdo (<a href="decisions.html">ADR-58</a>).
+</p>
+
+<h3>O contrato de foco da gaveta</h3>
+
+<ul>
+  <li><strong>Abrir</strong> move o foco para o primeiro item de navegação. Abrir
+      sem mover o foco deixa o usuário de teclado exatamente onde estava,
+      tabulando por uma página que ele já não vê.</li>
+  <li><strong>Escape, o scrim e o ✕</strong> fecham e devolvem o foco ao ☰. A
+      gaveta fica <code>inert</code> ao fechar, então quem tinha foco lá dentro
+      é despejado no <code>&lt;body&gt;</code> e o próximo Tab recomeça do topo do
+      documento — perdendo o lugar de quem estava navegando.</li>
+  <li><strong>Escape é escutado no <code>Shell</code></strong>, não na gaveta:
+      precisa funcionar com o foco no scrim, que é irmão da gaveta e não filho.
+      O guard dentro de <code>onEscape()</code> é o que impede a tecla de roubar
+      foco numa página onde nenhuma gaveta está aberta.</li>
+  <li><strong>Seguir um link fecha a gaveta</strong>
+      (<code>NavigationEnd</code>), porque seguir um link é a razão de ela
+      existir; sem isso o destino renderiza <em>atrás</em> do menu.</li>
+  <li><strong>Cruzar o breakpoint fecha a gaveta.</strong> Girar o telefone
+      cruza; deixar <code>navOpen</code> ligado faria o menu reaparecer sozinho
+      na próxima vez que a largura diminuísse.</li>
+  <li><strong><code>navOpen</code> nunca é persistido.</strong> Tema é
+      preferência; gaveta aberta é a posição transitória de um gesto, e restaurar
+      isso num boot frio recebe o usuário com um menu cobrindo a página que ele
+      pediu.</li>
+</ul>
+
+<h3>Alvos de toque: <code>--tap: 44px</code></h3>
+
+<p>
+  O token vive em <code>styles.scss</code> e não em <code>_themes.scss</code>,
+  porque não é assunto de tema: um alvo tem 44px no Paperwhite e no Synthwave
+  igual. Abaixo de <code>$bp-lg</code>, todo controle que a auditoria achou menor
+  que isso sobe para <code>min-height: var(--tap)</code> — e os quadrados
+  (<code>ui-button</code> variante <code>icon</code>, o alternador de
+  visualização, o ✕ do toast) sobem também em <code>min-width</code>, porque um
+  botão de 30px de largura é um alvo de 30px por mais alto que seja.
+</p>
+
+<p>
+  <strong>Onde a caixa visual não pode crescer, cresce o alvo.</strong> Um chip de
+  filtro com 44px de altura transformaria a barra de filtros num muro, e o pip de
+  reenquadramento fica <em>sobre</em> a foto que edita — um disco de 44px
+  escondia justamente o canto que o usuário está tentando julgar. Os dois recebem
+  um <code>::after</code> posicionado: o alvo tem 44px, a pílula e o círculo
+  pintados continuam do tamanho que eram. O pip é o único cujo alvo é maior que a
+  pintura <em>em toda largura</em> — 20px não é um problema só de celular, é só um
+  problema menor no desktop.
+</p>
+
+<h2 id="carga">Os três estados da casca</h2>
+
+<p>
+  O <code>&lt;main&gt;</code> renderiza exatamente um de três, e o do meio não
+  existia:
+</p>
+
+<ol class="steps">
+  <li>
+    <code>store.loaded()</code> → o <code>&lt;router-outlet&gt;</code>.
+    <code>loaded</code> continua sendo marcado só no fim do <code>load()</code>,
+    de propósito: meio vault na tela é pior do que uma mensagem dizendo que ele
+    não carregou.
+  </li>
+  <li>
+    <code>store.loadError()</code> → um bloco <code>role="alert"</code> com a
+    frase do servidor, uma dica e um botão <strong>Tentar de novo</strong> ligado
+    a <code>store.retryLoad()</code>, que desabilita enquanto
+    <code>retrying()</code>.
+    <span class="where">frontend: layout/shell/shell.ts, core/state/vault.store.ts</span>
+  </li>
+  <li>
+    Nenhum dos dois → “Carregando…”.
+  </li>
+</ol>
+
+<div class="callout danger">
+  <span class="label">O que isso conserta</span>
+  <p>
+    <code>shell.ts</code> chamava <code>this.store.load().catch(() =&gt;
+    undefined)</code> — a rejeição era <em>descartada</em> — enquanto o outlet
+    estava condicionado a <code>loaded()</code>, que só é marcado no fim de um
+    <code>load()</code> bem-sucedido. Consequência: <strong>qualquer falha que
+    não fosse 401 — um 500, um CORS recusado, um timeout, a API simplesmente fora
+    do ar — deixava a palavra “Carregando…” na tela para sempre</strong>, sem nada
+    no console e sem caminho para frente. O <code>catch</code> continua lá, agora
+    só para não deixar a rejeição solta: o erro já foi gravado em
+    <code>loadError</code> dentro do próprio <code>load()</code>
+    (<a href="decisions.html">ADR-49</a>).
+  </p>
+</div>
+
+<p>
+  <code>loadError</code> é <strong>string, não booleano</strong>: o servidor
+  normalmente se explica, e “não consigo alcançar o servidor” e “você não tem
+  acesso a este vault” não são o mesmo problema para quem está lendo.
+  <code>retryLoad()</code> limpa o erro antes de tentar, para que a segunda
+  tentativa mostre “carregando” em vez da falha velha, e engole a rejeição —
+  ele é chamado direto de um clique, e o resultado já está na tela de um jeito ou
+  de outro.
 </p>
 
 <h2 id="estado">Estado: signal stores</h2>
@@ -63,7 +293,13 @@
       <td>Coleções, listings, membros, perfil, settings + <strong>o mapa de versões</strong></td>
       <td>Signals privados, views <code>asReadonly()</code>, <code>computed()</code>
           para agregados. Toda mutação chama a API primeiro e atualiza o estado
-          local a partir da resposta</td>
+          local a partir da resposta. Também
+          <code>loadError</code>/<code>retrying</code>/<code>retryLoad()</code>
+          (ver <a href="#carga">os três estados da casca</a>) e
+          <code>syncState</code>/<code>syncStatusKey</code> derivados. Guarda
+          ainda <strong>quais coleções têm escrita em voo</strong>: no máximo
+          uma por coleção (<code>exclusive</code>), lida pela UI através de
+          <code>saving(id)</code></td>
     </tr>
     <tr>
       <td><code>AuthService</code></td>
@@ -109,8 +345,36 @@
     </tr>
     <tr>
       <td><code>ToastService</code></td>
-      <td>Mensagem efêmera</td>
-      <td><code>flash()</code>, renderizado pelo outlet global</td>
+      <td><strong>Uma fila</strong> de mensagens efêmeras</td>
+      <td><code>flash()</code> / <code>success()</code> / <code>error()</code>, e
+          um <code>ToastAction</code> opcional (é assim que o
+          <strong>Desfazer</strong> chega ao toast). Era um slot único de 1800 ms
+          cujo timer a mensagem seguinte cancelava — duas coisas em sequência
+          significavam uma perdida sem rastro. Erro <strong>não expira</strong>:
+          uma falha que o usuário não viu é uma falha que ele acredita ter
+          funcionado. Texto idêntico já na tela ou já na fila é descartado, o que
+          é o que permite ao <code>catch</code> de uma página e ao
+          <code>errorInterceptor</code> global relatarem sem o usuário ler duas
+          vezes</td>
+    </tr>
+    <tr>
+      <td><code>ConfirmService</code></td>
+      <td>A única pergunta sim/não em aberto</td>
+      <td>Exatamente a forma do <code>ConflictService</code>: signal + outlet
+          global (<code>ui-confirm</code>), zero dependências. Uma página faz
+          <code>await confirm.ask({…})</code> e nunca importa um componente nem
+          possui um modal. <strong><code>false</code> é a resposta para tudo que
+          não é um sim explícito</strong> — Cancelar, Escape, o scrim, e uma
+          segunda pergunta chegando antes desta ser respondida. Não há terceiro
+          estado: um chamador que precisasse distinguir “disse não” de “foi
+          embora” é um chamador a ponto de adivinhar</td>
+    </tr>
+    <tr>
+      <td><code>LayoutService</code></td>
+      <td><code>navOpen</code> e <code>compact</code></td>
+      <td>A forma do <code>ThemeService</code> com uma diferença deliberada:
+          <strong>nada é persistido</strong>. Detalhado em
+          <a href="#shell">a casca responsiva</a></td>
     </tr>
   </tbody>
 </table>
@@ -151,8 +415,70 @@
       <td><code>SetupService</code></td>
       <td>Só o wizard: status, teste de conexão, apply</td>
     </tr>
+    <tr>
+      <td><code>errorInterceptor</code></td>
+      <td>O único lugar em que uma chamada HTTP falha virar algo que o usuário vê.
+          Repete <strong>só</strong> GETs (2 tentativas extras, backoff de 350 ms)
+          e só nos status <code>0 · 408 · 502 · 503 · 504</code>; relata uma frase
+          localizada por classe de falha; e fica fora das duas falhas que já têm
+          dono. <code>httpErrorMessage()</code> é exportado dele e compartilhado
+          com <code>HttpVaultApi</code>, que antes tinha
+          <code>'Something went wrong'</code> em inglês no código — violação da
+          regra 8 no lugar mais provável de ser lido</td>
+    </tr>
   </tbody>
 </table>
+</div>
+
+<div class="callout warn">
+  <span class="label">A ordem dos interceptors é semântica</span>
+  <p>
+    <code>withInterceptors([errorInterceptor, authInterceptor,
+    languageInterceptor])</code> lê de fora para dentro: a requisição desce a
+    lista e a resposta volta subindo. <code>errorInterceptor</code> vem
+    <strong>primeiro</strong>, então é o último a ver uma resposta com falha e vê
+    o desfecho final, depois de o <code>authInterceptor</code> ter dado a sua
+    palavra sobre um 401. Depois do auth, ele relataria “você não tem permissão”
+    num toast de canto enquanto o app já estava navegando para o login. E o retry
+    tem de envolver a anexação do token, não o contrário: uma requisição repetida
+    reentra na cadeia abaixo dele e pega o bearer de novo.
+  </p>
+  <p>
+    <strong>Repetir leitura, nunca escrita.</strong> Um GET é idempotente por
+    contrato. Um PUT/POST/DELETE que deu timeout <em>pode ter sido aplicado</em> —
+    o que faltou foi a resposta, não necessariamente a escrita — e repetir é como
+    um delete vira dois, ou como um save guardado por versão é recusado por uma
+    mudança que o próprio app fez. Os status fora da lista não são repetidos
+    porque são <em>respostas</em>: repetir um 429 aprofunda o throttle que ele
+    relata, e repetir um 500 causado por um bug roda o bug de novo
+    (<a href="decisions.html">ADR-50</a>).
+  </p>
+</div>
+
+<div class="callout">
+  <span class="label">Uma escrita por coleção de cada vez</span>
+  <p>
+    Toda escrita cita a versão com que o app sincronizou por último, e essa
+    versão só avança quando a escrita em voo responde. Duas escritas simultâneas
+    da mesma coleção citam portanto o <em>mesmo</em> token, e o servidor recusa a
+    segunda com <code>412</code> — que o app então explicava como “outra pessoa
+    alterou esta coleção”. Numa coleção de 286 itens o PUT de documento inteiro
+    leva cerca de meio segundo, então bastava clicar duas vezes em “Aplicar”:
+    não havia outra pessoa.
+  </p>
+  <p>
+    <code>VaultStore.exclusive</code> agora recusa a segunda ali mesmo, com
+    <code>VaultBusyError</code> — que <strong>nunca</strong> é um
+    <code>VaultConflictError</code>, então o aviso de conflito não mente. E
+    <strong>recusa em vez de enfileirar</strong>: o payload da segunda é o
+    documento inteiro como a página o montou antes de a primeira aterrissar, e
+    mandá-lo depois seria restaurar por cima dela. Onde o payload é vivo e não
+    instantâneo — o autosave das configurações, a ordem manual pendente — quem
+    chama rearma seu <em>debounce</em>, porque ali descartar seria perda
+    silenciosa. A correção que o usuário vê, porém, é o botão: “Aplicar”,
+    “Excluir” em massa e “Salvar item” param de se oferecer enquanto a escrita
+    corre (<a href="decisions.html">ADR-64</a>).
+  </p>
 </div>
 
 <div class="callout danger">
@@ -180,7 +506,7 @@
 <table>
   <thead><tr><th>Componente</th><th>Seletor</th><th>Para que serve</th></tr></thead>
   <tbody>
-    <tr><td>Button</td><td class="nowrap"><code>ui-button</code></td><td><code>primary|ghost|danger|link|icon</code>, <code>size</code>, <code>block</code>, <code>muted</code>. <code>muted</code> lê como indisponível mas <em>dispara</em>: um controle morto não consegue dizer por que está morto</td></tr>
+    <tr><td>Button</td><td class="nowrap"><code>ui-button</code></td><td><code>primary|ghost|danger|link|icon</code>, <code>size</code>, <code>block</code>, <code>muted</code>. <code>muted</code> lê como indisponível mas <em>dispara</em>: um controle morto não consegue dizer por que está morto. <code>ariaExpanded</code>, <code>ariaControls</code> e <code>controlId</code> caem no <code>&lt;button&gt;</code> <strong>interno</strong>: o host <code>&lt;ui-button&gt;</code> não é focável e não carrega papel, então atributo posto ali nunca é alcançado por leitor de tela — era o que a <code>Topbar</code> fazia à mão depois do render. <code>danger</code> agora é <code>--danger</code> e não <code>--warn</code>: os dois eram o mesmo token, então “Excluir coleção” e um badge de condição Fair pintavam igual, e cor que marca duas coisas sem relação não marca nenhuma</td></tr>
     <tr><td>Field</td><td class="nowrap"><code>ui-field</code></td><td>Envolve qualquer controle com o rótulo mono maiúsculo</td></tr>
     <tr><td>Text input</td><td class="nowrap"><code>ui-text-input</code></td><td><code>value</code> como <code>model()</code>, variantes <code>panel|subtle</code></td></tr>
     <tr><td>Textarea</td><td class="nowrap"><code>ui-textarea</code></td><td>—</td></tr>
@@ -188,12 +514,13 @@
     <tr><td>Chip</td><td class="nowrap"><code>ui-chip</code></td><td><code>&lt;button&gt;</code> por padrão; com <code>link</code> vira <code>&lt;a&gt;</code> real — um chip que navega precisa sobreviver ao clique do meio</td></tr>
     <tr><td>Card</td><td class="nowrap"><code>ui-card</code></td><td>A superfície painel; <code>interactive</code>, <code>dashed</code></td></tr>
     <tr><td>Badge</td><td class="nowrap"><code>ui-badge</code></td><td><code>good|warn|accent|neutral</code> + helpers puros de condição e rótulo</td></tr>
-    <tr><td>Toggle</td><td class="nowrap"><code>ui-toggle</code></td><td><code>role="switch"</code></td></tr>
+    <tr><td>Toggle</td><td class="nowrap"><code>ui-toggle</code></td><td><code>role="switch"</code> — liga <em>uma configuração</em>. Nunca use para selecionar uma linha: a tecnologia assistiva anuncia os dois de formas diferentes, e “selecionado” não é a palavra que “switch” diz</td></tr>
+    <tr><td>Checkbox</td><td class="nowrap"><code>ui-checkbox</code></td><td>Um <code>&lt;input type="checkbox"&gt;</code> de verdade, não um botão estilizado — o navegador já dá o papel, o estado, a barra de espaço e, a parte que não se reimplementa, o traço <code>indeterminate</code> de que um “selecionar todos” tri-estado depende (anunciado como <code>aria-checked="mixed"</code>). Estilo é <code>accent-color</code> e mais nada, o que preserva o check, o anel de foco e o traço nativos. O output <code>picked</code> carrega as teclas modificadoras (<code>{ checked, shift }</code>), separado do model <code>checked</code>: o model diz no que <em>esta</em> caixa virou, e só quem quer intervalos precisa saber como chegou lá. Shift+clique e Shift+barra de espaço fazem intervalo — o próprio navegador dispara um click carregando <code>shiftKey</code> — e há um bind extra de <code>keydown.shift.enter</code>. Abaixo de <code>$bp-lg</code> ganha alvo de 44px por um <code>::after</code> centrado, sem crescer a caixa de 15px de que uma linha densa de tabela depende</td></tr>
     <tr><td>Tabs</td><td class="nowrap"><code>ui-tabs</code></td><td><code>tabs: TabDef[]</code>, <code>active</code> como model</td></tr>
     <tr><td>Avatar / stack</td><td class="nowrap"><code>ui-avatar</code>, <code>ui-avatar-stack</code></td><td>Iniciais; stack mostra os 4 primeiros sobrepostos</td></tr>
     <tr><td>Progress</td><td class="nowrap"><code>ui-progress</code></td><td><code>pct</code> + <code>secondaryPct</code> (faixa hachurada atrás: possuído vs. catalogado num denominador só). <strong>Duas tonalidades de um matiz é distinção só por cor</strong> — sempre imprima os números ao lado</td></tr>
     <tr><td>Mosaic</td><td class="nowrap"><code>ui-mosaic</code></td><td>Capa montada com até 4 fotos; <code>aria-hidden</code>, o nome pertence ao link que o envolve</td></tr>
-    <tr><td>Icon</td><td class="nowrap"><code>ui-icon</code></td><td>SVG inline estilo Feather</td></tr>
+    <tr><td>Icon</td><td class="nowrap"><code>ui-icon</code></td><td>SVG inline estilo Feather. Passou de <strong>4 para 26 nomes</strong>, exportados como valor (<code>ICON_NAMES</code>) e não só como tipo, para o spec poder iterar: um <code>@case</code> com nome errado renderiza um svg vazio e nada mais reclama. O conjunto de 4 é exatamente o motivo de o app ter acumulado glifos Unicode crus como substitutos (<code>⊞</code> U+229E não existe em nenhuma webfont do app, então caía no que o SO tivesse, em outra fonte, outro peso, outra linha de base — e um leitor de tela lia o nome Unicode). <strong>Acessibilidade é escolha do call site:</strong> sem <code>label</code> o ícone é <code>aria-hidden</code>; com <code>label</code> ele vira <code>role="img"</code> com aquele nome</td></tr>
     <tr><td>Flag</td><td class="nowrap"><code>ui-flag</code></td><td>Bandeira do idioma no seletor</td></tr>
     <tr><td>Reorder</td><td class="nowrap"><code>ui-reorder</code></td><td>A metade-teclado de uma lista arrastável; <code>moved(-1|1)</code></td></tr>
     <tr><td>Section label</td><td class="nowrap"><code>ui-section-label</code></td><td>Micro-título mono maiúsculo (maiúscula é CSS)</td></tr>
@@ -202,10 +529,55 @@
     <tr><td>Image focus</td><td class="nowrap"><code>ui-image-focus</code></td><td>Outlet global; o editor de ponto focal (arrastar ou setas, prévias por <code>usage</code>)</td></tr>
     <tr><td>Photo manager</td><td class="nowrap"><code>ui-photo-manager</code></td><td>Adicionar / reordenar / capa / enquadrar / remover fotos de um item</td></tr>
     <tr><td>Lightbox</td><td class="nowrap"><code>ui-lightbox</code></td><td>Visualizador cheio, paginação por setas, link do original</td></tr>
-    <tr><td>Toast</td><td class="nowrap"><code>ui-toast</code></td><td>Outlet global do <code>ToastService</code></td></tr>
+    <tr><td>Toast</td><td class="nowrap"><code>ui-toast</code></td><td>Outlet global do <code>ToastService</code>. Tons <code>info|success|error</code>; erro é pintado com <code>--danger</code> e <strong>não some sozinho</strong>. Renderiza o botão do <code>ToastAction</code> (o <strong>Desfazer</strong>) — o rótulo dele é chave e é traduzido aqui dentro, o que também é o que o mantém correto quando o idioma muda com o toast na tela — e diz quantas mensagens ainda esperam atrás</td></tr>
+    <tr><td>Dialog</td><td class="nowrap"><code>ui-dialog</code></td><td>A casca modal: scrim, painel, <code>aria-modal</code>, nome acessível ligado ao título visível, Escape, clique no scrim, e três slots (corpo, <code>[dlgActions]</code>) para o padding e o separador viverem aqui em vez de serem re-derivados por chamador. <code>role</code> é input (<code>dialog</code> | <code>alertdialog</code>) e é <em>bindado</em>, nunca escrito como atributo literal: estático ele cairia também no host <code>&lt;ui-dialog&gt;</code>, deixando dois elementos aninhados alegando ser o mesmo diálogo. <strong>Foca o painel, não um controle</strong> — focar um controle deixaria um Enter segurado responder o diálogo antes de ele ser lido. <code>dismissed</code> significa <strong>sempre</strong> “nada aconteceu”, nunca uma confirmação</td></tr>
+    <tr><td>Confirm</td><td class="nowrap"><code>ui-confirm</code></td><td>Outlet global do <code>ConfirmService</code>, no par que o <code>ConflictService</code>/<code>app-conflict-notice</code> já estabeleceu. É <code>alertdialog</code> porque o corpo <em>é</em> a mensagem. Tom <code>danger</code> põe o foco inicial em <strong>Cancelar</strong>: tudo que chega aqui chegou por um clique, e um clique é muitas vezes o rabo de um reflexo de teclado — com o foco no botão que confirma, o Enter termina o gesto que abriu o diálogo</td></tr>
+    <tr><td>Empty</td><td class="nowrap"><code>ui-empty</code></td><td>“Não tem nada aqui”, dito uma vez, numa forma, com para onde ir. <code>title</code> é <code>input.required</code> <strong>sem default</strong>: eram doze estados vazios escritos à mão em seis formas, e o problema grande não era a forma — uma lista <em>filtrada</em> e uma coleção <em>vazia</em> dividiam uma mensagem só, então quem nunca tocou num filtro era instruído a limpar filtros. São fatos diferentes sobre o mundo e cada call site tem de dizer qual é. <code>[emptyActions]</code> é projetado, não input: a saída de um vazio é um <code>ui-button</code> ou um router link de verdade. <strong>Deliberadamente não é <code>role="status"</code></strong> — a maioria renderiza no primeiro paint, onde uma live region não anunciaria nada (não houve mudança) e roubaria o anúncio de quem mudou de fato</td></tr>
+    <tr><td>Skeleton</td><td class="nowrap"><code>ui-skeleton</code></td><td>A única coisa no app autorizada a cintilar, e só dentro de <code>motion-safe</code>. Essa restrição <em>é</em> o componente: três das superfícies mais importantes (cards do painel, do store, de grupo) desenhavam hachura diagonal onde faltava foto, e uma hachura é indistinguível de um shimmer — então uma coleção pronta sem capa parecia permanentemente no meio de um fetch. O app agora diz exatamente uma de duas coisas: <em>isto ainda está chegando</em> (skeleton) ou <em>não tem nada aqui</em> (<code>ui-empty</code>, o placeholder plano do <code>ui-image-slot</code>). É <code>aria-hidden</code> e sem nome: quem carrega é a <em>região</em>, que possui o <code>aria-busy</code> e o anúncio</td></tr>
+    <tr><td>Date input</td><td class="nowrap"><code>ui-date-input</code></td><td>Um <code>&lt;input type="date"&gt;</code> nu segue a locale do <strong>navegador</strong>, não a do documento: um Chrome em locale inglês mostrava <code>mm/dd/yyyy</code> dentro de uma UI em português, o que <strong>não falha — grava a data errada</strong>, e data de aquisição é justamente o campo que ninguém relê. Duas defesas, porque uma não basta: <code>lang</code> bindado a <code>I18nService.current()</code> (o Chromium honra; Firefox e Safari pegam a locale do SO) e <strong>a ordem esperada impressa sob o campo</strong>, derivada de <code>Intl.DateTimeFormat</code> e ligada por <code>aria-describedby</code>, que é a parte que vale em qualquer navegador. O model é sempre ISO <code>yyyy-MM-dd</code>; <code>''</code> é “sem data”, então um campo limpo faz round-trip como o <code>null</code> da API sem este componente conhecer <code>null</code></td></tr>
     <tr><td>Conflict notice</td><td class="nowrap"><code>app-conflict-notice</code></td><td>Vive em <code>layout/</code>, não em <code>shared/ui</code>: é um outlet específico do app, não um elemento reutilizável</td></tr>
   </tbody>
 </table>
+</div>
+
+<div class="callout">
+  <span class="label">Onde os skeletons realmente estão</span>
+  <p>
+    Três superfícies: o painel (cards de estatística e de coleção), o store e a
+    página da coleção. O padrão é o mesmo nas três e vale copiar em qualquer
+    quarta:
+  </p>
+  <ul>
+    <li>
+      <strong>O placeholder veste as classes do card real</strong> —
+      <code>.stat__label</code>, <code>.name</code>, <code>.desc</code> — e a
+      barra do <code>ui-skeleton</code> é dimensionada em <code>em</code> daquilo
+      em que ela cai. É isso que faz a troca não custar layout shift: um
+      <code>height: 12px</code> adivinhado à mão custa.
+    </li>
+    <li>
+      <strong><code>aria-busy</code> e o único anúncio ficam na região</strong>
+      (um <code>&lt;p class="sr-only" role="status"&gt;</code>), e cada skeleton é
+      <code>aria-hidden</code>. Ouvir “carregando” uma vez serve; ouvir trinta
+      gráficos sem nome não.
+    </li>
+  </ul>
+  <p>
+    Na página da coleção isso conserta algo pior do que uma espera feia: <strong>o
+    caminho de carga <em>era</em> o caminho de não-encontrado</strong> — enquanto o
+    vault estava em voo, aquele branch dizia ao usuário que a coleção dele não
+    existia, e depois trocava a frase por uma página inteira.
+  </p>
+</div>
+
+<div class="callout warn">
+  <span class="label">Pela metade: <code>ui-empty</code> ainda não cobre tudo</span>
+  <p>
+    Já cobre o herói da coleção, os dois vazios da <code>CollectionPage</code>, o
+    card de grupo, o cabeçalho de faixa e a página do item.
+    <code>group-dashboard</code> e <code>group-tree</code> continuam com o
+    <code>div.empty</code> local.
+  </p>
 </div>
 
 <h3>Pipes</h3>
@@ -246,9 +618,9 @@
   <tbody>
     <tr><td><code>copies.util.ts</code></td><td>Posse derivada, melhor condição, <code>copyValue</code> (a cadeia de estimativa), totais pagos, <code>syncWantedTag</code></td></tr>
     <tr><td><code>sort.util.ts</code></td><td>Toda comparação de itens. <code>Intl.Collator</code> numérico, então <code>1 · 2 · 10 · 12A</code> ordena certo mesmo em campo de texto livre; sem valor sempre afunda</td></tr>
-    <tr><td><code>groups.util.ts</code></td><td><code>childrenOf</code> (alfabético, via <code>compareNames</code>), <code>flattenTree</code>, <code>visibleTree</code>, <code>fieldsFor</code>, <code>sortFor</code>, <code>resolveGroupId</code></td></tr>
+    <tr><td><code>groups.util.ts</code></td><td><code>childrenOf</code> (alfabético, via <code>compareNames</code>), <code>flattenTree</code>, <code>visibleTree</code>, <code>fieldsFor</code>, <code>sortFor</code>, <code>resolveGroupId</code>, e agora <code>canReparent</code> — a regra inteira de “este grupo pode morar aqui?” num lugar só. <code>subtreeIds</code> ganhou guarda de ciclo (<code>Set</code> de visitados): <code>parentId</code> não carrega chave estrangeira, então um nó apontando para o próprio descendente é representável, e a caminhada sem guarda recursiona até a pilha acabar. <code>canReparent</code> depende dela terminar — é o que torna a pergunta do seletor respondível num grafo já quebrado</td></tr>
     <tr><td><code>group-stats.util.ts</code></td><td>Toda aritmética de possuído/faltante/percentual, e o rollup contra <code>target</code></td></tr>
-    <tr><td><code>browse.util.ts</code></td><td><code>visibleItems</code> e <code>neighbours</code> — a lista visível e quem vem a seguir</td></tr>
+    <tr><td><code>browse.util.ts</code></td><td><code>visibleItems</code>, <code>neighbours</code> e <code>matchesQuery</code> — a lista visível, quem vem a seguir, e se um item responde a uma busca. A busca era só o nome, que era o default errado para a consulta mais frequente do app: um catalogador digita um número de catálogo, e número de catálogo é precisamente um campo custom — o único lugar onde a busca antiga não olhava. Agora olha nome, descrição, tags e o <em>valor</em> de todo campo custom. <strong>Nomes de campo não são buscados</strong>: um grupo que declara “Número” faria todo item dele casar com “num”</td></tr>
     <tr><td><code>tree-keyboard.ts</code></td><td>Não é util puro (mexe em foco), mas é a mesma barganha: o padrão de teclado de árvore ARIA que o mapa da coleção e o seletor das configurações compartilham</td></tr>
     <tr><td><code>sections.util.ts</code></td><td><code>sectionsOf</code> (ordem do array, <strong>nunca</strong> alfabética), <code>sectionRank</code>, <code>resolveSectionId</code>, <code>chunkBySection</code></td></tr>
     <tr><td><code>focal.util.ts</code></td><td><code>focalToPosition</code>, <code>clampFocal</code>, <code>focalFromPoint</code></td></tr>
@@ -256,6 +628,31 @@
     <tr><td><code>money.util.ts</code></td><td><code>ceilToCents</code>, <code>SUPPORTED_CURRENCIES</code> (espelho de <code>Money.SupportedCurrencies</code>)</td></tr>
     <tr><td><code>date.util.ts</code></td><td>Parseia ISO só-data como <strong>meia-noite local</strong> — <code>new Date('2026-08-13')</code> é UTC e mostraria o dia anterior no Brasil</td></tr>
     <tr><td><code>download.util.ts</code></td><td>Âncora de download do arquivo</td></tr>
+    <tr><td><code>field-format.util.ts</code></td><td><code>formatFieldValue</code>, <code>parseFieldNumber</code>, <code>isFieldRightAligned</code> — como o valor de um campo custom é <em>exibido</em>, nunca como é comparado. Um campo <code>number</code> passa por <code>Intl.NumberFormat</code> e <strong>nunca</strong> pelo formatador de dinheiro: um campo tipado <code>number</code> é um número de catálogo, uma tiragem, uma contagem de páginas, e renderizar <code>12</code> como <code>US$ 12,00</code> inventa uma moeda que o dado nunca alegou e uma precisão que ele nunca teve (<a href="decisions.html">ADR-48</a>). A ordenação continua no valor cru, em <code>sort.util.ts</code> — formatar é projeção de mão única, e ordenar <code>1.234</code> como texto porque ele renderiza com separador de milhar é exatamente a divergência que manter os dois separados evita. O parse casa com o de <code>keyOf</code> até a vírgula decimal, porque é o que um teclado brasileiro produz. Os formatadores são cacheados por locale: uma tabela de 8 colunas por 200 linhas são 1.600 chamadas por passe de render</td></tr>
+    <tr><td><code>list-totals.util.ts</code></td><td><code>listTotals</code> — o que o rodapé diz sobre a lista acima dele: linhas, quantas possuídas, quantas cópias, e o valor estimado <strong>por moeda</strong>. Separado de <code>group-stats.util.ts</code> de propósito: aquele agrega o <em>subárvore de um grupo</em>, coisa estável e com <code>target</code> para medir progresso; este agrega a <em>lista visível e filtrada</em>, que não tem tamanho declarado — não existe “o total esperado das 14 linhas que sobraram depois que você filtrou por Mint”, então <code>pct</code>, <code>missing</code> e <code>target</code> não têm significado aqui. Lista vazia ainda reporta a moeda com total zero: rodapé que não renderiza nada lê como quebrado, onde <code>0</code> lê como “nada ainda”</td></tr>
+    <tr><td><code>group-move.util.ts</code></td><td><code>groupMoveImpact</code> — o que mover um grupo para outro pai <em>mudaria</em>, calculado antes de mudar. Campos ganhos; campos perdidos com <strong>quantos itens da subárvore guardam valor</strong> para cada um; a ordem que o galho vai herdar; e um irmão homônimo, avisado e nunca bloqueado (nome de irmão não é chave — identidade é o id). Os perdidos são contados por item e não pela subárvore inteira: um descendente que redeclara o campo continua exibindo, então os itens dele não são afetados e não podem ser contados como se fossem</td></tr>
+    <tr><td><code>group-delete.util.ts</code></td><td><code>groupDeletePlan</code> — os números que o diálogo mostra <em>e</em> o grafo que a página aplica, na mesma chamada. Duas funções acabariam discordando, e o momento em que isso nunca pode acontecer é o em que alguém lê “12 itens” e aperta um botão que apaga quatorze. Em <strong>toda</strong> disposição as seções dos grupos removidos vão com eles e todo item sobrevivente que apontava para uma delas tem o <code>sectionId</code> limpo</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Puros e locais de página</h3>
+
+<p>
+  Alguns não pertencem a <code>core/utils</code> porque só uma tela os usa — e
+  continuam puros e com spec ao lado, pelo mesmo motivo de sempre: são testáveis
+  sem TestBed.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Arquivo</th><th>Dono de</th></tr></thead>
+  <tbody>
+    <tr><td><code>collection-page/item-selection.ts</code></td><td>Quais linhas uma ação em massa atinge. <code>selectedIn</code>, <code>toggle</code>, <code>extendTo</code>, <code>setAll</code> e os três predicados do cabeçalho tri-estado. <strong>O conjunto nunca é podado</strong>: todo leitor cruza com o que está visível, então estreitar um filtro esconde parte da seleção sem destruí-la — e, muito mais importante, <em>nenhuma ação alcança uma linha que o usuário não vê</em>, porque a interseção é a única lista que qualquer uma delas recebe. O âncora do intervalo é guardado como <strong>id</strong>, não índice (índices se movem no primeiro filtro), e o intervalo em si é calculado por posição na lista plana visível — o que define bem um intervalo que cruza um cabeçalho de faixa: é a corrida de linhas que o leitor vê entre as duas. Um âncora que saiu de vista degrada para um toggle simples</td></tr>
+    <tr><td><code>collection-page/bulk-patch.ts</code></td><td><code>BulkPatch</code>, <code>applyBulkPatch</code>, <code>removeItems</code>, <code>isEmptyPatch</code>, <code>distinctValues</code>. O critério do que é editável em massa é “um valor cujo significado não depende do item em que cai”: grupo, seção, ano, valor, campo custom, uma tag, e o <code>status</code> de uma cópia. Condição, preço, valor, data e notas de <em>cópia</em> falham no critério — uma cópia é um objeto físico com identidade própria, e “definir a condição de 40 itens” teria de escolher uma cópia por item, o que “a primeira” não é um conceito deste modelo. <code>status</code> é a exceção justamente por ser idempotente por cópia: toda cópia de todo item selecionado recebe. <strong>Presença significa “tocado”</strong>: chave ausente é deixada em paz, chave presente é aplicada, <em>string vazia incluída</em> — é o que torna limpar possível. Retorna um array do mesmo tamanho <strong>na mesma ordem</strong>, porque ordem manual é a ordem do array e reordenar aqui reescreveria em silêncio um arranjo feito à mão</td></tr>
+    <tr><td><code>collection-page/column-prefs.ts</code></td><td>Quais colunas de campo a tabela esconde, em <code>localStorage['vault.cols.&lt;coleção&gt;.&lt;grupo&gt;']</code>. <strong>Guarda os nomes ocultos, nunca os visíveis</strong>: um campo declarado na semana que vem fica visível por default — guardar o conjunto visível esconderia toda coluna nova de quem já abriu o seletor. Chaveado por coleção <em>e</em> por grupo, porque o conjunto de campos é por grupo. Toda leitura e escrita é dentro de <code>try</code>: <code>localStorage</code> lança de saída no modo privado do Safari, e uma preferência perdida não pode levar a página com ela (<a href="decisions.html">ADR-47</a>)</td></tr>
+    <tr><td><code>item-form-page/unsaved-item.guard.ts</code></td><td><code>unsavedItemGuard</code>, um <code>CanDeactivateFn</code>. O que ele precisa do componente é declarado como <strong>forma estrutural</strong> (<code>interface HasUnsavedCheck { canLeave(): boolean }</code>) e não como import: <code>app.routes.ts</code> é avaliado no load do módulo, então um guard que importasse <code>ItemFormPage</code> arrastaria o formulário inteiro, o photo manager e os pipes para o bundle inicial e desfaria o <code>loadComponent</code> em silêncio</td></tr>
+    <tr><td><code>browse-params.ts</code> → <code>nextSortFor</code></td><td>A ordenação que um clique num cabeçalho de coluna pede. Compara contra a ordem <strong>efetiva</strong> (o override da URL, ou a ordem declarada do grupo, ou o default) e não contra o override sozinho — é o que faz o primeiro clique na coluna por que o grupo <em>já</em> ordena <em>inverter</em>, em vez de parecer não fazer nada. Sempre devolve uma ordenação, nunca <code>null</code>: “clique na coluna em que você já está para voltar ao default do grupo” não é um gesto que alguém adivinharia. Dinheiro abre em <code>desc</code> (a pergunta que uma coluna de valor responde é “qual é o caro”), o resto em <code>asc</code></td></tr>
   </tbody>
 </table>
 </div>
@@ -341,6 +738,138 @@
   a quem estava nele.
 </p>
 
+<h2 id="colecao">A página da coleção</h2>
+
+<p>
+  É a tela que mais mudou, e o resumo é que ela deixou de ser só um visualizador.
+  Quatro peças novas, e uma correção embaraçosa.
+</p>
+
+<h3>A barra em massa</h3>
+
+<p>
+  Renderizada pela <code>CollectionPage</code> e <strong>não</strong> pela
+  tabela: a grade de cards precisa da barra idêntica e nenhuma das duas views
+  sabe da outra — a mesma divisão que deixa as duas renderizarem o mesmo
+  <code>SectionChunk[]</code>. Ela fica presa ao pé da coluna principal e só
+  existe enquanto <code>selectionCount() &gt; 0</code>.
+</p>
+
+<p>
+  A barra possui o <strong>rascunho</strong> e nada mais. Cada campo tem um
+  <code>{ touched, value }</code>, e <code>touched</code> é o desenho inteiro: sem
+  ele não há como distinguir “deixe estes quarenta anos em paz” de “ponha todos
+  em branco”, e um editor em massa que não expressa o primeiro é inútil enquanto
+  um que faz o segundo em silêncio é perigoso. Onde os itens selecionados
+  discordam, o controle reporta “3 valores” em vez de escolher um deles para
+  exibir (<code>distinctValues</code>). O <em>write</em> é um PUT de documento
+  inteiro e isso pertence a quem possui a coleção, então a barra emite um
+  <code>BulkPatch</code> e a página decide — que é também o que torna uma recusa
+  recuperável: a página mantém a seleção, o componente não é destruído, e o
+  rascunho continua na tela. O caminho ponta a ponta está em
+  <a href="flows.html#massa">Fluxos → editar muitos itens de uma vez</a>.
+</p>
+
+<h3>A coluna de seleção, na lista e na grade</h3>
+
+<p>
+  Na lista o <code>ui-checkbox</code> é <strong>irmão da âncora, nunca filho</strong>:
+  um checkbox dentro de um <code>&lt;a&gt;</code> é HTML inválido, e o
+  <code>ui-reorder</code> já estabelecia exatamente esse arranjo no mesmo wrapper.
+  Na grade ele fica sobre o canto do card e <em>engole o próprio clique</em>,
+  porque o card <em>é</em> o link — sem isso, marcar navegaria. O cabeçalho é
+  tri-estado: <code>indeterminate</code> quando algumas linhas visíveis estão
+  marcadas, e “selecionar todos” significa exatamente <em>as linhas na tela</em>.
+</p>
+
+<h3>Colunas de campo custom, e o que rola</h3>
+
+<p>
+  A lista renderiza <strong>o conjunto de campos mesclado de toda a
+  ancestralidade</strong> (<code>fieldsFor</code>), menos as colunas escondidas
+  (<code>column-prefs.ts</code>), entre Cond e Valor — assim as duas colunas de
+  dinheiro alinhadas à direita continuam adjacentes. Oito campos declarados não
+  cabem num laptop ao lado do nome, do grupo e de duas colunas de dinheiro, então:
+</p>
+
+<ul>
+  <li><strong>Só o container <code>.list-scroll</code> rola na horizontal.</strong>
+      O corpo da página nunca rola de lado — é a mesma regra do
+      <code>.table-wrap</code> deste manual.</li>
+  <li>A célula do checkbox e a do nome são <code>position: sticky</code>, com
+      fundo opaco próprio (<code>--row-bg</code>). Uma linha que perde a
+      identidade no meio da travessia é ilegível, e o checkbox é o controle de que
+      a barra em massa depende.</li>
+  <li>Uma ausência é <code>—</code>, nunca célula em branco: a mesma distinção
+      “desconhecido, não zero” que a coluna de valor faz.</li>
+</ul>
+
+<h3>Cabeçalhos ordenáveis</h3>
+
+<p>
+  Os cabeçalhos de Nome, Ano, Valor e de cada campo custom são
+  <code>&lt;button&gt;</code> com <code>aria-sort</code>
+  (<code>ascending</code>/<code>descending</code>/<code>none</code>) e uma seta
+  <code>aria-hidden</code>. <strong>A direção também vai no nome acessível</strong>
+  (<code>sortTitle</code>), e isso não é redundância: a lista é um grid CSS, não
+  uma <code>&lt;table&gt;</code>, então estes não são células
+  <code>columnheader</code> de verdade — um leitor que ignore o atributo nunca
+  diria para que lado a coluna aponta. O dropdown de ordenação existente continua
+  lá; os dois escrevem os mesmos <code>?sort=</code>/<code>?dir=</code>.
+</p>
+
+<h3>O rodapé de totais</h3>
+
+<p>
+  Contagem de linhas, quantas possuídas e quantas cópias, e o valor estimado do
+  que é efetivamente possuído — <strong>uma linha por moeda</strong>, porque somar
+  BRL com USD não é uma quantia de dinheiro em nenhuma das duas. Fica
+  <em>fora</em> do container que rola: os totais descrevem a lista toda, e uma
+  cifra estacionada 400px além da borda direita não descreve nada.
+</p>
+
+<h3>O estado de carga</h3>
+
+<p>
+  Enquanto o vault está em voo, a página reserva a forma real — banner, cabeçalho,
+  barra de controle, duas colunas — com <code>ui-skeleton</code>, dentro de uma
+  região <code>aria-busy</code> com um único anúncio. <strong>Esse branch
+  <em>era</em> o de não-encontrado</strong>: durante a carga o app dizia ao usuário
+  que a coleção dele não existia, e depois substituía a frase por uma página
+  inteira.
+</p>
+
+<h3>Dois vazios diferentes</h3>
+
+<p>
+  <code>filtering()</code> é a única coisa que separa os dois, e decide qual é.
+  Filtrando: “nada casa com os filtros”, com um botão que <strong>limpa também a
+  busca global</strong> — ela vive na topbar e não é query param, então um vazio
+  oferecendo limpar filtros enquanto uma busca velha mantém a lista vazia seria um
+  beco sem saída vestido de saída. Não filtrando: “nada aqui ainda”, com um botão
+  de adicionar item. Era uma mensagem só, e quem nunca tinha tocado num filtro
+  era instruído a limpar filtros.
+</p>
+
+<div class="callout danger">
+  <span class="label">O que estava impresso onde deveria haver uma foto</span>
+  <p>
+    A grade de itens e a página do item imprimiam a string de debug literal
+    <code>img: {{ item.img }}</code> — em inglês, sobre uma tile de hachura
+    diagonal, na superfície de navegação primária do app. A grade agora renderiza
+    <code>photoIds[0]</code> na variante <code>thumb</code> com o
+    <code>background-position</code> do ponto focal, e a ausência de foto é uma
+    marca discreta num painel plano com nome acessível.
+  </p>
+  <p>
+    <strong><code>Item.img</code> continua na transmissão e continua sendo
+    populado</strong> — <code>item-form-page</code> deriva um
+    <code>&lt;slug&gt;.jpg</code> do nome quando cria um item, e
+    <code>ItemDto.Img</code> existe no backend — mas <strong>nada busca esse
+    valor</strong>. É um resíduo do arquivo de design, não um mecanismo.
+  </p>
+</div>
+
 <h2 id="i18n">Idioma</h2>
 
 <p>
@@ -375,6 +904,102 @@
   usuário digitou.
 </p>
 
+<h2 id="contagens">Números que concordam com o texto ao lado</h2>
+
+<p>
+  Um usuário viu <strong>“1 subgrupos”</strong>. A escada em vigor tem três
+  degraus, e a escolha entre eles não é de estilo:
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Caso</th><th>Mecanismo</th><th>Exemplo</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Uma string, sem contagem</td>
+      <td>o pipe <code>t</code></td>
+      <td><code>itemForm.tags</code></td>
+    </tr>
+    <tr>
+      <td><strong>Uma</strong> contagem</td>
+      <td>duas chaves <code>.one</code>/<code>.other</code> via
+          <code>I18nService.plural</code>, com um 4º argumento opcional
+          <code>params</code> para os outros marcadores da mesma frase</td>
+      <td><code>progress.missing.one</code>/<code>.other</code> —
+          <em>falta 1</em> / <em>faltam 179</em></td>
+    </tr>
+    <tr>
+      <td><strong>Duas ou mais</strong> contagens independentes</td>
+      <td>a frase inteira numa chave só, recebendo locuções de
+          <code>I18nService.count(n, noun)</code></td>
+      <td><code>dashboard.sub</code> —
+          <em>“324 itens em 10 coleções · bem-vindo de volta, Marcus”</em></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>COUNT_NOUNS</code> é uma <em>tabela</em>, não uma interpolação
+  <code>noun.&lt;nome&gt;</code>: as duas metades continuam <code>MessageKey</code>
+  de verdade, então um par cruzado ou faltando quebra o build em vez de imprimir
+  <code>noun.item.one</code> na tela de alguém. E <code>{n}</code> é aplicado
+  <em>depois</em> de <code>params</code> de propósito, para nenhum chamador
+  conseguir imprimir um número enquanto flexiona por outro.
+</p>
+
+<div class="callout warn">
+  <span class="label">Por que o português é onde isso dói</span>
+  <p>
+    Não há como consertar acrescentando um “s”: <em>item</em> → <strong>itens</strong>,
+    <em>coleção</em> → <strong>coleções</strong>, <em>seção</em> → <strong>seções</strong>
+    são irregulares; e <em>faltando</em> não flexiona enquanto o verbo
+    <em>falta/faltam</em> flexiona. É por isso que uma frase com <em>uma</em>
+    contagem ainda é escrita duas vezes: a contagem quase sempre concorda com um
+    verbo em outro lugar dela, e o inglês esconde isso porque “missing” e “hold”
+    não mudam.
+  </p>
+</div>
+
+<p>
+  O que <strong>não</strong> é caso de concordância, e não deve ser “corrigido”:
+  ordinal (<code>exemplar nº{n}</code>, <code>foto {n} de {total}</code>), delta
+  (<code>+{n} acima</code>), razão (<code>{owned}/{total}</code>), particípio que
+  não flexiona (<code>{n} na wishlist</code>, <code>{n} em mãos</code>), rótulo
+  com contagem anexada (<code>Exemplares · 3</code>), e contagem contra uma
+  constante de compilação maior que um (<code>Até 50 exemplares</code>).
+</p>
+
+<h2 id="etiquetas">Etiquetas: editáveis, buscáveis e agora navegáveis</h2>
+
+<p>
+  As etiquetas estavam no modelo, no DTO e no validador desde o começo, e por um
+  tempo só a barra de edição em massa mexia nelas — dava para aplicar uma
+  etiqueta a quarenta itens e não corrigir em nenhum. Hoje o ciclo está fechado:
+  <code>ui-tag-input</code> no formulário do item, adicionar/remover uma na barra
+  de massa, e <code>?tag=</code> para filtrar.
+</p>
+
+<p>
+  As regras de “o que é uma etiqueta” vivem só em
+  <code>core/utils/tags.util.ts</code>: guardada como foi digitada (apenas sem
+  espaços nas pontas), comparada <em>ignorando</em> a caixa, e a
+  <code>wanted</code> derivada nunca é oferecida. O filtro não reimplementa nada
+  disso — <code>hasTag</code> pergunta a <code>withTagAdded</code> se a
+  referência volta igual. <strong>A consequência é o motivo:</strong> duas
+  comparações independentes acabariam partindo um rótulo em duas respostas, que
+  é exatamente a falha que <code>tags.util.ts</code> existe para evitar.
+</p>
+
+<p>
+  <code>readTag</code> confere contra a coleção inteira e uma etiqueta
+  desconhecida lê como “sem filtro”, nunca como lista vazia — ver ADR-66. Na
+  página do item cada etiqueta é um <code>ui-chip</code> com link (um
+  <code>&lt;a&gt;</code> de verdade, para o clique do meio funcionar), e o filtro
+  ativo aparece e se limpa na mesma linha de chips que condição e situação, com
+  <code>clearFilters()</code> alcançando ele também.
+</p>
+
 <h2 id="temas">Temas e tokens</h2>
 
 <p>
@@ -400,6 +1025,107 @@
 </table>
 </div>
 
+<h3>A camada estrutural, que <em>não</em> varia por tema</h3>
+
+<p>
+  <code>_themes.scss</code> abre com um <code>:root</code> próprio, antes do
+  primeiro tema, para escalas que descrevem <strong>ritmo e empilhamento</strong>
+  em vez de aparência. Um tema muda como o app parece; não muda quão longe duas
+  coisas ficam nem qual delas está na frente. Elas moram num
+  <code>:root</code> separado exatamente para que um bloco de tema nunca precise
+  reafirmá-las — e para que adicionar um tema não possa bifurcar a escala de
+  espaçamento por acidente.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Escala</th><th>Tokens</th><th>Nota</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Espaçamento</td>
+      <td><code>--sp-1</code> … <code>--sp-12</code></td>
+      <td>Base 4px. Componentes andam pela escala em vez de inventar um gap, que
+          é o que mantém alinhados dois painéis feitos com um mês de diferença</td>
+    </tr>
+    <tr>
+      <td>Tipo</td>
+      <td><code>--fs-xs</code> (11px) … <code>--fs-xl</code> (18px)</td>
+      <td>Abaixo do <code>--h1</code>, que segue por tema porque a face display
+          muda de tamanho entre eles</td>
+    </tr>
+    <tr>
+      <td>Movimento</td>
+      <td><code>--dur-fast</code> 120ms, <code>--dur-mid</code> 200ms,
+          <code>--dur-slow</code> 320ms, <code>--ease-out</code>,
+          <code>--ease-in-out</code></td>
+      <td>Curtos de propósito: isto é uma ferramenta de dados, e uma animação
+          que o usuário <em>espera</em> é bug</td>
+    </tr>
+    <tr>
+      <td>Empilhamento</td>
+      <td><code>--z-sticky</code> 10 · <code>--z-dropdown</code> 100 ·
+          <code>--z-overlay</code> 500 · <code>--z-modal</code> 600 ·
+          <code>--z-toast</code> 800 · <code>--z-notice</code> 900</td>
+      <td>Uma escala, declarada uma vez, para um dropdown dentro de um modal não
+          acabar atrás dele porque dois componentes adivinharam. O aviso de
+          conflito é o topo porque é a única mensagem que diz que um save não
+          aconteceu</td>
+    </tr>
+    <tr>
+      <td>Foco</td>
+      <td><code>--focus-width</code> 2px, <code>--focus-offset</code> 2px</td>
+      <td>Ver <a href="#a11y">acessibilidade</a> — o offset é
+          <strong>positivo</strong> agora</td>
+    </tr>
+    <tr>
+      <td>Toque</td>
+      <td><code>--tap: 44px</code>, em <code>styles.scss</code></td>
+      <td>Fora de <code>_themes.scss</code> porque não é assunto de tema</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Por tema, o que entrou foi <code>--danger</code> / <code>--danger-contrast</code>
+  (separado de <code>--warn</code>: eram o mesmo token, então “Excluir coleção” e
+  um badge de condição Fair pintavam idêntico) e os quatro tokens de contraste da
+  <a href="#contraste">seção seguinte</a>. E <code>_mixins.scss</code> ganhou os
+  breakpoints (<code>$bp-sm</code> 560 · <code>$bp-md</code> 768 ·
+  <code>$bp-lg</code> 900 · <code>$bp-xl</code> 1200) mais
+  <code>upto()</code>, <code>from()</code>, <code>focus-ring()</code> e
+  <code>motion-safe()</code> — variáveis SCSS e não custom properties, porque uma
+  media query não pode ler <code>var()</code>, que é justamente por que esses
+  números estavam copiados como literais em quatro stylesheets que depois
+  discordavam.
+</p>
+
+<h3>Primeiro paint</h3>
+
+<p>
+  <code>ThemeService</code> e <code>I18nService</code> escrevem
+  <code>data-theme</code> e <code>lang</code> de dentro de um <code>effect()</code>,
+  que não pode rodar antes do bootstrap. E o <code>&lt;html&gt;</code> de
+  <code>index.html</code> vinha com <code>lang="en"
+  data-theme="devlight"</code> <strong>fixos</strong>: todo carregamento frio
+  pintava branco e em inglês, e repintava um instante depois. Isso é pior
+  justamente para quem escolheu um tema escuro — quem pediu para não receber uma
+  tela branca.
+</p>
+
+<p>
+  Agora um script inline, dependency-free e síncrono, no <code>&lt;head&gt;</code>
+  antes do bundle, lê os dois de <code>localStorage</code> e os aplica. Os dois
+  valores são <strong>gravados pelo usuário</strong> e vão para um seletor de
+  atributo e para o idioma do documento, então nenhum é interpolado: cada um é
+  <em>casado contra uma allowlist</em> e descartado se não estiver nela. As duas
+  listas espelham <code>ThemeId</code> e <code>Lang</code> e têm de andar com
+  eles — um valor que falte ali custa um flash, nunca uma página quebrada.
+  Qualquer coisa diferida é um flash com outro nome, então o script não pode ser
+  <code>defer</code>. O sintoma correspondente está em
+  <a href="operations.html#troubleshooting">Sintomas e causas</a>.
+</p>
+
 <p>
   <strong>Adicionar um tema:</strong> um bloco em <code>_themes.scss</code>, um
   <code>ThemeDef</code> em <code>core/state/themes.ts</code>, o id em
@@ -415,11 +1141,171 @@
   usa, no card, na página do item e na capa.
 </p>
 
+<h2 id="contraste">Contraste é aritmética, não revisão</h2>
+
+<p>
+  <code>--muted</code> carregava <strong>a camada secundária de tipografia
+  inteira</strong> — todo micro-título, contagem, razão, legenda e placeholder do
+  app — medindo entre <strong>2,4 e 4,4:1</strong> dependendo do tema e da
+  superfície. Um revisor não <em>vê</em> 3,3:1. O autor de um oitavo tema
+  certamente não. A aritmética vê.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Token</th><th>Para</th><th>Piso</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>--muted-strong</code></td>
+      <td>Texto secundário informacional: micro-título, contagem, razão, legenda,
+          placeholder</td>
+      <td>≥ 4,5:1 contra <code>--bg</code>, <code>--panel</code>
+          <strong>e</strong> <code>--panel2</code></td>
+    </tr>
+    <tr>
+      <td><code>--muted</code></td>
+      <td>Decoração: um fio, uma marca d’água, um glifo que repete o que a linha
+          já diz em <code>--text</code></td>
+      <td><strong>Abaixo de AA de propósito.</strong> Nada legível pode usar</td>
+    </tr>
+    <tr>
+      <td><code>--accent-strong</code>, <code>--accent2-strong</code></td>
+      <td>Accent usado como <em>texto</em></td>
+      <td>≥ 4,5:1 nas três superfícies</td>
+    </tr>
+    <tr>
+      <td><code>--accent</code>, <code>--accent2</code></td>
+      <td>Accent usado como <em>preenchimento</em>: barra, borda, fundo de botão</td>
+      <td>Trabalho de 3:1 — e é para isso que eles são escolhidos</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  A distinção accent/accent-strong existe porque os accents crus são escolhidos
+  para <strong>serem vistos</strong>, e <strong>três dos sete falham 4,5:1 como
+  texto</strong>: o <code>--accent</code> do Zine mede 3,49:1 sobre
+  <code>--panel2</code>, o <code>--accent2</code> do Paperwhite 3,83:1. Onde o
+  accent de um tema já lê, o valor <code>-strong</code> <em>é</em> o próprio
+  accent — assim existe exatamente um lugar para olhar e nenhuma segunda paleta
+  silenciosa (<a href="decisions.html">ADR-55</a>).
+</p>
+
+<div class="callout ok">
+  <span class="label">O teste lê o <code>.scss</code> que é publicado</span>
+  <p>
+    <code>src/styles/themes.spec.ts</code> faz o parse do
+    <code>_themes.scss</code> real — <strong>nunca de uma cópia</strong>, porque
+    uma paleta duplicada num teste é uma paleta que vai discordar da que ship — e
+    reprova qualquer valor abaixo de 4,5:1 contra <code>--bg</code>,
+    <code>--panel</code> <em>e</em> <code>--panel2</code>, nos sete temas. Um
+    oitavo tema não consegue regredir isso, e nem um ajuste num tema existente.
+  </p>
+  <p>
+    <code>--panel2</code> entra porque <strong>num tema escuro ele é a mais
+    clara das três superfícies</strong> — é onde um rótulo tem mais chance de
+    falhar, e é onde o placeholder do <code>ui-image-slot</code> e a pista da
+    barra de progresso ficam. Há também uma asserção de <em>relação</em>:
+    <code>--muted-strong</code> tem de ser mais legível que <code>--muted</code>,
+    o que é o que impede alguém de “resolver” o teste igualando os dois. E uma
+    asserção de que os sete temas foram encontrados, para uma regressão no parser
+    não fazer a suíte inteira desaparecer passando.
+  </p>
+</div>
+
+<p>
+  Duas consequências práticas no código: o default de <code>mono-label()</code> em
+  <code>_mixins.scss</code> virou <code>--muted-strong</code> e
+  <code>--fs-xs</code> (11px) em vez de <code>--muted</code> e 10px — dezesseis
+  call sites herdam os dois, porque a 10px o tracking que faz esses rótulos
+  lerem como títulos é também o que impede que sejam lidos —, e a regra global de
+  <code>::placeholder</code> em <code>styles.scss</code> passou para
+  <code>--muted-strong</code>: aquela linha é todo campo do app.
+</p>
+
+<h2 id="movimento">Movimento</h2>
+
+<p>
+  Cinco usos, e nada além. Tudo é <code>transform</code> ou <code>opacity</code> —
+  as duas propriedades que o compositor animar sem relayout — e tudo está dentro
+  de <code>motion-safe</code>, então quem pediu menos movimento ao sistema
+  operacional recebe o estado final sem o percurso.
+</p>
+
+<ol class="steps">
+  <li><strong>Elevação do card</strong> — um card que pode ser aberto sobe 2px
+      na direção do ponteiro.</li>
+  <li>
+    <strong>Press.</strong> O app tinha <strong>25 regras <code>:hover</code> e
+    zero <code>:active</code></strong>. Numa tela de toque hover não existe, então
+    um controle que não recebe visivelmente o toque lê como quebrado e é tocado de
+    novo. Isto é funcional, não decoração.
+  </li>
+  <li><strong>Transição do chip</strong> — um filtro ligando ou desligando.</li>
+  <li><strong>Deslizar da gaveta</strong> — em <code>sidebar.scss</code>, com o
+      fade do scrim no <code>Shell</code>.</li>
+  <li><strong>Revelar o link de salto</strong> — ele entra de cima do viewport.</li>
+</ol>
+
+<p>
+  Três dos cinco moram em <code>styles.scss</code> e não no componente, porque os
+  componentes a que pertencem (<code>ui-card</code>, <code>ui-button</code>,
+  <code>ui-chip</code>) são a biblioteca compartilhada e isto é uma camada
+  transversal. Isso cobra um preço visível no seletor: o Angular injeta estilo de
+  componente <em>depois</em> deste arquivo, e o seletor scopado do componente tem
+  duas partes de classe, então as regras daqui repetem a classe
+  (<code>button.btn.btn</code>) para não perder o empate por ordem de fonte — o que
+  falharia em silêncio, porque o <code>transform</code> ainda se aplicaria, só sem
+  easing. A correção certa é um <code>transform</code> na lista de
+  <code>transition</code> dos próprios componentes.
+</p>
+
+<p>
+  O sexto candidato — o twisty da árvore de grupos — está deliberadamente
+  <strong>de fora</strong>: ele troca o glifo <code>▸</code> por <code>▾</code> em
+  vez de rotacionar um elemento, e uma troca de texto não é coisa que
+  <code>transform</code> anime.
+</p>
+
 <h2 id="a11y">Acessibilidade</h2>
 
 <ul>
   <li><code>&lt;a&gt;</code>/<code>&lt;button&gt;</code> reais para qualquer coisa
       clicável; <code>:focus-visible</code> visível, definido globalmente.</li>
+  <li>
+    <strong>Um link de salto é o primeiro elemento focável do documento.</strong>
+    Havia cerca de <strong>20 paradas de tabulação de chrome</strong> entre a
+    barra de endereços e o conteúdo — o que é um usuário de teclado apertando Tab
+    vinte vezes em <em>cada</em> navegação. Ele é escondido por
+    <code>transform</code>, não por <code>display: none</code>, que o tiraria da
+    ordem de tabulação e não deixaria nada com que saltar; o alvo é
+    <code>main#main-content</code> com <code>tabindex="-1"</code>, e ali o foco
+    não desenha anel — o ponto é que o foco <em>se moveu</em>, e o título em que
+    ele pousa diz isso.
+  </li>
+  <li>
+    <strong>Cada landmark <code>nav</code> tem <code>aria-label</code></strong>
+    (navegação primária, coleções, breadcrumb, sub-grupos), porque “navigation”
+    quatro vezes na lista de landmarks não é uma lista.
+  </li>
+  <li>
+    <strong>O anel de foco tem offset positivo e um halo da cor do fundo.</strong>
+    Era <code>outline-offset: -1px</code>, que desenha o anel <em>dentro</em> da
+    caixa de borda do elemento — então em toda superfície preenchida com accent (o
+    item de nav ativo, um botão primário, um chip selecionado) era accent sobre
+    accent e simplesmente não estava lá, e num pip de 20px ou num chip de 24px a
+    borda o engolia. Empurrar para fora resolve a maior parte sozinho: o vão do
+    offset cai fora da caixa de borda e mostra o fundo da página. O halo
+    <code>box-shadow</code> na cor do fundo preenche esse vão explicitamente, para
+    o caso de o controle estar sobre uma superfície que já é tingida de accent —
+    dois anéis, accent fora e fundo dentro, leem sobre qualquer preenchimento nos
+    sete temas, sem ninguém precisar optar. A pseudo-classe é escrita três vezes
+    (<code>:focus-visible:focus-visible:focus-visible</code>) porque o
+    <code>box-shadow</code> scopado de um componente tem duas partes de classe e
+    venceria o empate por ordem de fonte, deixando o halo de fora justamente dos
+    botões com fundo accent para os quais ele existe.
+  </li>
   <li>Status nunca só por cor — badges combinam cor e texto, e a barra de progresso
       imprime os números.</li>
   <li>Um atalho de seta é <strong>adição a um controle real, nunca
@@ -430,7 +1316,16 @@
   <li>Uma extremidade de sequência renderiza como <code>&lt;span&gt;</code>, e não
       como link que recebe foco e se recusa a ir a lugar nenhum.</li>
   <li>Tudo arrastável tem caminho por teclado (<code>ui-reorder</code>,
-      <code>ui-image-focus</code>).</li>
+      <code>ui-image-focus</code>). <strong>Mover um grupo é um
+      <code>&lt;select&gt;</code> e não um arrastar</strong>, e não é só por
+      teclado: uma lista pode <em>omitir</em> o que não pode aceitar
+      (<code>canReparent</code>), um alvo de drop não pode
+      (<a href="decisions.html">ADR-43</a>).</li>
+  <li>Alvos de toque de 44px abaixo de <code>$bp-lg</code>, e onde a caixa visual
+      não pode crescer o alvo cresce por pseudo-elemento — ver
+      <a href="#shell">a casca responsiva</a>.</li>
+  <li>Movimento só dentro de <code>motion-safe</code> — ver
+      <a href="#movimento">movimento</a>.</li>
 </ul>
 
 <h2 id="verificar">Verificar antes do merge</h2>
@@ -452,6 +1347,20 @@
     menos <strong>um tema escuro</strong> — regressões de token quase só aparecem
     lá — <strong>e em português</strong>, que roda ~20% mais longo que o inglês e
     é onde estouro de texto aparece primeiro.
+  </li>
+  <li>
+    <strong>A passada responsiva é uma medição, não um olhar.</strong> Asserte
+    <code>document.documentElement.scrollWidth === clientWidth</code> a
+    <strong>390, 768 e 900</strong> em todas as rotas do app — painel, store,
+    configurações, uma coleção, configurações da coleção, um item, as duas rotas do
+    formulário e o login — em pt-BR e num tema escuro. Todas transbordavam antes, e nada
+    disso era visível de uma janela de desktop: o jsdom não faz layout, então
+    nenhum teste unitário tinha viewport nenhum.
+  </li>
+  <li>
+    <code>src/styles/themes.spec.ts</code> verde é o que prende a paleta — ver
+    <a href="#contraste">contraste é aritmética</a>. Se você adicionou um tema, é
+    esse teste que decide se ele pode ship.
   </li>
 </ol>
 

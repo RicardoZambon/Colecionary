@@ -8,6 +8,13 @@
   max-width: 1080px;
 }
 
+@include upto($bp-md) {
+  :host {
+    padding: var(--sp-4) var(--sp-4) var(--sp-8);
+    gap: var(--sp-4);
+  }
+}
+
 h1 {
   @include display-heading;
   margin: 0;
@@ -21,7 +28,9 @@ h1 {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  /* 300px did not fit a 390px screen once the padding was paid for; a listing
+     card reads fine at 260 and the track still grows to fill. */
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
 }
 
@@ -31,7 +40,11 @@ h1 {
 
   &__banner {
     height: 60px;
-    @include stripes;
+    /* Flat: the hatch here read as a listing still loading its artwork, on
+       every card at once. No placeholder mark either — the initial and the
+       "curated" chip already fill the band, and a third thing in it would be
+       decoration competing with a label. */
+    background: var(--panel2);
     border-bottom: var(--bw) solid var(--border);
     display: flex;
     align-items: center;
@@ -44,6 +57,13 @@ h1 {
       color: var(--muted);
     }
 
+    /* A block skeleton sizes its bar to its host, and the host is auto-height,
+       so the band has to hand its own height down — stated here, next to the
+       60px it comes from, rather than repeated as a literal in the template. */
+    ui-skeleton {
+      height: 100%;
+    }
+
     .curated {
       font-family: var(--font-mono);
       font-size: 9.5px;
@@ -54,6 +74,11 @@ h1 {
       border-radius: var(--pill);
       padding: 2px 9px;
     }
+  }
+
+  /* The real band insets a letter and a chip; a placeholder fills it. */
+  &__banner--loading {
+    padding: 0;
   }
 
   &__body {

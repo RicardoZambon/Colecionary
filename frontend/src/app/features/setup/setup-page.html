@@ -1,7 +1,7 @@
 <div class="setup">
   <ui-card class="panel">
     <div class="brand">
-      <span class="brand__mark">◆</span>
+      <span class="brand__mark"><ui-icon name="diamond" [size]="13" /></span>
       <span class="brand__name">Vault</span>
       <span class="brand__sub">{{ 'setup.brandSub' | t }}</span>
     </div>
@@ -61,7 +61,12 @@
       </div>
       @if (testNote(); as note) {
         <p class="note" [class.ok]="note.tone === 'ok'" role="status">
-          <span class="note__icon" aria-hidden="true">{{ note.tone === 'ok' ? '✓' : '!' }}</span>
+          <ui-icon
+            class="note__icon"
+            [name]="note.tone === 'ok' ? 'check' : 'alert'"
+            [size]="13"
+            [strokeWidth]="2.1"
+          />
           <span>{{ note.text }}</span>
         </p>
       }
@@ -89,12 +94,12 @@
       </div>
       @if (ownerPassword() && ownerPassword().length < 8) {
         <p class="note" role="status">
-          <span class="note__icon" aria-hidden="true">!</span>
+          <ui-icon class="note__icon" name="alert" [size]="13" [strokeWidth]="2.1" />
           <span>{{ 'setup.admin.passwordTooShort' | t }}</span>
         </p>
       } @else if (ownerPasswordConfirm() && ownerPassword() !== ownerPasswordConfirm()) {
         <p class="note" role="status">
-          <span class="note__icon" aria-hidden="true">!</span>
+          <ui-icon class="note__icon" name="alert" [size]="13" [strokeWidth]="2.1" />
           <span>{{ 'setup.admin.passwordMismatch' | t }}</span>
         </p>
       }
@@ -125,7 +130,7 @@
 
     @if (error(); as message) {
       <p class="note" role="alert">
-        <span class="note__icon" aria-hidden="true">!</span>
+        <ui-icon class="note__icon" name="alert" [size]="13" [strokeWidth]="2.1" />
         <span>{{ message }}</span>
       </p>
     }

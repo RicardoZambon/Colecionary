@@ -291,6 +291,50 @@ public class ContractTests(VaultApiFactory factory)
         (await client.DeleteAsync($"/api/collections/{created.Id}")).EnsureSuccessStatusCode();
     }
 
+    [Fact]
+    public async Task Collection_GroupParent_MustResolve_AndMustNotLoop()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+        var created = (await (await client.PostAsJsonAsync(
+            "/api/collections",
+            new CreateCollectionRequest("Saint Seiya", string.Empty)))
+            .Content.ReadFromJsonAsync<CollectionDto>())!;
+
+        // The deliberate asymmetry with a section's or an item's reference,
+        // which are allowed to dangle because they read as "none". A ParentId
+        // has no such reading: the tree is walked down from the roots, so an
+        // orphaned or looped branch disappears from the sidebar and from the
+        // parent picker while its items still count in the collection totals.
+        var orphan = created with
+        {
+            Groups = [new GroupNodeDto("marvel", "Marvel", "gone", [])],
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutCollectionAsync(orphan)).StatusCode);
+
+        var cycle = created with
+        {
+            Groups =
+            [
+                new GroupNodeDto("a", "A", "b", []),
+                new GroupNodeDto("b", "B", "a", []),
+            ],
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutCollectionAsync(cycle)).StatusCode);
+
+        // A move is only a change of parent, so the legal shape still saves.
+        var moved = created with
+        {
+            Groups =
+            [
+                new GroupNodeDto("revistas", "Revistas", null, []),
+                new GroupNodeDto("marvel", "Marvel", "revistas", []),
+            ],
+        };
+        (await client.PutCollectionAsync(moved)).EnsureSuccessStatusCode();
+
+        (await client.DeleteAsync($"/api/collections/{created.Id}")).EnsureSuccessStatusCode();
+    }
+
     private static ItemDto Item(string id, string groupId, string sectionId) =>
         new(
             id,

@@ -1,5 +1,11 @@
-<nav class="group">
-  <a class="nav-item" routerLink="/dashboard" routerLinkActive="active">
+<div class="drawer-head">
+  <ui-button variant="icon" [ariaLabel]="'nav.close' | t" (click)="dismiss()">
+    <ui-icon name="close" [size]="14" />
+  </ui-button>
+</div>
+
+<nav class="group" [attr.aria-label]="'nav.primaryAria' | t">
+  <a #firstLink class="nav-item" routerLink="/dashboard" routerLinkActive="active">
     <ui-icon name="home" />{{ 'nav.dashboard' | t }}
   </a>
   <a class="nav-item" routerLink="/store" routerLinkActive="active">
@@ -7,7 +13,7 @@
   </a>
 </nav>
 
-<nav class="group">
+<nav class="group" [attr.aria-label]="'nav.collections' | t">
   <div class="heading">{{ 'nav.collections' | t }}</div>
   @for (collection of store.collections(); track collection.id) {
     <a class="nav-item nav-item--split" [routerLink]="['/c', collection.id]" routerLinkActive="active">
@@ -21,5 +27,7 @@
   <a class="nav-item" routerLink="/settings" routerLinkActive="active">
     <ui-icon name="gear" />{{ 'nav.settings' | t }}
   </a>
-  <div class="status">{{ 'nav.status' | t }}</div>
+  <!-- Derived, not decorative. This read "synced - v0.1 mock API" in a product
+       running on a real .NET backend, and the dot never changed colour. -->
+  <div class="status" [attr.data-sync]="store.syncState()">{{ store.syncStatusKey() | t }}</div>
 </div>

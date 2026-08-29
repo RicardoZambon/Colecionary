@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Vault.Api.Infrastructure;
 using Vault.Application.Collections;
@@ -25,6 +26,7 @@ public class ItemsController(CollectionService collections) : ControllerBase
     [ProducesResponseType<ItemDto>(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status412PreconditionFailed)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status428PreconditionRequired)]
+    [Authorize(Policy = VaultPolicies.CanWrite)]
     [HttpPut("{itemId}")]
     public async Task<ActionResult<ItemDto>> Upsert(
         string collectionId,
@@ -48,6 +50,7 @@ public class ItemsController(CollectionService collections) : ControllerBase
     /// could PUT the document back and resurrect it — so a caller left holding
     /// the old tag would be refused on its next save for a change it made itself.
     /// </remarks>
+    [Authorize(Policy = VaultPolicies.CanWrite)]
     [HttpDelete("{itemId}")]
     public async Task<IActionResult> Delete(string collectionId, string itemId, CancellationToken ct)
     {

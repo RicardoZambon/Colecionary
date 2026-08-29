@@ -1,15 +1,16 @@
 import { Params } from '@angular/router';
 
-import { CONDITIONS, Condition, GroupSort, Section } from '../../core/models';
-import { BrowseCriteria, OwnFilter } from '../../core/utils/browse.util';
+import { CONDITIONS, Condition, GroupSort, Item, Section, SortDirection } from '../../core/models';
+import { BrowseCriteria, OwnFilter, hasTag } from '../../core/utils/browse.util';
 import { UNSECTIONED_ID, sectionsOf } from '../../core/utils/sections.util';
 import { BUILTIN_SORTS, customFieldName } from '../../core/utils/sort.util';
+import { normalizeTag } from '../../core/utils/tags.util';
 
 /**
  * The browse criteria as URL query params, and back.
  *
  * Which items are on screen and in what order is URL state (rule 11): `?g=` was
- * always there, and `?cond=`, `?own=`, `?sort=` and `?dir=` join it so that
+ * always there, and `?cond=`, `?own=`, `?tag=`, `?sort=` and `?dir=` join it so that
  * opening an item can rebuild the very same list — the arrows on the item page
  * are only honest if "next" means the next of the list you were looking at.
  * Coming back from an item now also restores the filters instead of clearing
@@ -25,6 +26,7 @@ export interface BrowseParamValues {
   s?: string;
   cond?: string;
   own?: string;
+  tag?: string;
   sort?: string;
   dir?: string;
 }
@@ -57,6 +59,35 @@ export function sectionParams(sectionId: string | null): Params {
   return { s: sectionId };
 }
 
+/**
+ * `?tag=` narrowed to a tag some item in the collection actually carries.
+ *
+ * Checked against the data like `readSection`, and for the same reason a
+ * `?cond=` of `Bananas` is refused: a filter nothing can satisfy would answer
+ * every screen with "no matches" and offer no hint that the URL, not the
+ * collection, is what is empty. So an unknown tag reads as **no filter** and the
+ * unfiltered list appears — the one failure mode a reader can see through.
+ *
+ * Checked against the *whole* collection rather than the open group, on purpose:
+ * the group chips merge the filters, so a scope-sensitive check would make
+ * stepping into a sibling group silently drop the tag instead of showing an
+ * honest empty run.
+ *
+ * The tag comes back as the caller typed it, not as some item spells it —
+ * `hasTag` ignores case anyway, and rewriting it would make the URL disagree
+ * with the chip that produced it. Blank and the derived `wanted` tag are refused
+ * by `hasTag`, so they fall out here as "no filter" without a second rule.
+ */
+export function readTag(raw: string | undefined, items: readonly Item[]): string | null {
+  const tag = normalizeTag(raw ?? '');
+  if (!tag) return null;
+  return items.some(item => hasTag(item, tag)) ? tag : null;
+}
+
+export function tagParams(tag: string | null): Params {
+  return { tag };
+}
+
 export function readOwn(raw: string | undefined): OwnFilter {
   return raw === 'owned' || raw === 'wanted' ? raw : null;
 }
@@ -78,6 +109,36 @@ export function readSort(by: string | undefined, dir: string | undefined): Group
 /** The params that carry a sort, or the nulls that clear one. */
 export function sortParams(sort: GroupSort | null): Params {
   return sort ? { sort: sort.by, dir: sort.direction } : { sort: null, dir: null };
+}
+
+/**
+ * Which direction a key opens in when it is picked fresh.
+ *
+ * Money reads highest-first — the question a value column answers is "what is
+ * the expensive one" — and everything else reads lowest-first, which for a name
+ * is A–Z and for a year or a catalogue number is the order the set was issued
+ * in. `added` is the one built-in that is not a column header, and it keeps the
+ * newest-first sense `DEFAULT_SORT` already gives it.
+ */
+function openingDirection(by: string): SortDirection {
+  return by === 'value' || by === 'added' ? 'desc' : 'asc';
+}
+
+/**
+ * The sort a click on a column header asks for.
+ *
+ * `effective` is the order the list is *actually* in — the URL override, or the
+ * group's own declared order, or the default. Comparing against that rather
+ * than against the override alone is what makes the first click on the column a
+ * group already sorts by *reverse* it, instead of appearing to do nothing.
+ *
+ * Always returns a sort rather than ever returning null: a header is a direct
+ * manipulation of the order, and "click the column you are sorted by to fall
+ * back to the group's default" is not a gesture anyone would guess.
+ */
+export function nextSortFor(effective: GroupSort, by: string): GroupSort {
+  if (effective.by !== by) return { by, direction: openingDirection(by) };
+  return { by, direction: effective.direction === 'asc' ? 'desc' : 'asc' };
 }
 
 export function conditionParams(condition: Condition | null): Params {
@@ -104,18 +165,27 @@ export function groupLinkParams(groupId: string | null): Params {
   return { g: groupId, ...sortParams(null), ...sectionParams(null) };
 }
 
-/** The criteria a screen is browsing under, read straight off the URL. */
+/**
+ * The criteria a screen is browsing under, read straight off the URL.
+ *
+ * `data` is the collection's own sections and items: two of the params are
+ * checked against the document rather than against a whitelist (`?s=` against
+ * the open group's dividers, `?tag=` against the tags in use), and both default
+ * to empty so a caller with no collection in hand still gets the whitelist
+ * filters.
+ */
 export function readCriteria(
   values: BrowseParamValues,
   groupId: string | null,
   query: string,
-  sections: Section[] = [],
+  data: { sections?: Section[]; items?: readonly Item[] } = {},
 ): BrowseCriteria {
   return {
     groupId,
-    sectionId: readSection(values.s, sections, groupId),
+    sectionId: readSection(values.s, data.sections ?? [], groupId),
     condition: readCondition(values.cond),
     own: readOwn(values.own),
+    tag: readTag(values.tag, data.items ?? []),
     query,
     sort: readSort(values.sort, values.dir),
   };

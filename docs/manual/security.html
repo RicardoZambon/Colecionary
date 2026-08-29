@@ -126,12 +126,76 @@
     <tr><td>Token</td><td>JWT HS256, 8 h (<code>Jwt:LifetimeMinutes</code> = 480), <code>ClockSkew</code> de 1 min</td></tr>
     <tr><td>Claims</td><td><code>sub</code>, <code>tenant_id</code>, <code>email</code>, <code>name</code>, <code>role</code>, <code>plan</code>. <code>MapInboundClaims = false</code>: os nomes crus são preservados</td></tr>
     <tr><td>Autorização</td><td><strong>Deny-by-default</strong>: <code>FallbackPolicy = DefaultPolicy</code>. Anônimo só onde há <code>[AllowAnonymous]</code> explícito</td></tr>
-    <tr><td>Papel Owner</td><td><code>PUT /api/tenant/members</code> e <code>PUT /api/tenant/settings</code></td></tr>
+    <tr><td>Políticas de papel</td><td>Nomeadas em <code>VaultPolicies</code>. <code>CanWrite</code> (Owner, Editor) guarda coleções, itens, bytes de imagem e enquadramento; <code>CanAdminister</code> (Owner) guarda membros, configurações do tenant e importação de arquivo</td></tr>
     <tr><td>Onde o SPA guarda</td><td><code>localStorage['vault.auth']</code>; interceptor anexa o bearer e desloga em 401 no meio da sessão</td></tr>
     <tr><td>Resolução do tenant</td><td><code>CurrentTenantFromHttpContext</code> lê <code>tenant_id</code> do principal. Fora de requisição, <code>IsAuthenticated</code> é falso e os acessores lançam</td></tr>
   </tbody>
 </table>
 </div>
+
+<h3>Autenticar não é autorizar</h3>
+
+<p>
+  A metade da autenticação sempre esteve certa: <code>FallbackPolicy =
+  DefaultPolicy</code> significa que todo endpoint recusa um chamador anônimo a
+  menos que alguém escreva <code>[AllowAnonymous]</code>. A metade da
+  autorização não existia.
+</p>
+
+<div class="callout warn">
+  <span class="label">O que estava aberto, e por quanto tempo</span>
+  <p>
+    <code>[Authorize(Roles = …)]</code> aparecia <strong>duas vezes</strong> na
+    API inteira — <code>TenantMembersController</code> e
+    <code>TenantSettingsController</code>. Nada guardava
+    <code>CollectionsController</code> (POST, PUT, DELETE, import),
+    <code>ItemsController</code> (PUT, DELETE), <code>ImportController</code> nem
+    o POST de <code>ImagesController</code>. A camada Application não compensava:
+    <code>MemberRole</code> não aparecia em nenhum lugar de
+    <code>Collections/</code>. E <code>ICurrentTenant.Role</code> existia, era
+    emitido no JWT, chegava ao principal, era renderizado na tabela de
+    membros — e lido por ninguém.
+  </p>
+  <p>
+    <strong>Consequência:</strong> o token de <code>dev@example.com</code>, a
+    conta somente-leitura semeada, era aceito por toda escrita da aplicação.
+    Um Viewer podia substituir qualquer documento de coleção e apagar qualquer
+    item do tenant. O isolamento entre tenants continuava intacto — o filtro
+    global é do banco — então o dano possível era inteiramente <em>dentro</em>
+    da própria conta, o que é exatamente onde os dados do usuário estão.
+  </p>
+</div>
+
+<p>
+  Duas políticas nomeadas, e não uma string de papéis repetida em onze atributos:
+  a pertinência de “pode escrever” é uma decisão só, e uma lista copiada acaba
+  discordando de si mesma. A importação de arquivo fica sob
+  <code>CanAdminister</code> e não sob <code>CanWrite</code> porque não é uma
+  edição: uma requisição pode sobrescrever <em>todas</em> as coleções do vault,
+  o que é um ato em escala de conta chegando por um endpoint em forma de
+  conteúdo.
+</p>
+
+<p>
+  A granularidade é deliberadamente grosseira: as políticas são do tenant, não
+  da coleção. <code>CollectionMember.Role</code> existe, é validado, é exibido —
+  e <strong>continua não autorizando nada</strong>. Fazer um compartilhamento por
+  coleção conceder ou negar escrita é outra mudança, com consequências próprias
+  no filtro global. Grosseiro e imposto vale mais que fino e imaginário.
+</p>
+
+<p>
+  A recusa é <strong>403</strong>, não 404. A coleção existe e o Viewer pode
+  lê-la, então esconder seria uma mentira sobre a qual o cliente não pode agir —
+  e o frontend agora transforma o 403 numa frase própria (“sem permissão”, nunca
+  quem nem por quê).
+</p>
+
+<p>
+  <code>RoleAuthorizationTests</code> fixa as três direções, incluindo que um
+  Editor <em>ainda escreve</em>: uma política que recusa todo mundo passa num
+  teste feito só de recusas e quebra o produto.
+</p>
 
 <div class="callout warn">
   <span class="label">Rotas anônimas — a lista inteira</span>
@@ -354,12 +418,125 @@
     </tr>
     <tr>
       <td>Membros convidados não entram</td>
-      <td><code>PasswordHash</code> nulo, sem fluxo de convite</td>
+      <td><code>PasswordHash</code> nulo, sem fluxo de convite. <strong>E a UI
+          dizia “convite enviado”</strong> — não existe transporte de e-mail no
+          repositório</td>
       <td>Convite com token de definição de senha</td>
+    </tr>
+    <tr>
+      <td>Papel por coleção não autoriza nada</td>
+      <td><code>CollectionMember.Role</code> é validado e exibido, e não concede
+          nem restringe. As políticas são do tenant: um Editor pode escrever em
+          <em>qualquer</em> coleção da conta, inclusive uma que não foi
+          compartilhada com ele</td>
+      <td>Uma checagem por coleção no serviço, com as consequências que isso tem
+          para o filtro global</td>
+    </tr>
+    <tr>
+      <td>Um 403 é uma superfície de informação</td>
+      <td>Pequena e deliberada: o frontend passou a mostrar “sem permissão” ao
+          usuário. A frase nunca diz quem tem permissão nem por quê</td>
+      <td>Nada a fazer — está registrado para não ser “descoberto” depois</td>
     </tr>
   </tbody>
 </table>
 </div>
+
+<h2 id="cliente-papel">O cliente para de oferecer o que o servidor recusaria</h2>
+
+<p>
+  Fechar o buraco de autorização abriu um problema de experiência: o frontend
+  nunca soube o papel de quem entrou, então um Viewer continuava vendo todos os
+  botões de escrita — e cada um passou a render um 403 com toast vermelho.
+  Segurança correta, experiência pior: um botão que sempre falha é pior que
+  botão nenhum.
+</p>
+
+<p>
+  <code>UserProfileDto</code> passou a carregar <code>Role</code>, e é
+  <strong>somente leitura</strong>: <code>ProfileService.UpdateAsync</code>
+  ignora o campo, exatamente como recusa um e-mail alterado. Um cliente que
+  pudesse dar <code>PUT</code> no próprio papel seria o erro do botão de plano
+  outra vez, agora com consequência. O claim já estava no JWT e era lido por
+  ninguém; decodificar o token no navegador seria um parser para manter por um
+  valor que o perfil pode simplesmente dizer.
+</p>
+
+<p>
+  No cliente, <code>VaultStore.canEdit()</code> e <code>canAdminister()</code>
+  espelham as duas políticas, e ambos <strong>falham abertos</strong> enquanto o
+  perfil não chegou: esconder a interface inteira de um dono durante um
+  carregamento lento é um erro maior que oferecer por um instante um botão que
+  será recusado.
+</p>
+
+<div class="callout warn">
+  <span class="label">Cortesia, não controle</span>
+  <p>
+    Nada no navegador — nem o guard, nem o <code>canEdit</code>, nem um
+    <code>@if</code> — está entre um Viewer e uma escrita. O token é dele, o
+    bundle é dele, e quem recusa é o servidor. Todo o gating do cliente existe
+    para não <em>oferecer</em> o que renderia 403. Se algum dia for a única coisa
+    impedindo a escrita, a política do servidor foi perdida.
+  </p>
+</div>
+
+<p>
+  Rotas que existem <em>só</em> para escrever — as duas do formulário de item e
+  as configurações de coleção — são recusadas por <code>canEditGuard</code>, que
+  redireciona <strong>para dentro</strong>: quem seguiu um link “editar” queria
+  ver aquele item, e a página do item mostra. Um leitor recebe
+  <strong>um</strong> aviso por superfície, não um por controle escondido: por
+  que a tela está enxuta é uma propriedade da sessão, não de um botão.
+</p>
+
+<h2 id="removidos">Controles que pareciam segurança e não eram</h2>
+
+<p>
+  Duas superfícies embarcadas foram removidas, e vale registrar o que
+  <em>não</em> se perdeu com elas, para ninguém as reintroduzir como se fossem
+  uma regressão.
+</p>
+
+<ul>
+  <li>
+    <strong>Três chaves de “política de acesso” do tenant</strong> na página de
+    configurações — convites, link compartilhado, acesso externo. Eram um signal
+    local do componente: sem campo no DTO, sem endpoint, sem persistência,
+    voltando ao padrão a cada navegação. Não protegiam nada e pareciam proteger,
+    que é a pior combinação possível. O acesso real é a lista de membros mais o
+    <code>linkShare</code> por coleção, e a página agora diz isso.
+  </li>
+  <li>
+    <strong>O interruptor de compartilhamento por link.</strong> Dizia
+    “qualquer pessoa com o link pode ver esta coleção” e persistia um booleano.
+    Não existe rota anônima, não existe endpoint público, e não existe link
+    nenhum para copiar: nada no backend lê <code>LinkShare</code> além de
+    guardá-lo. O campo continua no contrato — construir a página pública depois
+    muda só esse cartão — mas o controle agora está <strong>desabilitado</strong>
+    e diz que a página não existe. Um interruptor que persiste uma promessa que
+    ninguém cumpre é o mesmo defeito das políticas de tenant, e vale registrar
+    que <em>este</em> era o mais perigoso dos três: os outros não faziam nada,
+    e este dava a entender que uma coleção estava exposta publicamente.
+  </li>
+  <li>
+    <strong>“Convite enviado ✓”.</strong> Não há transporte de e-mail no
+    repositório, então nada era enviado. A pessoa entrava na lista de membros e
+    não conseguia entrar no sistema — o que já estava registrado como limite
+    conhecido, enquanto a UI afirmava o contrário. O toast agora diz o que de
+    fato aconteceu: a pessoa foi adicionada à coleção.
+  </li>
+  <li>
+    <strong>O botão de plano.</strong> <code>choosePlan</code> deixava o cliente
+    fazer um <code>PUT /api/profile</code> definindo o próprio <code>plan</code>
+    como <code>pro</code> — sem pagamento, sem entitlement, sem auditoria. Como
+    <strong>nada</strong> no app limita qualquer funcionalidade por plano, nenhum
+    controle regrediu ao removê-lo; a auto-atribuição é que era falsa. Uma
+    paywall de verdade precisa de entitlement no servidor. Os cartões de plano
+    continuam, como informação, com a ação indisponível explicitamente
+    desabilitada.
+  </li>
+</ul>
 
 <h2 id="checklist">Checklist ao adicionar código</h2>
 
@@ -374,6 +551,14 @@
       de ser esquecido pelo coletor.</li>
   <li>Endpoint novo → é autenticado por padrão. <code>[AllowAnonymous]</code>
       precisa de justificativa escrita no código.</li>
+  <li><strong>Endpoint novo que escreve → escolha uma política.</strong>
+      <code>[Authorize(Policy = VaultPolicies.CanWrite)]</code> para conteúdo de
+      catálogo, <code>CanAdminister</code> para qualquer coisa em escala de
+      conta. Autenticado <em>não</em> é autorizado, e esta linha do checklist
+      parava em “é autenticado” — que é precisamente por que um Viewer podia
+      apagar qualquer item por tanto tempo. Cubra as três direções em
+      <code>RoleAuthorizationTests</code>: o Viewer recusado, o Editor
+      <em>aceito</em>, e nada escrito na tentativa recusada.</li>
   <li>Escrita nova em coleção ou item → exija <code>If-Match</code> com
       <code>IfMatch.Require</code> e devolva o <code>ETag</code>.</li>
   <li>Mensagem nova visível ao usuário → nos dois <code>.resx</code>, nunca

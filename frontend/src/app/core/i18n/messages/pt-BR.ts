@@ -12,10 +12,62 @@ import { MessageKey } from './keys';
  */
 export const ptBR: Record<MessageKey, string> = {
   // --- common ------------------------------------------------------------
+  'confirm.deleteCollection.title': 'Excluir «{name}»?',
+  'confirm.deleteCollection.body':
+    'Isso destrói a coleção e tudo que está nela — {items} em {groups}. Não há como desfazer, e o export desta página é o único caminho de volta.',
+  'confirm.deleteCollection.confirm': 'Excluir a coleção',
+  'confirm.removeField.title': 'Remover o campo «{name}»?',
+  'confirm.removeField.body.one':
+    'Ele deixa de aparecer e de ser oferecido para todos os itens deste grupo. {n} item tem valor nele — o valor fica guardado e volta se você declarar o campo de novo.',
+  'confirm.removeField.body.other':
+    'Ele deixa de aparecer e de ser oferecido para todos os itens deste grupo. {n} itens têm valor nele — os valores ficam guardados e voltam se você declarar o campo de novo.',
+  'confirm.removeField.bodyEmpty':
+    'Ele deixa de aparecer e de ser oferecido para todos os itens deste grupo. Nenhum item tem valor nele ainda.',
+  'confirm.removeField.confirm': 'Remover o campo',
+  'confirm.removeSection.title': 'Excluir o separador «{name}»?',
+  'confirm.removeSection.body.one':
+    '{n} item está sob ele e volta a ficar sem separador. A qual faixa ele pertencia não está registrado em nenhum outro lugar, então não há como desfazer.',
+  'confirm.removeSection.body.other':
+    '{n} itens estão sob ele e voltam a ficar sem separador. A qual faixa cada um pertencia não está registrado em nenhum outro lugar, então não há como desfazer.',
+  'confirm.removeSection.bodyEmpty': 'Nenhum item está sob ele, então nada mais muda.',
+  'confirm.removeSection.confirm': 'Excluir o separador',
+  'confirm.removeMember.title': 'Remover {name}?',
+  'confirm.removeMember.body':
+    'Essa pessoa perde o acesso a esta coleção na hora. Você pode compartilhar de novo depois, mas ela não consegue fazer isso sozinha.',
+  'confirm.removeMember.confirm': 'Remover',
+  'confirm.removeCopy.title': 'Remover este exemplar?',
+  'confirm.removeCopy.body':
+    'O quanto você pagou, o estado, quando conseguiu e as anotações vão com ele, e nada disso está registrado em outro lugar.',
+  'confirm.removeCopy.bodyLast':
+    'Este é o último exemplar, então o item volta para a lista de desejos. O quanto você pagou, o estado, quando conseguiu e as anotações vão com ele.',
+  'confirm.removeCopy.confirm': 'Remover o exemplar',
+  'confirm.removePhoto.title': 'Remover esta foto?',
+  'confirm.removePhoto.body':
+    'Para colocá-la de volta você precisa achar o arquivo e subir de novo.',
+  'confirm.removePhoto.confirm': 'Remover a foto',
   'common.collectionNotFound': 'Coleção não encontrada —',
   'common.backToDashboard': 'voltar ao painel',
   'common.active': '● Ativo',
   'common.clickToApply': 'Clique para aplicar',
+  'common.loading': 'Carregando…',
+  'common.cancel': 'Cancelar',
+
+  // --- count phrases -------------------------------------------------------
+  // Written out one by one, because the Portuguese plural is irregular and
+  // nothing here could just append an "s": item/itens, coleção/coleções,
+  // seção/seções, exemplar/exemplares.
+  'noun.item.one': '{n} item',
+  'noun.item.other': '{n} itens',
+  'noun.group.one': '{n} grupo',
+  'noun.group.other': '{n} grupos',
+  'noun.subGroup.one': '{n} subgrupo',
+  'noun.subGroup.other': '{n} subgrupos',
+  'noun.section.one': '{n} seção',
+  'noun.section.other': '{n} seções',
+  'noun.copy.one': '{n} exemplar',
+  'noun.copy.other': '{n} exemplares',
+  'noun.collection.one': '{n} coleção',
+  'noun.collection.other': '{n} coleções',
 
   // --- value ---------------------------------------------------------------
   'value.fromPaid': '≈ {value}',
@@ -24,11 +76,19 @@ export const ptBR: Record<MessageKey, string> = {
 
   // --- shell / sidebar ---------------------------------------------------
   'shell.loading': 'Carregando seu acervo…',
+  'shell.loadFailed.title': 'Não foi possível carregar seu acervo',
+  'shell.loadFailed.body':
+    'Nada foi perdido — o aplicativo só não conseguiu falar com o servidor. Verifique sua conexão e tente de novo.',
+  'shell.loadFailed.retry': 'Tentar de novo',
+  'shell.loadFailed.retrying': 'Tentando de novo…',
   'nav.dashboard': 'Painel',
   'nav.store': 'Loja',
   'nav.settings': 'Configurações',
   'nav.collections': 'Coleções',
-  'nav.status': '● sincronizado · API mock v0.1',
+  'nav.sync.synced': 'Tudo salvo',
+  'nav.sync.saving': 'Salvando…',
+  'nav.sync.offline': 'Sem conexão',
+  'nav.sync.conflict': 'Salvamento recusado — veja o aviso',
 
   // --- login -------------------------------------------------------------
   'login.tagline': 'Entre no acervo da sua coleção.',
@@ -48,18 +108,20 @@ export const ptBR: Record<MessageKey, string> = {
 
   // --- dashboard ---------------------------------------------------------
   'dashboard.title': 'Painel',
-  'dashboard.sub': '{items} itens em {collections} coleções · bem-vindo de volta, {name}',
+  'dashboard.sub': '{items} em {collections} · bem-vindo de volta, {name}',
   'dashboard.stat.items': 'Itens',
-  'dashboard.stat.itemsSub': 'em {collections} coleções',
+  'dashboard.stat.itemsSub.one': 'em {n} coleção',
+  'dashboard.stat.itemsSub.other': 'em {n} coleções',
   'dashboard.stat.value': 'Valor estimado',
   'dashboard.stat.groups': 'Grupos',
-  'dashboard.stat.groupsSub': 'em {collections} coleções',
+  'dashboard.stat.groupsSub.one': 'em {n} coleção',
+  'dashboard.stat.groupsSub.other': 'em {n} coleções',
   'dashboard.stat.added': 'Adicionados',
   'dashboard.stat.addedSub': 'esta semana',
   'dashboard.noPurchaseData': 'ainda sem dados de compra',
   'dashboard.appreciation': '{arrow} {pct}% vs. compra',
   'dashboard.collections': 'Coleções',
-  'dashboard.collectionMeta': '{owned}/{total} na coleção · {groups} grupos',
+  'dashboard.collectionMeta': '{owned}/{total} na coleção · {groups}',
   'dashboard.newCollection': '+ Criar coleção',
   'dashboard.newCollectionName': 'Nova coleção',
   'dashboard.recent': 'Adicionados recentemente',
@@ -70,7 +132,7 @@ export const ptBR: Record<MessageKey, string> = {
   'store.sub':
     'Checklists curadas — adicione uma ao seu acervo e acompanhe o quanto falta para completá-la.',
   'store.curated': 'Curada',
-  'store.listingMeta': 'por {publisher} · {items} itens · {groups} grupos',
+  'store.listingMeta': 'por {publisher} · {items} · {groups}',
   'store.estimate': 'est. {value}',
   'store.inVault': '✓ Já no seu acervo',
   'store.add': '+ Adicionar ao acervo',
@@ -88,8 +150,9 @@ export const ptBR: Record<MessageKey, string> = {
   'ui.lightbox.next': 'Próxima foto',
   'ui.lightbox.original': 'Abrir original',
   'ui.lightbox.close': 'Fechar visualizador',
-  'photos.drop': '⇪ solte as fotos aqui',
-  'photos.browse': 'ou clique para escolher · faltam {remaining}',
+  'photos.drop': 'solte as fotos aqui',
+  'photos.browse.one': 'ou clique para escolher · falta {n}',
+  'photos.browse.other': 'ou clique para escolher · faltam {n}',
   'photos.full': 'As {max} fotos já foram usadas — remova uma para adicionar outra',
   'photos.cover': 'Capa',
   'photos.makeCover': 'Tornar capa',
@@ -147,8 +210,9 @@ export const ptBR: Record<MessageKey, string> = {
   'settings.plan.onFree':
     'Você está no Free — assine o Pro para liberar campos personalizados, fotos e backups.',
   'settings.plan.current': '● Plano atual',
-  'settings.plan.upgrade': 'Assinar o Pro',
-  'settings.plan.downgrade': 'Voltar para o Free',
+  'settings.plan.unavailable': 'Ainda não disponível',
+  'settings.plan.billingNote':
+    'A cobrança ainda não existe, então não é possível trocar de plano por aqui — e hoje nada no aplicativo é limitado pelo seu plano. Isto é o que cada faixa vai cobrir.',
 
   'settings.access.heading': 'Membros do tenant',
   'settings.access.subBefore': 'Todo mundo com acesso ao tenant',
@@ -156,26 +220,21 @@ export const ptBR: Record<MessageKey, string> = {
     '. Coleções individuais também podem ser compartilhadas na própria página.',
   'settings.access.removeMember': 'Remover {name}',
   'settings.access.memberRoleAria': 'Papel de {name}',
-  'settings.access.policyHeading': 'Política de compartilhamento',
-  'settings.access.policy.invites.label': 'Membros podem compartilhar coleções',
-  'settings.access.policy.invites.description':
-    'Editores podem convidar novas pessoas para as coleções que editam',
-  'settings.access.policy.link.label': 'Compartilhamento por link',
-  'settings.access.policy.link.description':
-    'Permitir links somente-leitura para as coleções deste tenant',
-  'settings.access.policy.external.label': 'Compartilhamento externo',
-  'settings.access.policy.external.description':
-    'Permitir compartilhar com pessoas de fora da sua organização',
+  'settings.access.policyNote':
+    'O acesso é controlado aqui, pessoa por pessoa, e o compartilhamento por link fica na página de cada coleção. Ainda não existem chaves de compartilhamento para o tenant inteiro.',
+  'settings.access.remove.confirm.title': 'Remover {name}?',
+  'settings.access.remove.confirm.body':
+    'A pessoa perde o acesso a este acervo na hora. As coleções e os itens continuam exatamente como estão, e você pode convidá-la de volta depois.',
+  'settings.access.remove.confirm.ok': 'Remover o acesso',
 
   'settings.account.data': 'Dados',
-  'settings.account.dataSub': '{items} itens em {collections} coleções',
+  'settings.account.dataSub': '{items} em {collections}',
   'settings.account.export': 'Exportar ZIP',
   'settings.account.exporting': 'Preparando…',
   'settings.account.import': 'Importar ZIP',
   'settings.account.perCollection': 'Uma coleção por vez',
   'settings.account.perCollectionHint':
     'Um .zip só desta coleção e das fotos que ela usa — para passar para alguém ou restaurar sozinha. Dá para exportar a coleção que você está vendo direto das configurações dela.',
-  'settings.account.collectionMeta': '{items} itens',
   'settings.account.noCollections': 'Nenhuma coleção ainda.',
   'settings.account.importing': 'Importando…',
   'settings.account.importHint':
@@ -185,6 +244,15 @@ export const ptBR: Record<MessageKey, string> = {
   'role.owner': 'Dono',
   'role.editor': 'Pode editar',
   'role.viewer': 'Pode ver',
+
+  // --- read-only access ----------------------------------------------------
+  'readOnly.vault.title': 'Seu acesso é somente de visualização',
+  'readOnly.vault.body':
+    'Este acervo foi compartilhado com você para visualizar, então os controles que o alterariam não aparecem. Você continua livre para explorar, buscar e exportar tudo.',
+  'readOnly.account.title': 'Só o dono do acervo pode mudar isso',
+  'readOnly.account.body':
+    'Membros, papéis e a moeda da conta pertencem ao dono. Sua aparência, seu idioma e seus exports seguem como sempre.',
+  'readOnly.routeRefused': 'Essa página só serve para editar — e seu acesso é de visualização.',
 
   // --- theme catalog (names are proper nouns and stay untranslated) -------
   'theme.devlight.description': 'Ferramenta de dev limpa. Neutros discretos, acento índigo.',
@@ -236,17 +304,20 @@ export const ptBR: Record<MessageKey, string> = {
 
   // --- progress (shared by the hero, the group cards and the tree) --------
   'progress.owned': '{ratio} na coleção',
-  'progress.ofCatalogued': 'do catalogado',
-  'progress.missing': 'faltam {n}',
+  'progress.missing.one': 'falta {n}',
+  'progress.missing.other': 'faltam {n}',
   'progress.listed': '· {n} na wishlist',
   'progress.complete': 'Completo',
   'progress.allOwned': 'Tudo na coleção',
   'progress.overTarget': '· +{n} acima da meta',
   'progress.over': '· +{n} acima',
-  'progress.copies': '· {n} exemplares',
+  'progress.copies.one': '· {n} exemplar',
+  'progress.copies.other': '· {n} exemplares',
   'progress.label': 'progresso de {name}',
-  'progress.textNoTarget': '{owned} na coleção de {catalogued} catalogados',
-  'progress.textTarget': '{owned} na coleção, {catalogued} catalogados, de {target} no conjunto',
+  'progress.textNoTarget.one': '{owned} na coleção de {n} catalogado',
+  'progress.textNoTarget.other': '{owned} na coleção de {n} catalogados',
+  'progress.textTarget.one': '{owned} na coleção, {n} catalogado, de {target} no conjunto',
+  'progress.textTarget.other': '{owned} na coleção, {n} catalogados, de {target} no conjunto',
 
   // --- collection hero ---------------------------------------------------
   'hero.bannerPlaceholder': 'Solte uma imagem de capa para esta coleção',
@@ -255,26 +326,29 @@ export const ptBR: Record<MessageKey, string> = {
   'hero.ofTotal': '· {owned} / {total} no total',
   'hero.estimate': 'est.',
   'hero.manageSharing': 'Gerenciar compartilhamento',
-  'hero.manage': '⚙ Gerenciar',
+  'hero.manage': 'Gerenciar',
   'hero.manageTitle': 'Configurações da coleção — geral, grupos e compartilhamento',
-  'hero.addItem': '+ Adicionar item',
+  'hero.addItem': 'Adicionar item',
+  'hero.noMeasure.title': 'Nada a medir ainda',
 
   // --- group card --------------------------------------------------------
-  'groupCard.subGroups': '↳ {n} subgrupos',
   'groupCard.emptyWithTarget': '0 / {target} · nada aqui ainda',
   'groupCard.empty': 'Nenhum item ainda',
   'groupCard.badgeTarget': 'Meta {target}',
   'groupCard.aria': '{name} — {ratio} na coleção',
-  'groupCard.ariaMissing': 'faltam {n}',
   'groupCard.ariaOver': '{n} acima da meta',
-  'groupCard.ariaSubGroups': '{n} subgrupos',
 
   // --- group dashboard ---------------------------------------------------
   'groupDashboard.filedHere.one': '{n} item aqui',
   'groupDashboard.filedHere.other': '{n} itens aqui',
   'groupDashboard.newGroup': '+ Novo grupo',
   'group.none': 'Sem grupo',
-  'collection.noMatches': 'Nenhum item corresponde — limpe a busca ou os filtros.',
+  'collection.noMatches': 'Nenhum item corresponde',
+  'collection.noMatchesBody': 'Nada aqui se encaixa nos filtros e na busca em vigor.',
+  'collection.clearFilters': 'Limpar filtros',
+  'collection.empty': 'Nada catalogado aqui ainda',
+  'collection.emptyBody': 'Adicione o primeiro item e ele aparece nesta lista.',
+  'groupDashboard.emptyTitle': 'Nenhum subgrupo aqui',
   'groupDashboard.empty':
     'Nenhum subgrupo aqui ainda. Crie um para dividir esta parte da coleção, ou mude para as visões de item acima.',
 
@@ -291,10 +365,13 @@ export const ptBR: Record<MessageKey, string> = {
   'breadcrumb.showPanel': 'Mostrar o painel de grupos',
   'breadcrumb.groupPanel': '⟩ Painel de grupos',
   'breadcrumb.subGroupsAria': 'Subgrupos',
+  'crumb.new': 'novo',
+  'crumb.edit': 'editar',
+  'crumb.settings': 'ajustes',
   'breadcrumb.newGroupPlaceholder': 'Nome do novo grupo… (Enter)',
   'breadcrumb.newGroupAria': 'Nome do novo grupo',
   'breadcrumb.new': '+ Novo',
-  'breadcrumb.editGroups': '⚙ Editar grupos',
+  'breadcrumb.editGroups': 'Editar grupos',
   'breadcrumb.editGroupsTitle': 'Renomear, aninhar, adicionar campos e definir metas para estes grupos',
 
   // --- toolbar & filters -------------------------------------------------
@@ -309,6 +386,11 @@ export const ptBR: Record<MessageKey, string> = {
   'filters.status': 'Situação',
   'filters.owned': 'Na coleção',
   'filters.wanted': 'Wishlist',
+  // Added here because both dictionaries are owned by one agent: the tag filter
+  // and the item page's tag chips landed on this branch in files another agent
+  // owns, and the keys had nowhere else to go.
+  'filters.tag': 'Etiqueta',
+  'filters.tagClear': 'Limpar o filtro da etiqueta #{tag}',
 
   // --- item list & grid --------------------------------------------------
   'itemList.name': 'Nome',
@@ -317,9 +399,67 @@ export const ptBR: Record<MessageKey, string> = {
   'itemList.copies': 'Exemp.',
   'itemList.condition': 'Estado',
   'itemList.value': 'Valor',
-  'itemGrid.copies': '· {n} exemplares',
   'itemGrid.addItem': '+ Adicionar item',
   'itemGrid.chipTitle': '{field}: {value}',
+  'item.noPhoto': 'Sem foto ainda',
+
+  // --- item list columns, sorting & totals --------------------------------
+  'itemList.sortBy': 'Ordenar por {label}',
+  'itemList.sortedAsc': 'Ordenado por {label}, crescente — clique para inverter',
+  'itemList.sortedDesc': 'Ordenado por {label}, decrescente — clique para inverter',
+  'itemList.rows.one': '{n} linha',
+  'itemList.rows.other': '{n} linhas',
+  'itemList.footHeld': '{owned} na coleção · {copies} em mãos',
+  'itemList.footAria': 'Totais da lista',
+  'itemList.tableAria': 'Tabela de itens',
+  'columns.trigger': 'Colunas ▾',
+  'columns.aria': 'Colunas de campos',
+  'columns.showField': 'Mostrar a coluna {name}',
+
+  // --- selection & bulk editing ------------------------------------------
+  'select.item': 'Selecionar {name}',
+  'select.all': 'Selecionar todos os itens na tela',
+  'select.rangeHint': 'Segure Shift — com um clique ou a barra de espaço — para selecionar um intervalo',
+  'bulk.aria': 'Ações em massa para os itens selecionados',
+  'bulk.selected.one': '{n} item selecionado',
+  'bulk.selected.other': '{n} itens selecionados',
+  'bulk.clear': 'Limpar',
+  'bulk.showEdit': 'Editar campos',
+  'bulk.hideEdit': 'Fechar campos',
+  'bulk.apply': 'Aplicar',
+  'bulk.applying': 'Salvando\u2026',
+  'bulk.delete': 'Excluir',
+  'bulk.leaveAlone': '— manter como está',
+  'bulk.values.none': 'nada preenchido',
+  'bulk.values.one': '1 valor',
+  'bulk.values.other': '{n} valores',
+  'bulk.clearField': 'Limpar {label}',
+  'bulk.keepAsIs': 'Manter',
+  'bulk.keepAsIsAria': 'Deixar {label} como está em cada item',
+  'bulk.field.group': 'Grupo',
+  'bulk.field.section': 'Seção',
+  'bulk.field.year': 'Ano',
+  'bulk.field.value': 'Valor',
+  'bulk.field.addTag': 'Adicionar tag',
+  'bulk.field.removeTag': 'Remover tag',
+  'bulk.field.copyStatus': 'Todos os exemplares',
+  'bulk.tagPlaceholder': 'tag',
+  'bulk.sectionOneGroup': 'Disponível quando todos os itens selecionados estiverem no mesmo grupo.',
+  'bulk.yearNoClear': 'Deixe em branco para manter o ano de cada um.',
+  'bulk.nothingToApply': 'Nada mudou — mexa em um campo primeiro.',
+  'bulk.applied.one': '{n} item atualizado',
+  'bulk.applied.other': '{n} itens atualizados',
+  'bulk.applyFailed': 'Não foi possível aplicar essas mudanças.',
+  'bulk.deleted.one': '{n} item excluído',
+  'bulk.deleted.other': '{n} itens excluídos',
+  'bulk.deleteFailed': 'Não foi possível excluir esses itens.',
+  'bulk.confirm.title.one': 'Excluir {n} item?',
+  'bulk.confirm.title.other': 'Excluir {n} itens?',
+  'bulk.confirm.body':
+    'Eles saem desta coleção junto com seus exemplares, fotos e valores de campo. Não há como desfazer.',
+  'bulk.confirm.cancel': 'Cancelar',
+  'bulk.confirm.delete.one': 'Excluir {n} item',
+  'bulk.confirm.delete.other': 'Excluir {n} itens',
 
   // --- item page ---------------------------------------------------------
   'item.addPhoto': 'Adicionar foto',
@@ -353,6 +493,8 @@ export const ptBR: Record<MessageKey, string> = {
   'item.groupFields': 'Campos do grupo · {name}',
   'item.edit': 'Editar item',
   'item.delete': 'Excluir',
+  'itemPage.tags.aria': 'Etiquetas',
+  'itemPage.tags.filterBy': 'Ver todos os itens com a etiqueta #{tag}',
   'item.notFound': 'Item não encontrado nesta coleção.',
 
   // --- item form ---------------------------------------------------------
@@ -360,6 +502,11 @@ export const ptBR: Record<MessageKey, string> = {
   'itemForm.newTitle': 'Adicionar item em {collection}',
   'itemForm.name': 'Nome',
   'itemForm.description': 'Descrição',
+  'itemForm.tags': 'Etiquetas',
+  'tags.none': 'Nenhuma etiqueta ainda',
+  'tags.placeholder': 'Escreva uma etiqueta e aperte Enter',
+  'tags.addAria': 'Adicionar etiqueta',
+  'tags.remove': 'Remover a etiqueta {tag}',
   'itemForm.group': 'Grupo',
   'itemForm.year': 'Ano',
   'itemForm.value': 'Valor est. (por exemplar)',
@@ -383,6 +530,7 @@ export const ptBR: Record<MessageKey, string> = {
   'itemForm.groupFieldsLink': 'Configurações da coleção ▸ Grupos e campos',
   'itemForm.cancel': 'Cancelar',
   'itemForm.save': 'Salvar item',
+  'itemForm.saving': 'Salvando\u2026',
 
   // --- collection settings -----------------------------------------------
   'collSettings.title': 'Configurações da coleção',
@@ -391,7 +539,6 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.tab.sharing': 'Compartilhamento',
   'collSettings.groups.heading': 'Grupos e subgrupos',
   'collSettings.groups.add': '+ Adicionar grupo',
-  'collSettings.groups.itemCount': '{n} itens',
   'collSettings.groups.addSub': '+ Sub',
   'collSettings.groups.remove': 'Remover {name}',
   'collSettings.groups.renameAria': 'Renomear {name}',
@@ -413,6 +560,64 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.groups.newGroupAria': 'Nome do novo grupo',
   'collSettings.groups.inParent': '↳ em {name}',
   'collSettings.groups.atRoot': '↳ no nível principal',
+
+  'collSettings.groups.parent': 'Fica dentro de',
+  'collSettings.groups.parentAria': 'Grupo pai de {name}',
+  'collSettings.groups.parentRoot': 'O nível principal',
+  'collSettings.groups.moveHeading': 'Antes de mover',
+  'collSettings.groups.moveTo': 'Movendo {name} para dentro de {parent}.',
+  'collSettings.groups.moveToRoot': 'Movendo {name} para o nível principal.',
+  'collSettings.groups.moveGained': 'Campos que passam a aparecer: {names}.',
+  'collSettings.groups.moveLost.one':
+    '1 item tem valor em «{name}», que este grupo deixará de exibir.',
+  'collSettings.groups.moveLost.other':
+    '{n} itens têm valor em «{name}», que este grupo deixará de exibir.',
+  'collSettings.groups.moveLostNone':
+    '«{name}» deixa de ser declarado aqui. Nenhum item deste galho tem valor nele.',
+  'collSettings.groups.moveDormant':
+    'Nada é apagado: o valor de um campo que não está declarado continua no item e volta a aparecer se você mover o grupo de volta.',
+  'collSettings.groups.moveOrder': 'Os itens deste galho vão seguir {label}.',
+  'collSettings.groups.moveOrderNone':
+    'Nenhum grupo acima deste declara uma ordem, então este galho volta ao padrão.',
+  'collSettings.groups.moveNothing': 'Nenhum campo e nenhuma ordenação mudam.',
+  'collSettings.groups.moveClash': 'Já existe outro grupo aqui chamado {name}.',
+  'collSettings.groups.moveConfirm': 'Mover para cá',
+  'collSettings.groups.moveCancel': 'Deixar onde está',
+
+  'collSettings.groups.delete.title': 'Excluir {name}?',
+  'collSettings.groups.delete.lede': 'Escolha o que acontece com o que está dentro dele.',
+  'collSettings.groups.delete.subGroups.one': '1 subgrupo: {names}',
+  'collSettings.groups.delete.subGroups.other': '{n} subgrupos: {names}',
+  'collSettings.groups.delete.subGroupsMore': '{names} e mais {n}',
+  'collSettings.groups.delete.items.one': '1 item, aqui ou em um subgrupo',
+  'collSettings.groups.delete.items.other': '{n} itens, aqui ou nos subgrupos',
+  'collSettings.groups.delete.noItems': 'Nenhum item em todo este galho',
+  'collSettings.groups.delete.sections.one': '1 seção, que vai junto com o grupo dela',
+  'collSettings.groups.delete.sections.other': '{n} seções, que vão junto com os grupos delas',
+  'collSettings.groups.delete.choiceAria': 'O que acontece com o conteúdo de {name}',
+  'collSettings.groups.delete.reparent': 'Subir o conteúdo um nível',
+  'collSettings.groups.delete.reparentSub':
+    'Os subgrupos e os itens arquivados aqui vão para {parent}. Recomendado — é a única opção que não perde nada.',
+  'collSettings.groups.delete.reparentSubRoot':
+    'Os subgrupos vão para o nível principal e os itens arquivados aqui ficam sem grupo. Recomendado — é a única opção que não perde nada.',
+  'collSettings.groups.delete.unfile': 'Deixar os itens sem grupo',
+  'collSettings.groups.delete.unfileSub':
+    'Os subgrupos vão embora. Todos os itens caem em Sem grupo, de onde você pode arquivá-los de novo.',
+  'collSettings.groups.delete.deleteItems': 'Excluir os itens também',
+  'collSettings.groups.delete.deleteItemsSub.one': '1 item é destruído junto com o grupo.',
+  'collSettings.groups.delete.deleteItemsSub.other': '{n} itens são destruídos junto com o grupo.',
+  'collSettings.groups.delete.noUndo':
+    'Não há como desfazer — o vault não tem desfazer. Exporte a coleção antes se quiser uma cópia de segurança.',
+  'collSettings.groups.delete.exportFirst': 'Exportar esta coleção primeiro',
+  'collSettings.groups.delete.exporting': 'Preparando a exportação…',
+  'collSettings.groups.delete.cancel': 'Cancelar',
+  'collSettings.groups.delete.confirm': 'Excluir o grupo',
+  'collSettings.groups.delete.confirmReparent': 'Excluir o grupo e manter o conteúdo',
+  'collSettings.groups.delete.confirmUnfile.one': 'Excluir o grupo e deixar 1 item sem grupo',
+  'collSettings.groups.delete.confirmUnfile.other': 'Excluir o grupo e deixar {n} itens sem grupo',
+  'collSettings.groups.delete.confirmDelete.one': 'Excluir o grupo e 1 item',
+  'collSettings.groups.delete.confirmDelete.other': 'Excluir o grupo e {n} itens',
+
   'collSettings.groups.finePrint1':
     'Os nomes são salvos enquanto você digita. Campos personalizados valem para todos os itens do grupo e dos subgrupos, e o tipo do campo decide como ele ordena.',
   'collSettings.groups.finePrintOrderBy': 'Ordenar por',
@@ -420,7 +625,7 @@ export const ptBR: Record<MessageKey, string> = {
     'é a ordem padrão da coleção quando aquele grupo está aberto — os subgrupos herdam, a menos que definam a própria.',
   'collSettings.groups.finePrintTarget': 'Meta',
   'collSettings.groups.finePrint3':
-    'é quantos itens o conjunto completo tem, quando você sabe — uma série de 120 edições, um set de 24 cartas — para o progresso ser medido contra a série e não contra o que você já catalogou. Deixe em branco e ele volta ao padrão. Grupos que ainda têm itens não podem ser excluídos — mova os itens primeiro.',
+    'é quantos itens o conjunto completo tem, quando você sabe — uma série de 120 edições, um set de 24 cartas — para o progresso ser medido contra a série e não contra o que você já catalogou. Deixe em branco e ele volta ao padrão. Mover um grupo muda quais campos os itens dele exibem e qual ordem seguem, então o painel diz o que vai mudar antes de você confirmar; excluir um grupo pergunta o que fazer com o conteúdo.',
 
   'collSettings.sharing.emailPlaceholder': 'email@empresa.com',
   'collSettings.sharing.inviteRoleAria': 'Papel do convite',
@@ -428,7 +633,7 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.sharing.removeMember': 'Remover {name}',
   'collSettings.sharing.memberRoleAria': 'Papel de {name}',
   'collSettings.sharing.linkShare': 'Compartilhamento por link',
-  'collSettings.sharing.linkShareSub': 'Qualquer pessoa com o link pode ver esta coleção',
+  'collSettings.sharing.linkShareSoon': 'Ainda não disponível — a página pública de coleção não foi construída.',
   'collSettings.sharing.finePrint': 'As regras de acesso de todo o tenant ficam em',
   'collSettings.sharing.finePrintLink': 'Configurações ▸ Compartilhamento e acesso',
 
@@ -444,7 +649,8 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.general.export': 'Exportar esta coleção',
   'collSettings.general.exporting': 'Preparando…',
   'collSettings.general.delete': 'Excluir coleção',
-  'collSettings.done': 'Concluir',
+  'collSettings.done': 'Voltar para a coleção',
+  'collSettings.autosave': 'Tudo aqui é salvo conforme você edita.',
 
   'direction.asc': '↑ Cresc.',
   'direction.desc': '↓ Decr.',
@@ -533,8 +739,9 @@ export const ptBR: Record<MessageKey, string> = {
     'Não foi possível falar com o servidor do Vault. Confira se o contêiner ainda está rodando e tente de novo.',
 
   // --- toasts ------------------------------------------------------------
-  'toast.plan.pro': 'Bem-vindo ao Pro ✓',
-  'toast.plan.free': 'Você voltou para o Free',
+
+  'toast.member.roleFailed': 'O papel não mudou — a linha voltou como estava',
+  'toast.member.removeFailed': 'Não foi possível remover essa pessoa',
   'toast.member.roleUpdated': 'Papel atualizado',
   'toast.member.ownerImmutable': 'O dono não pode ser removido',
   'toast.member.removed': 'Acesso removido',
@@ -563,6 +770,7 @@ export const ptBR: Record<MessageKey, string> = {
   'import.confirm': 'Importar',
   'import.importing': 'Importando…',
   'toast.collection.created': 'Coleção criada — dê um nome a ela aqui',
+  'toast.collection.createFailed': 'Não foi possível criar a coleção',
   'toast.collection.added': 'Adicionada ao seu acervo ✓',
   'toast.collection.addFailed': 'Não foi possível adicionar a checklist',
   'toast.image.updated': 'Imagem atualizada ✓',
@@ -572,6 +780,9 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.photo.uploadFailed': 'O envio falhou',
   'toast.copy.added': 'Exemplar adicionado ✓',
   'toast.item.deleted': 'Item excluído',
+  'toast.item.restored': '“{name}” está de volta',
+  'toast.item.undoFailed':
+    'Não foi possível trazer “{name}” de volta — a coleção mudou nesse meio-tempo. Recarregue e cadastre o item outra vez.',
   'toast.order.saved': 'Ordem salva ✓',
   'toast.order.failed': 'Não foi possível salvar a ordem',
   'toast.group.added': 'Grupo "{name}" adicionado',
@@ -582,13 +793,18 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.collection.updated': 'Coleção atualizada ✓',
   'toast.currency.saved': 'Moeda atualizada ✓',
   'toast.currency.failed': 'Não foi possível trocar a moeda — só um Owner pode.',
-  'toast.group.hasItems': 'O grupo tem itens — mova-os primeiro',
   'toast.group.removed': 'Grupo removido',
+  'toast.group.moved': 'Grupo "{name}" movido',
+  'toast.group.removedKeeping': 'Grupo removido — o conteúdo subiu um nível',
+  'toast.group.removedUnfiled.one': 'Grupo removido — 1 item ficou sem grupo',
+  'toast.group.removedUnfiled.other': 'Grupo removido — {n} itens ficaram sem grupo',
+  'toast.group.removedWithItems.one': 'Grupo e 1 item removidos',
+  'toast.group.removedWithItems.other': 'Grupo e {n} itens removidos',
   'toast.field.removed': 'Campo removido',
   'toast.field.duplicate': '"{name}" já é um campo aqui',
   'toast.field.added': 'Campo "{name}" adicionado',
   'toast.invite.invalidEmail': 'Informe um e-mail válido',
-  'toast.invite.sent': 'Convite enviado ✓',
+  'toast.invite.sent': 'Adicionada a esta coleção',
   // --- save conflicts ------------------------------------------------------
   'conflict.title': 'Alguém salvou antes',
   'conflict.keepsYourWork':
@@ -619,13 +835,61 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.sections.renameAria': 'Renomear a seção {name}',
   'collSettings.sections.targetAria': 'Meta da seção {name}',
   'collSettings.sections.remove': 'Remover a seção {name}',
-  'collSettings.sections.itemCount': '{n} itens',
   'collSettings.sections.finePrint': 'A seção divide os itens de um grupo sem criar mais um nível: não declara campos nem ordenação própria, e você arruma as seções na mão — Bronze, Prata, Ouro, e não em ordem alfabética.',
   'toast.section.added': 'Seção "{name}" adicionada',
   'toast.section.removed': 'Seção removida — os itens dela ficaram sem seção',
-  'toast.section.converted': '{n} sub-grupos agora são seções',
+  'toast.section.converted.one': '{n} subgrupo agora é uma seção',
+  'toast.section.converted.other': '{n} subgrupos agora são seções',
   'collSettings.groups.pickerAria': 'Grupos desta coleção',
   'collSettings.groups.noneYet': 'Nenhum grupo ainda',
   'collSettings.groups.nameLabel': 'Nome',
-  'collSettings.groups.pickOne': 'Escolha um grupo à esquerda para editar o nome, a ordenação, os campos e as seções.',
+  'collSettings.groups.pickOne': 'Escolha um grupo à esquerda para editar o nome, onde ele fica, a ordenação, os campos e as seções.',
+  // --- toast chrome ---------------------------------------------------------
+  'toast.done': 'Feito',
+  'toast.failed': 'Falhou',
+  'toast.dismiss': 'Dispensar esta mensagem',
+  'toast.more': '+{n} na fila',
+  'toast.undo': 'Desfazer',
+
+  // --- confirmations -------------------------------------------------------
+  'item.delete.confirm.title': 'Excluir este item?',
+  'item.delete.confirm.body':
+    '“{name}” sai desta coleção, junto com as cópias, os valores dos campos e as fotos. Você pode desfazer logo depois.',
+  'item.delete.confirm.ok': 'Excluir o item',
+
+  // --- HTTP failures -------------------------------------------------------
+  'error.network':
+    'Não foi possível falar com o servidor do Vault. Nada foi salvo — verifique sua conexão e tente de novo.',
+  'error.forbidden': 'Você não tem permissão para fazer isso.',
+  'error.notFound': 'Isso não está mais aqui — pode ter sido excluído em outro lugar.',
+  'error.conflict': 'Isso conflita com algo já salvo. Nada foi alterado.',
+  'error.precondition':
+    'Esta tela está fora de passo com o servidor, então o salvamento foi recusado em vez de arriscado. Recarregue e tente de novo.',
+  'error.rateLimited': 'Requisições demais. Espere um instante e tente de novo.',
+  'error.server': 'O servidor deu erro. Sua alteração pode não ter sido salva — tente de novo.',
+  'error.unknown': 'Algo deu errado (HTTP {status}). Tente de novo em instantes.',
+  // --- responsive shell -----------------------------------------------------
+  'shell.skipToContent': 'Ir para o conteúdo',
+  'nav.open': 'Abrir navegação',
+  'nav.close': 'Fechar navegação',
+  'nav.primaryAria': 'Principal',
+
+  // --- ui-date-input --------------------------------------------------------
+  'ui.dateInput.day': 'dd',
+  'ui.dateInput.month': 'mm',
+  'ui.dateInput.year': 'aaaa',
+
+  // --- item form: resumo e a barra de gravação ------------------------------
+  'itemForm.summaryHeading': 'Resumo',
+  'itemForm.summaryOwnership': 'Posse',
+  'itemForm.summaryOwned': 'Na coleção · {n}',
+  'itemForm.summaryWanted': 'Lista de desejos',
+  'itemForm.summaryPaid': 'Pago',
+  'itemForm.summaryEstimate': 'Valor est.',
+  'itemForm.summaryPhotos': 'Fotos',
+  'itemForm.summaryPhotoCount': '{n} de {max}',
+  'itemForm.summaryDestination': 'Fica em',
+  'itemForm.unsaved': 'Alterações não salvas',
+  'itemForm.leaveConfirm': 'Este item tem alterações que você não salvou. Sair mesmo assim?',
+  'itemForm.copyAcquiredAria': 'Data de aquisição da cópia nº {n}',
 };

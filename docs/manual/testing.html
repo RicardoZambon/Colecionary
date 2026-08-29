@@ -16,10 +16,11 @@
 <p class="eyebrow">10 · Operação</p>
 <h1>Testes e as garantias que eles prendem</h1>
 <p class="lede">
-  254 testes no backend (240 <code>[Fact]</code> + 14 <code>[Theory]</code>) em
-  duas suítes, e 335 asserções em 38 specs no frontend. O que importa aqui não é
-  a contagem: é <strong>qual invariante cada teste prende</strong> — porque quase
-  toda regressão perigosa deste sistema deixa a outra suíte inteiramente verde.
+  190 testes unitários e 119 de integração no backend, em duas suítes, e 681
+  asserções em 58 specs no frontend. O que importa aqui não é a contagem: é
+  <strong>qual invariante cada teste prende</strong> — porque quase toda
+  regressão perigosa deste sistema deixa a outra suíte inteiramente verde. E há
+  uma classe inteira que <em>nenhuma</em> das duas vê; está na última seção.
 </p>
 
 <h2 id="rodar">Como rodar</h2>
@@ -293,7 +294,115 @@ npm test -- --watch=false</code></pre>
     estilo por componente e o aviso de 500 kB no bundle inicial estão em
     <code>angular.json</code>, e <strong>avisos contam</strong>.
   </li>
+  <li>
+    <strong>A paleta é aritmética.</strong>
+    <code>src/styles/themes.spec.ts</code> parseia o
+    <code>_themes.scss</code> que <em>embarca</em> — nunca uma cópia — e prende
+    <code>--muted-strong</code>, <code>--accent-strong</code>,
+    <code>--accent2-strong</code>, <code>--text2</code> e <code>--text</code> a
+    4,5:1 contra <code>--bg</code>, <code>--panel</code> <strong>e</strong>
+    <code>--panel2</code>, nos sete temas. Ler o arquivo real é a decisão que
+    importa: uma paleta duplicada num teste é uma paleta que vai discordar da
+    que roda.
+  </li>
+  <li>
+    <code>icon.spec.ts</code> asserta que <em>todo</em> nome de
+    <code>ICON_NAMES</code> desenha geometria, porque um <code>@case</code>
+    digitado errado renderiza um <code>&lt;svg&gt;</code> vazio e nada mais
+    reclama.
+  </li>
+  <li>
+    <code>collection-page.bulk.spec.ts</code> prende a propriedade que a feature
+    inteira existe para ter: uma edição ou exclusão em massa é exatamente
+    <strong>um</strong> PUT de coleção e <strong>zero</strong> escritas de item.
+  </li>
+  <li>
+    <code>item-selection.spec.ts</code> prende a regra da interseção: estreitar
+    um filtro esconde a seleção e nunca a destrói, e nenhuma ação alcança uma
+    linha invisível.
+  </li>
+  <li>
+    <code>group-delete.util.spec.ts</code> cobre os três destinos, a vistoria
+    independente do destino, a limpeza de seções e <code>sectionId</code>, a
+    ausência de mutação da entrada, e entrada cíclica.
+    <code>groups.util.spec.ts</code> cobre <code>canReparent</code> (recusa a si
+    mesmo, descendentes e pai inexistente) e a guarda de ciclo que
+    <code>subtreeIds</code> passou a ter.
+  </li>
+  <li>
+    <code>field-format.util.spec.ts</code> prende o eco de um valor que não
+    parseia, nos dois tipos — o campo é texto livre por baixo, então devolver o
+    que veio é a única leitura honesta.
+  </li>
 </ul>
+
+<h2 id="cegueira">A classe de defeito que nenhuma suíte vê</h2>
+
+<p>
+  Três dos piores problemas encontrados nesta rodada passaram por todos os
+  testes, nas duas linguagens, verdes:
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Defeito</th><th>Por que passou</th><th>O que o pega</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Um <code>Viewer</code> podia apagar qualquer item</td>
+      <td>Todo teste de contrato autenticava como <code>marcus@</code>, o Owner.
+          O caminho felizes sempre passava</td>
+      <td><code>RoleAuthorizationTests</code>, nas três direções</td>
+    </tr>
+    <tr>
+      <td>Um clique duplo em “Aplicar” acusava outra pessoa de ter editado a
+          coleção</td>
+      <td>Nenhum spec tinha duas escritas em voo ao mesmo tempo: o fake
+          respondia de forma síncrona, então a segunda nunca alcançava a
+          primeira</td>
+      <td><code>vault.store.spec.ts</code> com escritas seguradas
+          (<code>holdWrites</code>/<code>release</code>) — a segunda é recusada
+          sem sair, sem levantar aviso; a coleção é liberada quando a escrita
+          termina, aceita ou recusada; outra coleção não fica bloqueada</td>
+    </tr>
+    <tr>
+      <td>O app travava em “Carregando…” para sempre</td>
+      <td>Nenhum spec derrubava a API durante o boot</td>
+      <td><code>vault.store.spec.ts</code> nas falhas de carga</td>
+    </tr>
+    <tr>
+      <td>Um toast vermelho de alarme falso em <em>todo</em> carregamento</td>
+      <td>É a composição de duas peças corretas: um 404 de propósito e um
+          relator global correto. Nada num teste unitário observa as duas
+          juntas</td>
+      <td><strong>Abrir o app e olhar.</strong> Nada mais pega isso</td>
+    </tr>
+    <tr>
+      <td>O documento transbordava 390px em toda tela</td>
+      <td>jsdom não faz layout; nenhum teste tinha viewport</td>
+      <td>Medição com Playwright:
+          <code>scrollWidth === clientWidth</code> a 390/768/900</td>
+    </tr>
+    <tr>
+      <td>Uma frase em português sem gramática, montada por concatenação</td>
+      <td>As duas chaves existiam e traduziam. A frase só quebra quando
+          <em>renderizadas juntas</em>, e nada as renderizava juntas num
+          teste</td>
+      <td>Olhar a tela em pt-BR. É por isso que a regra 13 pede isso</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout warn">
+  <span class="label">A lição, escrita para durar</span>
+  <p>
+    Nenhum desses seria pego escrevendo mais testes unitários do mesmo tipo.
+    Todos exigem <em>rodar o sistema montado</em>: com um papel diferente, com a
+    rede caída, num viewport estreito, num idioma diferente. Um teste unitário
+    verifica que uma peça faz o que se pediu; ele não pergunta se pedir aquilo
+    era certo.
+  </p>
+</div>
 
 <h2 id="escrever">Ao escrever um teste novo</h2>
 

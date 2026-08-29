@@ -65,7 +65,7 @@ import { UiButton } from '../../shared/ui';
       border: 1px solid var(--border);
       border-left: 3px solid var(--accent);
       border-radius: var(--radius);
-      background: var(--surface);
+      background: var(--panel);
       box-shadow: var(--btn-shadow);
     }
 

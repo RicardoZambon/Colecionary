@@ -1,8 +1,11 @@
 <div class="banner">
+  <!-- `fillable` and `reframable` both follow canEdit: replacing the banner and
+       reframing it are two separate writes, and both answer 403 to a reader. -->
   <ui-image-slot
     [src]="images.url(collection().bannerImageId, 'display')"
     [focal]="focus.position(collection().bannerImageId)"
-    [reframable]="!!collection().bannerImageId"
+    [fillable]="canEdit()"
+    [reframable]="canEdit() && !!collection().bannerImageId"
     [placeholder]="'hero.bannerPlaceholder' | t"
     (fileSelected)="setImage('banner', $event)"
     (reframeRequested)="reframe('banner')"
@@ -13,9 +16,11 @@
 <div class="header">
   <div class="header__icon">
     <ui-image-slot
+      icon="diamond"
       [src]="images.url(collection().iconImageId, 'thumb')"
       [focal]="focus.position(collection().iconImageId)"
-      [reframable]="!!collection().iconImageId"
+      [fillable]="canEdit()"
+      [reframable]="canEdit() && !!collection().iconImageId"
       [placeholder]="'hero.iconPlaceholder' | t"
       (fileSelected)="setImage('icon', $event)"
       (reframeRequested)="reframe('icon')"
@@ -32,56 +37,101 @@
     </p>
   </div>
   <div class="header__actions">
-    <div class="progress-box">
-      <div class="progress-box__row">
-        <span>
-          {{ 'progress.owned' | t: { ratio: ratio() } }}
-          @if (scope().copies > scope().catalogued) {
-            <span class="copies-note">{{ 'progress.copies' | t: { n: scope().copies } }}</span>
-          }
-          @if (!scope().hasTarget) {
-            <span class="soft-note">{{ 'progress.ofCatalogued' | t }}</span>
-          }
-        </span>
-        <span class="pct">{{ scope().pct }}%</span>
-      </div>
-      <ui-progress
-        [pct]="scope().pct"
-        [secondaryPct]="scope().hasTarget ? scope().cataloguedPct : null"
-        [label]="'progress.label' | t: { name: heading() }"
-        [valueText]="progressText()"
+    @if (blank()) {
+      <!-- Nothing catalogued and no declared set: every figure the boxes below
+           would show is 0 ÷ 0, so there is no measurement to render.
+           Deliberately compact and body-less: the list underneath carries the
+           actionable empty state and the "add an item" call, and two full empty
+           states on one screen say the same thing twice. This one only has to
+           explain the absence of the bar. -->
+      <ui-empty
+        class="blank"
+        [compact]="true"
+        icon="trend-up"
+        [title]="'hero.noMeasure.title' | t"
       />
-      <div class="progress-box__foot">
-        @if (scope().missing) {
-          <span class="missing">{{ 'progress.missing' | t: { n: scope().missing } }}</span>
-          @if (scope().uncatalogued) {
-            <span class="split">{{ 'progress.listed' | t: { n: scope().wanted } }}</span>
+    } @else {
+      <div class="progress-box">
+        <div class="progress-box__row">
+          <!-- The composed sentence, not two keys glued together. The pieces
+               used to be `progress.owned` + `progress.ofCatalogued`, which in
+               Portuguese rendered "9 / 10 na coleção do catalogado" — a phrase
+               in no language. It also leaves the percentage unambiguous: the
+               sentence names both numerators, so the single figure beside a
+               two-band bar can only be the one it agrees with. -->
+          <span class="sentence">{{ progressText() }}</span>
+          <span class="pct">{{ scope().pct }}%</span>
+        </div>
+        <ui-progress
+          [pct]="scope().pct"
+          [secondaryPct]="scope().hasTarget ? scope().cataloguedPct : null"
+          [label]="'progress.label' | t: { name: heading() }"
+          [valueText]="progressText()"
+        />
+        <div class="progress-box__foot">
+          @if (scope().missing) {
+            <span class="missing">{{ missingLabel() }}</span>
+            @if (scope().uncatalogued) {
+              <span class="split">{{ 'progress.listed' | t: { n: scope().wanted } }}</span>
+            }
+          } @else if (scope().hasTarget) {
+            <span class="complete">{{ 'progress.complete' | t }}</span>
           }
-        } @else if (scope().hasTarget) {
-          <span class="complete">{{ 'progress.complete' | t }}</span>
-        }
-        @if (scope().over) {
-          <span class="split">{{ 'progress.overTarget' | t: { n: scope().over } }}</span>
-        }
-        @if (narrowed()) {
-          <span class="of-total">{{
-            'hero.ofTotal' | t: { owned: total().owned, total: total().denominator }
-          }}</span>
-        }
+          @if (scope().over) {
+            <span class="split">{{ 'progress.overTarget' | t: { n: scope().over } }}</span>
+          }
+          @if (scope().copies > scope().catalogued) {
+            <span class="split">{{ copiesLabel() }}</span>
+          }
+          @if (narrowed()) {
+            <span class="of-total">{{
+              'hero.ofTotal' | t: { owned: total().owned, total: total().denominator }
+            }}</span>
+          }
+        </div>
       </div>
-    </div>
-    <div class="value-box">
-      {{ 'hero.estimate' | t }} <span class="value">{{ scope().value | money: currency() }}</span>
-    </div>
-    <a
-      [routerLink]="['/c', collection().id, 'settings']"
-      [queryParams]="{ tab: 'sharing' }"
-      [attr.aria-label]="'hero.manageSharing' | t"
-      [title]="'hero.manageSharing' | t"
-    >
-      <ui-avatar-stack aria-hidden="true" [members]="members()" />
-    </a>
-    <ui-button variant="ghost" size="sm" [routerLink]="['/c', collection().id, 'settings']" [title]="'hero.manageTitle' | t">{{ 'hero.manage' | t }}</ui-button>
-    <ui-button size="sm" [routerLink]="['/c', collection().id, 'items', 'new']" queryParamsHandling="preserve">{{ 'hero.addItem' | t }}</ui-button>
+      <!-- `itemValue`, not `money`: nothing held is an absence, and an absence
+           renders `—`. "est. US$ 0,00" claims a measurement of zero. -->
+      <div class="value-box">
+        {{ 'hero.estimate' | t }}
+        <span class="value">{{ scope().value | itemValue: currency() }}</span>
+      </div>
+    }
+    <!-- Who is on the collection is worth seeing either way, but the link
+         behind it lands on a route `canEditGuard` turns back — so a reader gets
+         the faces without a journey that ends where it started. The stack keeps
+         its own name once it is no longer wrapped in a named anchor. -->
+    @if (canEdit()) {
+      <a
+        [routerLink]="['/c', collection().id, 'settings']"
+        [queryParams]="{ tab: 'sharing' }"
+        [attr.aria-label]="'hero.manageSharing' | t"
+        [title]="'hero.manageSharing' | t"
+      >
+        <ui-avatar-stack aria-hidden="true" [members]="members()" />
+      </a>
+      <ui-button
+        variant="ghost"
+        size="sm"
+        [routerLink]="['/c', collection().id, 'settings']"
+        [title]="'hero.manageTitle' | t"
+      >
+        <span class="btn-label"><ui-icon name="gear" [size]="14" />{{ 'hero.manage' | t }}</span>
+      </ui-button>
+      <ui-button
+        size="sm"
+        [routerLink]="['/c', collection().id, 'items', 'new']"
+        queryParamsHandling="preserve"
+      >
+        <span class="btn-label"><ui-icon name="plus" [size]="14" />{{ 'hero.addItem' | t }}</span>
+      </ui-button>
+    } @else {
+      <ui-avatar-stack
+        role="img"
+        [attr.aria-label]="'hero.manageSharing' | t"
+        [title]="'hero.manageSharing' | t"
+        [members]="members()"
+      />
+    }
   </div>
 </div>

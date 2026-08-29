@@ -20,6 +20,8 @@ import {
   UserProfile,
 } from '../../../core/models';
 import { I18nService } from '../../../core/i18n';
+import { UNGROUPED_ID } from '../../../core/utils/group-stats.util';
+import { ConfirmService } from '../../../core/state/confirm.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CollectionSettingsPage } from './collection-settings-page';
 
@@ -77,7 +79,7 @@ class FakeVaultApi extends VaultApi {
     return of(settings);
   }
   getProfile(): Observable<UserProfile> {
-    return of({ name: 'Marcus', email: 'marcus@example.com', initials: 'MC', plan: 'free' });
+    return of({ name: 'Marcus', email: 'marcus@example.com', initials: 'MC', plan: 'free', role: 'Owner' });
   }
   updateProfile(profile: UserProfile): Observable<UserProfile> {
     return of(profile);
@@ -164,6 +166,20 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
     fixture.detectChanges();
   };
 
+  /**
+   * Answers the confirmation a destructive action now raises.
+   *
+   * Every irreversible act on this page asks first, so a test that clicks one
+   * and asserts the result has to say what the user said. Passing `false` is how
+   * the cancel path is tested, and it is the more important of the two: a
+   * confirmation that cannot be declined is a speed bump, not a safeguard.
+   */
+  const answerConfirm = async (answer = true) => {
+    TestBed.inject(ConfirmService).answer(answer);
+    await tick();
+    fixture.detectChanges();
+  };
+
   /** "Done" flushes the debounced save immediately, so nothing waits 400 ms. */
   const done = async () => {
     click(el.querySelector('.done-row ui-button button')!);
@@ -176,6 +192,24 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
   const rowNames = () => rows().map(row => (row.textContent ?? '').replace(/\d+$/, '').trim());
   /** The editor on the right, for whatever the tree has selected. */
   const detail = () => el.querySelector('.groups-split__detail') as HTMLElement;
+  /** The deletion confirmation, when one is open. */
+  const dialog = () => el.querySelector('app-group-delete-dialog');
+  /** Its three dispositions, in the order they are offered. */
+  const dispositions = () =>
+    [...el.querySelectorAll('app-group-delete-dialog input[type="radio"]')] as HTMLInputElement[];
+  const choose = (index: number) => {
+    const radio = dispositions()[index];
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+  };
+  const dialogButtons = () =>
+    [...el.querySelectorAll('app-group-delete-dialog .panel__actions button')] as HTMLElement[];
+  /** The destructive action; the first button cancels. */
+  const confirmButton = () => dialogButtons()[dialogButtons().length - 1] as HTMLButtonElement;
+  /** The two-step move: the preview's confirm, and its escape hatch. */
+  const moveButtons = () =>
+    [...el.querySelectorAll('.move-preview__actions button')] as HTMLElement[];
   const byLabel = (aria: string) =>
     el.querySelector(`[aria-label="${aria}"]`) as HTMLInputElement & HTMLSelectElement;
 
@@ -188,9 +222,16 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
     type,
     click,
     done,
+    answerConfirm,
     rows,
     rowNames,
     detail,
+    dialog,
+    dispositions,
+    choose,
+    dialogButtons,
+    confirmButton,
+    moveButtons,
     byLabel,
     /** The document the last save sent to the API. */
     lastPut: () => api.puts[api.puts.length - 1],
@@ -298,6 +339,7 @@ describe('CollectionSettingsPage', () => {
     });
 
     page.click(page.el.querySelector('[aria-label="Remove field Issue"]')!);
+    await page.answerConfirm();
     await page.done();
 
     expect(page.lastPut().groups[0].fields).toEqual([]);
@@ -327,21 +369,235 @@ describe('CollectionSettingsPage', () => {
     expect((page.detail().querySelector('.rename input') as HTMLInputElement).value).toBe('alpha');
   });
 
-  it('will not remove a group that still holds items, anywhere in its subtree', async () => {
+  // --- moving a group to another parent (a picker, never a drag) ---
+
+  /** Revistas ▸ Marvel ▸ Ultimate, plus Bonecos as a foreign destination. */
+  const shelf = () =>
+    collection({
+      groups: [
+        group('revistas', { fields: [{ name: 'Editora', type: 'text' }] }),
+        group('marvel', { parentId: 'revistas' }),
+        group('ultimate', { parentId: 'marvel' }),
+        group('bonecos'),
+      ],
+      items: [
+        { ...item('spidey', 'marvel'), custom: [{ key: 'Editora', value: 'Panini' }] },
+        { ...item('xmen', 'ultimate'), custom: [{ key: 'Editora', value: 'Abril' }] },
+      ],
+    });
+
+  it('never offers itself or its own descendants as a parent', async () => {
+    // The decisive reason a move is a select and not a drop target: a list can
+    // leave out what it cannot accept, so there is nothing to reject after the
+    // gesture — and nothing to explain.
+    const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
+    const picker = page.byLabel('Parent group of marvel');
+
+    const values = [...picker.options].map(o => o.value);
+    expect(values).not.toContain('marvel');
+    expect(values).not.toContain('ultimate');
+    expect(values).toContain('revistas');
+    expect(values).toContain('bonecos');
+    // The leading entry is "no parent", and a group id is never blank.
+    expect(values[0]).toBe('');
+  });
+
+  it('says what the move changes before it changes anything', async () => {
+    const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
+    page.pick(page.byLabel('Parent group of marvel'), 'bonecos');
+
+    const preview = page.el.querySelector('.move-preview')!;
+    // Both items in the subtree hold an Editora value, and Bonecos does not
+    // declare that field.
+    expect(preview.textContent).toContain('Editora');
+    expect(preview.textContent).toContain('2');
+    // Nothing has been saved yet.
+    expect(page.api.puts).toHaveLength(0);
+  });
+
+  it('leaves the group where it is when the preview is declined', async () => {
+    const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
+    page.pick(page.byLabel('Parent group of marvel'), 'bonecos');
+    page.click(page.moveButtons()[0]);
+    await page.done();
+
+    expect(page.el.querySelector('.move-preview')).toBeNull();
+    expect(page.lastPut().groups.find(g => g.id === 'marvel')!.parentId).toBe('revistas');
+  });
+
+  it('reparents through the ordinary debounced draft path once confirmed', async () => {
+    const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
+    page.pick(page.byLabel('Parent group of marvel'), 'bonecos');
+    page.click(page.moveButtons()[1]);
+    await page.done();
+
+    const saved = page.lastPut();
+    expect(saved.groups.find(g => g.id === 'marvel')!.parentId).toBe('bonecos');
+    // A move changes the parent, not the id — so the sub-group, its items and
+    // their sections travel with it and need no migration.
+    expect(saved.groups.find(g => g.id === 'ultimate')!.parentId).toBe('marvel');
+    expect(saved.items.map(i => i.groupId)).toEqual(['marvel', 'ultimate']);
+    expect(saved.items[0].custom).toEqual([{ key: 'Editora', value: 'Panini' }]);
+  });
+
+  it('can move a group out to the top level', async () => {
+    const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
+    page.pick(page.byLabel('Parent group of marvel'), '');
+    page.click(page.moveButtons()[1]);
+    await page.done();
+
+    // Null, never '': the model spells "no parent" as null on a group, and the
+    // collection saves as a full-document PUT.
+    expect(page.lastPut().groups.find(g => g.id === 'marvel')!.parentId).toBeNull();
+  });
+
+  it('warns about a sibling of the same name without blocking the move', async () => {
+    // Sibling names are not keys — identity is the collection-wide id — and
+    // blocking would refuse a legitimate intermediate state of a document PUT.
     const page = await mount({
       collection: collection({
-        groups: [group('zeta'), group('child', { parentId: 'zeta' })],
-        sections: [],
-        items: [item('i1', 'child')],
+        groups: [group('revistas'), group('marvel', { parentId: 'revistas' }), group('bonecos'), group('twin', { parentId: 'bonecos', name: 'marvel' })],
+      }),
+      tab: 'groups',
+      g: 'marvel',
+    });
+    page.pick(page.byLabel('Parent group of marvel'), 'bonecos');
+
+    expect(page.el.querySelector('.move-preview__clash')).not.toBeNull();
+    page.click(page.moveButtons()[1]);
+    await page.done();
+    expect(page.lastPut().groups.find(g => g.id === 'marvel')!.parentId).toBe('bonecos');
+  });
+
+  // --- deleting a group asks what happens to its contents ---
+
+  /** zeta ▸ child, one item in the child and one filed on zeta itself. */
+  const branch = () =>
+    collection({
+      groups: [group('zeta'), group('child', { parentId: 'zeta' }), group('beta')],
+      sections: [{ id: 's1', groupId: 'child', name: 'Bronze', target: null }],
+      items: [{ ...item('deep', 'child'), sectionId: 's1' }, item('shallow', 'zeta')],
+    });
+
+  it('asks what happens to the contents instead of refusing outright', async () => {
+    // The refusal it replaces was safe and a dead end: nothing in the app moved
+    // items in bulk, so "move them first" was an instruction with no way to
+    // follow it — while an EMPTY branch was deleted silently and unconfirmed.
+    const page = await mount({ collection: branch(), tab: 'groups', g: 'zeta' });
+
+    page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+
+    expect(page.dialog()).not.toBeNull();
+    expect(page.api.puts).toHaveLength(0);
+  });
+
+  it('preselects no disposition, and will not confirm until one is chosen', async () => {
+    // The rule the import dialog established: an irreversible choice is never
+    // what a distracted Enter keypress answers.
+    const page = await mount({ collection: branch(), tab: 'groups', g: 'zeta' });
+    page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+
+    expect(page.dispositions().map(r => r.checked)).toEqual([false, false, false]);
+    expect(page.confirmButton().disabled).toBe(true);
+  });
+
+  it('states the count in the button that destroys, not a bare "Delete"', async () => {
+    const page = await mount({ collection: branch(), tab: 'groups', g: 'zeta' });
+    page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+
+    page.choose(2);
+    expect(page.confirmButton().textContent).toContain('2');
+  });
+
+  it('dismissal means nothing happened', async () => {
+    const page = await mount({ collection: branch(), tab: 'groups', g: 'zeta' });
+    page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+    page.choose(2);
+    // The scrim, which `ui-dialog` treats exactly like Escape.
+    page.click(page.el.querySelector('app-group-delete-dialog .scrim')!);
+    await page.done();
+
+    expect(page.dialog()).toBeNull();
+    expect(page.lastPut().groups.map(g => g.id)).toEqual(['zeta', 'child', 'beta']);
+    expect(page.lastPut().items).toHaveLength(2);
+  });
+
+  it('moves the contents up to the parent, losing nothing', async () => {
+    const page = await mount({ collection: branch(), tab: 'groups', g: 'zeta' });
+    page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+    page.choose(0);
+    page.click(page.confirmButton());
+    await page.done();
+
+    const saved = page.lastPut();
+    // zeta was a root, so its child becomes a root and its own item unfiled.
+    expect(saved.groups.map(g => `${g.id}:${g.parentId}`)).toEqual(['child:null', 'beta:null']);
+    expect(saved.items.find(i => i.id === 'shallow')!.groupId).toBe('');
+    expect(saved.items.find(i => i.id === 'deep')!.groupId).toBe('child');
+    // The surviving sub-group keeps its own divider.
+    expect(saved.sections.map(s => s.id)).toEqual(['s1']);
+    expect(saved.items.find(i => i.id === 'deep')!.sectionId).toBe('s1');
+  });
+
+  it('unfiles every item in the subtree, storing "" and never the bucket key', async () => {
+    // UNGROUPED_ID is a key to read by. Storing it would put a group id on the
+    // item that no group answers to.
+    const page = await mount({ collection: branch(), tab: 'groups', g: 'zeta' });
+    page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+    page.choose(1);
+    page.click(page.confirmButton());
+    await page.done();
+
+    const saved = page.lastPut();
+    expect(saved.groups.map(g => g.id)).toEqual(['beta']);
+    expect(saved.items.map(i => i.groupId)).toEqual(['', '']);
+    expect(saved.items.map(i => i.groupId)).not.toContain(UNGROUPED_ID);
+    // The sections went with their groups, so no item is left pointing at one.
+    expect(saved.sections).toEqual([]);
+    expect(saved.items.map(i => i.sectionId)).toEqual(['', '']);
+  });
+
+  it('deletes the items too when that is what was chosen', async () => {
+    const page = await mount({ collection: branch(), tab: 'groups', g: 'zeta' });
+    page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+    page.choose(2);
+    page.click(page.confirmButton());
+    await page.done();
+
+    const saved = page.lastPut();
+    expect(saved.groups.map(g => g.id)).toEqual(['beta']);
+    expect(saved.items).toEqual([]);
+    expect(saved.sections).toEqual([]);
+  });
+
+  it('takes a deleted group’s sections with it', async () => {
+    // A section belongs to exactly one group, so one whose group is gone can
+    // never be reached again. Leaving it behind is not harmless: it rides every
+    // PUT from here on, and `sectionsOf` would hand it back the day a new group
+    // is created with the same id.
+    const page = await mount({
+      collection: collection({
+        groups: [group('zeta'), group('child', { parentId: 'zeta' }), group('beta')],
+        sections: [
+          { id: 's1', groupId: 'zeta', name: 'Bronze', target: null },
+          { id: 's2', groupId: 'child', name: 'Prata', target: null },
+          { id: 's3', groupId: 'beta', name: 'Ouro', target: null },
+        ],
+        items: [],
       }),
       tab: 'groups',
       g: 'zeta',
     });
 
     page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+    // "Delete the items too" takes the whole branch; there are no items here.
+    page.choose(2);
+    page.click(page.confirmButton());
     await page.done();
 
-    expect(page.lastPut().groups.map(g => g.id)).toEqual(['zeta', 'child']);
+    // The whole subtree went, so both its sections went — and only those.
+    expect(page.lastPut().groups.map(g => g.id)).toEqual(['beta']);
+    expect(page.lastPut().sections.map(s => s.id)).toEqual(['s3']);
   });
 
   // --- sections ---
@@ -416,6 +672,7 @@ describe('CollectionSettingsPage', () => {
     });
 
     page.click(page.el.querySelector('[aria-label="Remove section Bronze"]')!);
+    await page.answerConfirm();
     await page.done();
 
     expect(page.lastPut().sections).toEqual([]);
@@ -449,14 +706,27 @@ describe('CollectionSettingsPage', () => {
 
   // --- master–detail (the tree on the left, one editor on the right) ---
 
-  it('edits nothing until a group is picked', async () => {
-    // The whole point of the split: no editor is open, so a deep collection
-    // opens as a map rather than as a column of forms.
+  it('opens on the first group rather than on a pane whose content is an instruction', async () => {
+    // Arriving with no ?g= used to show an invitation beside a tree. The first
+    // group is the one the tree already puts under the cursor, and it replaces
+    // rather than pushes, so back still means "the page I came from".
     const page = await mount({ tab: 'groups' });
+
+    expect(page.rowNames()).toEqual(['beta', 'zeta']);
+    expect(page.navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: expect.objectContaining({ tab: 'groups', g: 'beta' }),
+        replaceUrl: true,
+      }),
+    );
+  });
+
+  it('still renders an invitation for a collection with no groups at all', async () => {
+    const page = await mount({ collection: collection({ groups: [] }), tab: 'groups' });
 
     expect(page.detail().querySelector('.detail__empty')).not.toBeNull();
     expect(page.detail().querySelector('.rename input')).toBeNull();
-    expect(page.rowNames()).toEqual(['beta', 'zeta']);
   });
 
   it('opens the editor for the group the URL names', async () => {
@@ -506,10 +776,76 @@ describe('CollectionSettingsPage', () => {
     const page = await mount({ tab: 'groups', g: 'zeta' });
 
     page.click(page.el.querySelector('[aria-label="Remove zeta"]')!);
+    page.choose(0);
+    page.click(page.confirmButton());
 
     expect(page.navigate).toHaveBeenCalledWith(
       [],
       expect.objectContaining({ queryParams: expect.objectContaining({ g: null }) }),
     );
+  });
+});
+
+describe('CollectionSettingsPage — nothing is destroyed without a question', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('keeps the divider when the question is declined', async () => {
+    const page = await mount({
+      collection: collection({
+        groups: [group('espanha')],
+        sections: [{ id: 'bronze', groupId: 'espanha', name: 'Bronze', target: null }],
+        items: [{ ...item('seiya', 'espanha'), sectionId: 'bronze' }],
+      }),
+      tab: 'groups',
+      g: 'espanha',
+    });
+
+    page.click(page.el.querySelector('[aria-label="Remove section Bronze"]')!);
+    await page.answerConfirm(false);
+    await page.done();
+
+    // "Done" always flushes a save, so the assertion is about the content, not
+    // about whether a PUT happened: the divider survives, and so does the item's
+    // place in it — the part that could not have been recovered.
+    expect(page.lastPut().sections).toHaveLength(1);
+    expect(page.lastPut().items[0].sectionId).toBe('bronze');
+  });
+
+  it('keeps the field when the question is declined', async () => {
+    const page = await mount({
+      collection: collection({
+        groups: [group('zeta', { fields: [{ name: 'Issue', type: 'number' }] })],
+      }),
+      tab: 'groups',
+      g: 'zeta',
+    });
+
+    page.click(page.el.querySelector('[aria-label="Remove field Issue"]')!);
+    await page.answerConfirm(false);
+    await page.done();
+
+    expect(page.lastPut().groups[0].fields).toEqual([{ name: 'Issue', type: 'number' }]);
+  });
+
+  it('will not delete the collection until the question is answered yes', async () => {
+    // The largest irreversible act in the app, and it used to happen on one
+    // click with nothing in between.
+    const page = await mount();
+    const deleted: string[] = [];
+    page.api.deleteCollection = ((id: string) => {
+      deleted.push(id);
+      return of(void 0);
+    }) as typeof page.api.deleteCollection;
+
+    page.click(page.el.querySelector('.danger-row ui-button button, .general ui-button[variant="danger"] button')!);
+    await page.answerConfirm(false);
+    expect(deleted).toEqual([]);
+
+    page.click(page.el.querySelector('.danger-row ui-button button, .general ui-button[variant="danger"] button')!);
+    await page.answerConfirm(true);
+    expect(deleted).toEqual(['c1']);
   });
 });

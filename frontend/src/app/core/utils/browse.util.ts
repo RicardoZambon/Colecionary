@@ -1,5 +1,6 @@
 import { Condition, GroupNode, GroupSort, Item, Section } from '../models';
 import { isOwned } from './copies.util';
+import { isReservedTag, normalizeTag, withTagAdded } from './tags.util';
 import { UNGROUPED_ID } from './group-stats.util';
 import { fieldsFor, sortFor, subtreeIds } from './groups.util';
 import { UNSECTIONED_ID, sectionRank } from './sections.util';
@@ -21,9 +22,9 @@ export type OwnFilter = 'owned' | 'wanted' | null;
 
 /**
  * Everything that decides which items are on screen, and in what order. All of
- * it lives in the URL (`?g=`, `?s=`, `?cond=`, `?own=`, `?sort=`/`?dir=`) except the
- * search, which is global to the app — so an open item can rebuild the exact
- * list the grid showed without the grid handing it anything.
+ * it lives in the URL (`?g=`, `?s=`, `?cond=`, `?own=`, `?tag=`, `?sort=`/`?dir=`)
+ * except the search, which is global to the app — so an open item can rebuild the
+ * exact list the grid showed without the grid handing it anything.
  */
 export interface BrowseCriteria {
   /** `?g=` — a group id, {@link UNGROUPED_ID}, or null for the whole collection. */
@@ -37,6 +38,15 @@ export interface BrowseCriteria {
   sectionId: string | null;
   condition: Condition | null;
   own: OwnFilter;
+  /**
+   * `?tag=` — one tag, matched **exactly** (ignoring case). Null is no filter.
+   *
+   * Exact is the whole difference between this and the search box: `matchesQuery`
+   * finds `boxed` inside `unboxed`, which is what you want when typing a guess
+   * and precisely not what you want when picking a label off an item. Null and
+   * a tag nobody carries are the same answer — see `readTag`.
+   */
+  tag: string | null;
   /** The global search box. Blank means no search. */
   query: string;
   /** An explicit pick. Null falls back to the group's own declared order. */
@@ -47,6 +57,7 @@ export const NO_FILTERS: Omit<BrowseCriteria, 'groupId'> = {
   sectionId: null,
   condition: null,
   own: null,
+  tag: null,
   query: '',
   sort: null,
 };
@@ -90,11 +101,58 @@ export function visibleItems(
       (!criteria.condition || item.copies.some(c => c.condition === criteria.condition)) &&
       (!criteria.own || (criteria.own === 'owned' ? isOwned(item) : !isOwned(item))) &&
       (!criteria.sectionId || inSection(item, criteria.sectionId, rank)) &&
-      (!query || item.name.toLowerCase().includes(query)),
+      (!criteria.tag || hasTag(item, criteria.tag)) &&
+      matchesQuery(item, query),
   );
 
   const sort = criteria.sort ?? sortFor(groups, criteria.groupId) ?? DEFAULT_SORT;
   return sortItems(filtered, sort, fieldsFor(groups, criteria.groupId), rank);
+}
+
+/**
+ * Whether an item carries a tag — by the editor's own rule, not a second one.
+ *
+ * `withTagAdded` returns *the same array* when the tag is already there, and it
+ * decides that ignoring case, because `boxed` and `Boxed` are one tag. Asking it
+ * is how the filter and the tag editor are kept from ever disagreeing: a
+ * comparison written out again here would be a second definition of "the same
+ * tag", and the first divergence would split one label into two answers.
+ *
+ * Blank and the derived `wanted` tag are never carried: they are refused by the
+ * editor, so filtering by them would offer a list nobody can reach by hand.
+ */
+export function hasTag(item: Item, tag: string): boolean {
+  const wanted = normalizeTag(tag);
+  if (!wanted || isReservedTag(wanted)) return false;
+  return withTagAdded(item.tags, wanted) === item.tags;
+}
+
+/**
+ * Whether an item answers a search.
+ *
+ * Name, description, tags and every custom field value. Restricting this to the
+ * name was the wrong default for the app's most frequent lookup: a cataloguer
+ * types a catalogue number, and a catalogue number is precisely a custom
+ * field — the one place the old search could not see. Description and tags come
+ * along because they are the other two things already typed about an item, and
+ * a search that finds fewer things than the data holds reads as broken rather
+ * than as precise.
+ *
+ * Field *names* are not searched, only their values. A group that declares
+ * "Número" would otherwise make every one of its items match "num".
+ *
+ * `query` must already be trimmed and lower-cased — this runs once per item per
+ * keystroke, and folding the needle here instead of at the call site would fold
+ * it once per item too.
+ */
+export function matchesQuery(item: Item, query: string): boolean {
+  if (!query) return true;
+  return (
+    item.name.toLowerCase().includes(query) ||
+    item.description.toLowerCase().includes(query) ||
+    item.tags.some(tag => tag.toLowerCase().includes(query)) ||
+    item.custom.some(field => field.value.toLowerCase().includes(query))
+  );
 }
 
 /**

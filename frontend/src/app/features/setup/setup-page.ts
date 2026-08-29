@@ -6,7 +6,15 @@ import { SetupTestResult } from '../../core/models/setup.model';
 import { ThemeId } from '../../core/models';
 import { ThemeService } from '../../core/state/theme.service';
 import { TPipe } from '../../shared/pipes/t.pipe';
-import { UiButton, UiCard, UiField, UiSelect, UiTextInput, UiToggle } from '../../shared/ui';
+import {
+  UiButton,
+  UiCard,
+  UiField,
+  UiIcon,
+  UiSelect,
+  UiTextInput,
+  UiToggle,
+} from '../../shared/ui';
 import { SelectOption } from '../../shared/ui/select/select';
 import {
   CurrencyCode,
@@ -25,7 +33,7 @@ interface Note {
 @Component({
   selector: 'app-setup-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiButton, UiCard, UiField, UiSelect, UiTextInput, UiToggle],
+  imports: [TPipe, UiButton, UiCard, UiField, UiIcon, UiSelect, UiTextInput, UiToggle],
   templateUrl: './setup-page.html',
   styleUrl: './setup-page.scss',
 })

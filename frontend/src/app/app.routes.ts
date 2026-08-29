@@ -1,6 +1,8 @@
 import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
+import { canEditGuard } from './core/auth/write.guard';
+import { unsavedItemGuard } from './features/collection/item-form-page/unsaved-item.guard';
 import { setupCompletedGuard, setupGuard } from './core/setup/setup.guards';
 import { Shell } from './layout/shell/shell';
 
@@ -39,7 +41,12 @@ export const routes: Routes = [
           import('./features/collection/collection-page/collection-page').then(m => m.CollectionPage),
       },
       {
+        // The whole route is a write surface — every tab of it edits the
+        // collection document — so someone who cannot write is turned back at
+        // the door rather than handed a page of inert forms. Courtesy only: the
+        // 403 is what actually protects the collection.
         path: 'c/:collectionId/settings',
+        canActivate: [canEditGuard],
         loadComponent: () =>
           import('./features/collection/collection-settings-page/collection-settings-page').then(
             m => m.CollectionSettingsPage,
@@ -47,6 +54,8 @@ export const routes: Routes = [
       },
       {
         path: 'c/:collectionId/items/new',
+        canActivate: [canEditGuard],
+        canDeactivate: [unsavedItemGuard],
         loadComponent: () =>
           import('./features/collection/item-form-page/item-form-page').then(m => m.ItemFormPage),
       },
@@ -57,6 +66,8 @@ export const routes: Routes = [
       },
       {
         path: 'c/:collectionId/items/:itemId/edit',
+        canActivate: [canEditGuard],
+        canDeactivate: [unsavedItemGuard],
         loadComponent: () =>
           import('./features/collection/item-form-page/item-form-page').then(m => m.ItemFormPage),
       },

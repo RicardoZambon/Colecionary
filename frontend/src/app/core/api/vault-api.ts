@@ -45,6 +45,55 @@ export class VaultConflictError extends Error {
 }
 
 /**
+ * A write refused *here*, because one of the same collection is still in
+ * flight.
+ *
+ * Not pedantry, and not a lock for its own sake. Every write quotes the version
+ * the app last synchronised with, and that version only moves when the write in
+ * flight answers — so a second one issued before then quotes a token the first
+ * is about to supersede, and the server refuses it with a 412. The app would
+ * then raise the conflict notice and tell the user somebody else had edited
+ * their collection, when the only other writer was their own second click. On a
+ * collection large enough for a full-document PUT to take half a second, that is
+ * an ordinary double-click.
+ *
+ * Refused rather than queued, because the payload is the whole document as the
+ * page built it *before* the first write landed. Sending it afterwards would not
+ * be a second edit, it would be a restore over the first one — which is the
+ * exact failure the precondition exists to prevent.
+ *
+ * Its own type, and never a {@link VaultConflictError}: nothing was overwritten
+ * and nobody else is involved, so the notice that explains a real conflict would
+ * be a lie in calmer words.
+ */
+export class VaultBusyError extends Error {
+  constructor(
+    /** The collection already being written. */
+    readonly collectionId: string,
+  ) {
+    super(`A write of collection '${collectionId}' is already in flight.`);
+    this.name = 'VaultBusyError';
+  }
+}
+
+/**
+ * Whether a failed write has already accounted for itself.
+ *
+ * Two of them have: a conflict, which the shell's notice is already explaining
+ * in more words than a toast could, and a duplicate, whose first attempt is
+ * still running and will report whatever actually happens. Everything else is
+ * news, and the caller has to say so.
+ *
+ * One predicate rather than the pair of `instanceof` checks it replaces: there
+ * are eight call sites that catch a write, and the failure mode of spelling this
+ * out eight times is seven of them agreeing and one shouting at a user who
+ * double-clicked.
+ */
+export function isReportedWriteFailure(err: unknown): boolean {
+  return err instanceof VaultConflictError || err instanceof VaultBusyError;
+}
+
+/**
  * Backend contract for the Vault app.
  *
  * The app only ever talks to this abstract class (used as the DI token).

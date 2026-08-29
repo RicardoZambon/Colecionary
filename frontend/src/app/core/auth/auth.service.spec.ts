@@ -10,7 +10,7 @@ import { environment } from '../../../environments/environment';
 const SESSION: AuthSession = {
   token: 'jwt-token',
   expiresAt: new Date(Date.now() + 60_000).toISOString(),
-  profile: { name: 'Marcus Keller', email: 'marcus@example.com', initials: 'MK', plan: 'free' },
+  profile: { name: 'Marcus Keller', email: 'marcus@example.com', initials: 'MK', plan: 'free', role: 'Owner' },
 };
 
 describe('AuthService', () => {

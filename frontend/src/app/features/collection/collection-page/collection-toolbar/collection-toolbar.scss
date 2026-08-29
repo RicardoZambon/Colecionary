@@ -50,7 +50,13 @@
     background: var(--panel2);
   }
 
+  /* Reserved whether or not the tick is drawn, so picking a different order
+     does not shuffle every label in the menu sideways. */
   .check {
+    display: grid;
+    place-items: center;
+    width: 13px;
+    flex: none;
     color: var(--accent);
   }
 }
@@ -62,6 +68,8 @@
   overflow: hidden;
 
   button {
+    display: grid;
+    place-items: center;
     padding: 5px 10px;
     font-size: 12px;
     cursor: pointer;
@@ -73,5 +81,27 @@
       background: var(--panel2);
       color: var(--text);
     }
+  }
+}
+
+.col-head {
+  @include mono-label(var(--fs-xs), 0.1em);
+  text-transform: uppercase;
+  padding: 4px 10px 2px;
+}
+
+.col-option {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--panel2);
   }
 }

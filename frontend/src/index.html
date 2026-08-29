@@ -6,6 +6,52 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235453C4'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white'%3E%E2%97%86%3C/text%3E%3C/svg%3E">
+  <!--
+    Theme and language, before the bundle.
+
+    `ThemeService` and `I18nService` write `data-theme` and `lang` from an
+    Angular `effect()`, which cannot run until the app has bootstrapped — so
+    every cold load painted the default (white, English) first and repainted a
+    moment later. That flash is worst for the users who chose a dark theme, i.e.
+    the ones who asked not to be shown a white screen.
+
+    The two values come out of `localStorage`, which is user-writable, and land
+    in an attribute selector and the document language. So neither is
+    interpolated: each is *matched against an allowlist* and discarded if it is
+    not on it. The lists mirror `ThemeId` (styles/_themes.scss +
+    core/state/themes.ts) and `Lang` (core/i18n/langs.ts) and have to move with
+    them; a value missing here costs a flash, never a broken page.
+
+    Dependency-free and synchronous on purpose: anything deferred is a flash by
+    another name.
+  -->
+  <script>
+    (function () {
+      var THEMES = ['devlight', 'devdark', 'terminal', 'arcade', 'hud', 'paper', 'synth'];
+      var LANGS = ['pt-BR', 'en'];
+      var root = document.documentElement;
+      var read = function (key, allowed) {
+        try {
+          var value = localStorage.getItem(key);
+          return allowed.indexOf(value) === -1 ? null : value;
+        } catch (e) {
+          return null;
+        }
+      };
+      var theme = read('vault.theme', THEMES);
+      if (theme) root.setAttribute('data-theme', theme);
+      var lang = read('vault.lang', LANGS);
+      if (!lang) {
+        // Same first-visit rule as I18nService.detect(): any Portuguese counts.
+        try {
+          lang = (navigator.language || '').toLowerCase().indexOf('pt') === 0 ? 'pt-BR' : 'en';
+        } catch (e) {
+          lang = 'en';
+        }
+      }
+      root.lang = lang;
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Press+Start+2P&family=DM+Sans:wght@400;500;600;700&family=Orbitron:wght@500;700&family=Archivo+Black&family=Outfit:wght@400;500;600;700&family=Noto+Sans+Symbols:wght@400;700&family=Noto+Sans+Symbols+2&display=swap" rel="stylesheet">
 </head>

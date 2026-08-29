@@ -1,10 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { GroupNode } from '../../../../core/models';
 import { groupLinkParams } from '../../browse-params';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiChip } from '../../../../shared/ui';
+import { UiChip, UiIcon } from '../../../../shared/ui';
 
 interface Crumb {
   id: string | null;
@@ -34,7 +34,7 @@ export interface ChildChip {
 @Component({
   selector: 'app-group-breadcrumb',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, UiChip],
+  imports: [RouterLink, TPipe, UiChip, UiIcon],
   template: `
     <nav [attr.aria-label]="'breadcrumb.pathAria' | t">
       @for (crumb of crumbs(); track crumb.id; let last = $last) {
@@ -46,7 +46,7 @@ export interface ChildChip {
           [attr.aria-current]="crumb.current ? 'page' : null"
         >{{ crumb.label }}</ui-chip>
         @if (!last) {
-          <span class="sep" aria-hidden="true">›</span>
+          <ui-icon class="sep" name="chevron-right" [size]="11" [strokeWidth]="2.2" />
         }
       }
     </nav>
@@ -76,25 +76,30 @@ export interface ChildChip {
       }
     }
 
-    @if (pending()) {
-      <input
-        class="chip-input"
-        [placeholder]="'breadcrumb.newGroupPlaceholder' | t"
-        [attr.aria-label]="'breadcrumb.newGroupAria' | t"
-        autofocus
-        (keydown)="nameKeydown.emit($event)"
-        (blur)="nameCommit.emit($any($event.target).value)"
-      />
-    } @else {
-      <ui-chip [small]="true" [dashed]="true" (click)="newGroup.emit()">{{ 'breadcrumb.new' | t }}</ui-chip>
-    }
+    @if (canEdit()) {
+      @if (pending()) {
+        <input
+          class="chip-input"
+          [placeholder]="'breadcrumb.newGroupPlaceholder' | t"
+          [attr.aria-label]="'breadcrumb.newGroupAria' | t"
+          autofocus
+          (keydown)="nameKeydown.emit($event)"
+          (blur)="nameCommit.emit($any($event.target).value)"
+        />
+      } @else {
+        <ui-chip [small]="true" [dashed]="true" (click)="newGroup.emit()">{{ 'breadcrumb.new' | t }}</ui-chip>
+      }
 
-    <a
-      class="manage"
-      [routerLink]="['/c', collectionId(), 'settings']"
-      [queryParams]="{ tab: 'groups', g: currentId() }"
-      [title]="'breadcrumb.editGroupsTitle' | t"
-    >{{ 'breadcrumb.editGroups' | t }}</a>
+      <!-- The settings route is refused by canEditGuard anyway, so a reader
+           following this link would be bounced straight back. Better not to
+           offer the round trip. -->
+      <a
+        class="manage"
+        [routerLink]="['/c', collectionId(), 'settings']"
+        [queryParams]="{ tab: 'groups', g: currentId() }"
+        [title]="'breadcrumb.editGroupsTitle' | t"
+      ><ui-icon name="gear" [size]="12" />{{ 'breadcrumb.editGroups' | t }}</a>
+    }
   `,
   styles: `
     /* No border of its own: it shares one bar with the item controls, and the
@@ -117,7 +122,6 @@ export interface ChildChip {
 
     .sep {
       color: var(--muted);
-      font-size: 12px;
     }
 
     /* Separates path from children without a second row or a second label. */
@@ -145,7 +149,13 @@ export interface ChildChip {
       }
     }
 
+    /* The gear used to be a glyph inside the translated label. It is a mark
+       now, so the row has to space it — and the label keeps its own words in
+       both languages. */
     .manage {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--sp-1);
       font-size: 11.5px;
       color: var(--muted);
       white-space: nowrap;
@@ -168,6 +178,22 @@ export interface ChildChip {
   `,
 })
 export class GroupBreadcrumb {
+  /**
+   * Whether to offer the write affordances at all.
+   *
+   * An **input**, not a read of `VaultStore.canEdit`, even though that is where
+   * the answer comes from. Injecting the store into a presentational child drags
+   * `VaultApi` into the TestBed of every component that renders it — the same
+   * reason `CurrencyService` exists as a dependency-free signal rather than
+   * letting the money pipe reach for the store. The page reads it once and
+   * passes it down.
+   *
+   * Defaults to true so an un-passed caller keeps the behaviour it had, and so
+   * this fails open exactly as the store's own computed does.
+   */
+  readonly canEdit = input(true);
+
+
   /** Opening a group keeps the filters and drops the ad-hoc order. */
   protected readonly linkParams = groupLinkParams;
 

@@ -16,10 +16,61 @@
 <p class="eyebrow">03 · Fluxos</p>
 <h1>Fluxos ponta a ponta</h1>
 <p class="lede">
-  Nove caminhos que atravessam a aplicação inteira, do clique ao disco. Cada
+  Quatorze caminhos que atravessam a aplicação inteira, do clique ao disco. Cada
   passo nomeia o arquivo responsável — é o que transforma um relato de suporte
   (“não salvou”) em um ponto único onde olhar.
 </p>
+
+<div class="callout">
+  <span class="label">Um hop que todos compartilham: <code>errorInterceptor</code></span>
+  <p>
+    Toda requisição do app passa por <code>core/api/error.interceptor.ts</code>,
+    registrado <strong>primeiro</strong> na cadeia — o que o torna o último a ver
+    uma resposta com falha, e portanto o que vê o desfecho final. Ele faz três
+    coisas, e cada fluxo abaixo herda as três em vez de repeti-las:
+  </p>
+  <ol class="steps">
+    <li>
+      <strong>Repete leitura, nunca escrita.</strong> Duas tentativas extras, com
+      backoff de 350 ms, só em <code>GET</code> e só nos status
+      <code>0 · 408 · 502 · 503 · 504</code>. Um <code>PUT</code>/<code>POST</code>/
+      <code>DELETE</code> que deu timeout <em>pode ter sido aplicado</em> — o que
+      faltou foi a resposta, não necessariamente a escrita — e repetir é como um
+      delete vira dois, ou como um save guardado por versão é recusado por uma
+      mudança que o próprio app fez. Os demais status não são repetidos porque são
+      <em>respostas</em>, e uma resposta não muda por ser perguntada duas vezes.
+    </li>
+    <li>
+      <strong>Diz uma frase, uma vez, no idioma do usuário.</strong> Uma sentença
+      por classe de falha, preferindo o <code>ProblemDetails</code> do próprio
+      servidor quando existe — a API responde em <code>Accept-Language</code>,
+      então a frase dela já é localizada e é mais específica do que qualquer coisa
+      derivável de um status. <code>ToastService</code> descarta texto duplicado, o
+      que é o que permite ao <code>catch</code> de uma página relatar a mesma falha
+      sem o usuário ler duas vezes.
+    </li>
+    <li>
+      <strong>Fica fora das duas falhas que já têm dono.</strong> Um
+      <code>401</code> é do <code>authInterceptor</code>, que encerra a sessão; um
+      <code>412</code> é do <code>ConflictService</code>, cujo aviso explica que o
+      trabalho não salvo continua na tela. Um toast em cima de qualquer um dos dois
+      seria uma versão mais vaga e efêmera de uma mensagem feita
+      deliberadamente permanente. Duas coisas mais ficam de fora: o
+      <strong>login</strong>, reconhecido pela própria URL, porque relata a recusa
+      no formulário com espaço para explicá-la; e qualquer requisição que carregue
+      <code>SILENT_FAILURE</code> no <code>HttpContext</code>, que hoje é só o
+      <code>SetupService</code>. <strong>Tudo mais recebe toast, inclusive o
+      <code>409</code></strong> — vale saber: o <code>409</code> do
+      <code>ImportPlan</code> é uma <em>pergunta</em>, e a página a renderiza como
+      tal, mas um toast com a frase do servidor aparece junto.
+    </li>
+  </ol>
+  <p>
+    Ele <strong>sempre relança</strong>. Relatar não é tratar: quem chamou ainda
+    tem de decidir se mantém o formulário, desfaz uma edição otimista ou fica
+    parado. Registrado como <a href="decisions.html">ADR-50</a>.
+  </p>
+</div>
 
 <h2 id="setup">1 · Primeiro boot e wizard de configuração</h2>
 
@@ -152,13 +203,25 @@
   </p>
 </div>
 
-<h2 id="bootstrap">3 · Carregar o app</h2>
+<h2 id="bootstrap">3 · Carregar o app — e o que acontece quando falha</h2>
+
+<p>
+  Antes do bundle sequer existir, o script inline no <code>&lt;head&gt;</code> de
+  <code>index.html</code> lê <code>vault.theme</code> e <code>vault.lang</code> do
+  <code>localStorage</code>, <strong>casa cada um contra uma allowlist</strong> e
+  aplica <code>data-theme</code> e <code>lang</code> no <code>&lt;html&gt;</code>.
+  Os dois atributos eram fixos (<code>lang="en" data-theme="devlight"</code>),
+  então todo carregamento frio piscava branco e em inglês antes de repintar —
+  pior justamente para quem escolheu um tema escuro. Nada é interpolado: os
+  valores vêm do usuário e vão para um seletor de atributo.
+</p>
 
 <ol class="steps">
   <li>
-    <code>authGuard</code> libera a rota. O <code>Shell</code> monta topbar,
-    sidebar e os outlets globais (<code>ui-toast</code>,
-    <code>ui-image-focus</code>, <code>app-conflict-notice</code>).
+    <code>authGuard</code> libera a rota. O <code>Shell</code> monta o link de
+    salto, a topbar, a sidebar e os quatro outlets globais
+    (<code>ui-toast</code>, <code>app-conflict-notice</code>,
+    <code>ui-confirm</code>, <code>ui-image-focus</code>).
   </li>
   <li>
     <code>VaultStore.load()</code> dispara cinco chamadas em paralelo:
@@ -180,11 +243,190 @@
   <li>
     <code>ImageFocusService.load()</code> busca <code>GET /api/images/meta</code>
     uma vez e expõe <code>position(id)</code>. Nenhuma superfície calcula
-    porcentagem inline.
+    porcentagem inline. <strong>Esta é a única das duas cargas cuja falha é
+    ignorada de propósito</strong>: enquadramento é cosmético, e sem ele toda
+    imagem renderiza centralizada — que é exatamente o comportamento anterior ao
+    enquadramento. Nunca bloqueie o app por isso.
+  </li>
+  <li>
+    <code>loaded</code> é marcado <strong>só no fim</strong>, e continua assim:
+    meio vault na tela é pior do que uma mensagem dizendo que ele não carregou.
   </li>
 </ol>
 
-<h2 id="navegar">4 · Abrir uma coleção e navegar</h2>
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 700 300" role="img" aria-labelledby="boot-t">
+      <title id="boot-t">Os três estados do main durante e depois da carga</title>
+      <desc>O load resolve para o outlet, ou grava loadError e a casca renderiza
+      um alerta com botão de tentar de novo, que volta ao estado de carregando.</desc>
+
+      <rect class="box accent" x="8" y="122" width="130" height="46" rx="8"/>
+      <text class="t b mid" x="73" y="143">VaultStore</text>
+      <text class="t s mid" x="73" y="159">.load()</text>
+
+      <path class="ln accent" d="M142 145 H206"/><polygon class="fill-accent" points="206,145 198,141 198,149"/>
+
+      <rect class="box" x="212" y="118" width="150" height="54" rx="8"/>
+      <text class="t s mid" x="287" y="140">5 GET em paralelo</text>
+      <text class="t s mid" x="287" y="158">Promise.all</text>
+
+      <path class="ln" d="M366 132 V54 H454"/><polygon class="fill-border" points="454,54 446,50 446,58"/>
+      <text class="t s" x="374" y="46">resolveu</text>
+
+      <rect class="box goodbox" x="460" y="30" width="230" height="48" rx="8"/>
+      <text class="t b mid" x="575" y="51">loaded = true</text>
+      <text class="t s mid" x="575" y="68">&lt;router-outlet /&gt;</text>
+
+      <path class="ln" d="M366 158 V240 H454"/><polygon class="fill-border" points="454,240 446,236 446,244"/>
+      <text class="t s" x="374" y="232">rejeitou (não-401)</text>
+
+      <rect class="box dangerbox" x="460" y="212" width="230" height="60" rx="8"/>
+      <text class="t b mid" x="575" y="233">loadError = frase do servidor</text>
+      <text class="t s mid" x="575" y="250">role=&quot;alert&quot; + botão</text>
+      <text class="t s mid" x="575" y="264">Tentar de novo</text>
+
+      <path class="ln accent dashed" d="M460 262 H150 V168"/>
+      <polygon class="fill-accent" points="150,168 146,176 154,176"/>
+      <text class="t s" x="160" y="286">retryLoad() limpa o erro e tenta de novo</text>
+
+      <rect class="box warnbox" x="8" y="12" width="130" height="72" rx="8"/>
+      <text class="t s mid" x="73" y="34">nenhum dos dois:</text>
+      <text class="t s mid" x="73" y="52">“Carregando…”</text>
+      <text class="t s mid" x="73" y="70">(o estado inicial)</text>
+    </svg>
+  </div>
+</figure>
+
+<div class="callout danger">
+  <span class="label">O spinner infinito, e por que ele existia</span>
+  <p>
+    <code>shell.ts</code> chamava <code>this.store.load().catch(() =&gt;
+    undefined)</code> — a rejeição era <strong>descartada</strong> — enquanto o
+    <code>&lt;router-outlet&gt;</code> estava condicionado a <code>loaded()</code>,
+    que só é marcado no fim de um <code>load()</code> bem-sucedido. Consequência:
+    <strong>qualquer falha que não fosse 401 deixava a palavra “Carregando…” na
+    tela para sempre</strong>, com nada no console e nenhum caminho para frente.
+    Um 401 escapava porque o <code>authInterceptor</code> desloga e redireciona;
+    todo o resto — 500, CORS recusado, timeout, a API fora do ar — não escapava.
+  </p>
+  <p>
+    A correção não é um <code>catch</code> melhor, é um <strong>estado</strong>:
+    <code>load()</code> grava <code>loadError</code> e <em>relança</em>. As duas
+    metades importam. O relance é o que permite ao botão “recarregar” do aviso de
+    conflito saber se funcionou; <code>loadError</code> é o que permite à casca
+    renderizar a falha. O <code>catch</code> em <code>shell.ts</code> continua lá,
+    agora só para não deixar a rejeição solta
+    (<a href="decisions.html">ADR-49</a>).
+  </p>
+</div>
+
+<ol class="steps">
+  <li>
+    <strong>Falhou.</strong> <code>loadError</code> recebe a frase do servidor
+    quando existe uma (o <code>HttpVaultApi</code> já a localizou) e a nossa só
+    como piso. É string e não booleano de propósito: “não consigo alcançar o
+    servidor” e “você não tem acesso a este vault” não são o mesmo problema para
+    quem lê.
+  </li>
+  <li>
+    O <code>&lt;main&gt;</code> renderiza um bloco <code>role="alert"</code> com
+    título, a frase, uma dica e um <code>ui-button</code> ligado a
+    <code>retryLoad()</code>.
+  </li>
+  <li>
+    <strong>Tentar de novo</strong> limpa <code>loadError</code>
+    <em>antes</em> de tentar — assim a casca mostra “carregando” em vez da falha
+    velha — liga <code>retrying</code> (o botão desabilita e diz que está
+    tentando) e devolve um booleano. Ele engole a rejeição: é chamado direto de um
+    clique, e o resultado já está na tela de um jeito ou de outro.
+  </li>
+  <li>
+    Em paralelo, o rodapé da sidebar deixou de mentir.
+    <code>syncState</code> é derivado — <code>conflict</code> &gt;
+    <code>offline</code> &gt; <code>saving</code> &gt; <code>synced</code>, nessa
+    ordem de precedência, que é a ordem em que o usuário precisa saber — e
+    <code>syncStatusKey</code> devolve a chave de mensagem. Era a string fixa
+    <code>'● synced · v0.1 mock API'</code>: um ponto decorativo que nunca mudava,
+    ao lado de uma alegação sobre uma mock API que não existe desde o backend
+    .NET, na única parte do chrome cuja função é dizer se o trabalho do usuário
+    está a salvo. O <code>saving</code> vem de um contador de escritas em voo com
+    <code>finally</code>, que é por que ele nunca pode ficar preso
+    (<a href="decisions.html">ADR-53</a>).
+  </li>
+</ol>
+
+<h2 id="gaveta">4 · Abrir a gaveta de navegação</h2>
+
+<p>
+  Abaixo de <code>$bp-lg</code> (900px) a sidebar não é uma coluna, é uma gaveta
+  fora da tela — e isso é um caminho ponta a ponta de verdade, com uma metade de
+  teclado. Detalhes de layout em
+  <a href="frontend.html#shell">App Angular → a casca responsiva</a>.
+</p>
+
+<ol class="steps">
+  <li>
+    <code>LayoutService</code> espelha a media query com <code>matchMedia</code>
+    em <code>compact</code>. O breakpoint é <strong>duplicado</strong> em script
+    (<code>COMPACT_QUERY</code>) porque uma media query não pode ser lida pelo
+    JavaScript, e a parte que o CSS não expressa é a que importa.
+    <span class="where">frontend: core/state/layout.service.ts</span>
+  </li>
+  <li>
+    Fechada e em modo compacto, a gaveta é <code>aria-hidden="true"</code>
+    <strong>e</strong> <code>inert</code>. As duas: uma nav fora da tela que
+    continua tabulável é uma dúzia de paradas de tabulação invisíveis na frente do
+    conteúdo. Acima do breakpoint nenhum dos dois é aplicado — marcar a coluna como
+    escondida tiraria a navegação inteira de um leitor de tela no desktop.
+  </li>
+  <li>
+    O ☰ da topbar é um <code>ui-button</code> com <code>controlId</code>,
+    <code>ariaExpanded</code> e <code>ariaControls</code> — que caem no
+    <code>&lt;button&gt;</code> <em>interno</em>, porque o host
+    <code>&lt;ui-button&gt;</code> não é focável e não carrega papel. Antes desses
+    inputs a <code>Topbar</code> alcançava o DOM depois do render para escrevê-los.
+  </li>
+  <li>
+    <strong>Abrir move o foco para o primeiro item de navegação</strong>
+    (<code>viewChild('firstLink')</code> num <code>effect</code>). Abrir sem mover
+    o foco deixa o usuário de teclado exatamente onde estava, tabulando por uma
+    página que ele já não vê.
+  </li>
+  <li>
+    <strong>Escape, o scrim e o ✕ fecham e devolvem o foco ao ☰.</strong> O foco
+    tem de <em>voltar</em>: a gaveta fica <code>inert</code> ao fechar, então quem
+    tinha foco lá dentro é despejado no <code>&lt;body&gt;</code> e o próximo Tab
+    recomeça do topo do documento. Os três caminhos concordam por
+    <code>focusNavToggle(document)</code> — um id é o menor contrato possível entre
+    a topbar, a sidebar e o shell, que não podem trocar
+    <code>ElementRef</code>.
+    <span class="where">frontend: layout/nav-focus.ts</span>
+  </li>
+  <li>
+    Escape é escutado no <strong><code>Shell</code></strong>, não na gaveta:
+    precisa funcionar com o foco no scrim, que é irmão da gaveta. O guard em
+    <code>onEscape()</code> é o que impede a tecla de roubar foco numa página onde
+    nenhuma gaveta está aberta.
+  </li>
+  <li>
+    O scrim é um <code>&lt;button&gt;</code> real com <code>aria-label</code>,
+    renderizado <em>só</em> enquanto a gaveta está aberta — assim ele nunca engole
+    um clique na página embaixo — e o fundo dele é derivado de <code>--bg</code>,
+    não um preto literal: um scrim tem de escurecer na direção do chão do tema, ou
+    lê como um buraco no tema escuro e como fuligem no claro.
+  </li>
+  <li>
+    <strong>Seguir um link fecha a gaveta</strong>
+    (<code>NavigationEnd</code>) — sem isso o destino renderiza atrás do menu. E
+    <strong>cruzar o breakpoint fecha também</strong>: girar o telefone cruza, e
+    deixar <code>navOpen</code> ligado faria o menu reaparecer sozinho na próxima
+    vez que a largura diminuísse. <code>navOpen</code> nunca é persistido — gaveta
+    aberta é um gesto, não uma preferência (<a href="decisions.html">ADR-58</a>).
+  </li>
+</ol>
+
+<h2 id="navegar">5 · Abrir uma coleção e navegar</h2>
 
 <p>
   Tudo que o usuário gostaria de ver restaurado num refresh, num voltar ou num
@@ -232,7 +474,7 @@
   </li>
 </ol>
 
-<h2 id="salvar">5 · Salvar um item — o caminho da concorrência</h2>
+<h2 id="salvar">6 · Salvar um item — o caminho da concorrência</h2>
 
 <p>
   Este é o fluxo com mais peças, e o que mais aparece em suporte
@@ -332,9 +574,403 @@
     resposta certa é tentar de novo. <code>ConflictService</code> exibe o aviso e
     <strong>nada do que o usuário digitou é descartado</strong>.
   </li>
+  <li>
+    <strong>O hop do <code>errorInterceptor</code></strong> (o callout no topo
+    desta página) fica de fora deste caminho de propósito nos dois pontos que
+    importam: o <code>412</code> é do <code>ConflictService</code>, e um PUT
+    <strong>nunca</strong> é repetido — um PUT que deu timeout pode ter sido
+    aplicado, e repetir seria pedir um <code>412</code> por uma mudança que o
+    próprio app fez. Tudo o mais que falhar num save ganha uma frase localizada,
+    uma vez, e é relançado para a página decidir o que fazer com o formulário.
+  </li>
+  <li>
+    O contador de escritas em voo do <code>VaultStore</code> sobe e desce em
+    torno de cada uma delas, com <code>finally</code>, o que é o que faz o rodapé
+    da sidebar dizer <em>salvando</em> de verdade — e o que garante que ele nunca
+    fica preso ali. Esse contador não relata nada: relatar falha de HTTP é do
+    interceptor, numa voz só, e uma segunda mensagem no store seria a mesma
+    falha dita duas vezes em palavras mais vagas.
+  </li>
 </ol>
 
-<h2 id="foto">6 · Subir uma foto e enquadrá-la</h2>
+<h2 id="massa">7 · Editar muitos itens de uma vez</h2>
+
+<p>
+  A pergunta que decide a forma inteira deste fluxo: quantas escritas isso é? A
+  resposta é <strong>uma</strong>.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 700 320" role="img" aria-labelledby="bulk-t">
+      <title id="bulk-t">Seleção, interseção com o visível, e um PUT único guardado</title>
+      <desc>A seleção guardada cruza com a lista visível; a interseção alimenta a
+      barra e as ações; o write é um único PUT de documento inteiro sob um
+      If-Match.</desc>
+
+      <rect class="box" x="8" y="16" width="180" height="60" rx="8"/>
+      <text class="t b mid" x="98" y="38">selection: SelectionState</text>
+      <text class="t s mid" x="98" y="56">ids + anchor (id, não índice)</text>
+      <text class="t s mid" x="98" y="70">nunca podada</text>
+
+      <rect class="box" x="228" y="16" width="180" height="60" rx="8"/>
+      <text class="t b mid" x="318" y="38">items() — lista visível</text>
+      <text class="t s mid" x="318" y="56">grupo + filtros + busca</text>
+      <text class="t s mid" x="318" y="70">já ordenada</text>
+
+      <path class="ln" d="M98 80 V108 H198"/>
+      <path class="ln" d="M318 80 V108 H238"/>
+      <rect class="box accent" x="198" y="108" width="200" height="44" rx="8"/>
+      <text class="t b mid" x="298" y="128">selectedIds = interseção</text>
+      <text class="t s mid" x="298" y="144">a única lista que uma ação vê</text>
+
+      <path class="ln accent" d="M298 156 V186"/><polygon class="fill-accent" points="298,186 294,178 302,178"/>
+
+      <rect class="box" x="150" y="190" width="296" height="44" rx="8"/>
+      <text class="t s mid" x="298" y="210">app-bulk-bar → BulkPatch</text>
+      <text class="t s mid" x="298" y="226">applyBulkPatch(...) ou removeItems(...)</text>
+
+      <path class="ln accent" d="M446 212 H524"/><polygon class="fill-accent" points="524,212 516,208 516,216"/>
+
+      <rect class="box goodbox" x="470" y="16" width="222" height="80" rx="8"/>
+      <text class="t b mid" x="581" y="38">1 × PUT /api/collections/{id}</text>
+      <text class="t s mid" x="581" y="56">documento inteiro</text>
+      <text class="t s mid" x="581" y="72">1 × If-Match, 1 × bump de Version</text>
+      <text class="t s mid" x="581" y="88">tudo ou nada</text>
+
+      <path class="ln accent" d="M581 212 V100"/><polygon class="fill-accent" points="581,100 577,108 585,108"/>
+
+      <rect class="box dangerbox" x="470" y="240" width="222" height="60" rx="8"/>
+      <text class="t b mid" x="581" y="262">412 → ConflictService</text>
+      <text class="t s mid" x="581" y="279">seleção mantida, rascunho mantido</text>
+      <text class="t s mid" x="581" y="293">a barra não é destruída</text>
+      <path class="ln dashed" d="M581 236 V240"/>
+
+      <rect class="box warnbox" x="8" y="240" width="440" height="60" rx="8"/>
+      <text class="t b mid" x="228" y="262">o que N × upsertItem teria dado</text>
+      <text class="t s mid" x="228" y="279">40 round-trips estritamente sequenciais, 40 bumps de versão,</text>
+      <text class="t s mid" x="228" y="293">e uma falha no item 7 de 40 irrecuperável — o app não tem undo</text>
+    </svg>
+  </div>
+</figure>
+
+<ol class="steps">
+  <li>
+    <strong>Selecionar.</strong> Cada linha (lista e grade) tem um
+    <code>ui-checkbox</code>; o cabeçalho da lista é tri-estado. Shift+clique — ou
+    Shift+barra de espaço, que o próprio navegador dispara como um click carregando
+    <code>shiftKey</code> — estende um intervalo, calculado por
+    <strong>posição na lista plana visível</strong>. É o que define bem um
+    intervalo que cruza um cabeçalho de faixa: é a corrida de linhas que o leitor
+    <em>vê</em> entre as duas pontas. O âncora é guardado como <em>id</em>, não
+    índice, porque índices se movem no primeiro filtro; um âncora que saiu de vista
+    degrada para um toggle simples.
+    <span class="where">frontend: features/collection/collection-page/item-selection.ts</span>
+  </li>
+  <li>
+    <strong>A seleção não é estado de URL</strong>, e isso é deliberado. Quarenta
+    ids numa query string são mais longos que o resto da URL somada e ilegíveis;
+    toda mudança de filtro navega com <code>replaceUrl</code> e teria de carregá-los
+    ou descartá-los em silêncio; e o que decide é o link compartilhado —
+    <code>?sel=</code> significa que um link pode <em>chegar</em> com quarenta
+    linhas marcadas na frente de uma barra cujo botão da direita as apaga. A
+    seleção é um gesto dentro de uma sessão, não uma descrição do que você está
+    olhando (<a href="decisions.html">ADR-46</a>). Ela sobrevive a uma mudança de
+    filtro porque uma navegação de query param não recria o componente, e é
+    zerada por um <code>effect</code> quando o id da coleção muda.
+  </li>
+  <li>
+    <strong>A interseção com <code>items()</code> é a única lista que qualquer
+    ação recebe.</strong> O conjunto guardado nunca é podado, então estreitar um
+    filtro <em>esconde</em> parte da seleção sem destruí-la — e, muito mais
+    importante, uma edição em massa <strong>não consegue</strong> tocar uma linha
+    que o usuário não vê. A barra conta a interseção, o patch é aplicado sobre a
+    interseção, e o diálogo de exclusão é guardado também na contagem, porque um
+    filtro pode esvaziar a seleção debaixo de um diálogo aberto e “Apagar 0 itens”
+    não é uma pergunta que valha fazer.
+  </li>
+  <li>
+    <strong>Editar.</strong> A barra possui o rascunho; cada campo é um
+    <code>{ touched, value }</code>. <code>touched</code> é o desenho inteiro: sem
+    ele não há como distinguir “deixe estes quarenta anos em paz” de “ponha todos em
+    branco”. Onde os itens discordam, o controle diz “3 valores” em vez de escolher
+    um. Grupo e seção são resolvidos <em>juntos</em> — uma seção pertence a
+    exatamente um grupo, então mover o item para outro grupo obriga a re-resolver a
+    seção dele, senão sobra um id pendurado que renderiza como “sem seção” mas
+    <em>salva</em> como referência morta.
+    <span class="where">frontend: .../collection-page/bulk-bar/, bulk-patch.ts</span>
+  </li>
+  <li>
+    <strong>Campos que o grupo de destino não declara são preservados.</strong> O
+    formulário de item descarta campos não declarados quando salva um item, e ali o
+    usuário está olhando o conjunto de campos daquele item enquanto isso acontece.
+    Fazer o mesmo em quarenta itens destruiria em silêncio dados que nenhuma tela
+    mencionou: mover uma corrida para um grupo que declara um campo a menos e todo
+    número de catálogo dela desaparece (<a href="decisions.html">ADR-45</a>). Um
+    campo <em>mencionado</em> com valor em branco é removido — essa é a forma de
+    limpar.
+  </li>
+  <li>
+    <strong>Escrever.</strong> Um <code>PUT /api/collections/{id}</code> com o
+    documento inteiro, sob <strong>um</strong> <code>If-Match</code> lido
+    sincronamente antes do primeiro await, como todo save. O servidor mescla cada
+    item sob aquela precondição, então é atômico: <em>tudo</em> entra ou
+    <em>nada</em> entra.
+  </li>
+  <li>
+    <strong>Por que não N <code>upsertItem</code>.</strong> Cada um bumparia a
+    versão da coleção, o que faz das quarenta chamadas quarenta round-trips
+    estritamente sequenciais; uma falha no item 7 de 40 é irrecuperável num app sem
+    undo; e um escritor concorrente recusaria o resto com um <code>412</code> que o
+    usuário não tem como mapear em “quais 22 passaram”
+    (<a href="decisions.html">ADR-42</a>).
+  </li>
+  <li>
+    <strong>Apagar é o mesmo PUT com as linhas filtradas fora</strong>, e
+    deliberadamente <em>não</em> <code>DELETE /api/collections/{cid}/items/{id}</code>
+    por item: aquele endpoint não carrega precondição nenhuma, por desenho
+    (<a href="decisions.html">ADR-08</a>) — o que está certo para uma exclusão
+    deliberada e errado para uma varredura de quarenta.
+  </li>
+  <li>
+    <strong>Antes de escrever, o reorder pendente é cancelado.</strong> O payload
+    foi construído a partir de <code>sourceItems()</code>, que já inclui qualquer
+    reordenação manual não salva — deixar a escrita debounced disparar depois
+    reporia os itens pré-edição e desfaria tudo isto.
+  </li>
+  <li>
+    <strong>Conflito.</strong> Um <code>VaultConflictError</code> não gera toast:
+    a seleção é mantida, a barra não é destruída — então nada do que o usuário
+    digitou é perdido — e o aviso do <code>ConflictService</code> na casca diz mais
+    sobre um <code>412</code> do que um toast diria. Qualquer outro erro recebe a
+    frase do servidor num toast. Sucesso limpa a seleção e diz quantos itens
+    mudaram.
+  </li>
+</ol>
+
+<h2 id="apagar-item">8 · Apagar um item, e desfazer</h2>
+
+<p>
+  Isto era <strong>um clique não confirmado</strong> que destruía um item e
+  navegava para longe, sem diálogo em lugar nenhum do app e sem undo em lugar
+  nenhum tampouco. As duas metades existem agora — e o undo é a mais importante,
+  porque é ele que permite ao diálogo ser uma frase só em vez de um formulário
+  com checkbox e confirmação digitada. Uma pergunta barata de responder errado é
+  aceitável quando a resposta errada é reversível
+  (<a href="decisions.html">ADR-52</a>).
+</p>
+
+<ol class="steps">
+  <li>
+    <code>await confirm.ask({ …, tone: 'danger' })</code>. O
+    <code>ConfirmService</code> guarda a pergunta num signal, o
+    <code>ui-confirm</code> do shell a renderiza como <code>alertdialog</code>, e a
+    página só espera um booleano. Tom <code>danger</code> põe o <strong>foco
+    inicial em Cancelar</strong>: tudo que chega aqui chegou por um clique, e um
+    clique é muitas vezes o rabo de um reflexo de teclado.
+    <span class="where">frontend: core/state/confirm.service.ts, shared/ui/confirm/</span>
+  </li>
+  <li>
+    <strong>O <code>Item</code> inteiro é retido antes da chamada</strong>, não
+    lido depois — depois ele não está mais no store, e não haveria o que repor. É o
+    objeto todo, então um restore traz de volta as cópias, as tags, os valores de
+    campo, o grupo, a seção e os <code>photoIds</code>. Os bytes das imagens nunca
+    foram tocados pelo delete, então as fotos voltam com ele.
+  </li>
+  <li>
+    <code>VaultStore.deleteItem</code> → <code>DELETE
+    /api/collections/{cid}/items/{id}</code>. Sem precondição no servidor, mas
+    <strong>ainda move a versão</strong> — e o token que ele responde é guardado, ou
+    o próximo save seria recusado por uma mudança que este app fez.
+  </li>
+  <li>
+    <strong>Falhou:</strong> nenhuma navegação. Sair para uma lista que ainda
+    mostra o item leria como “funcionou, mas continua lá”. O motivo já está na tela
+    (o <code>errorInterceptor</code> relatou), então a página adiciona só o que
+    apenas ela sabe.
+  </li>
+  <li>
+    <strong>Funcionou:</strong> um toast carregando um <code>ToastAction</code>
+    rotulado <strong>Desfazer</strong>, e a navegação de volta para a coleção
+    preservando a query string.
+  </li>
+  <li>
+    <strong>Desfazer</strong> chama <code>upsertItem</code> com o item retido —
+    uma escrita guardada por versão como qualquer outra. O delete moveu a coleção e
+    o store guardou o token que ela respondeu, então um undo imediato passa.
+  </li>
+</ol>
+
+<div class="callout warn">
+  <span class="label">Dois limites honestos do undo</span>
+  <p>
+    <strong>Se alguém mais salvou aquela coleção no meio, a escrita é
+    recusada.</strong> O <code>ConflictService</code> levanta o aviso que explica,
+    e o item <strong>continua apagado</strong> — por isso a página adiciona um
+    toast de erro dizendo que o undo em si falhou. “Recarregue e tente de novo”
+    não traz um item de volta, e o usuário não pode ficar supondo que trouxe.
+  </p>
+  <p>
+    <strong>Um item restaurado aterrissa no fim do grupo dele.</strong> Ordem
+    manual é a ordem do array de <code>collection.items</code> e nada persiste um
+    índice por item (<a href="decisions.html">ADR-19</a>), então não existe a linha
+    de onde ele saiu para onde voltar. Todo o resto sobre ele volta idêntico.
+  </p>
+</div>
+
+<h2 id="mover-grupo">9 · Mover um grupo</h2>
+
+<p>
+  Um move <em>parece</em> inofensivo — o grupo mantém o id, o nome, os itens, as
+  seções e os campos que ele próprio declara — e não é.
+  <strong><code>fieldsFor</code> mescla toda a ancestralidade e
+  <code>sortFor</code> pega o ancestral mais próximo que declara ordem</strong>,
+  então arrastar um galho pela árvore <em>re-declara em silêncio</em> quais campos
+  todo item embaixo dele exibe e em que ordem eles vêm. E nada avisa depois, porque
+  nada <em>parece</em> quebrado: os valores simplesmente não são mostrados. É para
+  isso que a prévia existe.
+</p>
+
+<ol class="steps">
+  <li>
+    Um <code>&lt;select&gt;</code> na aba Grupos, e não um arrastar. As opções são
+    filtradas por <code>canReparent</code>, então <strong>um alvo ilegal nunca é
+    oferecido</strong> — o próprio grupo e a subárvore dele — em vez de ser recusado
+    depois do gesto. Esse é o motivo de ser um select: uma lista pode omitir o que
+    não pode aceitar, um alvo de drop não pode
+    (<a href="decisions.html">ADR-43</a>). A hierarquia é indentada com o mesmo
+    <code>↳</code> do seletor de grupo do formulário de item, para uma árvore ler
+    igual onde quer que seja oferecida.
+    <span class="where">frontend: core/utils/groups.util.ts → canReparent</span>
+  </li>
+  <li>
+    A escolha vira <code>pendingParent</code> e <strong>não é aplicada</strong>.
+    Selecionar outro grupo abandona a pendência em vez de carregá-la; escolher o pai
+    que o grupo já tem a cancela.
+  </li>
+  <li>
+    <strong>Ler a prévia</strong>, montada por <code>groupMoveImpact</code>:
+    <ul>
+      <li>os campos que a subárvore passa a <strong>herdar</strong>;</li>
+      <li>cada campo que ela <strong>deixa de exibir</strong>, com
+          <em>quantos itens guardam valor para ele</em> — “12 itens têm valor em
+          «Editora», que este grupo não vai mais exibir”. A contagem é por item e
+          não pela subárvore inteira: um descendente que redeclara o campo continua
+          exibindo, então os itens dele não são afetados e não podem ser
+          contados;</li>
+      <li>a <strong>ordem</strong> que o galho vai herdar, e só quando ela muda de
+          fato — um grupo que declara a própria ordem não é afetado por um
+          move;</li>
+      <li>um <strong>irmão homônimo</strong> no destino, avisado e nunca
+          bloqueado: nome de irmão não é chave — identidade é o id da coleção
+          inteira — e recusar seria recusar um estado intermediário legítimo de um
+          PUT de documento inteiro.</li>
+    </ul>
+    <span class="where">frontend: core/utils/group-move.util.ts</span>
+  </li>
+  <li>
+    <strong>Nada é destruído.</strong> Um valor <code>custom</code> vive no item
+    chaveado por <em>nome</em> de campo, então um valor cujo campo deixou de ser
+    declarado fica <strong>dormente, não apagado</strong> — e mover o grupo de volta
+    o traz de novo para a tela. É isso que faz da prévia uma prévia, e não a
+    confirmação de uma perda.
+  </li>
+  <li>
+    Confirmar passa pelo <strong>mesmo caminho de draft debounced</strong> de toda
+    outra edição desta página: <code>mutateGroup</code> → um PUT de documento
+    inteiro guardado por <code>If-Match</code>. Não é caso especial.
+  </li>
+  <li>
+    <strong>Seções e itens não precisam de migração.</strong> Um move muda o
+    <code>parentId</code> do grupo, não o id dele, então toda seção continua
+    apontando para o grupo para que sempre apontou e todo item continua apontando
+    para a mesma seção. Nada aqui deveria ganhar um laço que “conserta” isso.
+  </li>
+  <li>
+    O seletor é re-semeado depois do commit
+    (<code>expandedFor = null</code>): o galho onde o grupo acabou de aterrissar
+    está dobrado, e sem isso o grupo selecionado não está em nenhum lugar da tela.
+  </li>
+</ol>
+
+<h2 id="apagar-grupo">10 · Apagar um grupo</h2>
+
+<p>
+  Isto <strong>substitui uma recusa</strong>. Apagar um galho era bloqueado no
+  instante em que existisse qualquer item em qualquer lugar embaixo dele (“mova-os
+  primeiro”) — seguro, e um beco sem saída, porque nada no app movia itens em
+  massa, então a instrução não tinha como ser seguida. E o mesmo código apagava uma
+  subárvore <em>vazia</em> em silêncio, sem confirmação e sem contagem alguma na
+  tela, que era a metade genuinamente perigosa.
+</p>
+
+<ol class="steps">
+  <li>
+    O diálogo <strong>declara as contagens reais</strong>: os nomes dos
+    sub-grupos (os quatro primeiros, depois “e mais N”), quantos itens existem em
+    toda a subárvore, e quantas seções vão embora.
+    <span class="where">frontend: .../collection-settings-page/group-delete-dialog/</span>
+  </li>
+  <li>
+    Três disposições, <strong>nada pré-selecionado</strong> — uma escolha
+    irreversível não é o que um Enter distraído deve responder:
+    <ol class="steps">
+      <li>
+        <strong>Manter o conteúdo</strong> (<code>reparent</code>). Nada se
+        perde: os sub-grupos são refilados sob o pai do grupo apagado (ou na raiz),
+        e os itens arquivados diretamente nele vão para esse pai (ou ficam sem
+        grupo). Oferecida primeiro por isso. O refile passa pelo <em>mesmo</em>
+        <code>canReparent</code> do seletor de pai, então existe exatamente uma
+        resposta no app para “este grupo pode morar aqui?”.
+      </li>
+      <li>
+        <strong>Desarquivar os itens</strong> (<code>unfile</code>): os
+        sub-grupos vão, e todo item da subárvore fica com
+        <code>groupId: ''</code> — <strong>nunca <code>UNGROUPED_ID</code></strong>.
+        O sentinela do balde “sem grupo” é uma chave por que se lê, não um valor que
+        se guarda; gravá-lo poria no item um id de grupo a que nenhum grupo responde.
+      </li>
+      <li>
+        <strong>Apagar os itens também</strong> (<code>delete</code>), a única
+        irreversível — e <strong>a contagem vai no próprio botão</strong>.
+        “Excluir” num diálogo com três desfechos não diz qual deles está a ponto
+        de acontecer.
+      </li>
+    </ol>
+  </li>
+  <li>
+    <strong>Os números lidos e a mudança feita saem da mesma função.</strong>
+    <code>groupDeletePlan</code> devolve as duas coisas — as contagens que o diálogo
+    renderiza e as três listas (<code>groups</code>, <code>sections</code>,
+    <code>items</code>) que a página entrega a um único <code>mutate()</code>. Duas
+    funções acabariam discordando, e o momento em que isso nunca pode acontecer é o
+    em que alguém lê “12 itens” e aperta um botão que apaga quatorze
+    (<a href="decisions.html">ADR-44</a>).
+    <span class="where">frontend: core/utils/group-delete.util.ts</span>
+  </li>
+  <li>
+    <strong>Em toda disposição, as seções dos grupos removidos vão com eles</strong>
+    e todo item sobrevivente que apontava para uma delas tem o
+    <code>sectionId</code> limpo. Uma referência a algo apagado já lê como “sem
+    seção” de qualquer jeito — mas ela pega carona em cada PUT dali para frente e
+    voltaria à vida no dia em que um id se repetisse.
+  </li>
+  <li>
+    <strong>Não há undo, então o diálogo diz isso</strong> — e oferece o export
+    <em>antes</em>, na mesma linha, porque o export por coleção é a única rede de
+    segurança que existe. O botão de export desabilita enquanto o arquivo está
+    sendo gerado.
+  </li>
+  <li>
+    Aplicar é um <code>mutate()</code>, logo o mesmo PUT de documento inteiro
+    guardado, com um toast que diz qual disposição aconteceu. Se o
+    <code>?g=</code> aponta para um id que o plano <em>de fato</em> removeu, a
+    seleção é limpa — em “manter o conteúdo” um sub-grupo selecionado sobrevive, e
+    por isso só os ids removidos contam.
+  </li>
+</ol>
+
+<h2 id="foto">11 · Subir uma foto e enquadrá-la</h2>
 
 <div class="callout warn">
   <span class="label">São dois atos separados — e precisam continuar sendo</span>
@@ -391,9 +1027,18 @@
     padrão do servidor dá duas URLs — e duas entradas de cache — para a mesma
     foto.
   </li>
+  <li>
+    <strong>O hop do <code>errorInterceptor</code>:</strong> um upload é
+    <code>POST</code>, então <strong>não é repetido</strong> — um upload que deu
+    timeout pode ter gravado o arquivo, e repetir daria dois ids para a mesma
+    foto, o segundo deles sem referência nenhuma e esperando o coletor. O
+    <code>PUT</code> do focal também não é. As duas falhas ganham uma frase
+    localizada uma vez, e a fila de upload continua sendo sequencial por
+    arquivo, então uma falha no arquivo 3 de 6 não derruba os outros cinco.
+  </li>
 </ol>
 
-<h2 id="store">7 · Instanciar um checklist do Store</h2>
+<h2 id="store">12 · Instanciar um checklist do Store</h2>
 
 <ol class="steps">
   <li>
@@ -422,7 +1067,7 @@
   </li>
 </ol>
 
-<h2 id="arquivo">8 · Exportar e reimportar um arquivo</h2>
+<h2 id="arquivo">13 · Exportar e reimportar um arquivo</h2>
 
 <pre><code>manifest.json             <span class="c"># o que é este arquivo, e qual versão de layout o escreveu</span>
 collections.json          <span class="c"># mesma forma de GET /api/collections</span>
@@ -515,9 +1160,19 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     devolve. Se algo se moveu no meio, o import responde 409 com um plano novo —
     mesmo canal da primeira pergunta.
   </li>
+  <li>
+    <strong>O hop do <code>errorInterceptor</code>:</strong> tanto o export
+    (<code>GET</code>, mas de um <code>Blob</code>) quanto o import
+    (<code>POST</code> com o zip no corpo cru) são chamadas únicas e longas. O
+    import <strong>não é repetido</strong>, pelo motivo geral — uma escrita que
+    deu timeout pode ter sido aplicada, e reenviar um arquivo poderia duplicar
+    coleções. E o <code>409</code> do <code>ImportPlan</code> ganha um toast além
+    do diálogo, porque não está na lista de exceções do interceptor: vale saber
+    ao ler um relato de suporte.
+  </li>
 </ol>
 
-<h2 id="gc">9 · Coleta de imagens (background)</h2>
+<h2 id="gc">14 · Coleta de imagens (background)</h2>
 
 <p>
   Detalhado em <a href="images.html#coletor">Imagens e coletor</a>. Em resumo, e
@@ -549,6 +1204,42 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     bytes, espelhando como a imagem foi criada.
   </li>
 </ol>
+
+<h2 id="etiqueta">15 · Navegar por etiqueta</h2>
+
+<p>
+  Abrir um item, clicar numa etiqueta, e a coleção fica filtrada por ela.
+</p>
+
+<ol>
+  <li>A página do item renderiza cada etiqueta como <code>ui-chip</code> com
+      link, apontando para a coleção com <code>{ tag }</code>. O chip usa
+      <code>queryParamsHandling="merge"</code>, então o clique estreita
+      <em>a lista de onde o item foi aberto</em> — grupo, visão e os outros
+      filtros seguem junto — em vez de recomeçar na coleção inteira.</li>
+  <li><code>readTag</code> confere o valor contra as etiquetas da coleção. Uma
+      etiqueta que nenhum item carrega vira <code>null</code>: “sem filtro”, e
+      não “nada encontrado”.</li>
+  <li><code>visibleItems</code> aplica <code>hasTag</code> como um predicado a
+      mais, ao lado de condição, situação, seção e busca. Não é um segundo
+      caminho de código.</li>
+  <li>O chip <code>#etiqueta ×</code> aparece na linha de filtros e é a saída;
+      <code>clearFilters()</code> também limpa a etiqueta, senão o estado vazio
+      ofereceria uma saída que não funciona.</li>
+</ol>
+
+<div class="callout">
+  <span class="label">A consequência que vale escrever</span>
+  <p>
+    Como <code>?tag=</code> é estado de URL e todo link dentro da coleção
+    preserva a query string, a lista filtrada é compartilhável, sobrevive a um
+    recarregamento, e abrir um item dela e voltar cai na mesma lista — as setas
+    <code>←</code>/<code>→</code> passam a andar pelo conjunto filtrado. O
+    trade-off: uma etiqueta digitada errado mostra tudo em silêncio, em vez de
+    uma página vazia. Escolhido porque “nada encontrado” não deixa o leitor
+    distinguir se o problema é a URL ou a coleção.
+  </p>
+</div>
 
 <div class="pagenav"></div>
 </main>

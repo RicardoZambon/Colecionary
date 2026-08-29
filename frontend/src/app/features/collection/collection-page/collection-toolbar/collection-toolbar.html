@@ -17,22 +17,49 @@
           (click)="pickSort(option); sortMenu.close()"
         >
           <span>{{ option.label }}</span>
-          <span class="check" aria-hidden="true">@if (activeSortId() === option.id) { ✓ }</span>
+          <span class="check">
+            @if (activeSortId() === option.id) {
+              <ui-icon name="check" [size]="13" />
+            }
+          </span>
         </button>
       }
     </ng-container>
   </ui-dropdown>
 }
 
-<div class="view-toggle" role="group" [attr.aria-label]="'toolbar.viewAria' | t">
-  @for (option of views; track option.id) {
-    <button
-      type="button"
-      [class.active]="view() === option.id"
-      [attr.aria-pressed]="view() === option.id"
-      [attr.aria-label]="option.label | t"
-      [title]="option.label | t"
-      (click)="view.set(option.id)"
-    >{{ option.glyph }}</button>
-  }
-</div>
+@if (showColumns()) {
+  <ui-dropdown [width]="220">
+    <button ddTrigger type="button" class="sort-trigger">{{ 'columns.trigger' | t }}</button>
+    <ng-container ddPanel>
+      <span class="col-head">{{ 'columns.aria' | t }}</span>
+      <!-- Stays open across several toggles: hiding three of eight columns is
+           one decision, not three trips to a menu. -->
+      @for (field of fields(); track field.name) {
+        <label class="col-option">
+          <ui-checkbox
+            [checked]="isColumnVisible(field.name)"
+            [ariaLabel]="'columns.showField' | t: { name: field.name }"
+            (picked)="columnToggled.emit({ name: field.name, visible: $event.checked })"
+          />
+          <span>{{ field.name }}</span>
+        </label>
+      }
+    </ng-container>
+  </ui-dropdown>
+}
+
+@if (showViews()) {
+  <div class="view-toggle" role="group" [attr.aria-label]="'toolbar.viewAria' | t">
+    @for (option of views; track option.id) {
+      <button
+        type="button"
+        [class.active]="view() === option.id"
+        [attr.aria-pressed]="view() === option.id"
+        [attr.aria-label]="option.label | t"
+        [title]="option.label | t"
+        (click)="view.set(option.id)"
+      ><ui-icon [name]="option.icon" [size]="14" /></button>
+    }
+  </div>
+}

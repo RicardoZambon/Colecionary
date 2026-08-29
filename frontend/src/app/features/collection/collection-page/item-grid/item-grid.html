@@ -18,14 +18,27 @@
         class="item-card"
         [class.item-card--wanted]="!isOwned(entry.item)"
         [class.dragging]="drag.index() === entry.index"
-        [attr.draggable]="manual() ? true : null"
+        [attr.draggable]="manual() && canEdit() ? true : null"
         (dragstart)="drag.start($event, entry.index)"
         (dragover)="drag.over($event)"
         (drop)="onDrop($event, entry.index)"
         (dragend)="drag.end()"
         [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
         queryParamsHandling="preserve"
+        [class.item-card--picked]="isSelected(entry.item)"
       >
+        <!-- Over the corner, and swallowing its own click: the card is the
+             link, so without that a tick would navigate. Absent for a reader,
+             because selecting is only ever a prelude to editing. -->
+        @if (canEdit()) {
+          <span class="item-card__pick" (click)="contain($event)">
+            <ui-checkbox
+              [checked]="isSelected(entry.item)"
+              [ariaLabel]="selectLabel(entry.item)"
+              (picked)="pick(entry.item, $event)"
+            />
+          </span>
+        }
         <div class="item-card__img" [class.dim]="!isOwned(entry.item)">
           @if (fieldChip(entry.item); as chip) {
             <span class="item-card__chip">
@@ -42,7 +55,15 @@
               [style.background-position]="focus.position(entry.item.photoIds[0])"
             ></div>
           } @else {
-            img: {{ entry.item.img }}
+            <!-- No photograph yet. A quiet mark on a flat panel, not the
+                 filename this used to print on a diagonal-striped tile — that
+                 was a debug line, in English, on the primary browsing surface. -->
+            <span
+              class="item-card__nophoto"
+              role="img"
+              [attr.aria-label]="'item.noPhoto' | t"
+              [title]="'item.noPhoto' | t"
+            ><ui-icon name="diamond" [size]="26" /></span>
           }
         </div>
         <div class="item-card__body">
@@ -52,7 +73,7 @@
             @if (entry.item.copies.length > 1) {
               <!-- Spelled out, not only folded into the condition badge: how many
                    you hold is the thing you came to check. -->
-              <span class="item-card__copies">{{ 'itemGrid.copies' | t: { n: entry.item.copies.length } }}</span>
+              <span class="item-card__copies">{{ copiesLabel(entry.item.copies.length) }}</span>
             }
           </div>
           <div class="item-card__foot">
@@ -60,7 +81,7 @@
             <ui-badge [tone]="badgeTone(entry.item)">{{ badgeLabel(entry.item) }}</ui-badge>
           </div>
         </div>
-        @if (manual()) {
+        @if (manual() && canEdit()) {
           <!-- Bounds are the whole list's, not the chunk's: a move that crosses
                a heading is how an item changes section, so the last card of one
                run must still offer "down". -->
@@ -74,12 +95,14 @@
       </ui-card>
     }
 
-    @if (lastChunk) {
+    @if (lastChunk && canEdit()) {
       <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">{{ 'itemGrid.addItem' | t }}</a>
     }
   </div>
 } @empty {
   <div class="items-grid">
-    <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">{{ 'itemGrid.addItem' | t }}</a>
+    @if (canEdit()) {
+      <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">{{ 'itemGrid.addItem' | t }}</a>
+    }
   </div>
 }

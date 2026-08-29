@@ -16,14 +16,18 @@
       [queryParams]="{ v: 'grid' }"
       queryParamsHandling="merge"
     >
-      <span class="tile__glyph" aria-hidden="true">▦</span>
+      <ui-icon class="tile__glyph" name="grid" [size]="22" [strokeWidth]="1.6" />
       {{ filedHere() }}
     </a>
   }
 
-  <button type="button" class="tile tile--new" (click)="newGroup.emit()">{{ 'groupDashboard.newGroup' | t }}</button>
+  @if (canEdit()) {
+    <button type="button" class="tile tile--new" (click)="newGroup.emit()">{{ 'groupDashboard.newGroup' | t }}</button>
+  }
 </div>
 
 @if (!cards().length && !directCount()) {
-  <div class="empty">{{ 'groupDashboard.empty' | t }}</div>
+  <!-- One shape for every "nothing here" in the app. A hand-rolled div drifts:
+       this one and the collection page's were byte-identical CSS in two files. -->
+  <ui-empty icon="grid" [title]="'groupDashboard.emptyTitle' | t" [body]="'groupDashboard.empty' | t" />
 }

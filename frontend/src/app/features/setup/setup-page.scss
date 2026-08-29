@@ -22,6 +22,9 @@
   gap: 8px;
 
   &__mark {
+    /* The wordmark and its subtitle share a baseline; a drawn mark has none, so
+       it centres against the line instead of hanging below it. */
+    align-self: center;
     color: var(--accent);
   }
 
@@ -102,11 +105,13 @@
    as a stray line of text. `.bad` is the default tone. */
 .note {
   display: flex;
-  align-items: baseline;
+  /* Top, not baseline: the mark belongs to the first line of a message that may
+     run to three, and an inline-flex box has no baseline to align to anyway. */
+  align-items: flex-start;
   gap: 8px;
   margin: 0;
   padding: 10px 12px;
-  border: var(--bw) dashed var(--warn);
+  border: var(--bw) dashed var(--danger);
   border-radius: var(--radius);
   font-size: 12.5px;
   line-height: 1.5;
@@ -117,9 +122,8 @@
   }
 
   &__icon {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--warn);
+    margin-top: 3px;
+    color: var(--danger);
   }
 
   &.ok &__icon {

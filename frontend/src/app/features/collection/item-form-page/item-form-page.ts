@@ -1,25 +1,35 @@
+import { DOCUMENT } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
 import { I18nService, MessageKey } from '../../../core/i18n';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
-import { VaultConflictError } from '../../../core/api/vault-api';
+import { isReportedWriteFailure } from '../../../core/api/vault-api';
+import { ConfirmService } from '../../../core/state/confirm.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
-import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
+import { CurrencyService } from '../../../core/state/currency.service';
+import { isOwned, newCopy, ownedValue, paidTotal, syncWantedTag } from '../../../core/utils/copies.util';
+import { tagsInUse } from '../../../core/utils/tags.util';
+import { currencyOf } from '../../../core/utils/currency.util';
 import { fieldsFor, flattenTree, groupById, resolveGroupId } from '../../../core/utils/groups.util';
 import { resolveSectionId, sectionsOf } from '../../../core/utils/sections.util';
+import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import { groupLinkParams } from '../browse-params';
 import { TPipe } from '../../../shared/pipes/t.pipe';
 import {
   SelectOption,
   UiButton,
   UiCard,
+  UiDateInput,
   UiField,
+  UiIcon,
   UiPhotoManager,
   UiSelect,
+  UiSkeleton,
+  UiTagInput,
   UiTextInput,
   UiTextarea,
 } from '../../../shared/ui';
@@ -50,6 +60,29 @@ interface CopyDraft {
   notes: string;
 }
 
+/**
+ * Whether a copy draft holds anything a person typed.
+ *
+ * `condition` and `status` are excluded on purpose: every new copy arrives with
+ * both already set, so counting them would make an untouched blank copy look
+ * like it had content and put a pointless question in front of every removal.
+ */
+function copyDraftHasContent(copy: CopyDraft): boolean {
+  // The numbers are parsed, not tested as strings. `newCopy()` starts at
+  // `price: 0` and `toDraft` stringifies that to "0", so reading the raw string
+  // made every freshly added copy look like it held data — which would have put
+  // a question in front of every single removal and taught people to dismiss it
+  // without reading. Zero is "not set" here, exactly as it is for an item's
+  // estimate; the cost is that a copy whose only fact is "paid nothing" is
+  // removed without asking.
+  return Boolean(
+    parseNumber(copy.value) ||
+      parseNumber(copy.price) ||
+      copy.acquiredOn.trim() ||
+      copy.notes.trim(),
+  );
+}
+
 function toDraft(copy: ItemCopy): CopyDraft {
   return {
     id: copy.id,
@@ -78,13 +111,18 @@ function fromDraft(draft: CopyDraft): ItemCopy {
   selector: 'app-item-form-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    MoneyPipe,
     RouterLink,
     TPipe,
     UiButton,
     UiCard,
+    UiDateInput,
     UiField,
+    UiIcon,
     UiPhotoManager,
     UiSelect,
+    UiSkeleton,
+    UiTagInput,
     UiTextInput,
     UiTextarea,
   ],
@@ -93,11 +131,17 @@ function fromDraft(draft: CopyDraft): ItemCopy {
 })
 export class ItemFormPage {
   protected readonly store = inject(VaultStore);
+
+  /** The vault is still in flight — not the same fact as 'no such collection'. */
+  protected readonly loading = computed(() => !this.store.loaded());
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
   private readonly router = inject(Router);
+  private readonly currencies = inject(CurrencyService);
+  private readonly document = inject(DOCUMENT);
 
   readonly collectionId = input.required<string>();
   /** Present when editing, absent on the "new item" route. */
@@ -126,6 +170,14 @@ export class ItemFormPage {
   );
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
+
+  /**
+   * Whether this collection already has a write in flight, so Save can stop
+   * offering itself. An item write is guarded by the *collection's* version, so
+   * a second one sent before the first answers quotes a token that is about to
+   * move and is refused — as a conflict with nobody.
+   */
+  protected readonly saving = computed(() => this.store.saving(this.collectionId()));
   protected readonly editing = computed(() =>
     this.collection()?.items.find(i => i.id === this.itemId()),
   );
@@ -140,6 +192,41 @@ export class ItemFormPage {
   protected readonly copies = signal<CopyDraft[]>([]);
   protected readonly custom = signal<Record<string, string>>({});
   protected readonly photoIds = signal<string[]>([]);
+  /**
+   * The item's whole tag list, the derived `wanted` one included.
+   *
+   * Kept whole rather than pre-filtered because `syncWantedTag` runs over the
+   * saved item and expects to find it: dropping it here would make every save
+   * from this form look like the item had left the wantlist.
+   */
+  protected readonly tags = signal<readonly string[]>([]);
+
+  /**
+   * The draft as it stood when the form opened, or when it was last saved.
+   *
+   * Dirtiness is a comparison against a snapshot rather than a flag set by every
+   * handler: a flag has to be set in ten places and is wrong the first time
+   * someone adds an eleventh, and it also cannot tell that a user typed a
+   * character and deleted it again. Serialising is cheap — this is a form, not a
+   * list — and it is exact.
+   */
+  private readonly baseline = signal('');
+
+  protected readonly snapshot = computed(() =>
+    JSON.stringify({
+      name: this.name().trim(),
+      description: this.description().trim(),
+      groupId: this.groupId(),
+      sectionId: this.sectionId(),
+      year: this.year().trim(),
+      value: this.value().trim(),
+      copies: this.copies().map(fromDraft),
+      custom: this.custom(),
+      photoIds: this.photoIds(),
+    }),
+  );
+
+  protected readonly dirty = computed(() => this.snapshot() !== this.baseline());
 
   private initializedFor: string | null = null;
 
@@ -166,6 +253,11 @@ export class ItemFormPage {
       this.copies.set(item ? item.copies.map(toDraft) : [toDraft(newCopy())]);
       this.custom.set(Object.fromEntries((item?.custom ?? []).map(c => [c.key, c.value])));
       this.photoIds.set([...(item?.photoIds ?? [])]);
+      this.tags.set([...(item?.tags ?? [])]);
+      // Seeded after every field, so an untouched form is clean. Read through
+      // `untracked` is unnecessary here: the effect already depends on all of
+      // them by having just written them.
+      this.baseline.set(this.snapshot());
     });
   }
 
@@ -197,8 +289,23 @@ export class ItemFormPage {
   /**
    * The manager hands back the whole list after any edit — added, reordered,
    * made cover, removed — so the form has one way in rather than four.
+   *
+   * A shorter list is the only one of those four that loses something: putting
+   * a photo back means finding the file and uploading it again, because the
+   * bytes survive their grace period but nothing in the app offers them back.
+   * So the question is asked on the shrink and on nothing else — a reorder that
+   * stopped to ask would be a confirmation people learn to dismiss.
    */
-  protected setPhotos(ids: string[]): void {
+  protected async setPhotos(ids: string[]): Promise<void> {
+    if (ids.length < this.photoIds().length) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'confirm.removePhoto.title',
+        bodyKey: 'confirm.removePhoto.body',
+        confirmKey: 'confirm.removePhoto.confirm',
+        tone: 'danger',
+      });
+      if (!confirmed) return;
+    }
     this.photoIds.set(ids);
   }
 
@@ -217,9 +324,37 @@ export class ItemFormPage {
     this.copies.update(copies => [...copies, toDraft(newCopy())]);
   }
 
-  protected removeCopy(index: number): void {
+  /**
+   * Removes one copy, asking first if there is anything in it to lose.
+   *
+   * A copy is a physical object with a price paid, a condition, a date and
+   * notes, and none of that is recoverable from anywhere else — so a mis-click
+   * on the wrong row of a list of identical-looking copies is expensive. But an
+   * untouched blank copy, which is what "add copy" gives you, holds nothing:
+   * asking about that one would teach people to dismiss the question without
+   * reading it, which is how a confirmation stops working.
+   *
+   * Removing the last copy is also how an item goes on the wantlist, and that
+   * is a deliberate act worth naming rather than a side effect.
+   */
+  protected async removeCopy(index: number): Promise<void> {
+    const copy = this.copies()[index];
+    if (!copy) return;
+
+    if (copyDraftHasContent(copy)) {
+      const last = this.copies().length === 1;
+      const confirmed = await this.confirm.ask({
+        titleKey: 'confirm.removeCopy.title',
+        bodyKey: last ? 'confirm.removeCopy.bodyLast' : 'confirm.removeCopy.body',
+        confirmKey: 'confirm.removeCopy.confirm',
+        tone: 'danger',
+      });
+      if (!confirmed) return;
+    }
+
     this.copies.update(copies => copies.filter((_, i) => i !== index));
   }
+
 
   protected patchCopy(index: number, patch: Partial<CopyDraft>): void {
     this.copies.update(copies => copies.map((c, i) => (i === index ? { ...c, ...patch } : c)));
@@ -290,6 +425,63 @@ export class ItemFormPage {
     this.custom.update(all => ({ ...all, [field]: value }));
   }
 
+
+  // --- the summary card ---------------------------------------------------
+  //
+  // The left column used to be a 300px dropzone above ~600px of nothing, on a
+  // page one click from anywhere. What belongs in that space is the answer to
+  // the question the form is asking — "what am I about to save?" — read from the
+  // same helpers every other surface reads, so the figure here and the figure on
+  // the item page cannot disagree.
+
+  /** The item this form would save right now. Also what `save()` sends. */
+  protected readonly draftItem = computed<Item>(() => {
+    const existing = this.editing();
+    return {
+      id: existing?.id ?? '',
+      name: this.name().trim(),
+      description: this.description().trim(),
+      groupId: this.groupId(),
+      sectionId: this.sectionId(),
+      year: parseNumber(this.year()) || new Date().getFullYear(),
+      value: parseNumber(this.value()),
+      copies: this.copies().map(fromDraft),
+      tags: [...this.tags()],
+      img: existing?.img ?? slugify(this.name().trim()) + '.jpg',
+      photoIds: this.photoIds(),
+      createdAt: existing?.createdAt,
+      custom: this.groupFields()
+        .map(field => ({ key: field.name, value: (this.custom()[field.name] ?? '').trim() }))
+        .filter(c => c.value),
+    };
+  });
+
+  /**
+   * Tags already used elsewhere in this collection, offered as completions.
+   *
+   * A vocabulary that grows one typo at a time is one nobody can filter by, and
+   * the cheapest guard against that is showing people the words they have
+   * already chosen.
+   */
+  protected readonly tagSuggestions = computed(() => tagsInUse(this.collection()?.items ?? []));
+
+  protected readonly currency = computed(() =>
+    currencyOf(this.collection(), this.currencies.account()),
+  );
+
+  protected readonly owned = computed(() => isOwned(this.draftItem()));
+  protected readonly paid = computed(() => paidTotal(this.draftItem()));
+  protected readonly estimate = computed(() => ownedValue(this.draftItem()));
+
+  /** Where the item will be filed, spelled out — "no group" is an answer too. */
+  protected readonly destination = computed(() => {
+    const collection = this.collection();
+    if (!collection) return '';
+    const group = groupById(collection.groups, this.groupId())?.name ?? this.i18n.t('group.none');
+    const section = collection.sections.find(sec => sec.id === this.sectionId())?.name;
+    return section ? `${group} \u25B8 ${section}` : group;
+  });
+
   protected async save(): Promise<void> {
     const collection = this.collection();
     if (!collection) return;
@@ -300,24 +492,7 @@ export class ItemFormPage {
     }
 
     const existing = this.editing();
-
-    const item: Item = {
-      id: existing?.id ?? `i${Date.now()}`,
-      name,
-      description: this.description().trim(),
-      groupId: this.groupId(),
-      sectionId: this.sectionId(),
-      year: parseNumber(this.year()) || new Date().getFullYear(),
-      value: parseNumber(this.value()),
-      copies: this.copies().map(fromDraft),
-      tags: [...(existing?.tags ?? [])],
-      img: existing?.img ?? slugify(name) + '.jpg',
-      photoIds: this.photoIds(),
-      createdAt: existing?.createdAt,
-      custom: this.groupFields()
-        .map(field => ({ key: field.name, value: (this.custom()[field.name] ?? '').trim() }))
-        .filter(c => c.value),
-    };
+    const item: Item = { ...this.draftItem(), id: existing?.id ?? `i${Date.now()}` };
 
     try {
       await this.store.upsertItem(collection.id, syncWantedTag(item));
@@ -326,7 +501,7 @@ export class ItemFormPage {
       // is the only copy of what was typed, and a refused save leaves it
       // unsaved. A conflict explains itself through the shell's notice; any
       // other failure gets a toast. Either way the page stays exactly as it is.
-      if (!(err instanceof VaultConflictError)) {
+      if (!isReportedWriteFailure(err)) {
         this.toast.flash(
           err instanceof Error ? err.message : this.i18n.t('toast.item.saveFailed'),
         );
@@ -335,6 +510,10 @@ export class ItemFormPage {
     }
 
     this.toast.flash(this.i18n.t('toast.item.saved'));
+    // The form is now identical to what is stored, so the leave guard has
+    // nothing to warn about — without this every successful save would be
+    // followed by "you have unsaved changes" on its own navigation.
+    this.baseline.set(this.snapshot());
 
     if (existing) {
       void this.router.navigate(['/c', collection.id, 'items', existing.id], {
@@ -351,6 +530,23 @@ export class ItemFormPage {
       queryParams: groupLinkParams(item.groupId || null),
       queryParamsHandling: 'merge',
     });
+  }
+
+  /**
+   * The leave guard's answer. Public because the route calls it, not the
+   * template.
+   *
+   * A native `confirm` rather than `ui-dialog`: a `CanDeactivate` has to answer
+   * synchronously or hand back an Observable, and the dialog route means holding
+   * a half-finished navigation in component state while a modal is open — a
+   * state machine guarding a page whose whole job is to not lose data. The
+   * browser's own dialog cannot be dismissed by a rogue re-render and needs no
+   * state at all.
+   */
+  canLeave(): boolean {
+    if (!this.dirty()) return true;
+    const confirmed = this.document.defaultView?.confirm(this.i18n.t('itemForm.leaveConfirm'));
+    return confirmed !== false;
   }
 
   protected cancel(): void {

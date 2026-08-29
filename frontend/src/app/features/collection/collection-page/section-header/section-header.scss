@@ -29,8 +29,8 @@
 
 .sec__ratio {
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
+  font-size: var(--fs-xs);
+  color: var(--muted-strong);
 }
 
 .sec__bar {
@@ -38,7 +38,8 @@
   max-width: 160px;
 }
 
+/* The divider already draws a rule under itself, so the empty note is a
+   caption on that row and not a second bordered box. */
 .sec__empty {
-  font-size: 11px;
-  color: var(--muted);
+  flex: none;
 }

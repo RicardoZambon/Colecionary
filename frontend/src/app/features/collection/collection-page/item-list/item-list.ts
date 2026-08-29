@@ -2,28 +2,64 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { RouterLink } from '@angular/router';
 
 import { I18nService } from '../../../../core/i18n';
-import { Item } from '../../../../core/models';
+import { GroupField, GroupSort, Item } from '../../../../core/models';
 import { valueIsPaid } from '../../../../core/utils/copies.util';
+import { formatFieldValue, isFieldRightAligned } from '../../../../core/utils/field-format.util';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
+import { listTotals } from '../../../../core/utils/list-totals.util';
 import { SectionChunk } from '../../../../core/utils/sections.util';
-import { fieldValue } from '../../../../core/utils/sort.util';
+import { fieldSortKey, fieldValue } from '../../../../core/utils/sort.util';
 import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
+import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiCard, UiReorder } from '../../../../shared/ui';
+import { IconName, UiCard, UiCheckbox, UiIcon, UiReorder } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
 import { SectionHeader } from '../section-header/section-header';
 import { VaultStore } from '../../../../core/state/vault.store';
 
+/** What a click on a row's checkbox reports. `shift` asks for a range. */
+export interface RowPick {
+  id: string;
+  checked: boolean;
+  shift: boolean;
+}
+
 /** The dense table view of the same items {@link ItemGrid} renders as cards. */
 @Component({
   selector: 'app-item-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, ItemValuePipe, TPipe, SectionHeader, UiCard, UiReorder],
+  imports: [
+    RouterLink,
+    ItemValuePipe,
+    MoneyPipe,
+    TPipe,
+    SectionHeader,
+    UiCard,
+    UiCheckbox,
+    UiIcon,
+    UiReorder,
+  ],
   templateUrl: './item-list.html',
   styleUrl: './item-list.scss',
 })
 export class ItemList {
+  /**
+   * Whether to offer the write affordances at all.
+   *
+   * An **input**, not a read of `VaultStore.canEdit`, even though that is where
+   * the answer comes from. Injecting the store into a presentational child drags
+   * `VaultApi` into the TestBed of every component that renders it — the same
+   * reason `CurrencyService` exists as a dependency-free signal rather than
+   * letting the money pipe reach for the store. The page reads it once and
+   * passes it down.
+   *
+   * Defaults to true so an un-passed caller keeps the behaviour it had, and so
+   * this fails open exactly as the store's own computed does.
+   */
+  readonly canEdit = input(true);
+
+
   private readonly i18n = inject(I18nService);
   private readonly store = inject(VaultStore);
 
@@ -33,6 +69,24 @@ export class ItemList {
   readonly sectionStats = input<ReadonlyMap<string, GroupStats>>(new Map());
   readonly activeSection = input<string | null>(null);
   readonly collectionId = input.required<string>();
+
+  /**
+   * The custom-field columns to render, already filtered by the user's column
+   * preference — the merged ancestor path, in `fieldsFor`'s order.
+   *
+   * All of them, not just the nearest group's: the sort menu on the same screen
+   * offers every inherited field, so restricting the columns would make a
+   * column vanish while its ordering stayed on offer.
+   */
+  readonly fields = input<GroupField[]>([]);
+
+  /** The order the list is actually in, for `aria-sort` on the headers. */
+  readonly sort = input.required<GroupSort>();
+
+  /** Which visible rows are selected, and the header's tri-state. */
+  readonly selectedIds = input<ReadonlySet<string>>(new Set());
+  readonly allSelected = input(false);
+  readonly someSelected = input(false);
 
   /**
    * Amounts here belong to this collection, so they follow its currency rather
@@ -45,8 +99,51 @@ export class ItemList {
 
   readonly moved = output<{ from: number; to: number }>();
   readonly sectionToggled = output<string>();
+  readonly picked = output<RowPick>();
+  readonly allPicked = output<boolean>();
+  /** A column header was clicked; the page turns the key into `?sort=`/`?dir=`. */
+  readonly sortByPicked = output<string>();
 
   protected readonly drag = new DragOrder(() => this.manual());
+
+  /** The row count and per-currency totals under the last row. */
+  protected readonly totals = computed(() => listTotals(this.items(), this.currency()));
+
+  protected readonly rowsLabel = computed(() =>
+    this.i18n.plural(this.totals().count, 'itemList.rows.one', 'itemList.rows.other'),
+  );
+
+  protected readonly heldLabel = computed(() =>
+    this.i18n.t('itemList.footHeld', {
+      owned: this.totals().owned,
+      copies: this.totals().copies,
+    }),
+  );
+
+  protected isSelected(item: Item): boolean {
+    return this.selectedIds().has(item.id);
+  }
+
+  protected selectLabel(item: Item): string {
+    return this.i18n.t('select.item', { name: item.name });
+  }
+
+  /**
+   * Shift-click, and its keyboard twin.
+   *
+   * Space on a focused checkbox dispatches a real `click` carrying the modifier
+   * state, so shift+Space *is* the keyboard equivalent of shift-click and needs
+   * no separate handler — which is what rule 12 asks for. Shift+Enter is handled
+   * inside `ui-checkbox`, which reports the state it moved the box to.
+   *
+   * This used to correct the reported state, because the shift+Enter path
+   * reported the box's *pre-toggle* value. That was a bug in `ui-checkbox` and
+   * it has been fixed there, with a spec; a caller compensating for a shared
+   * component is a workaround that outlives the reason for it.
+   */
+  protected pick(item: Item, event: { checked: boolean; shift: boolean }): void {
+    this.picked.emit({ id: item.id, checked: event.checked, shift: event.shift });
+  }
 
   protected badgeTone(item: Item) {
     return itemTone(item);
@@ -65,9 +162,68 @@ export class ItemList {
     return this.groupNames().get(item.groupId) ?? item.groupId;
   }
 
+  /**
+   * The sort field's value, shown beside the name — but only while that field
+   * has no column of its own. With the column on screen the chip would print
+   * the same value twice on the same row.
+   */
   protected fieldChip(item: Item): string | null {
     const name = this.sortFieldName();
-    return name ? fieldValue(item, name) || null : null;
+    if (!name || this.fields().some(field => field.name === name)) return null;
+    return fieldValue(item, name) || null;
+  }
+
+  // --- custom field columns ------------------------------------------------
+
+  /**
+   * A field's value ready to render. Display only — ordering keeps going
+   * through `sort.util.ts` on the raw string.
+   */
+  protected cell(item: Item, field: GroupField): string {
+    return formatFieldValue(fieldValue(item, field.name), field.type, this.i18n.locale());
+  }
+
+  protected rightAligned(field: GroupField): boolean {
+    return isFieldRightAligned(field.type);
+  }
+
+  protected fieldKey(field: GroupField): string {
+    return fieldSortKey(field.name);
+  }
+
+  // --- sortable headers ---------------------------------------------------
+
+  /** `ascending` / `descending` on the column in force, `none` on the rest. */
+  protected ariaSort(by: string): string {
+    if (this.sort().by !== by) return 'none';
+    return this.sort().direction === 'asc' ? 'ascending' : 'descending';
+  }
+
+  /**
+   * What the header announces. The direction is in the accessible name and not
+   * only in `aria-sort`, because these are buttons rather than real
+   * `columnheader` cells and a reader that ignores the attribute would
+   * otherwise never say which way the column is pointing.
+   */
+  protected sortTitle(by: string, label: string): string {
+    if (this.sort().by !== by) return this.i18n.t('itemList.sortBy', { label });
+    return this.sort().direction === 'asc'
+      ? this.i18n.t('itemList.sortedAsc', { label })
+      : this.i18n.t('itemList.sortedDesc', { label });
+  }
+
+  /**
+   * The mark next to an active header, or null for the columns not in force.
+   *
+   * A name rather than a glyph: the arrows here were the last two substitute
+   * characters in the app's chrome, and a table header full of them at whatever
+   * weight the fallback font happened to have sat badly next to the tracked mono
+   * label it belongs to. Decoration only — `sortTitle` is what a screen reader
+   * hears, and it says the direction in words.
+   */
+  protected sortArrow(by: string): IconName | null {
+    if (this.sort().by !== by) return null;
+    return this.sort().direction === 'asc' ? 'chevron-up' : 'chevron-down';
   }
 
   protected onDrop(event: DragEvent, to: number): void {

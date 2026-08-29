@@ -6,7 +6,7 @@
     [attr.aria-label]="'groupTree.hidePanel' | t"
     [title]="'groupTree.hidePanel' | t"
     (click)="collapse.emit()"
-  >⟨</button>
+  ><ui-icon name="chevron-left" [size]="14" /></button>
 </div>
 
 <ul role="tree" [attr.aria-label]="'groupTree.aria' | t">
@@ -30,7 +30,7 @@
               | t: { name: row.node.name }
           "
           (click)="toggle($event, row.node.id)"
-        >{{ row.expanded ? '▾' : '▸' }}</button>
+        ><ui-icon [name]="row.expanded ? 'chevron-down' : 'chevron-right'" [size]="11" /></button>
       } @else {
         <span class="row__twisty row__twisty--leaf" aria-hidden="true"></span>
       }
@@ -60,6 +60,8 @@
       </a>
     </li>
   } @empty {
-    <li class="empty">{{ 'groupTree.empty' | t }}</li>
+    <li>
+      <ui-empty icon="grid" [compact]="true" [title]="'groupTree.empty' | t" />
+    </li>
   }
 </ul>

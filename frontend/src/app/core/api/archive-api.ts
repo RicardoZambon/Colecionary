@@ -1,7 +1,8 @@
-import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
+import { SILENT_FAILURE } from './error.interceptor';
 import { environment } from '../../../environments/environment';
 import { problemMessage } from './problem-details';
 import { VersionedCollection } from './vault-api';
@@ -124,6 +125,14 @@ export class ArchiveApi {
         this.http.post<VersionedCollection[]>(`${environment.apiBaseUrl}/import`, file, {
           headers: { 'Content-Type': 'application/zip' },
           params,
+          // This request reports its own outcome, both halves of it. The 409
+          // below is not a failure at all — it is the server asking which
+          // collections to overwrite — and the global reporter would render
+          // that question as a red error toast beside the dialog that is
+          // already asking it. The genuine failures are caught below and
+          // surfaced with the server's own sentence, which says more than the
+          // interceptor's generic one could.
+          context: new HttpContext().set(SILENT_FAILURE, true),
         }),
       );
     } catch (error) {

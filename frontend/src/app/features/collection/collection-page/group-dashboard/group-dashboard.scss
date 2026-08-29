@@ -20,8 +20,10 @@
   background: transparent;
   cursor: pointer;
 
+  /* Inherits the tile's colour, so the mark follows the hover with the label
+     rather than staying grey beside an accented one. */
   &__glyph {
-    font-size: 18px;
+    opacity: 0.7;
   }
 
   &:hover {

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Vault.Api.Infrastructure;
 using Vault.Application.Collections;
@@ -24,6 +25,7 @@ public class CollectionsController(CollectionService collections) : ControllerBa
     public Task<List<VersionedCollectionDto>> List(CancellationToken ct) =>
         collections.ListVersionedAsync(ct);
 
+    [Authorize(Policy = VaultPolicies.CanWrite)]
     [HttpPost]
     public async Task<ActionResult<CollectionDto>> Create(CreateCollectionRequest request, CancellationToken ct)
     {
@@ -42,6 +44,7 @@ public class CollectionsController(CollectionService collections) : ControllerBa
     [ProducesResponseType<CollectionDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status412PreconditionFailed)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status428PreconditionRequired)]
+    [Authorize(Policy = VaultPolicies.CanWrite)]
     [HttpPut("{id}")]
     public async Task<CollectionDto> Update(string id, CollectionDto dto, CancellationToken ct)
     {
@@ -60,6 +63,7 @@ public class CollectionsController(CollectionService collections) : ControllerBa
     /// collection under the same id, which is the recovery path that does apply
     /// here. An <c>If-Match</c> the caller chooses to send is still honoured.
     /// </remarks>
+    [Authorize(Policy = VaultPolicies.CanWrite)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(string id, CancellationToken ct)
     {
@@ -67,6 +71,7 @@ public class CollectionsController(CollectionService collections) : ControllerBa
         return NoContent();
     }
 
+    [Authorize(Policy = VaultPolicies.CanWrite)]
     [HttpPost("import/{listingId}")]
     public async Task<ActionResult<CollectionDto>> ImportStoreListing(string listingId, CancellationToken ct)
     {

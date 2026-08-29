@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Vault.Api.Infrastructure;
 using Vault.Application.Collections.Dtos;
 using Vault.Application.Tenants;
 
@@ -13,7 +14,7 @@ public class TenantMembersController(TenantMemberService members) : ControllerBa
     public Task<List<MemberDto>> List(CancellationToken ct) => members.ListAsync(ct);
 
     [HttpPut]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Policy = VaultPolicies.CanAdminister)]
     public Task<List<MemberDto>> Update(List<MemberDto> desired, CancellationToken ct) =>
         members.UpdateAsync(desired, ct);
 }

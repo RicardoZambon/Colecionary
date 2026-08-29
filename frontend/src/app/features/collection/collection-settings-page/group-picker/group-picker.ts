@@ -12,6 +12,7 @@ import { RouterLink } from '@angular/router';
 import { GroupNode } from '../../../../core/models';
 import { visibleTree } from '../../../../core/utils/groups.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
+import { UiIcon } from '../../../../shared/ui';
 import { TreeKeyboard } from '../../tree-keyboard';
 
 interface PickerRow {
@@ -46,7 +47,7 @@ interface PickerRow {
 @Component({
   selector: 'app-group-picker',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe],
+  imports: [RouterLink, TPipe, UiIcon],
   templateUrl: './group-picker.html',
   styleUrl: './group-picker.scss',
 })

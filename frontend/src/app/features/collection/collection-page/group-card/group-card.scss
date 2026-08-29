@@ -1,11 +1,25 @@
 @use '../../../../../styles/mixins' as *;
 
+/**
+ * The host is a grid item and the board stretches it, so every card in a row is
+ * already the same height. The panel inside it has to be told to fill that,
+ * which is what `height: 100%` on `.card` was for — but the anchor in between
+ * was `display: block` with an auto height, so the percentage resolved against
+ * the content and stopped there. A row of cards with different amounts to say
+ * therefore drew panels of different heights inside identical boxes: a group
+ * with no items ended a good 50px above the one beside it.
+ *
+ * Flex all the way down passes the stretch through without anybody needing a
+ * percentage of a parent that might not have one.
+ */
 :host {
-  display: block;
+  display: flex;
 }
 
 .link {
-  display: block;
+  display: flex;
+  flex: 1;
+  min-width: 0;
   color: inherit;
 
   &:hover {
@@ -16,7 +30,8 @@
 .card {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-width: 0;
 
   &__cover {
     height: 116px;
@@ -28,6 +43,13 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    /*
+     * Takes the slack the stretch created. Without this the extra height lands
+     * between the cover and the name; with it, the spare space falls after the
+     * last line, which is what makes the covers, the names and the foot rows of
+     * a row line up instead of merely making the borders the same length.
+     */
+    flex: 1;
   }
 
   &__head {
@@ -45,53 +67,79 @@
     white-space: nowrap;
   }
 
-  /* A caption, not a chip: a chip would suggest it is separately clickable. */
+  /* A caption, not a chip: a chip would suggest it is separately clickable.
+     Bumped from 9.5px to --fs-xs and off the decorative grey: it is the only
+     place a card says it has children. */
   &__subs {
-    @include mono-label(9.5px, 0.08em);
+    @include mono-label(var(--fs-xs), 0.08em);
+    color: var(--muted-strong);
   }
 
-  &__meta {
-    font-size: 11.5px;
-    color: var(--muted);
+  &__empty {
+    /* The card's own dashed border already frames this, so the compact form
+       keeps it a caption rather than a second box inside a box. */
+    padding: var(--sp-1) 0;
   }
 
   &__numbers {
     display: flex;
     align-items: baseline;
-    gap: 6px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    color: var(--muted);
+    justify-content: space-between;
+    gap: var(--sp-2);
+    font-size: var(--fs-xs);
+    color: var(--muted-strong);
   }
 
-  &__ratio {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text);
-  }
-
-  /* Says the denominator is only what has been catalogued, so a full bar
-     cannot be mistaken for a finished set. */
-  &__soft {
-    text-transform: uppercase;
+  /* A sentence, so it takes the body face; mono at tracking doubles the width
+     of prose and halves the reading speed. */
+  &__sentence {
+    line-height: 1.35;
   }
 
   &__pct {
-    margin-left: auto;
-    color: var(--accent);
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
+    /* Type, so the readable variant — see collection-hero.scss. */
+    color: var(--accent-strong);
     font-weight: 700;
+    flex: none;
   }
 
   &__foot {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 8px;
-    margin-top: 2px;
+    /*
+     * Wraps as a unit: the amount sits on the right while it fits and drops to
+     * its own line when the phrase beside it is too long for a 289px card —
+     * which pt-BR reaches first. Without this the phrase itself broke and left
+     * "exemplares" orphaned under a value that had stayed put.
+     */
+    flex-wrap: wrap;
+    gap: 0 8px;
+    /*
+     * Pushed to the bottom of the body rather than sitting 2px under the bar.
+     * The foot is the one line every card that has items ends with, so aligning
+     * it across a row is the difference between a grid and a pile.
+     */
+    margin-top: auto;
+    padding-top: 2px;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.06em;
+    /*
+     * A flex row with a gap, because Angular compiles with
+     * preserveWhitespaces: false and drops the whitespace-only node between two
+     * adjacent elements — so "Tudo na coleção" and "· 24 exemplares" rendered
+     * as "coleção· 24". The separator lives in the copy already; only the space
+     * before it was missing, and a space that has to survive a template is a
+     * space that eventually will not. Wraps rather than overflowing: the phrase
+     * is two clauses in a 289px card, and pt-BR runs longer than English.
+     */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 4px;
 
     .warn {
       color: var(--warn);
@@ -102,7 +150,7 @@
     }
 
     .soft {
-      color: var(--muted);
+      color: var(--muted-strong);
     }
   }
 
@@ -110,7 +158,7 @@
     font-family: var(--font-body);
     font-size: 13px;
     font-weight: 700;
-    color: var(--accent2);
+    color: var(--accent2-strong);
     flex: none;
   }
 }

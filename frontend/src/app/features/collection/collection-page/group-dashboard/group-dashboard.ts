@@ -15,7 +15,7 @@ import { ImageFocusService } from '../../../../core/state/image-focus.service';
 import { GroupStats, UNGROUPED_ID } from '../../../../core/utils/group-stats.util';
 import { childrenOf } from '../../../../core/utils/groups.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { MosaicTile } from '../../../../shared/ui';
+import { MosaicTile, UiEmpty, UiIcon } from '../../../../shared/ui';
 import { GroupCard } from '../group-card/group-card';
 
 interface CardView {
@@ -32,11 +32,27 @@ interface CardView {
 @Component({
   selector: 'app-group-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, GroupCard],
+  imports: [GroupCard, RouterLink, TPipe, UiEmpty, UiIcon],
   templateUrl: './group-dashboard.html',
   styleUrl: './group-dashboard.scss',
 })
 export class GroupDashboard {
+  /**
+   * Whether to offer the write affordances at all.
+   *
+   * An **input**, not a read of `VaultStore.canEdit`, even though that is where
+   * the answer comes from. Injecting the store into a presentational child drags
+   * `VaultApi` into the TestBed of every component that renders it — the same
+   * reason `CurrencyService` exists as a dependency-free signal rather than
+   * letting the money pipe reach for the store. The page reads it once and
+   * passes it down.
+   *
+   * Defaults to true so an un-passed caller keeps the behaviour it had, and so
+   * this fails open exactly as the store's own computed does.
+   */
+  readonly canEdit = input(true);
+
+
   private readonly images = inject(ImagesApi);
   private readonly focus = inject(ImageFocusService);
   private readonly i18n = inject(I18nService);

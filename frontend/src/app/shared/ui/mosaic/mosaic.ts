@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
+import { IconName, UiIcon } from '../icon/icon';
+
 export interface MosaicTile {
   src: string;
   /** CSS `background-position`, from `ImageFocusService.position(id)`. */
@@ -17,10 +19,18 @@ export interface MosaicTile {
  *
  * Decorative by construction — `aria-hidden`, because the accessible name
  * belongs to whatever link wraps the cover.
+ *
+ * **With no photos it says "empty", not "loading".** The fallback used to be
+ * the `stripes` hatch, which is the silhouette of a skeleton shimmer — and
+ * since most group cards have no cover photo, most of the group grid read as
+ * permanently mid-fetch. It is now a flat `--panel2` field with a dimmed mark,
+ * matching `ui-image-slot`; a sweep now means one thing and one thing only,
+ * and it lives in `ui-skeleton`.
  */
 @Component({
   selector: 'ui-mosaic',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [UiIcon],
   host: { 'aria-hidden': 'true', '[class.dim]': 'dim()' },
   template: `
     @if (shown().length) {
@@ -34,7 +44,12 @@ export interface MosaicTile {
         }
       </div>
     } @else {
-      <div class="empty">{{ placeholder() }}</div>
+      <div class="empty">
+        <ui-icon class="empty__mark" [name]="icon()" [size]="30" [strokeWidth]="1.5" />
+        @if (placeholder()) {
+          <span>{{ placeholder() }}</span>
+        }
+      </div>
     }
   `,
   styles: `
@@ -93,14 +108,32 @@ export interface MosaicTile {
     .empty {
       position: absolute;
       inset: 0;
-      @include stripes;
-      display: grid;
-      place-items: center;
-      padding: 0 12px;
+      background: var(--panel2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--sp-1);
+      padding: 0 var(--sp-3);
       text-align: center;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--muted);
+
+      &__mark {
+        color: var(--muted-strong);
+        /* The mark is decoration; the name below it is the message and stays at
+           full strength. */
+        opacity: 0.4;
+      }
+
+      span {
+        font-family: var(--font-mono);
+        font-size: var(--fs-xs);
+        letter-spacing: 0.08em;
+        color: var(--muted-strong);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+      }
     }
   `,
 })
@@ -108,6 +141,8 @@ export class UiMosaic {
   readonly tiles = input.required<MosaicTile[]>();
   /** Shown when there is nothing to display. */
   readonly placeholder = input('');
+  /** The mark drawn above the placeholder label. */
+  readonly icon = input<IconName>('image');
   readonly dim = input(false);
 
   /** The layouts stop at four; more tiles would each be too small to read. */

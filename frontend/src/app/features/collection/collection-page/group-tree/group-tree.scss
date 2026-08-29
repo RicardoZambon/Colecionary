@@ -3,7 +3,9 @@
 :host {
   display: block;
   @include panel;
-  padding: 12px 10px;
+  /* Same inset as the item list's rows: the two sit side by side in one grid
+     row, so an inset that differs by a couple of pixels reads as a mistake. */
+  padding: var(--sp-3);
   /* The scroll container is the shell's .main, so this holds position on a
      long board without any change to the shell. */
   position: sticky;
@@ -23,6 +25,8 @@
 
   &__collapse {
     flex: none;
+    display: grid;
+    place-items: center;
     border: none;
     background: transparent;
     color: var(--muted);
@@ -57,6 +61,8 @@ ul {
      which starts exactly at the name. */
   &__twisty {
     width: 14px;
+    display: grid;
+    place-items: center;
     flex: none;
     margin-top: 6px;
     padding: 0;

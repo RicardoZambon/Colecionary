@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Vault.Api.Infrastructure;
 using Vault.Application.Tenants;
 
 namespace Vault.Api.Controllers;
@@ -16,7 +17,7 @@ public class TenantSettingsController(TenantSettingsService settings) : Controll
     // Writable only by an Owner, like the member list — it changes what every
     // other member sees.
     [HttpPut]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Policy = VaultPolicies.CanAdminister)]
     public Task<TenantSettingsDto> Update(TenantSettingsDto dto, CancellationToken ct) =>
         settings.UpdateAsync(dto, ct);
 }

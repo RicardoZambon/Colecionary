@@ -4,9 +4,16 @@ import { RouterLink } from '@angular/router';
 import { I18nService } from '../../../../core/i18n';
 import { GroupStats } from '../../../../core/utils/group-stats.util';
 import { groupLinkParams } from '../../browse-params';
-import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
+import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { MosaicTile, UiBadge, UiCard, UiMosaic, UiProgress } from '../../../../shared/ui';
+import {
+  MosaicTile,
+  UiBadge,
+  UiCard,
+  UiEmpty,
+  UiMosaic,
+  UiProgress,
+} from '../../../../shared/ui';
 import { BadgeTone } from '../../../../shared/ui/badge/badge';
 import { VaultStore } from '../../../../core/state/vault.store';
 
@@ -22,7 +29,7 @@ import { VaultStore } from '../../../../core/state/vault.store';
 @Component({
   selector: 'app-group-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, TPipe, UiBadge, UiCard, UiMosaic, UiProgress],
+  imports: [RouterLink, ItemValuePipe, TPipe, UiBadge, UiCard, UiEmpty, UiMosaic, UiProgress],
   templateUrl: './group-card.html',
   styleUrl: './group-card.scss',
 })
@@ -47,7 +54,13 @@ export class GroupCard {
 
   protected readonly empty = computed(() => this.stats().catalogued === 0);
 
-  /** "12 / 120" against a target, "12 / 34" against what is catalogued. */
+  /**
+   * "12 / 120" against a target, "12 / 34" against what is catalogued.
+   *
+   * Spoken, not printed: the visible line is `progressText()`, a sentence that
+   * says the same thing grammatically. This form survives because the
+   * `aria-label` reads best as a compact ratio after the group's name.
+   */
   protected readonly ratio = computed(() => `${this.stats().owned} / ${this.stats().denominator}`);
 
   protected readonly badge = computed<{ tone: BadgeTone; label: string } | null>(() => {
@@ -57,28 +70,50 @@ export class GroupCard {
     return { tone: 'accent', label: this.i18n.t('groupCard.badgeTarget', { target: stats.target! }) };
   });
 
+  /**
+   * "3 sub-groups", "1 sub-group" — one count phrase, shared with everywhere
+   * else that counts sub-groups. It said "1 subgrupos" before.
+   */
+  protected readonly subGroupsLabel = computed(() =>
+    this.i18n.count(this.stats().childCount, 'subGroup'),
+  );
+
+  /** pt-BR conjugates this one: "falta 1", "faltam 2". */
+  protected readonly missingLabel = computed(() =>
+    this.i18n.plural(this.stats().missing, 'progress.missing.one', 'progress.missing.other'),
+  );
+
+  protected readonly copiesLabel = computed(() =>
+    this.i18n.plural(this.stats().copies, 'progress.copies.one', 'progress.copies.other'),
+  );
+
   protected readonly ariaLabel = computed(() => {
     const stats = this.stats();
     const parts = [this.i18n.t('groupCard.aria', { name: this.name(), ratio: this.ratio() })];
-    if (stats.missing) parts.push(this.i18n.t('groupCard.ariaMissing', { n: stats.missing }));
+    // The same two phrases the card prints — spoken, not a second wording that
+    // could drift out of agreement on its own.
+    if (stats.missing) parts.push(this.missingLabel());
     if (stats.over) parts.push(this.i18n.t('groupCard.ariaOver', { n: stats.over }));
-    if (stats.childCount) {
-      parts.push(this.i18n.t('groupCard.ariaSubGroups', { n: stats.childCount }));
-    }
+    if (stats.childCount) parts.push(this.subGroupsLabel());
     return parts.join(', ');
   });
 
   protected readonly progressText = computed(() => {
     const stats = this.stats();
+    // `catalogued` is the count that decides the agreement; the other two
+    // figures ride along as plain params.
     return stats.hasTarget
-      ? this.i18n.t('progress.textTarget', {
-          owned: stats.owned,
-          catalogued: stats.catalogued,
-          target: stats.target!,
-        })
-      : this.i18n.t('progress.textNoTarget', {
-          owned: stats.owned,
-          catalogued: stats.catalogued,
-        });
+      ? this.i18n.plural(
+          stats.catalogued,
+          'progress.textTarget.one',
+          'progress.textTarget.other',
+          { owned: stats.owned, target: stats.target! },
+        )
+      : this.i18n.plural(
+          stats.catalogued,
+          'progress.textNoTarget.one',
+          'progress.textNoTarget.other',
+          { owned: stats.owned },
+        );
   });
 }

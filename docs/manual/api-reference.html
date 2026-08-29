@@ -51,13 +51,16 @@
     </tr>
     <tr>
       <td class="nowrap">POST</td><td class="nowrap"><code>/api/collections</code></td>
-      <td><span class="tag">bearer</span></td>
+      <td><span class="tag">bearer</span> <span class="tag">Owner/Editor</span></td>
       <td>201 + <code>ETag</code></td>
     </tr>
     <tr>
       <td class="nowrap">PUT</td><td class="nowrap"><code>/api/collections/{id}</code></td>
-      <td><span class="tag">bearer</span></td>
-      <td><span class="tag danger">If-Match obrigatório</span> substitui o documento inteiro → <code>ETag</code></td>
+      <td><span class="tag">bearer</span> <span class="tag">Owner/Editor</span></td>
+      <td><span class="tag danger">If-Match obrigatório</span> substitui o documento inteiro → <code>ETag</code>.
+          <strong>400</strong> se um <code>ParentId</code> de grupo não existir no mesmo documento
+          (<code>GroupParentMustExist</code>) ou se o grafo de pais tiver ciclo
+          (<code>GroupParentCycle</code>)</td>
     </tr>
     <tr>
       <td class="nowrap">DELETE</td><td class="nowrap"><code>/api/collections/{id}</code></td>
@@ -153,6 +156,27 @@
   fallback do SPA nunca sequestra rota de API. Toda rota não-API cai em
   <code>index.html</code> para o roteamento no cliente.
 </p>
+
+<div class="callout warn">
+  <span class="label">O que a coluna Auth passou a dizer</span>
+  <p>
+    <span class="tag">bearer</span> sozinho significa “qualquer papel
+    autenticado” — leitura, e o próprio perfil.
+    <span class="tag">Owner/Editor</span> é a política
+    <code>VaultPolicies.CanWrite</code> e guarda toda escrita de catálogo:
+    coleções, itens, upload de imagem e enquadramento.
+    <span class="tag">Owner</span> é <code>CanAdminister</code> e guarda membros,
+    configurações do tenant e <code>POST /api/import</code> — que fica ali, e não
+    com as escritas de conteúdo, porque uma requisição pode sobrescrever todas as
+    coleções do vault.
+  </p>
+  <p>
+    Um papel insuficiente recebe <strong>403</strong>, nunca 404: a coleção
+    existe e o chamador pode lê-la, então esconder seria uma mentira sobre a qual
+    o cliente não pode agir. Antes desta mudança <em>nenhuma</em> dessas rotas
+    checava papel, e um Viewer autenticado escrevia em todas.
+  </p>
+</div>
 
 <h2 id="concorrencia">Concorrência otimista</h2>
 

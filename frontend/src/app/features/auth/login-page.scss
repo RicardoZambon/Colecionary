@@ -5,8 +5,11 @@
   padding: 24px;
 }
 
+/* A fixed 360px is 20px wider than a 390px screen once the 24px of page
+   padding is paid for, which put the sign-in card itself off the edge. */
 .panel {
-  width: 360px;
+  width: 100%;
+  max-width: 360px;
   padding: 28px 26px;
   display: flex;
   flex-direction: column;
@@ -50,8 +53,8 @@ form {
 
 .error {
   font-size: 12.5px;
-  color: var(--warn);
-  border: var(--bw) dashed var(--warn);
+  color: var(--danger);
+  border: var(--bw) dashed var(--danger);
   border-radius: var(--radius);
   padding: 8px 12px;
 }

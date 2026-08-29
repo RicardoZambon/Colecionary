@@ -22,20 +22,29 @@
       </div>
 
       @if (stats().childCount) {
-        <div class="card__subs">{{ 'groupCard.subGroups' | t: { n: stats().childCount } }}</div>
+        <div class="card__subs">{{ subGroupsLabel() }}</div>
       }
 
       @if (empty()) {
-        <div class="card__meta">
-          @if (stats().hasTarget) { {{ 'groupCard.emptyWithTarget' | t: { target: stats().target ?? 0 } }} }
-          @else { {{ 'groupCard.empty' | t }} }
-        </div>
+        <ui-empty
+          class="card__empty"
+          [compact]="true"
+          icon="tag"
+          [title]="
+            stats().hasTarget
+              ? ('groupCard.emptyWithTarget' | t: { target: stats().target ?? 0 })
+              : ('groupCard.empty' | t)
+          "
+        />
       } @else {
         <div class="card__numbers">
-          <span class="card__ratio">{{ ratio() }}</span>
-          @if (!stats().hasTarget) {
-            <span class="card__soft">{{ 'progress.ofCatalogued' | t }}</span>
-          }
+          <!-- The composed sentence, not `progress.owned` glued to
+               `progress.ofCatalogued` — that pair rendered in Portuguese as
+               "9 / 10 na coleção do catalogado", which is not a phrase. It also
+               settles which quantity the percentage is: the sentence carries
+               both numerators, so the one figure beside a two-band bar can only
+               be the one it agrees with. -->
+          <span class="card__sentence">{{ progressText() }}</span>
           <span class="card__pct">{{ stats().pct }}%</span>
         </div>
 
@@ -49,7 +58,7 @@
         <div class="card__foot">
           <span class="card__missing">
             @if (stats().missing) {
-              <span class="warn">{{ 'progress.missing' | t: { n: stats().missing } }}</span>
+              <span class="warn">{{ missingLabel() }}</span>
               @if (stats().uncatalogued) {
                 <span class="soft">{{ 'progress.listed' | t: { n: stats().wanted } }}</span>
               }
@@ -62,10 +71,11 @@
               <span class="soft">{{ 'progress.over' | t: { n: stats().over } }}</span>
             }
             @if (stats().copies > stats().catalogued) {
-              <span class="soft">{{ 'progress.copies' | t: { n: stats().copies } }}</span>
+              <span class="soft">{{ copiesLabel() }}</span>
             }
           </span>
-          <span class="card__value">{{ stats().value | money: currency() }}</span>
+          <!-- `itemValue`, not `money`: nothing held is unknown, not zero. -->
+          <span class="card__value">{{ stats().value | itemValue: currency() }}</span>
         </div>
       }
     </div>

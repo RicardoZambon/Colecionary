@@ -125,6 +125,16 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-42</span> Uma escrita em massa é um único PUT de documento inteiro</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Editar quarenta itens de uma vez tem dois caminhos possíveis: N chamadas a <code>upsertItem</code> ou um <code>updateCollection</code>. Cada escrita de item move a versão da coleção no servidor.</dd>
+    <dt>Decisão</dt><dd>Toda operação em massa — inclusive a exclusão — é um <code>updateCollection</code>, com o documento inteiro sob um único <code>If-Match</code>. A exclusão em massa é o mesmo PUT com os itens filtrados fora, nunca N <code>DELETE /items/{id}</code>.</dd>
+    <dt>Consequência</dt><dd>Atômico: <code>ReplaceGraph</code> funde tudo num <code>SaveChanges</code>. O caminho recusado era pior de duas formas — N escritas são estritamente sequenciais, e uma falha no item 7 de 40 é irrecuperável num app sem undo; e outro escritor chegando no meio recusa o resto com um 412 que o usuário não consegue mapear em “quais 22 dos meus 40 passaram”. <code>DELETE /items/{id}</code> não carrega precondição de propósito, o que é certo para uma exclusão deliberada e errado para uma varredura de quarenta.</dd>
+    <dt>Imposta por</dt><dd><code>collection-page.bulk.spec.ts</code> — uma edição ou exclusão em massa é exatamente <em>um</em> PUT de coleção e <em>zero</em> escritas de item</dd>
+  </dl></div>
+</details>
+
 <h2 id="imagens-adr">Imagens</h2>
 
 <details class="adr">
@@ -291,6 +301,36 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-43</span> Mover um grupo é um seletor de pai, não um arrastar</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um <code>GroupNode</code> sempre teve <code>parentId</code>, sem FK, e <code>ReplaceGraph</code> já o atribuía — mover era só UI que não existia. A pergunta era qual gesto.</dd>
+    <dt>Decisão</dt><dd>Um <code>ui-select</code> “fica sob” no painel de detalhe, com as opções filtradas por <code>canReparent</code>, mais a metade servidora: <code>CollectionDtoValidator</code> recusa um <code>ParentId</code> ausente do próprio payload ou cujo grafo tem ciclo.</dd>
+    <dt>Consequência</dt><dd>Grupos listam em ordem alfabética e nada persiste posição de grupo, então soltar <em>entre</em> duas linhas não significa nada e ensinaria o modelo errado; só soltar <em>sobre</em> uma linha contaria, o que é um affordance invisível que ainda deveria uma rota de teclado. Um select é nativo no teclado e — decisivo — consegue <em>omitir</em> o alvo ilegal em vez de recusá-lo depois do gesto. <code>ParentId</code> é a única referência do agregado que <strong>não</strong> pode ficar pendurada, ao contrário de <code>Section.GroupId</code> e <code>Item.SectionId</code>: um pai inexistente não tem leitura graciosa — <code>childrenOf</code> nunca alcança o ramo em laço, então todo grupo dele desaparece da árvore e do seletor enquanto seus itens continuam contando no total.</dd>
+    <dt>Imposta por</dt><dd><code>groups.util.spec.ts</code> (<code>canReparent</code>, e a guarda de ciclo que <code>subtreeIds</code> passou a ter), <code>ValidatorTests</code>, <code>ContractTests.Collection_GroupParent_MustResolve_AndMustNotLoop</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-44</span> Apagar um grupo pergunta o que acontece com o conteúdo</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A recusa anterior era segura e era um beco sem saída: qualquer item em qualquer lugar da subárvore bloqueava a exclusão com “mova os itens primeiro” — uma instrução que o app não dava meio de seguir, porque não existia mover em massa. Ao mesmo tempo, subgrupos vazios eram apagados em silêncio, sem confirmação e sem contagem.</dd>
+    <dt>Decisão</dt><dd>Um diálogo que declara as contagens reais e oferece três destinos em rádio, <strong>nada pré-selecionado</strong>: subir o conteúdo para o pai (recomendado, o único que não perde nada), desarquivar os itens (<code>groupId: ''</code>, nunca <code>UNGROUPED_ID</code>), ou apagar os itens também — com o botão lendo “Apagar N itens”. Em todos, as seções dos grupos removidos vão embora e o <code>sectionId</code> de qualquer item sobrevivente é limpo.</dd>
+    <dt>Consequência</dt><dd>A aritmética vive em <code>groupDeletePlan</code>, que devolve as contagens que o diálogo mostra <em>e</em> o grafo que a página aplica — de uma função só, para que o número exibido e a mudança feita não possam discordar. Não há undo em lugar nenhum do app, então o diálogo diz isso e oferece o export antes; prometer um undo que não existe seria pior que não oferecer nenhum.</dd>
+    <dt>Imposta por</dt><dd><code>group-delete.util.spec.ts</code> (os três destinos, a vistoria independente do destino, entrada cíclica, ausência de mutação) e os testes do componente do diálogo</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-45</span> Editar em massa preserva campos que o grupo de destino não declara</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd><code>item-form-page</code> descarta valores <code>custom</code> de campos não declarados ao salvar um item — aceitável ali, porque o usuário está olhando o conjunto de campos daquele item.</dd>
+    <dt>Decisão</dt><dd>Uma aplicação em massa <strong>mantém</strong> os campos não declarados no destino.</dd>
+    <dt>Consequência</dt><dd>Fazer o descarte em quarenta itens destruiria dados que ninguém viu. Um valor cujo campo não é mais declarado fica dormente, não apagado — é indexado por <em>nome</em> de campo no item — e volta a aparecer se o grupo voltar, que é o mesmo motivo pelo qual mover um grupo é reversível.</dd>
+    <dt>Imposta por</dt><dd><code>bulk-patch.spec.ts</code></dd>
+  </dl></div>
+</details>
+
 <h2 id="seguranca-adr">Segurança</h2>
 
 <details class="adr">
@@ -330,6 +370,16 @@
     <dt>Decisão</dt><dd><code>FallbackPolicy = DefaultPolicy</code>. Anônimo exige <code>[AllowAnonymous]</code> explícito — e o fallback do SPA precisa dele, senão o shell devolveria 401.</dd>
     <dt>Consequência</dt><dd>A lista de rotas anônimas é curta e auditável.</dd>
     <dt>Imposta por</dt><dd>Configuração em <code>Program.cs</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-41</span> Um papel precisa restringir alguma coisa</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A autenticação era negar-por-padrão desde o início, então todo endpoint recusava corretamente um chamador anônimo — e em seguida aceitava um <strong>Viewer</strong>. <code>[Authorize(Roles = …)]</code> aparecia duas vezes na API inteira, ambas em administração de tenant. <code>ICurrentTenant.Role</code> era emitido no JWT, exposto no principal, renderizado na tabela de membros, e lido por ninguém: a conta somente-leitura semeada podia substituir qualquer documento de coleção e apagar qualquer item do tenant.</dd>
+    <dt>Decisão</dt><dd>Duas políticas nomeadas em <code>VaultPolicies</code>, não uma string de papéis repetida em onze atributos: <code>CanWrite</code> (Owner, Editor) para coleções, itens, bytes de imagem e enquadramento; <code>CanAdminister</code> (Owner) para membros, configurações do tenant e importação de arquivo — que fica aqui e não com as escritas de conteúdo porque não é uma edição: uma requisição pode sobrescrever todas as coleções do vault.</dd>
+    <dt>Consequência</dt><dd>Deliberadamente grosseiro, no nível do tenant. <code>CollectionMember.Role</code> continua não autorizando nada — fazer um compartilhamento por coleção conceder escrita é outra mudança, com consequências próprias no filtro global. Grosseiro e imposto vale mais que fino e imaginário. A pertinência de “pode escrever” é uma decisão só, e uma lista copiada acaba discordando de si mesma.</dd>
+    <dt>Imposta por</dt><dd><code>RoleAuthorizationTests</code> — nas três direções, inclusive que um Editor <em>ainda escreve</em>: uma política que recusa todo mundo passa num teste só de recusa e quebra o produto</dd>
   </dl></div>
 </details>
 
@@ -444,6 +494,216 @@
     <dt>Decisão</dt><dd>Build, format, unitários, frontend e integração são <em>passos</em> do job “Build validation”. O job também verifica que os projetos de teste da solução são exatamente os que ele roda.</dd>
     <dt>Consequência</dt><dd>Um portão movido para um job próprio deixaria de ser obrigatório em silêncio. O custo é rodar em série. Pague.</dd>
     <dt>Imposta por</dt><dd>A guarda que compara com <code>Vault.slnx</code>, e <code>TreatNoTestsAsError=true</code> nas duas suítes</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-46</span> Seleção é estado de componente, não estado de URL</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A regra da casa é que a URL é o estado. Uma seleção de itens é a exceção que precisa de justificativa escrita, ou alguém a “corrige” depois.</dd>
+    <dt>Decisão</dt><dd>A seleção vive num signal da <code>CollectionPage</code>, com a âncora de intervalo guardada como <em>id</em> e não como índice. Toda ação usa a interseção do conjunto guardado com <code>items()</code> visível.</dd>
+    <dt>Consequência</dt><dd>Quarenta ids numa query string é hostil; as navegações de filtro usam <code>replaceUrl</code> e atropelariam a seleção; e um link compartilhado que abre com quarenta linhas marcadas na frente de uma barra destrutiva é um perigo. A interseção é o que mantém a feature honesta: estreitar um filtro esconde a seleção mas não a destrói, e uma edição em massa nunca alcança uma linha que o usuário não pode ver.</dd>
+    <dt>Imposta por</dt><dd><code>item-selection.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-47</span> Visibilidade de coluna é preferência de navegador, guardando os nomes ocultos</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um grupo pode declarar oito campos, e a tabela precisa caber. Quais colunas alguém escondeu não é algo que um link compartilhado deveria carregar, e a página do item não precisa disso para reconstruir a lista.</dd>
+    <dt>Decisão</dt><dd><code>localStorage</code> em <code>vault.cols.&lt;collectionId&gt;.&lt;groupId|''&gt;</code>, guardando os nomes <strong>ocultos</strong>, com todo acesso em <code>try/catch</code> como em <code>tree-prefs</code>.</dd>
+    <dt>Consequência</dt><dd>Guardar o conjunto <em>visível</em> esconderia todo campo futuro de quem já abriu o seletor uma vez. A tabela em si rola horizontalmente com a identidade da linha em <code>position: sticky</code>, e só esse contêiner rola — nunca o corpo da página.</dd>
+    <dt>Imposta por</dt><dd><code>column-prefs.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-48</span> Um campo tipado <code>number</code> é formatado com <code>Intl.NumberFormat</code>, nunca como dinheiro</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Campos customizados são strings no item, tipados pelo grupo. O formatador de dinheiro estava à mão.</dd>
+    <dt>Decisão</dt><dd><code>date</code> passa por <code>formatDate</code>, <code>number</code> só recebe separadores de milhar do locale, <code>text</code> sai literal. A formatação é só de exibição — a ordenação continua em <code>sort.util.ts</code> sobre o valor bruto.</dd>
+    <dt>Consequência</dt><dd>Um campo <code>number</code> é um número de catálogo ou uma tiragem; renderizar <code>12</code> como <code>US$ 12,00</code> inventaria uma moeda que o dado nunca alegou. Ordenar pela string formatada quebraria a colação numérica. Um valor que não parseia é devolvido como veio, porque o campo é texto livre por baixo.</dd>
+    <dt>Imposta por</dt><dd><code>field-format.util.spec.ts</code> — inclusive o eco de valores não parseáveis</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-49</span> Uma carga que falhou é um estado, não um travamento</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd><code>shell.ts</code> chamava <code>store.load().catch(() =&gt; undefined)</code> com um comentário afirmando que o interceptor de auth cuidava do caso — mas ele cuida apenas do 401. Com o outlet condicionado a <code>loaded()</code>, qualquer 500, CORS, timeout ou API fora do ar deixava o usuário diante da palavra “Carregando…” <strong>para sempre</strong>, sem erro, sem retry e sem nada no console.</dd>
+    <dt>Decisão</dt><dd><code>VaultStore</code> ganhou <code>loadError</code> e <code>retryLoad()</code>; <code>load()</code> registra a falha <em>e</em> a repropaga, então quem depende de saber se funcionou continua sabendo. O shell renderiza três estados: carregado, falhou com botão, carregando.</dd>
+    <dt>Consequência</dt><dd><code>loaded</code> continua tudo-ou-nada de propósito — meia loja é pior que nenhuma. Era o pior bug de UX do app e não aparecia em teste nenhum, porque o caminho felizes sempre passava.</dd>
+    <dt>Imposta por</dt><dd><code>vault.store.spec.ts</code> — as falhas de carga e o <code>syncState</code> derivado</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-50</span> Um só relator de falha HTTP; repetir leituras, nunca escritas</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Havia dois interceptors — auth (401) e idioma. Um 403, 429, 500 ou queda de rede era indistinguível de sucesso para o código de feature, e oito métodos do store rejeitavam para cima com chamadores que não capturavam.</dd>
+    <dt>Decisão</dt><dd><code>errorInterceptor</code> produz uma frase localizada por classe de falha, preferindo o <code>ProblemDetails</code> do próprio servidor (que já vem traduzido via <code>Accept-Language</code>). Repete <strong>só GETs</strong>, só em 0/408/502/503/504, duas vezes com backoff curto. Fica fora do 401 (é da auth) e do 412 (é do <code>ConflictService</code>).</dd>
+    <dt>Consequência</dt><dd>Nunca repetir uma escrita: um PUT que deu timeout pode ter sido aplicado. Um 403 agora chega ao usuário, o que é uma superfície pequena de divulgação — ele diz “sem permissão”, nunca quem nem por quê. As escritas do store repropagam sem engolir: uma voz para falhas de HTTP, e só quem chamou sabe se deve manter o formulário, ficar parado, ou devolver um controle ao lugar.</dd>
+    <dt>Imposta por</dt><dd><code>error.interceptor.spec.ts</code> — o mapa completo de status, o backoff, e que uma escrita jamais é repetida</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-51</span> Erro não expira, e o toast é uma fila</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>O <code>ToastService</code> era um slot único de 1800 ms que dava <code>clearTimeout</code> em cada mensagem nova, então duas em sequência significavam uma nunca lida — e sem tom, uma falha era pintada em <code>--accent</code>.</dd>
+    <dt>Decisão</dt><dd>Tons <code>info | success | error</code>. Erro pinta <code>--danger</code> e <strong>não</strong> se fecha sozinho; info e success mantêm o tempo curto. As mensagens enfileiram, um erro segura a fila atrás de si, e texto idêntico já visível é descartado.</dd>
+    <dt>Consequência</dt><dd>Uma falha que o usuário não viu é uma falha que ele acha que deu certo. O descarte de duplicatas é o que permite ao interceptor e ao <code>catch</code> de uma página relatarem sem o usuário ler duas vezes. O tom nunca é só cor: cada um carrega marcador de texto, e erro é <code>role="alert"</code>.</dd>
+    <dt>Imposta por</dt><dd><code>toast.service.spec.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-52</span> Confirmar barato, desfazer de verdade</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Não havia <code>confirm()</code> nem diálogo nenhum no app: apagar um item era um clique que destruía e navegava para fora.</dd>
+    <dt>Decisão</dt><dd><code>ConfirmService.ask()</code> + <code>ui-confirm</code>, no mesmo formato de <code>ConflictService</code>/<code>ui-conflict-notice</code> — um serviço, não um framework de modal. E o toast da exclusão carrega um <strong>Desfazer</strong> que re-<code>upsert</code>a o item retido.</dd>
+    <dt>Consequência</dt><dd>O undo é a proteção principal; é ele que deixa o diálogo ser de uma frase. Dois limites honestos, escritos no código: a restauração é guardada por versão, então se alguém salvou a coleção no meio a escrita é recusada, o item <em>continua apagado</em> e um toast de erro diz isso — “recarregue e tente de novo” não traz um item de volta; e a ordem manual é o índice do array, então o item restaurado cai no fim do grupo.</dd>
+    <dt>Imposta por</dt><dd><code>confirm.service.spec.ts</code>, <code>ui-confirm</code> (incluindo foco inicial no Cancelar quando o tom é destrutivo)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-53</span> UI que não pode dizer a verdade sai</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Duas superfícies embarcadas mentiam. As três chaves de “política de acesso” eram um signal local, nunca persistido, sem campo na API, que voltava ao padrão a cada navegação. E <code>choosePlan</code> deixava o cliente definir o próprio <code>plan</code> como <code>pro</code> — sem pagamento, sem entitlement, sem auditoria — enquanto nada no app limitava qualquer coisa por plano.</dd>
+    <dt>Decisão</dt><dd>As chaves foram removidas, junto das suas mensagens, e substituídas por uma linha dizendo onde o acesso é controlado de verdade. O <code>choosePlan</code> saiu; os cartões de plano ficam, o atual é marcado, e o outro carrega um botão <strong>desabilitado</strong> dizendo que cobrança não está implementada.</dd>
+    <dt>Consequência</dt><dd>Um controle que não consegue persistir não pode parecer uma configuração — chave em forma de segurança que não faz nada é pior que a ausência dela. A lista de planos continua sendo informação verdadeira; só a transação era falsa, e é ela que sai.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span> — e a ausência das chaves em <code>en.ts</code>/<code>pt-BR.ts</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-54</span> <code>--danger</code> é separado de <code>--warn</code>, e as escalas estruturais não variam por tema</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Existiam 22 tokens. <code>--warn</code> fazia quatro trabalhos sem relação — ação destrutiva, erro de login, o selo de condição “Fair” e contagens de itens faltando — então “Apagar coleção” e um selo Fair saíam na mesma cor. Não havia escala de espaçamento, de tipo, de camada (z-index), de movimento, nem breakpoints; quatro stylesheets tinham copiado cada um um número mágico diferente.</dd>
+    <dt>Decisão</dt><dd><code>--danger</code>/<code>--danger-contrast</code> por tema, nos sete, ajustados para o vermelho nunca colidir com o accent daquele tema. As escalas que descrevem ritmo e empilhamento — <code>--sp-*</code>, <code>--fs-*</code>, <code>--dur-*</code>/<code>--ease-*</code>, <code>--z-*</code>, foco — num <code>:root</code> estrutural próprio. Breakpoints em <code>_mixins.scss</code> como variáveis SCSS, porque uma media query não lê <code>var()</code>.</dd>
+    <dt>Consequência</dt><dd>Cor que marca duas coisas sem relação não marca nenhuma. A ausência desses tokens era a causa-raiz de três defeitos vivos: <code>conflict-notice</code> pintava o fundo com <code>var(--surface)</code>, que não existe e não tinha fallback — o único aviso que não pode passar batido renderizava <strong>sem fundo</strong>; e <code>photo-manager</code> citava <code>var(--danger, …)</code> quatro vezes, caindo em <code>--accent</code>, o que fazia “apagar foto” ficar idêntico a “enquadrar foto” ao lado. Um tema novo entra sem poder bifurcar a escala de espaçamento.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span> para o uso; o build quebra se um token citado não existir apenas quando não há fallback</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-55</span> Dois cinzas e dois níveis de accent, em vez de clarear <code>--muted</code></summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Medido ao vivo: <code>--muted</code> ficava entre 2,4:1 e 4,4:1 dependendo do tema e da superfície, e era a cor de <em>toda</em> a camada de tipografia secundária — rótulo de estatística, contagem de grupo, migalha, cabeçalho de coluna, placeholder de campo. Clarear o token resolveria o contraste e apagaria a distinção entre texto que informa e texto que decora. Medindo o resto da paleta apareceu uma segunda falha do mesmo tipo: os accents são escolhidos para serem <em>vistos</em> como preenchimento, que é um trabalho de 3:1, e três dos sete reprovam 4,5:1 <em>como texto</em>.</dd>
+    <dt>Decisão</dt><dd><code>--muted-strong</code>, <code>--accent-strong</code> e <code>--accent2-strong</code> por tema, cada valor derivado da própria paleta daquele tema (matiz e saturação preservados, luminosidade movida até passar) contra <code>--bg</code>, <code>--panel</code> <strong>e</strong> <code>--panel2</code> — em tema escuro <code>--panel2</code> é a superfície mais clara, então é onde um rótulo realmente reprova. Onde o accent do tema já lê, o valor <code>-strong</code> <em>é</em> o accent.</dd>
+    <dt>Consequência</dt><dd>Todo call site passa a escolher: <code>--muted</code> é decoração e está abaixo de AA de propósito; <code>--muted-strong</code> é a camada de texto secundário. O accent cru é preenchimento; <code>-strong</code> é tipo. Como o valor coincide quando já passava, não existe uma segunda paleta silenciosa. Um gradiente de placeholder semeado por id foi <em>descartado na medição</em>: misturar accent em <code>--panel2</code> a 6% derruba o rótulo de volta para 4,35–4,48:1 em 20 de 28 combinações — compraria variedade reintroduzindo exatamente a falha que isto existe para corrigir.</dd>
+    <dt>Imposta por</dt><dd><code>src/styles/themes.spec.ts</code> — parseia o <code>.scss</code> embarcado, nunca uma cópia, e reprova abaixo de 4,5:1 nas três superfícies vezes sete temas. Um tema novo não consegue regredir a paleta</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-56</span> Cintilar significa “carregando”, e nada mais</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Não havia skeleton nenhum no app, e o estado “sem imagem” era o mixin <code>stripes()</code> — hachura diagonal. Em 7 de 10 cartões do painel, 5 de 5 do store e na maioria dos cartões de grupo, o resultado era que as três superfícies mais importantes pareciam permanentemente no meio de um fetch.</dd>
+    <dt>Decisão</dt><dd><code>ui-skeleton</code> é a única coisa no app autorizada a cintilar, e só dentro de <code>motion-safe</code>. Estado “sem imagem” é <code>--panel2</code> plano com um <code>ui-icon</code> grande e esmaecido, em <code>ui-image-slot</code> e <code>ui-mosaic</code>.</dd>
+    <dt>Consequência</dt><dd>Uma hachura é indistinguível de um shimmer, então enquanto ela ocupava o lugar do “sem imagem” nada podia distinguir ausência de espera. <code>stripes()</code> continua em <code>_mixins.scss</code> só porque alguns arquivos ainda o chamam; quando saírem, o mixin sai também.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span>; verificado ao vivo — zero <code>repeating-linear-gradient</code> na página de coleção</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-57</span> A frase de progresso substitui o par “razão + sufixo”</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>O rótulo visível era a chave <code>progress.owned</code> colada na <code>progress.ofCatalogued</code>. Em português isso renderizava <strong>“9 / 10 na coleção do catalogado”</strong> — não é uma frase. A sentença correta já existia no componente, composta a partir de <code>progress.textNoTarget</code>/<code>progress.textTarget</code>, e era passada apenas para um texto acessível.</dd>
+    <dt>Decisão</dt><dd>Renderizar a frase composta como o rótulo visível nas duas superfícies, e apagar <code>progress.ofCatalogued</code> das duas listas.</dd>
+    <dt>Consequência</dt><dd>Concatenar fragmentos traduzidos produz gramática errada em alguma língua — sempre; a ordem das palavras não é detalhe de apresentação. Ganha-se uma linha mais longa e uma gramatical. De lambuja resolve o número solto ao lado da barra: a frase nomeia os dois numeradores, então a porcentagem só pode ser a que concorda com ela.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span> — e a ausência da chave nas duas listas</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-58</span> A gaveta fora da tela em <code>$bp-lg</code>, com o breakpoint duplicado em script</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>O app era só desktop: quatro <code>@media</code> em vinte e três stylesheets, em quatro larguras sem coordenação, e um documento que transbordava um viewport de 390px em até 107px em <strong>toda</strong> tela — a sidebar era uma coluna de 226px fixos, sem breakpoint nenhum. Uma media query não pode ser lida pelo JavaScript, e uma gaveta escondida precisa sair também da árvore de acessibilidade e da ordem de tabulação.</dd>
+    <dt>Decisão</dt><dd><code>LayoutService</code> guarda <code>navOpen</code> (transitório, nunca persistido — gaveta aberta é um gesto, não uma preferência) e <code>compact</code>, um espelho de <code>$bp-lg</code> via <code>matchMedia</code>. A gaveta é <code>position: fixed</code>, e fechada abaixo do breakpoint é <code>aria-hidden</code> <strong>e</strong> <code>inert</code>.</dd>
+    <dt>Consequência</dt><dd>Um constante duplicada — documentada no serviço, e que precisa mudar junto com o mixin. A alternativa era uma gaveta <code>aria-hidden</code> enquanto visível, ou uma dúzia de paradas de tabulação invisíveis. <code>position: fixed</code> e não <code>absolute</code> é o detalhe que resolve o transbordo: uma caixa absoluta transladada para fora ainda conta na largura do documento, que era a origem dos 280px de rolagem lateral.</dd>
+    <dt>Imposta por</dt><dd>Medição com Playwright: <code>scrollWidth === clientWidth</code> em 390/768/900 nas nove rotas, em pt-BR e em tema escuro; e o contrato de foco da gaveta (abre no primeiro item, Escape devolve o foco ao botão)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-59</span> Um <code>confirm()</code> nativo para o guard de item não salvo</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A página do formulário de item ficava com o Salvar abaixo da dobra, sem barra fixa e sem indicador de alteração — uma armadilha de perda de dados a um clique da sidebar. Um <code>CanDeactivate</code> tem de responder de forma síncrona ou devolver um Observable.</dd>
+    <dt>Decisão</dt><dd>Barra de ação fixa, indicador de “alterações não salvas” derivado de um snapshot JSON contra uma linha de base, e <code>unsavedItemGuard</code> nas duas rotas do formulário — usando o <code>confirm()</code> do navegador, não o <code>ui-dialog</code>.</dd>
+    <dt>Consequência</dt><dd>Custa um diálogo sem estilo. A rota do <code>ui-dialog</code> exigiria estacionar uma navegação pela metade dentro do estado do componente, na única página cujo trabalho é justamente não perder dados. O snapshot, e não um flag, é o que permite notar um caractere digitado e apagado.</dd>
+    <dt>Imposta por</dt><dd><code>unsaved-item.guard.ts</code> e a verificação ao vivo (descartar fica na página; aceitar navega; formulário limpo não pergunta)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-60</span> Numa lista vazia a barra de ferramentas desaparece, não fica desabilitada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Numa coleção sem itens a barra renderizava duas linhas de filtro, o seletor de ordem e três alternadores de visão — nenhum utilizável, nenhum servindo de orientação.</dd>
+    <dt>Decisão</dt><dd>Quando o escopo aberto tem zero itens catalogados, sobra a linha de identidade (migalha, “+ Novo”, “Editar grupos”); filtros, ordem e visões saem da tela. O predicado é um só, <code>blank()</code>, que vive em <code>collection-page.ts</code> e é passado ao hero e à barra.</dd>
+    <dt>Consequência</dt><dd>Um controle desabilitado convida a perguntar por que; um controle ausente não é uma pergunta. E um filtro que chegou pela URL continua escapável, porque o estado vazio da lista oferece “limpar filtros” — que é o caminho de saída, no lugar onde a saída é necessária.</dd>
+    <dt>Imposta por</dt><dd>Três testes em <code>collection-page.spec.ts</code>, nos dois sentidos</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-61</span> Barras de skeleton medem <code>1lh</code>, contra a classe do elemento real</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um skeleton só serve se ocupar exatamente o espaço que o conteúdo vai ocupar; caso contrário troca uma tela vazia por um salto de layout, que é pior porque acontece depois que a pessoa começou a ler.</dd>
+    <dt>Decisão</dt><dd>O placeholder veste as <em>próprias classes</em> do elemento real, e cada barra tem <code>height="1lh"</code> — uma caixa de linha do que quer que a envolva — em vez de um valor em pixels adivinhado.</dd>
+    <dt>Consequência</dt><dd>Medido: o cartão de coleção do painel bate exatamente (154px nas duas larguras); o cartão de estatística e o do store deixam um resíduo quando uma linha de texto quebra, porque quantas linhas o conteúdo terá é justamente o que um skeleton não pode saber. Resíduo aceito. Cuidado com <code>variant="block"</code>, que carrega um piso <code>min-height: var(--sp-12)</code> e sobrepõe silenciosamente um <code>height</code> menor.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span>; medido com <code>GET /api/collections</code> atrasado</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-62</span> A marca de tom do toast é <code>aria-hidden</code>, ao lado de uma palavra</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A regra 12 diz que status nunca é só cor. A tentação é dar um <code>aria-label</code> ao ícone de tom.</dd>
+    <dt>Decisão</dt><dd>O ícone fica <code>aria-hidden</code>. Quem carrega o tom para leitor de tela é a palavra ao lado — “Falhou” / “Concluído” — mais <code>role="alert"</code> no caso de erro.</dd>
+    <dt>Consequência</dt><dd>Nomear o ícone anunciaria o tom duas vezes. A regra é satisfeita pela palavra, não pelo matiz nem pelo desenho; e o ícone perdeu também o anel de 15px que existia só para um <code>✓</code> pelado parecer deliberado — um triângulo dentro de um círculo de 15px são duas formas em dez pixels.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span>; verificado ao vivo (marca 13×13, <code>aria-hidden=true</code>, <code>role=alert</code>, “Falhou” ao lado)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-63</span> Uma etiqueta é guardada como foi escrita e comparada sem caixa</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Etiquetas existiam no modelo, no DTO e no validador desde o início, e a barra de edição em massa passou a adicionar e remover uma — mas o formulário do item apenas as carregava adiante. Dava para aplicar uma etiqueta a quarenta itens de uma vez e não havia como corrigir em nenhum deles. O formulário agora edita, e isso obrigou a decidir o que é uma etiqueta.</dd>
+    <dt>Decisão</dt><dd>Guardar exatamente como foi digitada, apenas sem espaços nas pontas; comparar <em>ignorando</em> a caixa. As regras vivem em <code>core/utils/tags.util.ts</code> e a barra de massa passou a usá-las também. O <code>wanted</code> derivado é filtrado do editor e não pode ser adicionado nem removido.</dd>
+    <dt>Consequência</dt><dd>Reescrever a capitalização de alguém é o tipo de normalização silenciosa que faz um campo parecer quebrado, então <code>Sealed</code> continua <code>Sealed</code>. Mas permitir <code>boxed</code> e <code>Boxed</code> ao mesmo tempo seriam duas fichas significando uma coisa, e um filtro por etiqueta daria duas respostas para ela — daí a comparação sem caixa. O <code>wanted</code> tinha de sair do editor por um motivo mais forte que estética: ele é derivado das cópias por <code>syncWantedTag</code>, então uma remoção seria desfeita no próximo save, e um controle cujo efeito é revertido em silêncio é pior que controle nenhum.</dd>
+    <dt>Imposta por</dt><dd><code>tags.util.spec.ts</code> e os testes de etiquetas em <code>item-form-page.spec.ts</code> (mostra, adiciona, remove, persiste, e nunca toca no <code>wanted</code>)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-64</span> Uma segunda escrita da mesma coleção é recusada, nunca enfileirada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Toda escrita cita em <code>If-Match</code> a versão com que o app sincronizou por último, e essa versão só avança quando a escrita em voo responde. Numa coleção grande o PUT de documento inteiro leva cerca de meio segundo — medido em 521&nbsp;ms para 286 itens — e um segundo clique em “Aplicar” chega bem antes disso. As duas requisições citavam o mesmo token, o servidor recusava a segunda com <code>412</code>, e o app levantava o aviso de conflito dizendo que <em>outra pessoa</em> havia alterado a coleção. Não havia outra pessoa: havia um clique duplo.</dd>
+    <dt>Decisão</dt><dd><code>VaultStore.exclusive</code> mantém no máximo uma escrita em voo <em>por coleção</em>. A segunda é recusada aqui mesmo, com <code>VaultBusyError</code> — que nunca é um <code>VaultConflictError</code> e portanto nunca aciona o aviso. <code>VaultStore.saving(id)</code> expõe o estado para que os controles parem de se oferecer: “Aplicar”, “Excluir” em massa e “Salvar item” ficam desabilitados e dizem “Salvando…”.</dd>
+    <dt>Consequência</dt><dd>Recusar e não enfileirar é a metade que importa. O payload da segunda escrita é o documento inteiro como a página o montou <em>antes</em> de a primeira aterrissar; mandá-lo depois não seria uma segunda edição, seria uma restauração por cima da primeira — exatamente a perda que a pré-condição existe para impedir. Onde o payload é vivo em vez de instantâneo, quem chama rearma em vez de descartar: o autosave das configurações e a ordenação manual pendente remarcam seu <em>debounce</em>, porque ali o descarte seria perda silenciosa. O guard é rede de proteção; a correção que o usuário vê é o botão que para de se oferecer.</dd>
+    <dt>Imposta por</dt><dd><code>vault.store.spec.ts</code> — recusa a segunda escrita sem mandá-la e sem levantar aviso, solta a coleção quando a escrita termina (aceita ou recusada) e não bloqueia outra coleção</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-65</span> Uma frase com duas contagens recebe uma <em>locução</em> como parâmetro</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A regra §6.3 proíbe concatenar string traduzida — e já foi violada nesta branch, produzindo <em>“9 / 10 na coleção do catalogado”</em>. Mas várias frases carregam <strong>duas contagens independentes</strong> (“{items} itens em {collections} coleções”), e um par <code>.one</code>/<code>.other</code> não consegue concordar com as duas. Quatro chaves por frase é combinatória sem fim.</dd>
+    <dt>Decisão</dt><dd><code>I18nService.count(n, noun)</code> renderiza <em>uma</em> locução — número mais substantivo — a partir de um par <code>noun.*</code> compartilhado, e a frase recebe isso como parâmetro. A tabela <code>COUNT_NOUNS</code> é conferida pelo compilador, então par trocado ou faltando quebra o build em vez de imprimir <code>noun.item.one</code> para o usuário. Onde a contagem precisa flexionar algo <em>dentro</em> da frase, escreve-se a frase duas vezes com <code>plural</code>.</dd>
+    <dt>Consequência</dt><dd>Não é concatenação, e a fronteira é nítida: a frase continua uma entrada só do dicionário, cuja ordem das palavras é do tradutor; o que viaja é um valor opaco, da mesma classe que um nome ou um valor formatado. A regra proíbe <em>código</em> decidir ordem de palavras, e um <code>{placeholder}</code> não decide. No instante em que o parâmetro carregaria uma oração, um verbo, ou pontuação juntando duas ideias, virou concatenação. O custo aceito: o tradutor perde a chance de flexionar <em>em volta</em> da contagem — foi por isso que <code>progress.textTarget</code> recusou a locução, já que o pt-BR flexiona <em>catalogado</em> dentro da frase.</dd>
+    <dt>Imposta por</dt><dd><code>i18n.service.spec.ts</code> (concordância irregular do pt-BR: item/itens, coleção/coleções, seção/seções, exemplar/exemplares) e <code>group-card.spec.ts</code>, que renderiza o DOM da superfície reportada e prende <code>1 subgrupo</code>, <code>falta 1</code> e <code>1 catalogado</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-66</span> <code>?tag=</code> é conferido contra o documento, e desconhecido não filtra nada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd><code>?tag=</code> é o primeiro parâmetro cujo vocabulário é <strong>dado do usuário</strong>: os valores válidos são criados digitando. Não há whitelist possível, ao contrário de <code>?cond=</code>.</dd>
+    <dt>Decisão</dt><dd>Conferido contra as etiquetas da <em>coleção inteira</em> — não do grupo aberto — e uma etiqueta desconhecida lê como “sem filtro”, nunca como lista vazia. A pertinência é decidida por <code>hasTag</code>, que pergunta a <code>withTagAdded</code> se a referência volta igual, reaproveitando as regras do editor de etiquetas.</dd>
+    <dt>Consequência</dt><dd>Conferir pelo grupo aberto faria entrar num grupo irmão descartar a etiqueta em silêncio, em vez de mostrar uma faixa honestamente vazia. E “sem filtro” em vez de “nada encontrado” significa que um link antigo mostra <em>mais</em> do que quem enviou via, e não uma página vazia — que é a única falha que o leitor consegue enxergar. O custo: um erro de digitação na etiqueta mostra tudo em silêncio. Uma comparação escrita de novo no filtro seria uma segunda definição de “a mesma etiqueta”, e a primeira divergência partiria um rótulo em duas respostas.</dd>
+    <dt>Imposta por</dt><dd><code>browse-params.spec.ts</code> e <code>browse.util.spec.ts</code> — igualdade exata e não substring, insensível à caixa, desconhecida e reservada lendo como sem filtro, e a composição com condição, situação e busca</dd>
   </dl></div>
 </details>
 

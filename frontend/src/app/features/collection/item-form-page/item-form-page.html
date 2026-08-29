@@ -1,5 +1,7 @@
 @if (collection(); as coll) {
-  <a class="back" [routerLink]="['/c', coll.id]" queryParamsHandling="preserve">← {{ coll.name }}</a>
+  <a class="back" [routerLink]="['/c', coll.id]" queryParamsHandling="preserve"
+    ><ui-icon name="chevron-left" [size]="13" />{{ coll.name }}</a
+  >
   <h1>{{
     editing()
       ? ('itemForm.editTitle' | t: { name: editing()!.name })
@@ -7,7 +9,10 @@
   }}</h1>
 
   <div class="layout">
-    <div class="photos">
+    <!-- The photos and the running summary share the narrow column: the
+         dropzone is 300px tall and the page is ~900px, so this column used to
+         be two thirds empty. -->
+    <aside class="side">
       <ui-photo-manager
         [photoIds]="photoIds()"
         [max]="maxPhotos"
@@ -15,7 +20,33 @@
         (changed)="setPhotos($event)"
         (framed)="reframe($event)"
       />
-    </div>
+
+      <ui-card class="summary">
+        <div class="summary__heading">{{ 'itemForm.summaryHeading' | t }}</div>
+        <dl class="summary__rows">
+          <dt>{{ 'itemForm.summaryOwnership' | t }}</dt>
+          <dd>
+            {{
+              owned()
+                ? ('itemForm.summaryOwned' | t: { n: copies().length })
+                : ('itemForm.summaryWanted' | t)
+            }}
+          </dd>
+
+          <dt>{{ 'itemForm.summaryPaid' | t }}</dt>
+          <dd>{{ paid() | money: currency() }}</dd>
+
+          <dt>{{ 'itemForm.summaryEstimate' | t }}</dt>
+          <dd>{{ estimate() | money: currency() }}</dd>
+
+          <dt>{{ 'itemForm.summaryPhotos' | t }}</dt>
+          <dd>{{ 'itemForm.summaryPhotoCount' | t: { n: photoIds().length, max: maxPhotos } }}</dd>
+
+          <dt>{{ 'itemForm.summaryDestination' | t }}</dt>
+          <dd class="destination">{{ destination() }}</dd>
+        </dl>
+      </ui-card>
+    </aside>
 
     <form class="form" (submit)="$event.preventDefault(); save()">
       <ui-field [label]="'itemForm.name' | t">
@@ -24,6 +55,16 @@
 
       <ui-field [label]="'itemForm.description' | t">
         <ui-textarea [rows]="3" [value]="description()" (valueChange)="description.set($event)" />
+      </ui-field>
+
+      <!--
+        Tags were reachable from the bulk bar and nowhere else, so a tag could be
+        applied to forty items at once and never corrected on one of them. The
+        derived `wanted` tag is filtered out inside `ui-tag-input`; see
+        `tags.util.ts` for why it is not offered.
+      -->
+      <ui-field [label]="'itemForm.tags' | t">
+        <ui-tag-input [(tags)]="tags" [suggestions]="tagSuggestions()" />
       </ui-field>
 
       <div class="pair">
@@ -75,7 +116,7 @@
                 variant="icon"
                 [ariaLabel]="'itemForm.removeCopy' | t"
                 (click)="removeCopy($index)"
-              >✕</ui-button>
+              ><ui-icon name="close" [size]="13" /></ui-button>
             </div>
             <div class="copies__fields">
               <ui-field [label]="'itemForm.paid' | t">
@@ -95,9 +136,12 @@
                 />
               </ui-field>
               <ui-field [label]="'itemForm.acquired' | t">
-                <ui-text-input
+                <!-- Not a bare type="date": that follows the *browser's* locale
+                     and shows mm/dd/yyyy inside a Portuguese UI, which does not
+                     fail — it records the wrong date. -->
+                <ui-date-input
                   variant="subtle"
-                  type="date"
+                  [ariaLabel]="'itemForm.copyAcquiredAria' | t: { n: $index + 1 }"
                   [value]="copy.acquiredOn"
                   (valueChange)="patchCopy($index, { acquiredOn: $event })"
                 />
@@ -143,11 +187,38 @@
         </div>
       </ui-card>
 
+      <!-- Sticky, because Save used to sit below the fold of a page tall enough
+           to scroll on every screen: the control that commits the work was the
+           one control you had to go looking for. The dirty flag is beside it so
+           "did that take?" is answerable without scrolling back up. -->
       <div class="actions">
+        <span class="actions__state" aria-live="polite">
+          @if (dirty()) {
+            <span class="dot" aria-hidden="true">●</span>{{ 'itemForm.unsaved' | t }}
+          }
+        </span>
         <ui-button variant="ghost" (click)="cancel()">{{ 'itemForm.cancel' | t }}</ui-button>
-        <ui-button type="submit">{{ 'itemForm.save' | t }}</ui-button>
+        <!-- Disabled while this collection's own write is in flight: a second
+             save would quote the version the first is about to move, and come
+             back refused as a conflict with a writer who does not exist. -->
+        <ui-button type="submit" [disabled]="saving()">
+          {{ (saving() ? 'itemForm.saving' : 'itemForm.save') | t }}
+        </ui-button>
       </div>
     </form>
+  </div>
+} @else if (loading()) {
+  <!--
+    Ordered before the not-found branch, and that order is the whole point: the
+    vault arrives asynchronously, so "the store has no such collection yet" and
+    "there is no such collection" are the same expression at two different
+    moments. Telling someone their collection does not exist while it is still
+    in flight is the version of this bug that the shell used to hide by refusing
+    to render any page at all until the whole vault had landed.
+  -->
+  <div class="missing" aria-busy="true">
+    <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
+    <ui-skeleton variant="text" [lines]="2" />
   </div>
 } @else {
   <div class="missing">

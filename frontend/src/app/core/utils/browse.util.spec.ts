@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { Condition, GroupNode, Item, ItemCopy, Section } from '../models';
-import { NO_FILTERS, neighbours, scopeItems, visibleItems } from './browse.util';
+import { NO_FILTERS, hasTag, matchesQuery, neighbours, scopeItems, visibleItems } from './browse.util';
 import { UNGROUPED_ID } from './group-stats.util';
 import { UNSECTIONED_ID } from './sections.util';
+import { WANTED_TAG } from './tags.util';
 
 function group(id: string, parentId: string | null = null): GroupNode {
   return { id, name: id, parentId, fields: [], sort: null, target: null };
@@ -113,10 +114,98 @@ describe('browse.util', () => {
       expect(ids(list)).toEqual(['charizard', 'alakazam']);
     });
 
+    it('finds an item by a custom field value, not only by its name', () => {
+      // The cataloguer's most frequent lookup is a catalogue number, which is
+      // precisely a custom field — the one place the old search could not see.
+      const numbered = [
+        { ...item('charizard', 'rare'), custom: [{ key: 'Número', value: '004-A' }] },
+        item('alakazam', 'rare'),
+      ];
+      expect(ids(visibleItems(numbered, GROUPS, { ...ALL, query: '004' }))).toEqual(['charizard']);
+    });
+
     it('leaves the array it was given untouched', () => {
       const original = ids(ITEMS);
       visibleItems(ITEMS, GROUPS, { ...ALL, sort: { by: 'name', direction: 'asc' } });
       expect(ids(ITEMS)).toEqual(original);
+    });
+  });
+
+  describe('hasTag', () => {
+    const tagged = { ...item('x', 'rare'), tags: ['CIB', 'first print'] };
+
+    it('matches a whole tag, ignoring case, the way the editor does', () => {
+      expect(hasTag(tagged, 'cib')).toBe(true);
+      expect(hasTag(tagged, 'CIB')).toBe(true);
+      expect(hasTag(tagged, '  cib ')).toBe(true);
+      expect(hasTag(tagged, 'first print')).toBe(true);
+    });
+
+    it('is exact, so it does not match the substrings a search would', () => {
+      // This is the whole difference between a tag filter and the search box:
+      // `matchesQuery` finds 'cib' inside 'cibernetico', and a filter must not.
+      expect(hasTag(tagged, 'ci')).toBe(false);
+      expect(hasTag(tagged, 'print')).toBe(false);
+      expect(hasTag({ ...tagged, tags: ['unboxed'] }, 'boxed')).toBe(false);
+    });
+
+    it('carries nothing for a blank tag or the derived wanted one', () => {
+      expect(hasTag(tagged, '')).toBe(false);
+      expect(hasTag({ ...tagged, tags: [WANTED_TAG] }, WANTED_TAG)).toBe(false);
+    });
+  });
+
+  describe('visibleItems — the tag filter', () => {
+    const TAGGED = [
+      { ...item('charizard', 'rare', [copy('Mint')]), tags: ['CIB', 'rare'] },
+      { ...item('alakazam', 'rare'), tags: ['cib'] },
+      { ...item('blastoise', 'cards', [copy('Mint')]), tags: ['loose'] },
+      { ...item('tetris', 'games', [copy('Mint')]), tags: [] },
+    ];
+
+    it('keeps only the items carrying it, however either side spelled it', () => {
+      // Order is the default sort's business, not the filter's — hence .sort().
+      expect(ids(visibleItems(TAGGED, GROUPS, { ...ALL, tag: 'cib' })).sort()).toEqual([
+        'alakazam',
+        'charizard',
+      ]);
+    });
+
+    it('is one more predicate, so it composes with condition, status and search', () => {
+      // Four filters at once, each removing something the others would keep:
+      // 'alakazam' owns nothing, 'blastoise' is not tagged cib, 'tetris' is
+      // neither — and the search still has to match.
+      expect(
+        ids(
+          visibleItems(TAGGED, GROUPS, {
+            ...ALL,
+            tag: 'cib',
+            condition: 'Mint',
+            own: 'owned',
+            query: 'chari',
+          }),
+        ),
+      ).toEqual(['charizard']);
+
+      // Drop the tag and the same filters keep two more items.
+      expect(
+        ids(visibleItems(TAGGED, GROUPS, { ...ALL, condition: 'Mint', own: 'owned' })).sort(),
+      ).toEqual(['blastoise', 'charizard', 'tetris']);
+
+      // Contradict it and nothing survives, rather than the tag quietly winning.
+      expect(visibleItems(TAGGED, GROUPS, { ...ALL, tag: 'loose', own: 'wanted' })).toEqual([]);
+    });
+
+    it('narrows within the group scope rather than escaping it', () => {
+      expect(
+        ids(visibleItems(TAGGED, GROUPS, { ...ALL, groupId: 'games', tag: 'cib' })),
+      ).toEqual([]);
+    });
+
+    it('does not narrow at all when no tag is asked for', () => {
+      expect(ids(visibleItems(TAGGED, GROUPS, { ...ALL, tag: null }))).toEqual(
+        ids(visibleItems(TAGGED, GROUPS, ALL)),
+      );
     });
   });
 
@@ -211,6 +300,40 @@ describe('browse.util', () => {
       expect(visibleItems(ITEMS, GROUPS, criteria(), []).map(i => i.id)).toEqual(
         visibleItems(ITEMS, GROUPS, criteria()).map(i => i.id),
       );
+    });
+  });
+
+  describe('matchesQuery', () => {
+    const subject = {
+      ...item('Charizard', 'rare'),
+      description: 'Holo, first edition',
+      tags: ['graded', 'holo'],
+      custom: [
+        { key: 'Número', value: '004-A' },
+        { key: 'Set', value: 'Base' },
+      ],
+    };
+
+    it('matches an empty query, so no search means no filter', () => {
+      expect(matchesQuery(subject, '')).toBe(true);
+    });
+
+    it('matches the name, the description, a tag and a field value', () => {
+      // The needle arrives already trimmed and lower-cased — folding it once at
+      // the call site rather than once per item.
+      expect(matchesQuery(subject, 'chariz')).toBe(true);
+      expect(matchesQuery(subject, 'first edition')).toBe(true);
+      expect(matchesQuery(subject, 'graded')).toBe(true);
+      expect(matchesQuery(subject, '004-a')).toBe(true);
+    });
+
+    it('does not match a field name, only its value', () => {
+      // A group declaring "Número" would otherwise make every item match "núm".
+      expect(matchesQuery(subject, 'número')).toBe(false);
+    });
+
+    it('is false when nothing on the item holds it', () => {
+      expect(matchesQuery(subject, 'blastoise')).toBe(false);
     });
   });
 });

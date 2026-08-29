@@ -14,6 +14,7 @@ import {
 import { ImagesApi } from '../../../core/api/images-api';
 import { I18nService } from '../../../core/i18n';
 import { TPipe } from '../../pipes/t.pipe';
+import { UiIcon } from '../icon/icon';
 
 /**
  * Full-screen viewer for a set of photos.
@@ -31,7 +32,7 @@ import { TPipe } from '../../pipes/t.pipe';
 @Component({
   selector: 'ui-lightbox',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe],
+  imports: [TPipe, UiIcon],
   host: {
     '(document:keydown)': 'onKeydown($event)',
   },
@@ -56,20 +57,22 @@ import { TPipe } from '../../pipes/t.pipe';
               [disabled]="ids().length < 2"
               [attr.aria-label]="'ui.lightbox.previous' | t"
               (click)="step(-1)"
-            >←</button>
+            ><ui-icon name="chevron-left" [size]="13" /></button>
             <button
               type="button"
               [disabled]="ids().length < 2"
               [attr.aria-label]="'ui.lightbox.next' | t"
               (click)="step(1)"
-            >→</button>
+            ><ui-icon name="chevron-right" [size]="13" /></button>
             <a
               class="original"
               [href]="originalUrl()"
               target="_blank"
               rel="noopener"
             >{{ 'ui.lightbox.original' | t }}</a>
-            <button type="button" [attr.aria-label]="'ui.lightbox.close' | t" (click)="close()">✕</button>
+            <button type="button" [attr.aria-label]="'ui.lightbox.close' | t" (click)="close()">
+              <ui-icon name="close" [size]="13" />
+            </button>
           </div>
         </div>
       </div>
@@ -131,6 +134,9 @@ import { TPipe } from '../../pipes/t.pipe';
 
     button,
     .original {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       padding: 4px 10px;
       font-family: var(--font-mono);
       font-size: 10px;

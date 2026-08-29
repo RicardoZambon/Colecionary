@@ -348,6 +348,130 @@
   <thead><tr><th>Sintoma</th><th>Causa provável</th><th>O que fazer</th></tr></thead>
   <tbody>
     <tr>
+      <td>“O app fica em <em>Carregando…</em> para sempre”</td>
+      <td><strong>Corrigido.</strong> O shell chamava <code>load()</code> com um
+          catch que descartava o erro, e o outlet era condicionado a
+          <code>loaded()</code> — qualquer falha que não fosse 401 travava ali,
+          sem mensagem e sem nada no console</td>
+      <td>Agora a falha aparece com a frase do servidor e um botão
+          <em>Tentar de novo</em>. Se o botão insiste em falhar, o problema é
+          <code>/api/collections</code> ou <code>/api/tenant/settings</code> —
+          olhe o log da API, não o navegador</td>
+    </tr>
+    <tr>
+      <td>“Diz que <em>outra pessoa</em> alterou a coleção, e estou sozinho na
+          conta”</td>
+      <td><strong>Corrigido.</strong> Duas escritas da mesma coleção em voo ao
+          mesmo tempo citavam a mesma versão em <code>If-Match</code>; o servidor
+          aceitava a primeira e recusava a segunda com <code>412</code>. Numa
+          coleção grande o PUT leva cerca de meio segundo, então um clique duplo
+          em “Aplicar” bastava. O outro escritor era o próprio segundo clique</td>
+      <td>O store agora mantém no máximo uma escrita em voo por coleção
+          (<code>VaultStore.exclusive</code>, ADR-64) e os botões ficam
+          desabilitados enquanto ela corre. Se a mensagem aparecer mesmo assim,
+          é conflito de verdade — outra aba, outra sessão, ou um
+          <code>load()</code> que terminou depois de uma escrita que ele não
+          viu; a saída é <em>Recarregar a versão mais recente</em> no aviso</td>
+    </tr>
+    <tr>
+      <td>“O log da API mostra <code>ERR … responded 500</code> para um conflito
+          que o cliente recebeu como 412”</td>
+      <td>Não é o que aconteceu com o cliente.
+          <code>UseSerilogRequestLogging</code> está registrado <em>depois</em>
+          de <code>UseExceptionHandler</code>, ou seja, por dentro dele: o
+          middleware de log vê a exceção subindo antes de o handler escrever a
+          resposta, e anota 500. O status real é o do handler</td>
+      <td>Confie no status que o cliente recebeu, não no do log; a linha
+          seguinte nomeia a exceção
+          (<code>PreconditionFailedException</code>) e essa é a informação boa</td>
+    </tr>
+    <tr>
+      <td>“Salvei / apaguei / mudei um papel e nada aconteceu”</td>
+      <td>Antes, oito métodos do store rejeitavam para cima e vários chamadores
+          não capturavam — uma troca de papel falha deixava o papel novo no
+          <code>&lt;select&gt;</code> e o antigo no servidor</td>
+      <td>Toda requisição falha é relatada uma vez. Se não há toast, a
+          requisição não falhou — procure no lugar certo</td>
+    </tr>
+    <tr>
+      <td>“Um toast de erro não vai embora”</td>
+      <td>Por design: erros não expiram</td>
+      <td>Precisa ser fechado. Uma falha que o usuário não viu é uma falha que
+          ele acha que deu certo</td>
+    </tr>
+    <tr>
+      <td>“A mesma mensagem apareceu duas vezes”</td>
+      <td>Não deveria: <code>ToastService</code> descarta texto idêntico já na
+          fila ou já visível</td>
+      <td>Se aparecer, as duas frases são diferentes — provavelmente o
+          <code>catch</code> da página e o interceptor dizendo coisas distintas
+          sobre a mesma falha</td>
+    </tr>
+    <tr>
+      <td>“Um GET aparece três vezes no log do servidor”</td>
+      <td>O retry limitado do interceptor: duas tentativas extras, 350 ms e
+          700 ms, e <strong>só</strong> para 0/408/502/503/504</td>
+      <td>Esperado. Escrita nunca é repetida — um PUT que deu timeout pode ter
+          sido aplicado</td>
+    </tr>
+    <tr>
+      <td>“Toast vermelho dizendo que algo não existe mais, num app que
+          funciona”</td>
+      <td>Uma requisição que falha <em>de propósito</em> chegou ao relator
+          global. Foi o que aconteceu com <code>GET /api/setup/status</code>,
+          que dá 404 num host já configurado — e é assim que ele diz “já
+          configurado”</td>
+      <td>Passe <code>SILENT_FAILURE</code> no contexto daquela requisição.
+          Nada ensina a ignorar erros de verdade mais rápido que um alarme
+          falso a cada carregamento</td>
+    </tr>
+    <tr>
+      <td>“Um Viewer conseguiu apagar/alterar coisas”</td>
+      <td>Endpoint de escrita sem política. Autenticado não é autorizado</td>
+      <td><code>[Authorize(Policy = VaultPolicies.CanWrite)]</code>, ou
+          <code>CanAdminister</code> se for em escala de conta. Cubra em
+          <code>RoleAuthorizationTests</code></td>
+    </tr>
+    <tr>
+      <td>“A página rola de lado no celular”</td>
+      <td>Uma largura fixa numa regra de layout, ou um elemento fora da tela
+          posicionado <code>absolute</code> em vez de <code>fixed</code> — uma
+          caixa absoluta transladada ainda conta na largura do documento</td>
+      <td>Compare <code>document.documentElement.scrollWidth</code> com
+          <code>clientWidth</code> a 390px. Grades declaram um mínimo
+          (<code>minmax</code>), nunca uma contagem</td>
+    </tr>
+    <tr>
+      <td>“O app pisca branco e em inglês ao carregar”</td>
+      <td>O script inline no <code>&lt;head&gt;</code> de
+          <code>index.html</code> foi removido, ou o id do tema/idioma não está
+          na allowlist dele</td>
+      <td>Reponha o script, ou acrescente o id. Um valor faltando na allowlist
+          custa um piscar, não uma página quebrada</td>
+    </tr>
+    <tr>
+      <td>“Uma data salvou um dia ou um mês errado”</td>
+      <td>Um <code>&lt;input type="date"&gt;</code> cru em vez de
+          <code>ui-date-input</code>. O input nativo segue o locale do
+          <strong>navegador</strong>, não do documento — em pt-BR com Chrome em
+          inglês ele desenha <code>mm/dd/yyyy</code>, e isso não falha: grava
+          errado</td>
+      <td>Troque por <code>ui-date-input</code></td>
+    </tr>
+    <tr>
+      <td>“O botão de plano não faz nada”</td>
+      <td>Deliberado: cobrança não está implementada</td>
+      <td>O controle está desabilitado e diz por quê. Nada no app é limitado por
+          plano hoje</td>
+    </tr>
+    <tr>
+      <td>“Não consigo apagar um grupo”</td>
+      <td>Comportamento antigo: a exclusão era recusada se houvesse qualquer
+          item na subárvore</td>
+      <td>Agora o diálogo pergunta o destino do conteúdo. Se a versão instalada
+          ainda recusa, é anterior a esta mudança</td>
+    </tr>
+    <tr>
       <td>“O wizard de setup roda toda vez”</td>
       <td><code>/data/config</code> não está montado</td>
       <td>Monte o volume. Depois de configurado, a rota <code>/api/setup/status</code> nem é mapeada</td>
@@ -419,6 +543,20 @@
     </tr>
   </tbody>
 </table>
+</div>
+
+<div class="callout">
+  <span class="label">Três lugares que um tema ou idioma novo precisa alcançar</span>
+  <p>
+    O bloco em <code>styles/_themes.scss</code> (com
+    <code>--muted-strong</code>, <code>--accent-strong</code>,
+    <code>--accent2-strong</code> e <code>--danger</code> derivados contra as
+    superfícies daquele tema — <code>themes.spec.ts</code> recusa abaixo de
+    4,5:1); a entrada em <code>core/state/themes.ts</code> mais a chave de
+    descrição nos dois dicionários; e a <strong>allowlist no script inline de
+    <code>src/index.html</code></strong>, sem a qual o primeiro paint cai no
+    padrão e pisca.
+  </p>
 </div>
 
 <h2 id="upgrade">Notas de atualização</h2>

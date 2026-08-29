@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Vault.Api.Infrastructure;
 using Vault.Application.Collections.Dtos;
 using Vault.Application.Common;
 using Vault.Application.Import;
@@ -63,6 +65,7 @@ public class ImportController(ImportService import) : ControllerBase
     /// an unequal pair of lists is a mistake that is impossible to miss.
     /// </param>
     /// <param name="ct">Cancellation.</param>
+    [Authorize(Policy = VaultPolicies.CanAdminister)]
     [HttpPost]
     [RequestSizeLimit(MaxArchiveBytes)]
     [ProducesResponseType<IReadOnlyList<VersionedCollectionDto>>(StatusCodes.Status200OK)]

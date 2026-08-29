@@ -474,6 +474,33 @@
   os targets da coleção.
 </p>
 
+<h2 id="parentid">A única referência que não pode ficar pendurada</h2>
+
+<p>
+  Nenhuma entidade, coluna ou migration mudou nesta rodada. Uma invariante,
+  porém, ficou explícita e agora é imposta pelo validador.
+</p>
+
+<p>
+  <code>Group.ParentId</code> é uma string simples, sem FK — “trees are replaced
+  wholesale”. As outras referências internas do agregado
+  (<code>Section.GroupId</code>, <code>Item.SectionId</code>) <em>podem</em>
+  ficar penduradas de propósito: grupos, seções e itens chegam no mesmo PUT, e
+  cruzá-los recusaria estados intermediários legítimos, então uma referência
+  morta resolve graciosamente para “nenhuma”.
+</p>
+
+<p>
+  <code>ParentId</code> não tem leitura graciosa. <code>childrenOf(groups,
+  null)</code> nunca alcança um ramo em laço ou órfão, então
+  <strong>todo grupo dentro dele desaparece da árvore e do seletor — enquanto os
+  itens dele continuam contando no total da coleção.</strong> Um usuário vê uma
+  contagem que não bate com nada que consiga abrir, e nada em lugar nenhum
+  registra um erro. É por isso que essa assimetria existe:
+  <code>CollectionDtoValidator</code> recusa com <strong>400</strong> um pai
+  ausente do próprio documento e um grafo de pais com ciclo, e apenas esses.
+</p>
+
 <h2 id="moeda">Moeda</h2>
 
 <p>

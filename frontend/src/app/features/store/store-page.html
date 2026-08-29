@@ -3,35 +3,69 @@
   <p class="sub">{{ 'store.sub' | t }}</p>
 </header>
 
-<div class="grid">
-  @for (listing of store.storeListings(); track listing.id) {
-    <ui-card class="listing">
-      <div class="listing__banner">
-        <span class="letter">{{ listing.name.charAt(0) }}</span>
-        <span class="curated">{{ 'store.curated' | t }}</span>
-      </div>
-      <div class="listing__body">
-        <div class="name">{{ listing.name }}</div>
-        <div class="meta">{{
-          'store.listingMeta'
-            | t
-              : {
-                  publisher: listing.publisher,
-                  items: listing.items.length,
-                  groups: listing.groups.length
-                }
-        }}</div>
-        <div class="desc">{{ listing.description }}</div>
-        <div class="fill"></div>
-        <div class="foot">
-          <span class="value">{{ 'store.estimate' | t: { value: totalValue(listing) | money } }}</span>
-          @if (inVault(listing)) {
-            <ui-button variant="ghost" size="sm" [disabled]="true">{{ 'store.inVault' | t }}</ui-button>
-          } @else {
-            <ui-button size="sm" (click)="add(listing)">{{ 'store.add' | t }}</ui-button>
-          }
+<!--
+  Placeholders wear the real card's own classes, and every bar is `1lh` tall —
+  one line box of whatever it lands in — so `.name`, `.meta` and `.foot .value`
+  reserve exactly what the text will occupy. The description is the one row that
+  cannot be exact, because a real one runs to two lines or three; it reserves
+  two. `aria-busy` and the one announcement sit on the region; the skeletons are
+  `aria-hidden`.
+-->
+<div class="grid" [attr.aria-busy]="loading() ? 'true' : null">
+  @if (loading()) {
+    <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
+    @for (row of placeholders; track row) {
+      <ui-card class="listing">
+        <!-- A fixed 60px band, so its shape is already reserved by its height;
+             there is no intrinsic image ratio here to hold open. -->
+        <div class="listing__banner listing__banner--loading">
+          <ui-skeleton variant="block" radius="0" />
         </div>
-      </div>
-    </ui-card>
+        <div class="listing__body">
+          <div class="name"><ui-skeleton width="64%" height="1lh" /></div>
+          <div class="meta"><ui-skeleton width="86%" height="1lh" /></div>
+          <!-- Two bars plus the component's own gap have to add up to two line
+               boxes, which is what the subtraction is for: n bars leave n-1
+               gaps, so each bar gives back its share. -->
+          <div class="desc">
+            <ui-skeleton [lines]="2" height="calc(1lh - var(--sp-2) / 2)" />
+          </div>
+          <div class="fill"></div>
+          <div class="foot">
+            <span class="value"><ui-skeleton width="72px" height="1lh" /></span>
+            <!-- The height a `size="sm"` ui-button resolves to; there is no
+                 token for it, and this row's height is that button's.
+                 Deliberately not `variant="block"`: that one carries a
+                 `min-height: var(--sp-12)` floor for filling a box, which at 48px
+                 silently overrides any smaller height and made the card 16px too
+                 tall. -->
+            <ui-skeleton width="112px" height="32px" radius="var(--radius)" />
+          </div>
+        </div>
+      </ui-card>
+    }
+  } @else {
+    @for (listing of store.storeListings(); track listing.id) {
+      <ui-card class="listing">
+        <div class="listing__banner">
+          <span class="letter">{{ listing.name.charAt(0) }}</span>
+          <span class="curated">{{ 'store.curated' | t }}</span>
+        </div>
+        <div class="listing__body">
+          <div class="name">{{ listing.name }}</div>
+          <div class="meta">{{ listingMeta(listing) }}</div>
+          <div class="desc">{{ listing.description }}</div>
+          <div class="fill"></div>
+          <div class="foot">
+            <span class="value">{{ 'store.estimate' | t: { value: totalValue(listing) | money } }}</span>
+            @if (inVault(listing)) {
+              <ui-button variant="ghost" size="sm" [disabled]="true">{{ 'store.inVault' | t }}</ui-button>
+            } @else {
+              <ui-button size="sm" (click)="add(listing)">{{ 'store.add' | t }}</ui-button>
+            }
+          </div>
+        </div>
+      </ui-card>
+    }
   }
 </div>

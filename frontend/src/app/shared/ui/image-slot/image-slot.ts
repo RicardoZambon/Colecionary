@@ -2,24 +2,35 @@ import { ChangeDetectionStrategy, Component, inject, input, output } from '@angu
 
 import { I18nService } from '../../../core/i18n';
 import { TPipe } from '../../pipes/t.pipe';
+import { IconName, UiIcon } from '../icon/icon';
 
 /**
  * User-fillable image placeholder (collection banners and icons).
- * Purely presentational: shows `src` when set, the striped placeholder
- * otherwise, and emits the picked/dropped file — the page owns upload
- * and persistence.
+ * Purely presentational: shows `src` when set, an empty-state placeholder
+ * otherwise, and emits the picked/dropped file — the page owns upload and
+ * persistence.
+ *
+ * **The placeholder says "empty", never "loading".** It used to be a diagonal
+ * stripe hatch, which is the exact silhouette of a skeleton shimmer, so on the
+ * dashboard, the store and the group grid the majority of cards read as
+ * permanently mid-fetch — and because the app had no real skeletons, nothing
+ * anywhere distinguished the two states. It is now a flat `--panel2` field with
+ * a large, dimmed outline mark: static, obviously terminal, and unmistakable
+ * next to `ui-skeleton`'s sweep. Stripes are reserved for nothing at all now;
+ * `ui-skeleton` supersedes them.
  */
 @Component({
   selector: 'ui-image-slot',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe],
+  imports: [TPipe, UiIcon],
   host: {
     '(click)': 'browse()',
     '(dragover)': 'onDragOver($event)',
     '(drop)': 'onDrop($event)',
     // Bound, not literal: a host attribute is written once at creation, so the
     // title has to be an expression to follow a language change.
-    '[title]': "i18n.t('ui.imageSlot.hint')",
+    '[title]': "fillable() ? i18n.t('ui.imageSlot.hint') : null",
+    '[class.readonly]': '!fillable()',
   },
   template: `
     @if (src(); as url) {
@@ -36,12 +47,15 @@ import { TPipe } from '../../pipes/t.pipe';
           [attr.aria-label]="'ui.imageSlot.reframe' | t"
           (click)="requestReframe($event)"
         >
-          ⌖
+          <ui-icon name="crosshair" [size]="13" />
         </button>
       }
     } @else {
       <div class="placeholder">
-        <span>{{ placeholder() }}</span>
+        <ui-icon class="placeholder__mark" [name]="icon()" [size]="34" [strokeWidth]="1.5" />
+        @if (placeholder()) {
+          <span>{{ placeholder() }}</span>
+        }
       </div>
     }
   `,
@@ -55,19 +69,24 @@ import { TPipe } from '../../pipes/t.pipe';
       cursor: pointer;
     }
 
+    /* Nothing to click, so nothing that looks clickable. */
+    :host(.readonly) {
+      cursor: default;
+    }
+
     .reframe {
       position: absolute;
-      top: 6px;
-      right: 6px;
-      width: 20px;
-      height: 20px;
+      top: var(--sp-2);
+      right: var(--sp-2);
+      width: 22px;
+      height: 22px;
       display: grid;
       place-items: center;
+      padding: 0;
       border: var(--bw) solid var(--border);
       border-radius: var(--pill);
       background: var(--panel);
       color: var(--text2);
-      font-size: 11px;
       cursor: pointer;
 
       &:hover {
@@ -83,19 +102,35 @@ import { TPipe } from '../../pipes/t.pipe';
       background-position: center;
     }
 
+    /* Flat and still. See the class comment: anything with a repeating pattern
+       here reads as a shimmer. */
     .placeholder {
       width: 100%;
       height: 100%;
-      display: grid;
-      place-items: center;
-      background: repeating-linear-gradient(45deg, var(--panel2) 0 8px, var(--panel) 8px 16px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--sp-1);
+      padding: var(--sp-2);
+      background: var(--panel2);
+
+      &__mark {
+        color: var(--muted-strong);
+        /* Dimmed because the mark is decoration and the label is the message;
+           the label itself stays at full strength and clears AA. */
+        opacity: 0.4;
+      }
 
       span {
         font-family: var(--font-mono);
-        font-size: 10px;
-        color: var(--muted);
-        padding: 6px 10px;
+        font-size: var(--fs-xs);
+        letter-spacing: 0.08em;
+        color: var(--muted-strong);
         text-align: center;
+        /* A banner slot can be 150px tall and 40px on a phone; the label goes
+           before the mark does. */
+        overflow: hidden;
       }
     }
   `,
@@ -111,8 +146,20 @@ export class UiImageSlot {
   readonly focal = input('50% 50%');
   /** Shows the "adjust framing" affordance. Off by default: read-only usages
    * (the dashboard card) must stay inert. */
+  /**
+   * Whether picking or dropping a file is offered at all.
+   *
+   * Defaults to true, because that is what every existing caller relied on
+   * before this existed. It is set to false for a Viewer: the whole slot is a
+   * click target and a drop zone, so without this a reader clicking the banner
+   * gets a file dialog for an upload the server will refuse with a 403. A
+   * courtesy, not a control — the 403 is the real answer.
+   */
+  readonly fillable = input(true);
   readonly reframable = input(false);
   readonly placeholder = input('');
+  /** The mark drawn behind the placeholder label. */
+  readonly icon = input<IconName>('image');
   readonly fileSelected = output<File>();
   readonly reframeRequested = output<void>();
 
@@ -124,6 +171,7 @@ export class UiImageSlot {
   }
 
   protected browse(): void {
+    if (!this.fillable()) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -135,10 +183,15 @@ export class UiImageSlot {
   }
 
   protected onDragOver(event: DragEvent): void {
+    // Not preventing the default is what makes the browser refuse the drop, so
+    // an unfillable slot shows the "no drop" cursor rather than accepting a file
+    // and silently doing nothing with it.
+    if (!this.fillable()) return;
     event.preventDefault();
   }
 
   protected onDrop(event: DragEvent): void {
+    if (!this.fillable()) return;
     event.preventDefault();
     const file = event.dataTransfer?.files?.[0];
     if (file) this.fileSelected.emit(file);

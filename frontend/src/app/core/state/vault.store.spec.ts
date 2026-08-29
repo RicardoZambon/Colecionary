@@ -4,16 +4,16 @@ import { TestBed } from '@angular/core/testing';
 import { Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { VaultApi, VaultConflictError, VersionedCollection, VersionedItem } from '../api/vault-api';
 import {
-  Collection,
-  Item,
-  Member,
-  StoreListing,
-  TenantSettings,
-  UserProfile,
-} from '../models';
+  VaultApi,
+  VaultBusyError,
+  VaultConflictError,
+  VersionedCollection,
+  VersionedItem,
+} from '../api/vault-api';
+import { Collection, Item, Member, MemberRole, StoreListing, TenantSettings, UserProfile } from '../models';
 import { ConflictService } from './conflict.service';
+import { I18nService } from '../i18n';
 import { VaultStore } from './vault.store';
 
 /**
@@ -29,6 +29,40 @@ class FakeVaultApi extends VaultApi {
   private readonly versions = new Map<string, number>();
   /** Every `If-Match` the store sent, in order. */
   readonly preconditions: string[] = [];
+  /**
+   * When set, every read fails with it — an outage, a 500, a CORS refusal. The
+   * one condition the shell used to render as "Loading…" for ever.
+   */
+  failReadsWith: Error | null = null;
+  /** How many times the store has asked for the collection list. */
+  reads = 0;
+
+  /**
+   * While true, an accepted write is *received* but not answered — it parks
+   * until {@link release}. That is the only way to have two writes overlap the
+   * way they do in a browser, which is the situation the store's per-collection
+   * guard exists for; a fake that answers synchronously can never produce it.
+   */
+  holdWrites = false;
+  private held: (() => void)[] = [];
+
+  /** Answers every parked write, oldest first. */
+  release(): void {
+    const parked = this.held;
+    this.held = [];
+    for (const answer of parked) answer();
+  }
+
+  /** The response, now or when the test lets go of it. */
+  private answer<T>(value: T): Observable<T> {
+    if (!this.holdWrites) return of(value);
+    return new Observable<T>(subscriber => {
+      this.held.push(() => {
+        subscriber.next(value);
+        subscriber.complete();
+      });
+    });
+  }
 
   /** Moves a collection on behind the store's back, as another tab would. */
   moveOn(id: string): void {
@@ -36,6 +70,8 @@ class FakeVaultApi extends VaultApi {
   }
 
   listCollections(): Observable<VersionedCollection[]> {
+    this.reads++;
+    if (this.failReadsWith) return throwError(() => this.failReadsWith);
     return of(
       structuredClone(this.collections).map(collection => {
         this.versions.set(collection.id, this.versions.get(collection.id) ?? 1);
@@ -57,7 +93,7 @@ class FakeVaultApi extends VaultApi {
     }
     this.moveOn(collection.id);
     this.collections = this.collections.map(c => (c.id === collection.id ? collection : c));
-    return of({ version: this.tag(collection.id), collection });
+    return this.answer({ version: this.tag(collection.id), collection });
   }
 
   deleteCollection(): Observable<void> {
@@ -74,7 +110,7 @@ class FakeVaultApi extends VaultApi {
       return throwError(() => new VaultConflictError(collectionId, 'Changed somewhere else.'));
     }
     this.moveOn(collectionId);
-    return of({ version: this.tag(collectionId), item });
+    return this.answer({ version: this.tag(collectionId), item });
   }
 
   deleteItem(collectionId: string): Observable<string> {
@@ -98,8 +134,17 @@ class FakeVaultApi extends VaultApi {
   updateTenantSettings(settings: TenantSettings): Observable<TenantSettings> {
     return of(settings);
   }
+  /** Whatever role the test wants this session to have. */
+  role: MemberRole = 'Owner';
+
   getProfile(): Observable<UserProfile> {
-    return of({ name: 'Marcus', email: 'marcus@example.com', initials: 'MC', plan: 'free' });
+    return of({
+      name: 'Marcus',
+      email: 'marcus@example.com',
+      initials: 'MC',
+      plan: 'free',
+      role: this.role,
+    });
   }
   updateProfile(profile: UserProfile): Observable<UserProfile> {
     return of(profile);
@@ -143,9 +188,10 @@ function item(patch: Partial<Item> = {}): Item {
   };
 }
 
-async function mount(collections: Collection[] = [collection()]) {
+async function mount(collections: Collection[] = [collection()], role: MemberRole = 'Owner') {
   const api = new FakeVaultApi();
   api.collections = collections;
+  api.role = role;
 
   TestBed.configureTestingModule({
     providers: [
@@ -173,6 +219,81 @@ describe('VaultStore versions', () => {
     // saving twice in a row is the single commonest thing this page does.
     expect(api.preconditions).toEqual(['"1"', '"2"']);
     expect(store.collection('c1')!.name).toBe('Second');
+  });
+
+  it('refuses a second write of the same collection while the first is in flight', async () => {
+    // The bug this exists for: a full-document PUT of a large collection takes
+    // long enough that an ordinary double-click lands before the first answers.
+    // Both would quote the same version, the server would refuse the second,
+    // and the app would tell the user somebody else had edited their
+    // collection. The only other writer was their own second click.
+    const { api, store, conflicts } = await mount();
+    api.holdWrites = true;
+
+    const first = store.updateCollection(collection({ name: 'First' }));
+    await expect(store.updateCollection(collection({ name: 'Second' }))).rejects.toBeInstanceOf(
+      VaultBusyError,
+    );
+
+    // Never sent, which is the point: one precondition reached the server, not
+    // two, so there was no 412 to explain and nothing to explain it with.
+    expect(api.preconditions).toEqual(['"1"']);
+    expect(conflicts.pending()).toBeNull();
+
+    api.release();
+    await first;
+    expect(store.collection('c1')!.name).toBe('First');
+  });
+
+  it('lets go of the collection when the write settles, and the next save works', async () => {
+    // A lock that outlived its write would be worse than the conflict it
+    // prevents: every control on the collection would stay dead for the rest of
+    // the session, with nothing on screen to say why.
+    const { api, store } = await mount();
+    api.holdWrites = true;
+
+    const first = store.updateCollection(collection({ name: 'First' }));
+    api.release();
+    await first;
+
+    api.holdWrites = false;
+    await store.updateCollection(collection({ name: 'Second' }));
+    expect(api.preconditions).toEqual(['"1"', '"2"']);
+    expect(store.collection('c1')!.name).toBe('Second');
+  });
+
+  it('lets go even when the write is refused', async () => {
+    const { api, store } = await mount();
+    api.moveOn('c1');
+
+    await expect(store.updateCollection(collection({ name: 'Stale' }))).rejects.toBeInstanceOf(
+      VaultConflictError,
+    );
+
+    // Refused, not busy: the guard released on the way out, so the second
+    // attempt reaches the server and is judged on its own precondition.
+    await expect(store.updateCollection(collection({ name: 'Stale again' }))).rejects.toBeInstanceOf(
+      VaultConflictError,
+    );
+    expect(api.preconditions).toEqual(['"1"', '"1"']);
+  });
+
+  it('guards an item write against the collection it belongs to, and no other', async () => {
+    // Per collection and not global: an item write holds the collection whose
+    // version it moves, and saving one collection is no reason to freeze the
+    // controls on another.
+    const { api, store } = await mount([collection(), collection({ id: 'c2' })]);
+    api.holdWrites = true;
+
+    const first = store.upsertItem('c1', item({ name: 'Held' }));
+    await expect(store.upsertItem('c1', item({ name: 'Second' }))).rejects.toBeInstanceOf(
+      VaultBusyError,
+    );
+
+    const other = store.upsertItem('c2', item({ name: 'Elsewhere' }));
+    api.release();
+    await Promise.all([first, other]);
+    expect(api.preconditions).toEqual(['"1"', '"1"']);
   });
 
   it('refuses a save built on a version somebody else has replaced', async () => {
@@ -252,5 +373,161 @@ describe('VaultStore versions', () => {
     await store.load();
     await store.updateCollection(collection({ name: 'After reloading' }));
     expect(store.collection('c1')!.name).toBe('After reloading');
+  });
+});
+
+describe('VaultStore load failures', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  /** Mounted without loading, so the failing first load is the subject. */
+  function bare() {
+    const api = new FakeVaultApi();
+    api.collections = [collection()];
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: VaultApi, useValue: api },
+      ],
+    });
+    return { api, store: TestBed.inject(VaultStore) };
+  }
+
+  it('records the failure instead of leaving the app loading for ever', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('Can’t reach the Vault server.');
+
+    // Still rejects: the conflict notice's "reload" button has to be able to
+    // tell whether it worked.
+    await expect(store.load()).rejects.toThrow();
+
+    // And now it is a *state*, which is the whole point — `loaded` stays false,
+    // so the shell must have something else to render, and this is it.
+    expect(store.loaded()).toBe(false);
+    expect(store.loadError()).toBe('Can’t reach the Vault server.');
+  });
+
+  it('falls back to its own words when the failure had none', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('');
+
+    await expect(store.load()).rejects.toThrow();
+    expect(store.loadError()).toBe(TestBed.inject(I18nService).t('shell.loadFailed.body'));
+  });
+
+  it('retries, and reports success by clearing the failure', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('offline');
+    await expect(store.load()).rejects.toThrow();
+
+    api.failReadsWith = null;
+    await expect(store.retryLoad()).resolves.toBe(true);
+
+    expect(store.loadError()).toBeNull();
+    expect(store.loaded()).toBe(true);
+    expect(store.collection('c1')).toBeDefined();
+  });
+
+  it('never rejects out of a retry, and puts the failure back when it fails again', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('still offline');
+    await expect(store.load()).rejects.toThrow();
+
+    // Called straight from a click: a rejection here would be exactly the
+    // silence this whole change is about.
+    await expect(store.retryLoad()).resolves.toBe(false);
+    expect(store.loadError()).toBe('still offline');
+    expect(store.retrying()).toBe(false);
+  });
+
+  it('will not run two retries at once', async () => {
+    const { api, store } = bare();
+    api.failReadsWith = new Error('offline');
+    await expect(store.load()).rejects.toThrow();
+    const before = api.reads;
+
+    const first = store.retryLoad();
+    const second = store.retryLoad();
+    await Promise.all([first, second]);
+
+    // A second click while the first attempt is in flight is not a second
+    // attempt.
+    expect(api.reads).toBe(before + 1);
+  });
+
+  it('tells the status line what is actually going on', async () => {
+    const { api, store } = bare();
+    expect(store.syncState()).toBe('synced');
+
+    api.failReadsWith = new Error('offline');
+    await expect(store.load()).rejects.toThrow();
+    expect(store.syncState()).toBe('offline');
+    expect(store.syncStatusKey()).toBe('nav.sync.offline');
+
+    api.failReadsWith = null;
+    await store.retryLoad();
+    expect(store.syncState()).toBe('synced');
+
+    // A refused save outranks everything else: it is the one the user has to
+    // answer.
+    TestBed.inject(ConflictService).raise({ collectionId: 'c1', message: 'Changed elsewhere.' });
+    expect(store.syncStatusKey()).toBe('nav.sync.conflict');
+  });
+
+  it('never leaves the status line stuck on "saving" after a refused write', async () => {
+    const { api, store } = bare();
+    await store.load();
+    expect(store.syncState()).toBe('synced');
+
+    api.moveOn('c1');
+    // A refused write must not leave the status line stuck on "Saving…".
+    await expect(store.updateCollection(collection({ name: 'Stale' }))).rejects.toThrow();
+    expect(store.syncState()).toBe('conflict');
+  });
+});
+
+describe('VaultStore permissions', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('lets an Owner and an Editor write, and refuses a Viewer', async () => {
+    for (const role of ['Owner', 'Editor'] as const) {
+      TestBed.resetTestingModule();
+      const page = await mount([collection()], role);
+      expect(page.store.canEdit(), role).toBe(true);
+    }
+
+    TestBed.resetTestingModule();
+    const viewer = await mount([collection()], 'Viewer');
+    expect(viewer.store.canEdit()).toBe(false);
+  });
+
+  it('reserves account administration for the Owner', async () => {
+    const owner = await mount([collection()], 'Owner');
+    expect(owner.store.canAdminister()).toBe(true);
+
+    TestBed.resetTestingModule();
+    const editor = await mount([collection()], 'Editor');
+    // An Editor writes catalogue content and does not touch membership, tenant
+    // settings or an archive restore — `CanAdminister` on the server.
+    expect(editor.store.canEdit()).toBe(true);
+    expect(editor.store.canAdminister()).toBe(false);
+  });
+
+  it('fails open before the profile has arrived', async () => {
+    // Deliberate, and the direction matters: hiding every control from an Owner
+    // during a slow load is a worse wrong than briefly offering a button that
+    // turns out to be refused. The 403 is the real answer either way.
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: VaultApi, useValue: new FakeVaultApi() },
+      ],
+    });
+    const store = TestBed.inject(VaultStore);
+
+    expect(store.profile()).toBeNull();
+    expect(store.canEdit()).toBe(true);
+    expect(store.canAdminister()).toBe(true);
   });
 });

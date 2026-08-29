@@ -8,6 +8,13 @@
   max-width: 1020px;
 }
 
+@include upto($bp-md) {
+  :host {
+    padding: var(--sp-4) var(--sp-4) var(--sp-8);
+    gap: var(--sp-4);
+  }
+}
+
 h1 {
   @include display-heading;
   margin: 0;
@@ -44,14 +51,23 @@ h1 {
 
 // --- appearance ---
 
+/*
+ * A grid, not a wrapping flex row of fixed-width cards. Two things follow from
+ * that. The 208px width becomes a *minimum* — a card can grow into the last
+ * column instead of leaving a 208px-wide gap, and on a 390px screen it stops
+ * being a horizontal overflow. And `grid-auto-rows: 1fr` makes every card in a
+ * row the same height: the descriptions are one, two and three lines long, so
+ * as a flex row the cards were visibly ragged and the "● Active" line sat at a
+ * different height in every one.
+ */
 .themes {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-auto-rows: 1fr;
   gap: 14px;
 }
 
 .theme-card {
-  width: 208px;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -113,7 +129,8 @@ h1 {
 
 .plans {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-auto-rows: 1fr;
   gap: 14px;
   max-width: 640px;
 }
@@ -162,8 +179,26 @@ h1 {
     gap: 7px;
 
     .tick {
+      /* Nailed to the first line: a feature that wraps keeps its tick beside
+         the words it belongs to rather than centring on the whole block. */
+      align-self: flex-start;
+      margin-top: 3px;
       color: var(--accent);
     }
+  }
+}
+
+/*
+ * A member row is avatar + name/email + a role select + a remove button. Below
+ * $bp-sm that is more than one line's worth, so it wraps: the identity keeps
+ * the first line and the controls drop under it, rather than squeezing the
+ * email to three characters.
+ */
+@include upto($bp-sm) {
+  .member-row,
+  .policy-row,
+  .account-card {
+    flex-wrap: wrap;
   }
 }
 
@@ -220,7 +255,7 @@ h1 {
 
 .account {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 14px;
   max-width: 760px;
 }

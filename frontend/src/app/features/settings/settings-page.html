@@ -9,6 +9,7 @@
         <div class="heading">{{ 'settings.plan.heading' | t }}</div>
         <p class="sub">{{ planSub() }}</p>
       </div>
+      <p class="sub">{{ 'settings.plan.billingNote' | t }}</p>
       <div class="plans">
         @for (plan of plans; track plan.id) {
           <ui-card class="plan" [class.plan--active]="store.profile()?.plan === plan.id">
@@ -18,15 +19,24 @@
             </div>
             <div class="plan__features">
               @for (feature of plan.featureKeys; track feature) {
-                <div class="feature"><span class="tick">›</span>{{ feature | t }}</div>
+                <!-- A tick, not a chevron. This was a `›` — the mark that
+                     means "goes deeper" everywhere else in the app — standing in
+                     for "included in this plan", which is a different claim. -->
+                <div class="feature">
+                  <ui-icon class="tick" name="check" [size]="12" [strokeWidth]="2.4" />
+                  {{ feature | t }}
+                </div>
               }
             </div>
             @if (store.profile()?.plan === plan.id) {
               <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.current' | t }}</ui-button>
-            } @else if (plan.id === 'pro') {
-              <ui-button [block]="true" (click)="choosePlan('pro')">{{ 'settings.plan.upgrade' | t }}</ui-button>
             } @else {
-              <ui-button variant="ghost" [block]="true" (click)="choosePlan('free')">{{ 'settings.plan.downgrade' | t }}</ui-button>
+              <!-- Disabled, and it says why. This used to be a live button that
+                   set the plan from the browser and toasted a welcome; there is
+                   no billing behind it and nothing in the app is gated on the
+                   plan, so an enabled control here would be a receipt for a
+                   purchase that never happened. -->
+              <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.unavailable' | t }}</ui-button>
             }
           </ui-card>
         }
@@ -34,6 +44,7 @@
     </section>
   }
   @case ('access') {
+      <ui-read-only-notice scope="administer" />
     <section class="section access">
       <div>
         <div class="heading">{{ 'settings.access.heading' | t }}</div>
@@ -42,47 +53,48 @@
         </p>
       </div>
       <ui-card class="members">
-        @for (member of store.tenantMembers(); track member.email) {
+        @for (member of store.tenantMembers(); track member.email + '#' + memberRev()) {
           <div class="member-row">
             <ui-avatar [initials]="member.initials" />
             <span class="who">
               <span class="name">{{ member.name }}</span>
               <span class="email">{{ member.email }}</span>
             </span>
-            <ui-select
-              class="compact"
-              [ariaLabel]="'settings.access.memberRoleAria' | t: { name: member.name }"
-              [options]="roleOptions()"
-              [value]="member.role"
-              [disabled]="member.role === 'Owner'"
-              (valueChange)="setMemberRole(member.email, $event)"
-            />
-            <ui-button
-              variant="icon"
-              [muted]="member.role === 'Owner'"
-              [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
-              (click)="removeMember(member.email)"
-            >✕</ui-button>
+            <!-- Membership is CanAdminister, not CanWrite: an Editor is
+                 refused it too, so this is `canAdminister` and not `canEdit`.
+                 The Owner's own row keeps its existing disabled/muted treatment,
+                 which explains why the *Owner* cannot be demoted — a different
+                 question from whether you may change anybody at all. -->
+            @if (store.canAdminister()) {
+              <ui-select
+                class="compact"
+                [ariaLabel]="'settings.access.memberRoleAria' | t: { name: member.name }"
+                [options]="roleOptions()"
+                [value]="member.role"
+                [disabled]="member.role === 'Owner'"
+                (valueChange)="setMemberRole(member.email, $event)"
+              />
+              <ui-button
+                variant="icon"
+                [muted]="member.role === 'Owner'"
+                [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
+                (click)="removeMember(member.email)"
+              ><ui-icon name="close" [size]="13" /></ui-button>
+            } @else {
+              <span class="role-static">{{ roleLabel(member.role) | t }}</span>
+            }
           </div>
         }
       </ui-card>
 
-      <div class="heading">{{ 'settings.access.policyHeading' | t }}</div>
-      <ui-card class="policies">
-        @for (policy of policyDefs; track policy.key) {
-          <div class="policy-row">
-            <span class="who">
-              <span class="name">{{ policy.label | t }}</span>
-              <span class="email">{{ policy.description | t }}</span>
-            </span>
-            <ui-toggle
-              [ariaLabel]="policy.label | t"
-              [on]="policies()[policy.key]"
-              (onChange)="togglePolicy(policy.key)"
-            />
-          </div>
-        }
-      </ui-card>
+      <!-- The three "sharing policy" toggles that used to sit here are gone.
+           They were held in a component signal, had no field on the wire, were
+           never sent anywhere and reset on navigation — security-shaped
+           switches that did nothing at all. What actually controls access today
+           is the member list above and a collection's own link sharing, and
+           saying so is more honest than three switches that only look like
+           settings. -->
+      <p class="sub">{{ 'settings.access.policyNote' | t }}</p>
     </section>
   }
   @case ('account') {
@@ -98,10 +110,7 @@
       <ui-card class="account-card">
         <span class="who">
           <span class="name">{{ 'settings.account.data' | t }}</span>
-          <span class="email">{{
-            'settings.account.dataSub'
-              | t: { items: store.totalItems(), collections: store.collections().length }
-          }}</span>
+          <span class="email">{{ dataSub() }}</span>
         </span>
         <ui-button variant="ghost" size="sm" [disabled]="exporting()" (click)="exportArchive()">
           {{ (exporting() ? 'settings.account.exporting' : 'settings.account.export') | t }}
@@ -113,6 +122,7 @@
           variant="ghost"
           size="sm"
           [disabled]="importing()"
+          [disabled]="importing() || !store.canAdminister()"
           (click)="archiveInput.click()"
         >
           {{ (importing() ? 'settings.account.importing' : 'settings.account.import') | t }}
@@ -133,9 +143,7 @@
         <ui-card class="account-card">
           <span class="who">
             <span class="name">{{ collection.name }}</span>
-            <span class="email">{{
-              'settings.account.collectionMeta' | t: { items: collection.items.length }
-            }}</span>
+            <span class="email">{{ itemCount(collection.items.length) }}</span>
           </span>
           <ui-button
             variant="ghost"

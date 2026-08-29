@@ -16,6 +16,9 @@ export type ButtonSize = 'md' | 'sm';
       [type]="type()"
       [disabled]="disabled()"
       [attr.aria-label]="ariaLabel() || null"
+      [attr.id]="controlId() || null"
+      [attr.aria-expanded]="ariaExpanded() ?? null"
+      [attr.aria-controls]="ariaControls() || null"
       [attr.title]="ariaLabel() || null"
       class="btn"
       [class.btn--primary]="variant() === 'primary'"
@@ -83,14 +86,21 @@ export type ButtonSize = 'md' | 'sm';
       }
     }
 
+    /*
+     * Destructive, and coloured by --danger rather than --warn. They used to be
+     * the same token, which meant "Delete collection" and a Fair-condition
+     * badge rendered identically — colour that marks two unrelated things marks
+     * neither.
+     */
     .btn--danger {
       background: transparent;
-      color: var(--warn);
+      color: var(--danger);
       border: var(--bw) solid var(--border);
       font-weight: 600;
 
       &:hover:not(:disabled) {
-        border-color: var(--warn);
+        border-color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 8%, transparent);
       }
     }
 
@@ -118,11 +128,18 @@ export type ButtonSize = 'md' | 'sm';
     }
 
     /*
-     * A bare glyph — the ✕ that removes a copy, a field, a member. Quiet until
-     * pointed at, then warn-coloured, because removal is the one action here
-     * that cannot be undone by clicking again.
+     * A bare mark — the ui-icon close that removes a copy, a field, a member.
+     * Quiet until pointed at, then danger-coloured, because removal is the one
+     * action here that cannot be undone by clicking again.
+     *
+     * The flex centring is what an inline svg needs: a button lays its content
+     * out on a text baseline, so a block-level svg sat a couple of pixels low
+     * and left a descender's worth of dead space under it.
      */
     .btn--icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       background: none;
       border: 0;
       padding: 2px 4px;
@@ -132,7 +149,7 @@ export type ButtonSize = 'md' | 'sm';
       color: var(--muted);
 
       &:hover:not(:disabled) {
-        color: var(--warn);
+        color: var(--danger);
       }
     }
 
@@ -165,10 +182,23 @@ export class UiButton {
   readonly disabled = input(false);
   readonly type = input<'button' | 'submit'>('button');
   /**
-   * Accessible name for buttons whose content is a bare glyph (↑ ↓ ✕). Also
+   * Accessible name for buttons whose content is a bare mark (a `ui-icon`). Also
    * becomes the tooltip, so the meaning is reachable by mouse too.
    */
   readonly ariaLabel = input('');
+  /**
+   * For a button that discloses something — the nav drawer's hamburger.
+   *
+   * These have to land on the real inner `<button>`, not on the `<ui-button>`
+   * host: the host is not focusable and carries no role, so assistive
+   * technology never reaches an attribute placed there. Without these inputs a
+   * caller has to reach into the DOM after render to set them, which is exactly
+   * what `Topbar` was doing.
+   */
+  readonly ariaExpanded = input<boolean | undefined>(undefined);
+  readonly ariaControls = input('');
+  /** An id on the inner button, so something else can point focus back at it. */
+  readonly controlId = input('');
   /** Stretch to the full width of the container (e.g. plan cards). */
   readonly block = input(false);
   /**

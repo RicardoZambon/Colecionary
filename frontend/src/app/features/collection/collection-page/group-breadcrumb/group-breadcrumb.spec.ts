@@ -21,6 +21,7 @@ function node(id: string, name: string, parentId: string | null = null): GroupNo
       [children]="children"
       [collapsed]="collapsed"
       [pending]="pending"
+      [canEdit]="canEdit"
     />
   `,
 })
@@ -29,6 +30,7 @@ class HostComponent {
   children: ChildChip[] = [];
   collapsed = false;
   pending = false;
+  canEdit = true;
 }
 
 function mount(patch: Partial<HostComponent> = {}) {
@@ -42,7 +44,17 @@ function mount(patch: Partial<HostComponent> = {}) {
   const labels = (selector: string) =>
     [...el.querySelectorAll(`${selector} .chip__label`)].map(n => n.textContent!.trim());
 
-  return { el, path: () => labels('nav[aria-label="Group path"]'), children: () => labels('.children') };
+  return {
+    el,
+    path: () => labels('nav[aria-label="Group path"]'),
+    children: () => labels('.children'),
+    // `dashed` is a signal input, so it is not an attribute in the DOM; the
+    // pill is identified by its label instead.
+    newChip: () =>
+      [...el.querySelectorAll('ui-chip')].find(c => (c.textContent ?? '').includes('+ New')) ?? null,
+    manageLink: () => el.querySelector('a.manage'),
+    nameInput: () => el.querySelector('input.chip-input'),
+  };
 }
 
 describe('GroupBreadcrumb', () => {
@@ -96,5 +108,39 @@ describe('GroupBreadcrumb', () => {
   it('swaps the New pill for an input while a name is being typed', () => {
     expect(mount().el.querySelector('.chip-input')).toBeNull();
     expect(mount({ pending: true }).el.querySelector('.chip-input')).not.toBeNull();
+  });
+});
+
+describe('GroupBreadcrumb — view-only access', () => {
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+  });
+
+  it('offers the write actions to someone who can write', () => {
+    const page = mount({ path: [node('marvel', 'Marvel')] });
+
+    expect(page.newChip()).not.toBeNull();
+    expect(page.manageLink()).not.toBeNull();
+  });
+
+  it('offers a reader neither the New pill nor the Edit groups link', () => {
+    // The settings route is refused by `canEditGuard` anyway, so the link would
+    // bounce straight back — and creating a group would earn a 403. Offering an
+    // action and then refusing it is the worst order to find out.
+    const page = mount({ path: [node('marvel', 'Marvel')], canEdit: false });
+
+    expect(page.newChip()).toBeNull();
+    expect(page.manageLink()).toBeNull();
+    // The path itself is reading, and stays — collection chip included.
+    expect(page.path()).toEqual(['Comics', 'Marvel']);
+  });
+
+  it('does not open the name input for a reader, even if asked to', () => {
+    // `pending` is the page's state, not a permission; the gate has to hold
+    // regardless of what it says.
+    const page = mount({ path: [node('marvel', 'Marvel')], pending: true, canEdit: false });
+
+    expect(page.nameInput()).toBeNull();
   });
 });

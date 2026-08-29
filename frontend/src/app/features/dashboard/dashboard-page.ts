@@ -3,6 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../core/api/images-api';
 import { I18nService } from '../../core/i18n';
+import { Collection } from '../../core/models';
 import { ImageFocusService } from '../../core/state/image-focus.service';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
@@ -11,7 +12,7 @@ import { formatRelative } from '../../core/utils/date.util';
 import { CurrencyCode, formatMoney } from '../../core/utils/money.util';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { TPipe } from '../../shared/pipes/t.pipe';
-import { UiCard, UiImageSlot, UiSectionLabel } from '../../shared/ui';
+import { UiCard, UiImageSlot, UiSectionLabel, UiSkeleton } from '../../shared/ui';
 
 interface RecentEntry {
   collectionId: string;
@@ -29,17 +30,47 @@ const RECENT_COUNT = 4;
 @Component({
   selector: 'app-dashboard-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, TPipe, UiCard, UiImageSlot, UiSectionLabel],
+  imports: [RouterLink, MoneyPipe, TPipe, UiCard, UiImageSlot, UiSectionLabel, UiSkeleton],
   templateUrl: './dashboard-page.html',
   styleUrl: './dashboard-page.scss',
 })
 export class DashboardPage {
+  /**
+   * Whether to offer the write affordances at all.
+   *
+   * A courtesy, not a control — see the doc comment on VaultStore.canEdit.
+   */
+  protected readonly canEdit = computed(() => this.store.canEdit());
+
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
   protected readonly focus = inject(ImageFocusService);
   protected readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+
+  /**
+   * The vault has not arrived yet, so the page draws its own shape instead of
+   * nothing. Four stat tiles and four cards, which is the modal case — the
+   * point is to reserve the row, not to guess the count.
+   */
+  protected readonly loading = computed(() => !this.store.loaded());
+
+  /**
+   * "324 items across 5 collections · welcome back, Marcus".
+   *
+   * Two independent counts in one sentence: neither can be a `.one`/`.other`
+   * pair on its own, so each arrives as a rendered count phrase and the sentence
+   * stays a single translated unit whose word order the translator owns.
+   */
+  protected readonly sub = computed(() =>
+    this.i18n.t('dashboard.sub', {
+      items: this.i18n.count(this.store.totalItems(), 'item'),
+      collections: this.i18n.count(this.store.collections().length, 'collection'),
+      name: this.store.profile()?.name?.split(' ')?.[0] ?? '',
+    }),
+  );
+  protected readonly placeholders = [0, 1, 2, 3];
 
   private readonly allItems = computed(() =>
     this.store.collections().flatMap(collection =>
@@ -80,13 +111,29 @@ export class DashboardPage {
     const collections = this.store.collections().length;
     const locale = this.i18n.locale();
     return [
-      { label: this.i18n.t('dashboard.stat.items'), values: [String(this.store.totalItems())], sub: this.i18n.t('dashboard.stat.itemsSub', { collections }) },
+      {
+        label: this.i18n.t('dashboard.stat.items'),
+        values: [String(this.store.totalItems())],
+        sub: this.i18n.plural(
+          collections,
+          'dashboard.stat.itemsSub.one',
+          'dashboard.stat.itemsSub.other',
+        ),
+      },
       {
         label: this.i18n.t('dashboard.stat.value'),
         values: this.store.ownedValueByCurrency().map(x => formatMoney(x.total, locale, x.currency)),
         sub: this.appreciationLabel(),
       },
-      { label: this.i18n.t('dashboard.stat.groups'), values: [String(this.store.totalGroups())], sub: this.i18n.t('dashboard.stat.groupsSub', { collections }) },
+      {
+        label: this.i18n.t('dashboard.stat.groups'),
+        values: [String(this.store.totalGroups())],
+        sub: this.i18n.plural(
+          collections,
+          'dashboard.stat.groupsSub.one',
+          'dashboard.stat.groupsSub.other',
+        ),
+      },
       { label: this.i18n.t('dashboard.stat.added'), values: [String(this.addedThisWeek())], sub: this.i18n.t('dashboard.stat.addedSub') },
     ];
   });
@@ -116,18 +163,42 @@ export class DashboardPage {
     return this.store.collection(collectionId)?.items.filter(isOwned).length ?? 0;
   }
 
+  /**
+   * "9/34 owned · 3 groups" — the group half is a count phrase, so a collection
+   * with one group no longer reads "1 groups".
+   */
+  protected collectionMeta(collection: Collection): string {
+    return this.i18n.t('dashboard.collectionMeta', {
+      owned: this.ownedCount(collection.id),
+      total: collection.items.length,
+      groups: this.i18n.count(collection.groups.length, 'group'),
+    });
+  }
+
   protected ownedValue(collectionId: string): number {
     return (
       this.store.collection(collectionId)?.items.reduce((acc, i) => acc + ownedValue(i), 0) ?? 0
     );
   }
 
+  /**
+   * Creates an empty collection and opens it for naming.
+   *
+   * The `catch` is the point: this is `await`ed straight from a click, so a
+   * refused create used to reject into nothing — an unhandled promise, no
+   * message, and a button that looked broken. Nothing is navigated to on a
+   * failure either, since the collection it would open does not exist.
+   */
   protected async newCollection(): Promise<void> {
-    const created = await this.store.createCollection(
-      this.i18n.t('dashboard.newCollectionName'),
-      '',
-    );
-    this.toast.flash(this.i18n.t('toast.collection.created'));
+    let created;
+    try {
+      created = await this.store.createCollection(this.i18n.t('dashboard.newCollectionName'), '');
+    } catch {
+      // `errorInterceptor` has already said *why*; this says what it was for.
+      this.toast.error(this.i18n.t('toast.collection.createFailed'));
+      return;
+    }
+    this.toast.success(this.i18n.t('toast.collection.created'));
     void this.router.navigate(['/c', created.id, 'settings'], { queryParams: { tab: 'general' } });
   }
 }

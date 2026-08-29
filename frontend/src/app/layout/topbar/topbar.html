@@ -1,3 +1,17 @@
+<!--
+  The nav drawer's toggle. Below $bp-lg the sidebar is off-canvas, so this is
+  the only way to reach it; above, it is hidden and the sidebar is a column.
+-->
+<ui-button
+  class="hamburger"
+  variant="icon"
+  [ariaLabel]="'nav.open' | t"
+  [controlId]="toggleId"
+  [ariaExpanded]="layout.navOpen()"
+  [ariaControls]="drawerId"
+  (click)="layout.toggleNav()"
+><ui-icon name="list" [size]="16" /></ui-button>
+
 <a class="brand" routerLink="/dashboard">
   <span class="brand__mark"><ui-icon name="diamond" [size]="12" /></span>Vault
 </a>
@@ -17,7 +31,8 @@
 <ui-dropdown #langMenu [width]="180">
   <button ddTrigger type="button" class="theme-trigger" [title]="'topbar.language' | t">
     <ui-flag [lang]="i18n.currentDef.id" [size]="16" />
-    {{ i18n.currentDef.id }} ▾
+    <span>{{ i18n.currentDef.id }}</span>
+    <ui-icon class="caret" name="chevron-down" [size]="11" />
   </button>
   <ng-container ddPanel>
     @for (lang of i18n.langs; track lang.id) {
@@ -30,7 +45,11 @@
       >
         <ui-flag [lang]="lang.id" [size]="20" />
         <span class="theme-row__name">{{ lang.name }}</span>
-        <span class="theme-row__check" aria-hidden="true">@if (lang.id === i18n.current()) { ✓ }</span>
+        <span class="theme-row__check">
+          @if (lang.id === i18n.current()) {
+            <ui-icon name="check" [size]="13" />
+          }
+        </span>
       </button>
     }
   </ng-container>
@@ -38,7 +57,9 @@
 
 <ui-dropdown #themeMenu [width]="236">
   <button ddTrigger type="button" class="theme-trigger" [title]="'topbar.theme' | t">
-    ◐ {{ theme.currentDef.name }} ▾
+    <ui-icon name="contrast" [size]="13" />
+    <span>{{ theme.currentDef.name }}</span>
+    <ui-icon class="caret" name="chevron-down" [size]="11" />
   </button>
   <ng-container ddPanel>
     @for (t of theme.themes; track t.id) {
@@ -55,7 +76,11 @@
           <span [style.background]="t.swatches[4]"></span>
         </span>
         <span class="theme-row__name">{{ t.name }}</span>
-        <span class="theme-row__check" aria-hidden="true">@if (t.id === theme.current()) { ✓ }</span>
+        <span class="theme-row__check">
+          @if (t.id === theme.current()) {
+            <ui-icon name="check" [size]="13" />
+          }
+        </span>
       </button>
     }
     <a class="theme-more" routerLink="/settings" [queryParams]="{ tab: 'appearance' }" (click)="themeMenu.close()">

@@ -1,10 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, model } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  model,
+  output,
+} from '@angular/core';
 
 import { I18nService, MessageKey } from '../../../../core/i18n';
 import { GroupField, GroupSort } from '../../../../core/models';
 import { DEFAULT_SORT, sortChoices, sortLabel } from '../../../../core/utils/sort.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiDropdown } from '../../../../shared/ui';
+import { IconName, UiCheckbox, UiDropdown, UiIcon } from '../../../../shared/ui';
 import { ViewMode } from '../view-mode';
 
 /** A row in the sort menu. A null `sort` means "follow the group's default". */
@@ -28,7 +36,7 @@ function sortId(sort: GroupSort): string {
 @Component({
   selector: 'app-collection-toolbar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiDropdown],
+  imports: [TPipe, UiCheckbox, UiDropdown, UiIcon],
   templateUrl: './collection-toolbar.html',
   styleUrl: './collection-toolbar.scss',
 })
@@ -41,13 +49,47 @@ export class CollectionToolbar {
   readonly groupSort = input<GroupSort | null>(null);
   /** True while a search is forcing the item grid, whatever the view says. */
   readonly searching = input(false);
+  /**
+   * Nothing catalogued in the open scope and no declared set, computed once by
+   * the page and shared with the hero.
+   *
+   * Every control on this bar except the breadcrumb narrows or redraws a list of
+   * items. With no items there is nothing to narrow and nothing to redraw, so an
+   * order, a column picker and three view toggles are neither usable nor
+   * guidance — they are five dead controls standing between a brand-new
+   * collection and the one link that fixes it.
+   */
+  readonly blank = input(false);
+
+  /**
+   * Field columns the user has hidden in this group. A preference, not URL
+   * state — see `column-prefs.ts`.
+   */
+  readonly hiddenColumns = input<ReadonlySet<string>>(new Set());
 
   /** Null means "use the selected group's configured order". */
   readonly sortOverride = model<GroupSort | null>(null);
   readonly view = model.required<ViewMode>();
 
+  readonly columnToggled = output<{ name: string; visible: boolean }>();
+
   /** Nothing to order when the pane shows group cards rather than items. */
-  protected readonly showSort = computed(() => this.view() !== 'dashboard');
+  protected readonly showSort = computed(() => !this.blank() && this.view() !== 'dashboard');
+
+  /** The view toggles pick how a list is drawn; with no list, they pick nothing. */
+  protected readonly showViews = computed(() => !this.blank());
+
+  /**
+   * Only the table has columns, and only a group that declares fields has any
+   * to choose between — a picker offering nothing is worse than no picker.
+   */
+  protected readonly showColumns = computed(
+    () => !this.blank() && this.view() === 'list' && this.fields().length > 0,
+  );
+
+  protected isColumnVisible(name: string): boolean {
+    return !this.hiddenColumns().has(name);
+  }
 
   protected readonly effectiveSort = computed<GroupSort>(
     () => this.sortOverride() ?? this.groupSort() ?? DEFAULT_SORT,
@@ -82,10 +124,10 @@ export class CollectionToolbar {
     return this.groupSort() ? GROUP_DEFAULT_ID : sortId(this.effectiveSort());
   });
 
-  protected readonly views: { id: ViewMode; glyph: string; label: MessageKey }[] = [
-    { id: 'dashboard', glyph: '▤', label: 'view.dashboard' },
-    { id: 'grid', glyph: '▦', label: 'view.grid' },
-    { id: 'list', glyph: '☰', label: 'view.list' },
+  protected readonly views: { id: ViewMode; icon: IconName; label: MessageKey }[] = [
+    { id: 'dashboard', icon: 'rows', label: 'view.dashboard' },
+    { id: 'grid', icon: 'grid', label: 'view.grid' },
+    { id: 'list', icon: 'list', label: 'view.list' },
   ];
 
   protected pickSort(option: SortMenuOption): void {
