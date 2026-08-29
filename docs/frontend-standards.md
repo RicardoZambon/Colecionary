@@ -699,11 +699,14 @@ fails if anyone reorders it.
   (`npm start`), including at least one dark theme — token regressions usually
   only show up there — and **in Portuguese**, which runs ~20% longer than
   English and is where text overflow shows up first.
-- **The responsive pass is a measurement, not a look.** Assert
-  `document.documentElement.scrollWidth === clientWidth` at 390, 768 and 900 on
-  the dashboard, the store, settings, a collection, collection settings, an item
-  and both item-form routes — in pt-BR and in a dark theme. Every one of those
-  overflowed before, and none of it was visible from a desktop window.
+- **`npm run verify:browser`** (`frontend/e2e/verify.mjs`) makes the checks only
+  a real browser can. Run it against a dev server before merging UI work. It
+  asserts first paint carries the stored theme and language, that the dashboard
+  raises **no toast while idle**, that `scrollWidth === clientWidth` at 390/768/900
+  across the routes, and the nav drawer's whole aria and focus contract — in
+  pt-BR and a dark theme, because both are where this app breaks first. It is
+  not an end-to-end suite; **add to it whenever you find a defect the unit suite
+  could not have caught.**
 - **The palette is arithmetic.** `src/styles/themes.spec.ts` parses the shipped
   `_themes.scss` and holds `--muted-strong`, `--accent-strong`,
   `--accent2-strong`, `--text2` and `--text` to 4.5:1 against `--bg`, `--panel`
