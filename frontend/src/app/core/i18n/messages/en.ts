@@ -298,6 +298,7 @@ export const en = {
   'collection.clearFilters': 'Clear filters',
   'collection.empty': 'Nothing catalogued here yet',
   'collection.emptyBody': 'Add the first item and it will show up in this list.',
+  'groupDashboard.emptyTitle': 'No sub-groups here',
   'groupDashboard.empty':
     'No sub-groups here yet. Create one to break this part of the collection down, or switch to the item views above.',
 

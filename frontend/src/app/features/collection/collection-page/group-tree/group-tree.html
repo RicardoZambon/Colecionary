@@ -60,6 +60,8 @@
       </a>
     </li>
   } @empty {
-    <li class="empty">{{ 'groupTree.empty' | t }}</li>
+    <li>
+      <ui-empty icon="grid" [compact]="true" [title]="'groupTree.empty' | t" />
+    </li>
   }
 </ul>

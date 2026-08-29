@@ -286,6 +286,7 @@ export const ptBR: Record<MessageKey, string> = {
   'collection.clearFilters': 'Limpar filtros',
   'collection.empty': 'Nada catalogado aqui ainda',
   'collection.emptyBody': 'Adicione o primeiro item e ele aparece nesta lista.',
+  'groupDashboard.emptyTitle': 'Nenhum subgrupo aqui',
   'groupDashboard.empty':
     'Nenhum subgrupo aqui ainda. Crie um para dividir esta parte da coleção, ou mude para as visões de item acima.',
 

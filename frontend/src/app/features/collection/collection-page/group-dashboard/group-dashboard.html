@@ -25,5 +25,7 @@
 </div>
 
 @if (!cards().length && !directCount()) {
-  <div class="empty">{{ 'groupDashboard.empty' | t }}</div>
+  <!-- One shape for every "nothing here" in the app. A hand-rolled div drifts:
+       this one and the collection page's were byte-identical CSS in two files. -->
+  <ui-empty icon="grid" [title]="'groupDashboard.emptyTitle' | t" [body]="'groupDashboard.empty' | t" />
 }

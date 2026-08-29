@@ -637,6 +637,36 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-60</span> Numa lista vazia a barra de ferramentas desaparece, não fica desabilitada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Numa coleção sem itens a barra renderizava duas linhas de filtro, o seletor de ordem e três alternadores de visão — nenhum utilizável, nenhum servindo de orientação.</dd>
+    <dt>Decisão</dt><dd>Quando o escopo aberto tem zero itens catalogados, sobra a linha de identidade (migalha, “+ Novo”, “Editar grupos”); filtros, ordem e visões saem da tela. O predicado é um só, <code>blank()</code>, que vive em <code>collection-page.ts</code> e é passado ao hero e à barra.</dd>
+    <dt>Consequência</dt><dd>Um controle desabilitado convida a perguntar por que; um controle ausente não é uma pergunta. E um filtro que chegou pela URL continua escapável, porque o estado vazio da lista oferece “limpar filtros” — que é o caminho de saída, no lugar onde a saída é necessária.</dd>
+    <dt>Imposta por</dt><dd>Três testes em <code>collection-page.spec.ts</code>, nos dois sentidos</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-61</span> Barras de skeleton medem <code>1lh</code>, contra a classe do elemento real</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um skeleton só serve se ocupar exatamente o espaço que o conteúdo vai ocupar; caso contrário troca uma tela vazia por um salto de layout, que é pior porque acontece depois que a pessoa começou a ler.</dd>
+    <dt>Decisão</dt><dd>O placeholder veste as <em>próprias classes</em> do elemento real, e cada barra tem <code>height="1lh"</code> — uma caixa de linha do que quer que a envolva — em vez de um valor em pixels adivinhado.</dd>
+    <dt>Consequência</dt><dd>Medido: o cartão de coleção do painel bate exatamente (154px nas duas larguras); o cartão de estatística e o do store deixam um resíduo quando uma linha de texto quebra, porque quantas linhas o conteúdo terá é justamente o que um skeleton não pode saber. Resíduo aceito. Cuidado com <code>variant="block"</code>, que carrega um piso <code>min-height: var(--sp-12)</code> e sobrepõe silenciosamente um <code>height</code> menor.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span>; medido com <code>GET /api/collections</code> atrasado</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-62</span> A marca de tom do toast é <code>aria-hidden</code>, ao lado de uma palavra</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A regra 12 diz que status nunca é só cor. A tentação é dar um <code>aria-label</code> ao ícone de tom.</dd>
+    <dt>Decisão</dt><dd>O ícone fica <code>aria-hidden</code>. Quem carrega o tom para leitor de tela é a palavra ao lado — “Falhou” / “Concluído” — mais <code>role="alert"</code> no caso de erro.</dd>
+    <dt>Consequência</dt><dd>Nomear o ícone anunciaria o tom duas vezes. A regra é satisfeita pela palavra, não pelo matiz nem pelo desenho; e o ícone perdeu também o anel de 15px que existia só para um <code>✓</code> pelado parecer deliberado — um triângulo dentro de um círculo de 15px são duas formas em dez pixels.</dd>
+    <dt>Imposta por</dt><dd><span class="tag warn">só por convenção</span>; verificado ao vivo (marca 13×13, <code>aria-hidden=true</code>, <code>role=alert</code>, “Falhou” ao lado)</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>
