@@ -83,14 +83,21 @@ export type ButtonSize = 'md' | 'sm';
       }
     }
 
+    /*
+     * Destructive, and coloured by --danger rather than --warn. They used to be
+     * the same token, which meant "Delete collection" and a Fair-condition
+     * badge rendered identically — colour that marks two unrelated things marks
+     * neither.
+     */
     .btn--danger {
       background: transparent;
-      color: var(--warn);
+      color: var(--danger);
       border: var(--bw) solid var(--border);
       font-weight: 600;
 
       &:hover:not(:disabled) {
-        border-color: var(--warn);
+        border-color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 8%, transparent);
       }
     }
 
@@ -119,7 +126,7 @@ export type ButtonSize = 'md' | 'sm';
 
     /*
      * A bare glyph — the ✕ that removes a copy, a field, a member. Quiet until
-     * pointed at, then warn-coloured, because removal is the one action here
+     * pointed at, then danger-coloured, because removal is the one action here
      * that cannot be undone by clicking again.
      */
     .btn--icon {
@@ -132,7 +139,7 @@ export type ButtonSize = 'md' | 'sm';
       color: var(--muted);
 
       &:hover:not(:disabled) {
-        color: var(--warn);
+        color: var(--danger);
       }
     }
 

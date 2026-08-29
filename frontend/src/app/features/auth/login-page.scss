@@ -50,8 +50,8 @@ form {
 
 .error {
   font-size: 12.5px;
-  color: var(--warn);
-  border: var(--bw) dashed var(--warn);
+  color: var(--danger);
+  border: var(--bw) dashed var(--danger);
   border-radius: var(--radius);
   padding: 8px 12px;
 }

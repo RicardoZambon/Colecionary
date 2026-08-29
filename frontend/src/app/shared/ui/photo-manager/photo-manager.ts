@@ -158,7 +158,7 @@ import { UiReorder } from '../reorder/reorder';
       border-radius: var(--radius);
 
       &--failed {
-        border-color: var(--danger, var(--border));
+        border-color: var(--danger);
       }
     }
 
@@ -171,7 +171,7 @@ import { UiReorder } from '../reorder/reorder';
     }
 
     .upload__error {
-      color: var(--danger, var(--text2));
+      color: var(--danger);
     }
 
     .upload__dismiss {
@@ -255,8 +255,8 @@ import { UiReorder } from '../reorder/reorder';
         }
 
         &.danger:hover {
-          color: var(--danger, var(--accent));
-          border-color: var(--danger, var(--accent));
+          color: var(--danger);
+          border-color: var(--danger);
         }
       }
     }

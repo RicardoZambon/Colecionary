@@ -98,8 +98,8 @@ h1 {
     cursor: pointer;
 
     &:hover {
-      color: var(--warn);
-      border-color: var(--warn);
+      color: var(--danger);
+      border-color: var(--danger);
     }
   }
 

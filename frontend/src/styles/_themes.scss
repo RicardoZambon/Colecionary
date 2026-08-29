@@ -7,6 +7,60 @@
 // never hardcode a color or radius in a component style.
 // ============================================================================
 
+// ============================================================================
+// Structural tokens — the same in every theme, because they describe rhythm and
+// layering rather than appearance. A theme changes what the app looks like; it
+// does not change how far apart two things sit or which one is on top.
+//
+// These live in their own :root so that a theme block never has to restate
+// them, and so adding a theme cannot accidentally fork the spacing scale.
+// ============================================================================
+
+:root {
+  // Spacing, 4px base. Components step through this scale rather than inventing
+  // a gap, which is what keeps two panels built a month apart aligned.
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  // Type scale below the display heading (--h1, which is per-theme because the
+  // display face changes size between them).
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+
+  // Motion. Durations are short on purpose: this is a data tool, and an
+  // animation the user waits for is a bug. `--dur-fast` is for state a pointer
+  // causes (hover, press), `--dur-mid` for something entering or leaving.
+  --dur-fast: 120ms;
+  --dur-mid: 200ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  // Layering. One scale, declared once, so a dropdown inside a modal cannot end
+  // up behind it because two components each guessed a z-index.
+  --z-sticky: 10;
+  --z-dropdown: 100;
+  --z-overlay: 500;
+  --z-modal: 600;
+  --z-toast: 800;
+  // The conflict notice outlives the toast and must never be covered: it is the
+  // only message that says a save did not happen.
+  --z-notice: 900;
+
+  --focus-width: 2px;
+  --focus-offset: 2px;
+}
+
 :root {
   // --- Paperwhite (devlight, default) ---
   --bg: #FAFAF8;
@@ -21,6 +75,8 @@
   --accent2: #1F8A5B;
   --good: #1F8A5B;
   --warn: #A16207;
+  --danger: #C2352B;
+  --danger-contrast: #FFFFFF;
   --radius: 10px;
   --pill: 999px;
   --bw: 1px;
@@ -46,6 +102,8 @@
   --accent2: #34B37A;
   --good: #34B37A;
   --warn: #D9A521;
+  --danger: #E5645A;
+  --danger-contrast: #141417;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   --btn-shadow: none;
 }
@@ -63,6 +121,8 @@
   --accent2: #FBBF24;
   --good: #4ADE80;
   --warn: #FBBF24;
+  --danger: #FF5F56;
+  --danger-contrast: #0B0E0B;
   --radius: 0px;
   --pill: 0px;
   --font-display: 'JetBrains Mono', 'Noto Sans Symbols 2', 'Noto Sans Symbols', monospace;
@@ -86,6 +146,8 @@
   --accent2: #F472B6;
   --good: #4ADE80;
   --warn: #FBBF24;
+  --danger: #FF4D6D;
+  --danger-contrast: #131022;
   --radius: 0px;
   --pill: 0px;
   --bw: 2px;
@@ -110,6 +172,8 @@
   --accent2: #FBBF24;
   --good: #34D399;
   --warn: #FBBF24;
+  --danger: #FF6B6B;
+  --danger-contrast: #060B14;
   --radius: 4px;
   --pill: 3px;
   --font-display: 'Orbitron', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
@@ -133,6 +197,8 @@
   --accent2: #1B1A16;
   --good: #2A6E4E;
   --warn: #A16207;
+  --danger: #8C1D18;
+  --danger-contrast: #FBFAF4;
   --radius: 0px;
   --pill: 0px;
   --bw: 1.5px;
@@ -157,6 +223,8 @@
   --accent2: #22D3EE;
   --good: #34D399;
   --warn: #FBBF24;
+  --danger: #FF4D4D;
+  --danger-contrast: #150A20;
   --radius: 8px;
   --font-display: 'Outfit', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;
   --font-body: 'Outfit', 'Noto Sans Symbols 2', 'Noto Sans Symbols', system-ui, sans-serif;

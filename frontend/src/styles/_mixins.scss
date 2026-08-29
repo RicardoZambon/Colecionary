@@ -42,3 +42,53 @@
     var(--panel) $step $step * 2
   );
 }
+
+// ============================================================================
+// Breakpoints
+//
+// SCSS variables rather than custom properties because a media query cannot
+// read `var()` — which is exactly why these were previously copied as magic
+// numbers into four component stylesheets that then disagreed.
+//
+// Mobile-first is not the house style here (the app is a desktop data tool
+// first), so `upto` is the common direction: state the desktop layout, then
+// collapse it.
+// ============================================================================
+
+$bp-sm: 560px; // phone, portrait
+$bp-md: 768px; // large phone / small tablet — where the sidebar has to go
+$bp-lg: 900px; // tablet
+$bp-xl: 1200px; // wide desktop, where optional columns can appear
+
+@mixin upto($bp) {
+  @media (max-width: $bp) {
+    @content;
+  }
+}
+
+@mixin from($bp) {
+  @media (min-width: $bp + 1px) {
+    @content;
+  }
+}
+
+/**
+ * The one focus treatment in the app. `:focus-visible` only, so a mouse click
+ * never paints a ring, and offset outward so it never eats into the content of
+ * a dense row.
+ */
+@mixin focus-ring($color: var(--accent)) {
+  outline: var(--focus-width) solid $color;
+  outline-offset: var(--focus-offset);
+}
+
+/**
+ * Honours a user who asked the operating system for less motion. Wrap any
+ * transition that moves something a meaningful distance; a colour fade is not
+ * motion and does not need it.
+ */
+@mixin motion-safe {
+  @media (prefers-reduced-motion: no-preference) {
+    @content;
+  }
+}
