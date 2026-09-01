@@ -255,6 +255,33 @@ npm test -- --watch=false</code></pre>
           disponível ao cliente</td>
     </tr>
     <tr>
+      <td>Uma importação de CSV é <strong>uma</strong> escrita, itens e grupos juntos</td>
+      <td><code>collection-page.import.spec.ts</code> (<em>writes the whole import
+          as one full-document PUT, never per item</em>)</td>
+      <td>Uma falha no meio deixa o grupo criado, parte do conteúdo dentro, e
+          nenhuma forma de dizer quais entraram</td>
+    </tr>
+    <tr>
+      <td>A pré-visualização da importação é o objeto aplicado</td>
+      <td><code>csv-import-dialog.spec.ts</code> (<em>emits exactly the plan it
+          drew</em>)</td>
+      <td>A tela e a escrita divergem exatamente onde é mais caro — o usuário
+          aprovou quatrocentas linhas confiando no que leu</td>
+    </tr>
+    <tr>
+      <td>Uma linha ilegível fica de fora e é nomeada; as outras entram</td>
+      <td><code>csv-import.spec.ts</code> (condição desconhecida, contagem
+          ilegível, grupo ambíguo, linha sem nome)</td>
+      <td>Ou o arquivo inteiro é recusado sem dizer qual linha, ou
+          <code>dois</code> vira “zero exemplares” e esvazia a prateleira</td>
+    </tr>
+    <tr>
+      <td>Atualizar por CSV preserva o que o arquivo não cita</td>
+      <td><code>csv-import.spec.ts</code> (<em>keeps what an updating file does
+          not mention</em>, <em>reuses a copy rather than rebuilding it</em>)</td>
+      <td>Uma reimportação para corrigir o ano apaga fotos, notas e preços pagos</td>
+    </tr>
+    <tr>
       <td>Arredondamento e não-soma de moedas</td>
       <td><code>CurrencyTests</code>, <code>CurrencySettingsTests</code></td>
       <td><code>0.07</code> cobrado como oito centavos; BRL somado com USD</td>

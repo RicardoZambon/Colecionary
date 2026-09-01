@@ -194,6 +194,109 @@ if (collection) {
   );
 }
 
+// The CSV import dialog, on a phone, with a plan drawn in it.
+//
+// Everything here is invisible to the unit suite for the usual reason — it is
+// layout — and the dialog is the one surface in the app whose body is a table.
+// A preview that widens the document on a 390px screen would push the Import
+// button off the side of the very dialog that asks the user to press it.
+if (collection) {
+  const dialogCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    storageState: await context.storageState(),
+  });
+  const dp = await dialogCtx.newPage();
+  dp.on('pageerror', e => pageErrors.push(`csv dialog: ${String(e).slice(0, 160)}`));
+  await dp.goto(`${BASE}${collection}`, { waitUntil: 'networkidle' });
+  await dp.waitForTimeout(900);
+
+  // Found by the label in either language rather than by a position: the header
+  // grows actions, and an nth-child would start checking a different button.
+  const importBtn = dp
+    .locator('.header__actions button')
+    .filter({ hasText: /^(Importar|Import)$/ })
+    .first();
+  const found = (await importBtn.count()) > 0;
+  check('the import action is offered in the collection header', found);
+
+  if (found) {
+    await importBtn.click();
+    await dp.waitForTimeout(400);
+    check('the import dialog opens', (await dp.locator('app-csv-import-dialog').count()) > 0);
+
+    // A plan with a long name and a deep path — the two things that would widen
+    // a table that had no scroller of its own.
+    await dp.locator('app-csv-import-dialog textarea').fill(
+      [
+        'Nome;Grupo;Ano;Exemp.;Estado;Valor',
+        'Um nome deliberadamente muito comprido para esticar a coluna;Um / Caminho / Bem / Fundo;2006;2;Perfeito;1.234,56',
+        'Outro item;Um / Caminho / Bem / Fundo;2006;0;Quero;—',
+      ].join('\n'),
+    );
+    await dp.waitForTimeout(400);
+
+    const m = await dp.evaluate(() => {
+      const R = Math.round;
+      const scroll = document.querySelector('app-csv-import-dialog .preview__scroll');
+      const panel = document.querySelector('app-csv-import-dialog .panel');
+      return {
+        docSw: document.documentElement.scrollWidth,
+        docCw: document.documentElement.clientWidth,
+        rows: document.querySelectorAll('app-csv-import-dialog tbody tr').length,
+        counts: document.querySelectorAll('app-csv-import-dialog .counts li').length,
+        // The table scrolls inside its own box; the panel never does.
+        panelOverflow: panel ? R(panel.scrollWidth - panel.clientWidth) : null,
+        scrollerExists: !!scroll,
+      };
+    });
+
+    check('the dialog draws a row per line', m.rows === 2, `${m.rows} rows`);
+    check('the dialog counts what it would write', m.counts > 0, `${m.counts} counts`);
+    check(
+      'the open dialog does not widen the document at 390px',
+      m.docSw === m.docCw,
+      `${m.docSw} vs ${m.docCw}`,
+    );
+    check(
+      'the preview table scrolls inside its own box, not the panel',
+      m.scrollerExists && m.panelOverflow === 0,
+      `panel ${m.panelOverflow}px`,
+    );
+
+    // A focus ring is drawn OUTSIDE the control, and a scrolling dialog body
+    // clips it: asking for overflow-y: auto makes overflow-x compute to auto
+    // too. A full-width textarea then focuses with a ring that is complete top
+    // and bottom and missing down both sides. Nothing in jsdom has an outline,
+    // a scroll container or a clip, so only a browser can see this.
+    await dp.locator('app-csv-import-dialog textarea').focus();
+    await dp.waitForTimeout(150);
+    const ring = await dp.evaluate(() => {
+      const ta = document.querySelector('app-csv-import-dialog textarea');
+      const body = document.querySelector('app-csv-import-dialog .panel__body');
+      if (!ta || !body) return null;
+      const t = ta.getBoundingClientRect();
+      const b = body.getBoundingClientRect();
+      const cs = getComputedStyle(ta);
+      return {
+        left: Math.round(t.left - b.left),
+        right: Math.round(b.right - t.right),
+        reach: Math.round(parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset)),
+      };
+    });
+    check(
+      'a focused control keeps its whole ring inside the dialog body',
+      !!ring && ring.left >= ring.reach && ring.right >= ring.reach,
+      ring ? `${ring.left}px / ${ring.right}px for a ${ring.reach}px ring` : 'not found',
+    );
+
+    await dp.keyboard.press('Escape');
+    await dp.waitForTimeout(300);
+    check('Escape closes the import dialog', (await dp.locator('app-csv-import-dialog').count()) === 0);
+  }
+
+  await dialogCtx.close();
+}
+
 // The nav drawer's focus contract. A drawer that traps focus, or loses it, is
 // worse than no drawer — and none of this is observable without a viewport.
 const phone = await browser.newContext({

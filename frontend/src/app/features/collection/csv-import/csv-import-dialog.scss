@@ -1,0 +1,207 @@
+@use '../../../../styles/mixins' as *;
+
+.lede {
+  margin: 0;
+  color: var(--text2);
+}
+
+.format {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted-strong);
+}
+
+.format__more {
+  display: block;
+  margin-top: 2px;
+}
+
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.sources__file {
+  font-size: var(--fs-sm);
+  color: var(--muted-strong);
+}
+
+.sources__error {
+  font-size: var(--fs-sm);
+  color: var(--danger);
+}
+
+.duplicates {
+  margin: 0;
+  padding: var(--sp-3);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+.duplicates legend {
+  padding: 0 var(--sp-1);
+  text-transform: uppercase;
+  @include mono-label;
+}
+
+.duplicates label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-md);
+  cursor: pointer;
+
+  /* Below the large breakpoint nothing interactive renders under the tap
+     target (rule 17). The radio itself must not grow — a 44px dot is a
+     different control — so the label carries the target instead. */
+  @include upto($bp-lg) {
+    position: relative;
+    min-height: var(--tap);
+  }
+}
+
+.duplicates__hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text2);
+}
+
+.summary,
+.issues,
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.summary__heading,
+.issues__heading,
+.preview__heading {
+  margin: 0;
+  text-transform: uppercase;
+  @include mono-label;
+}
+
+.issues__heading {
+  color: var(--warn);
+}
+
+.summary__quiet {
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--text2);
+}
+
+.counts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.counts li {
+  padding: 2px var(--sp-2);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel2);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.issues ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--fs-sm);
+  color: var(--text2);
+}
+
+.issues__where {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--warn);
+  margin-right: var(--sp-2);
+}
+
+.issues__more,
+.preview__more {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted-strong);
+}
+
+/* The table scrolls inside its own box; the dialog never does horizontally. */
+.preview__scroll {
+  overflow-x: auto;
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+th,
+td {
+  padding: 6px var(--sp-3);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: var(--bw) solid var(--border);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: var(--panel2);
+  text-transform: uppercase;
+  font-weight: 500;
+  @include mono-label;
+}
+
+.num {
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--muted-strong);
+}
+
+.outcome {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* A skipped row is dimmed *and* says "leave alone" in its own column — the
+   dimming is the second cue, never the only one. */
+.row--skip td {
+  color: var(--muted-strong);
+}
+
+.mark {
+  margin-left: var(--sp-2);
+  padding: 1px 6px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}

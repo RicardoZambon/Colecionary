@@ -16,7 +16,7 @@
 <p class="eyebrow">03 · Fluxos</p>
 <h1>Fluxos ponta a ponta</h1>
 <p class="lede">
-  Quatorze caminhos que atravessam a aplicação inteira, do clique ao disco. Cada
+  Dezesseis caminhos que atravessam a aplicação inteira, do clique ao disco. Cada
   passo nomeia o arquivo responsável — é o que transforma um relato de suporte
   (“não salvou”) em um ponto único onde olhar.
 </p>
@@ -1238,6 +1238,186 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     trade-off: uma etiqueta digitada errado mostra tudo em silêncio, em vez de
     uma página vazia. Escolhido porque “nada encontrado” não deixa o leitor
     distinguir se o problema é a URL ou a coleção.
+  </p>
+</div>
+
+<h2 id="csv">16 · Importar itens de uma planilha (CSV)</h2>
+
+<p>
+  O jeito de pôr duzentos itens numa coleção sem digitar duzentos formulários. É
+  a maior escrita do app, e por isso a única cujo <strong>plano</strong> é um
+  objeto que aparece na tela antes de virar requisição.
+</p>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 700 340" role="img" aria-labelledby="csv-t">
+      <title id="csv-t">Texto colado vira plano, o plano é desenhado, e o mesmo plano é aplicado</title>
+      <desc>O texto passa por parseCsv e planCsvImport, produzindo um plano; o
+      diálogo desenha esse plano; ao confirmar, o mesmo objeto é aplicado por
+      applyCsvImport e enviado como um único PUT de documento inteiro.</desc>
+
+      <rect class="box" x="8" y="16" width="184" height="58" rx="8"/>
+      <text class="t b mid" x="100" y="38">texto colado ou arquivo</text>
+      <text class="t s mid" x="100" y="56">Nome;Grupo;Ano;Exemp.;…</text>
+      <text class="t s mid" x="100" y="70">separador farejado no cabeçalho</text>
+
+      <path class="ln" d="M192 45 H236"/><polygon class="fill-accent" points="236,45 228,41 228,49"/>
+
+      <rect class="box" x="236" y="16" width="184" height="58" rx="8"/>
+      <text class="t b mid" x="328" y="38">planCsvImport(...)</text>
+      <text class="t s mid" x="328" y="56">puro — não toca a coleção</text>
+      <text class="t s mid" x="328" y="70">árvore de grupos clonada</text>
+
+      <path class="ln" d="M420 45 H464"/><polygon class="fill-accent" points="464,45 456,41 456,49"/>
+
+      <rect class="box accent" x="464" y="16" width="228" height="58" rx="8"/>
+      <text class="t b mid" x="578" y="38">CsvImportPlan</text>
+      <text class="t s mid" x="578" y="56">rows · issues · newGroups · newFields</text>
+      <text class="t s mid" x="578" y="70">created / updated / skipped</text>
+
+      <path class="ln accent" d="M578 78 V112"/><polygon class="fill-accent" points="578,112 574,104 582,104"/>
+
+      <rect class="box" x="376" y="116" width="316" height="58" rx="8"/>
+      <text class="t b mid" x="534" y="138">app-csv-import-dialog desenha o plano</text>
+      <text class="t s mid" x="534" y="156">contagens · linha a linha · linhas recusadas</text>
+      <text class="t s mid" x="534" y="170">o mesmo objeto que o botão emite</text>
+
+      <path class="ln accent" d="M534 178 V212"/><polygon class="fill-accent" points="534,212 530,204 538,204"/>
+
+      <rect class="box" x="376" y="216" width="316" height="44" rx="8"/>
+      <text class="t s mid" x="534" y="236">applyCsvImport(collection, plan)</text>
+      <text class="t s mid" x="534" y="252">updates no lugar · creations no fim</text>
+
+      <path class="ln accent" d="M376 238 H316"/><polygon class="fill-accent" points="316,238 324,234 324,242"/>
+
+      <rect class="box goodbox" x="88" y="208" width="228" height="60" rx="8"/>
+      <text class="t b mid" x="202" y="230">1 × PUT /api/collections/{id}</text>
+      <text class="t s mid" x="202" y="247">itens e grupos na mesma requisição</text>
+      <text class="t s mid" x="202" y="261">1 × If-Match — tudo ou nada</text>
+
+      <rect class="box warnbox" x="8" y="284" width="684" height="48" rx="8"/>
+      <text class="t b mid" x="350" y="304">o que N escritas teriam dado</text>
+      <text class="t s mid" x="350" y="321">o grupo criado, parte do conteúdo dentro, e nenhuma forma de dizer quais entraram</text>
+    </svg>
+  </div>
+</figure>
+
+<ol class="steps">
+  <li>
+    <strong>Abrir.</strong> O botão <em>Importar</em> fica no cabeçalho da
+    coleção, ao lado de <em>Adicionar item</em> — e também no estado vazio, que é
+    onde ele vale mais. O diálogo herda o <strong>escopo</strong> da página: o
+    grupo aberto, ou <code>''</code> na raiz. É isso que faz um único controle
+    atender aos dois pedidos, “importar na coleção” e “importar direto no grupo”.
+    <span class="where">frontend: features/collection/collection-page/collection-hero/</span>
+  </li>
+  <li>
+    <strong>Ler.</strong> <code>detectDelimiter</code> fareja
+    <code>;</code> · <code>,</code> · tab contando <em>fora de aspas</em> na
+    primeira linha, e <code>parseCsv</code> devolve registros com o número da
+    linha física em que cada um começou — o BOM que o Excel escreve é removido
+    antes, senão o primeiro cabeçalho deixa de casar e a coluna Nome some sem
+    explicação na tela.
+    <span class="where">frontend: core/utils/csv.util.ts</span>
+  </li>
+  <li>
+    <strong>O formato é a tabela.</strong> As colunas reconhecidas são as colunas
+    da tabela de itens, nos dois idiomas: <code>Nome</code>, <code>Grupo</code>,
+    <code>Ano</code>, <code>Exemp.</code>, <code>Estado</code>,
+    <code>Valor</code> — mais <code>Seção</code>, <code>Tags</code> e
+    <code>Descrição</code>. Só <code>Nome</code> é obrigatório. As grafias que a
+    própria tabela imprime são entrada legal: <code>—</code> para valor ausente,
+    <code>Quero</code> para lista de desejos, <code>Perfeito ×2</code> para dois
+    exemplares perfeitos. <strong>Qualquer outra coluna é um campo custom</strong>,
+    casado por nome com os campos declarados do grupo.
+    <span class="where">frontend: features/collection/csv-import/csv-import.ts</span>
+  </li>
+  <li>
+    <strong>Resolver o grupo, em quatro tentativas nesta ordem.</strong> O
+    <strong>nome do próprio grupo aberto</strong> resolve para ele — estar dentro
+    de Ouro e colar uma tabela cujas linhas todas dizem Ouro significa que elas
+    são de Ouro, e não de um Ouro novo aninhado dentro dele (foi assim que o
+    primeiro corte errou, em silêncio, em toda linha). Depois: um caminho
+    (<code>Bronze / V1</code>) percorrido a partir do escopo, criando os elos que
+    faltam; um nome simples que exista <em>exatamente uma vez</em> dentro da
+    subárvore do escopo, onde quer que esteja; e por fim qualquer outra coisa,
+    criada como filha direta do escopo. Um nome que casa com <em>dois</em> grupos
+    é recusado com a linha, não adivinhado — arquivar quarenta itens na
+    “Série 1” errada é o tipo de erro que ninguém descobre. O preço da primeira
+    regra: um descendente homônimo do ancestral não é endereçável por nome
+    simples de dentro dele; importe do nível de cima, onde o caminho separa os
+    dois.
+  </li>
+  <li>
+    <strong>Uma linha ruim não recusa o arquivo.</strong> Ela vira uma
+    <em>issue</em> com o número da própria linha e fica de fora do plano; as
+    outras seguem. O diálogo lista as issues, e a alternativa — recusar tudo —
+    obrigaria o usuário a adivinhar qual das quatrocentas linhas quebrou.
+    Uma issue carrega uma <strong>chave</strong> de mensagem, nunca a frase: o
+    util não tem injector, e um util que devolvesse português seria uma segunda
+    cópia do catálogo, divergindo em silêncio.
+  </li>
+  <li>
+    <strong>Duplicados são uma escolha, e o padrão é não escrever.</strong> Um
+    item com o mesmo nome no grupo de destino é reconhecido — inclusive um nome
+    repetido dentro do próprio arquivo, que conta como duplicado do primeiro.
+    <em>Deixar como está</em> é o padrão; <em>Atualizar</em> mexe só nas colunas
+    que o arquivo traz. As contagens continuam na tela mesmo quando a resposta é
+    “nada”: um botão desabilitado sem número ao lado lê como “importar está
+    quebrado aqui”, enquanto <em>“5 já estão aqui e ficam como estão”</em> lê
+    como a resposta que é, logo acima do rádio que a muda. Fotos, notas, datas, valores pagos e campos não citados
+    ficam onde estavam, e um exemplar existente é <strong>reaproveitado</strong>
+    em vez de recriado, senão o preço pago some numa importação que só queria
+    corrigir o ano.
+  </li>
+  <li>
+    <strong>Campos custom são declarados, senão a importação some.</strong> O
+    valor mora no item e o grupo apenas declara o que <em>mostrar</em>. Uma
+    coluna que ninguém declarou importaria perfeitamente e não apareceria em
+    lugar nenhum — a pior das duas falhas, porque nada na tela diria que o dado
+    está lá. Com um grupo aberto a declaração vai <strong>nele</strong>, já que
+    <code>fieldsFor</code> desce pela ancestralidade e uma declaração cobre a
+    subárvore inteira; na raiz, vai em cada destino. O tipo é inferido dos
+    próprios valores e <code>text</code> ganha qualquer desacordo.
+  </li>
+  <li>
+    <strong>Aplicar é um PUT só.</strong> <code>applyCsvImport</code> recebe o
+    mesmo objeto que o diálogo desenhou; itens atualizados mantêm a
+    <em>posição</em> no array (que é a ordem manual, <a href="frontend.html">rule 4</a>)
+    e as criações entram no fim, em ordem de arquivo. O plano é aplicado sobre
+    <code>sourceItems</code>, não sobre <code>collection.items</code>: pode haver
+    um arraste na janela de debounce, e aplicar sobre o array velho publicaria a
+    ordem pré-arraste como se o usuário a tivesse desfeito.
+    <span class="where">frontend: features/collection/collection-page/collection-page.ts</span>
+  </li>
+  <li>
+    <strong>Se a escrita for recusada, o diálogo fica aberto</strong>, com o texto
+    colado onde estava. Redigitar quatrocentas linhas porque um <code>412</code>
+    chegou não é recuperação. Um <code>412</code> é do
+    <code>ConflictService</code>, como em qualquer outra escrita; o resto vira
+    toast.
+  </li>
+</ol>
+
+<div class="callout">
+  <span class="label">A consequência que vale escrever</span>
+  <p>
+    O que a tela mostra <em>é</em> o objeto aplicado — não uma descrição dele. Se
+    a pré-visualização fosse calculada por um código e a escrita por outro, a
+    pré-visualização poderia mentir, e é ela que o usuário usa para decidir sobre
+    quatrocentas linhas que ele não leu uma a uma. Por isso
+    <code>planCsvImport</code> e <code>applyCsvImport</code> são duas funções e o
+    plano é o único canal entre elas, e por isso
+    <code>csv-import-dialog.spec.ts</code> fixa exatamente isso.
+  </p>
+  <p>
+    Limites deliberados: <strong>2000 linhas</strong> por importação (acima disso
+    um PUT de documento inteiro deixa de ser uma unidade de trabalho razoável) e
+    <strong>99 exemplares</strong> por linha (um erro de digitação vira objetos
+    físicos que a coleção afirma ter). Seções são <em>casadas</em>, nunca criadas:
+    a identidade de uma seção é a posição dela no array, e um arquivo não tem como
+    dizer onde uma nova entraria.
   </p>
 </div>
 

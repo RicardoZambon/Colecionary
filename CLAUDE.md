@@ -371,6 +371,23 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    *Apply*, bulk *Delete* and *Save item* stop offering themselves while their
    own write runs.
 
+21. **An import is planned, previewed and applied as one object.**
+   `planCsvImport` reads the text into a `CsvImportPlan`; the dialog draws that
+   plan and emits **it**; `applyCsvImport` takes nothing else, and the page makes
+   one full-document PUT. Never let a preview be computed by different code than
+   the write — the user approves four hundred rows on the strength of what they
+   read. **The CSV format is the item table**, under the table's own headings in
+   both languages, including the spellings it prints (`—`, `Quero`,
+   `Perfeito ×2`); any other column is a custom field, and a field the
+   destination does not declare gets declared, or the values import and appear
+   nowhere. A row that cannot be read becomes an issue carrying a message *key*
+   and its line number, and the rest of the file still imports. **The open group
+   answers to its own name**: a `Grupo` cell naming the group you are standing in
+   resolves to it, never to a twin created inside it. Sections are
+   matched, never created: a section's identity is its position (rule 5) and a
+   file cannot say where a new one goes. Full detail in
+   [`docs/manual/flows.html`](docs/manual/flows.html) §16 and ADR-67/68.
+
 ## One trap that costs an hour every time
 
 **Never put a backtick inside an inline `template:` or `styles:` block** — not

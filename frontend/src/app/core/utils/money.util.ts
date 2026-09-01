@@ -102,3 +102,42 @@ export function currencyLabel(code: CurrencyCode, locale: string): string {
   const name = new Intl.DisplayNames([locale], { type: 'currency', fallback: 'none' }).of(code);
   return name ? `${code} — ${name}` : code;
 }
+
+/**
+ * The one place a string becomes an amount — the inverse of {@link formatMoney},
+ * and as tolerant as that one is strict.
+ *
+ * It has to be tolerant because of where the strings come from: a field
+ * somebody typed into, a cell pasted out of a spreadsheet, a column copied
+ * back out of the app's own table. So a currency symbol, a stray space, a
+ * thousands separator and the `—` the table prints for "nothing here" all
+ * parse rather than failing, and anything with no digit in it at all is `0` —
+ * which is exactly what `Item.value` means by "not estimated" (rule 3).
+ *
+ * **The last separator decides.** Whichever of `.` and `,` appears last is the
+ * decimal point when one or two digits follow it, and every separator is a
+ * thousands mark otherwise. That reads `4.200,00`, `4,200.00`, `4.200` and
+ * `12,5` all correctly without being told which locale wrote them, which no
+ * fixed rule can do: `1,234` is a thousand in en-US and one-and-a-bit in pt-BR,
+ * and the file does not say which one it is. Three trailing digits are read as
+ * a thousands group, so `12,500` is twelve and a half thousand — stated here
+ * because it is the one case the heuristic can get wrong.
+ */
+export function parseAmount(raw: string): number {
+  const cleaned = raw.replace(/[^\d.,-]/g, '');
+  if (!/\d/.test(cleaned)) return 0;
+
+  const negative = cleaned.startsWith('-');
+  const digits = cleaned.replace(/-/g, '');
+  const lastSeparator = Math.max(digits.lastIndexOf('.'), digits.lastIndexOf(','));
+  const decimals = lastSeparator < 0 ? 0 : digits.length - lastSeparator - 1;
+
+  const normalized =
+    decimals >= 1 && decimals <= 2
+      ? `${digits.slice(0, lastSeparator).replace(/[.,]/g, '')}.${digits.slice(lastSeparator + 1)}`
+      : digits.replace(/[.,]/g, '');
+
+  const parsed = parseFloat(normalized);
+  if (!Number.isFinite(parsed)) return 0;
+  return negative ? -parsed : parsed;
+}

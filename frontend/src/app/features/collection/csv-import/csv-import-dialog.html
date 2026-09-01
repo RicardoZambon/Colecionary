@@ -1,0 +1,162 @@
+<ui-dialog
+  size="wide"
+  [title]="'csvImport.title' | t"
+  describedBy="csv-import-lede"
+  (dismissed)="cancelled.emit()"
+>
+  <p id="csv-import-lede" class="lede">{{ lede() }}</p>
+  <p class="format">
+    {{ format() }}
+    <span class="format__more">{{ 'csvImport.formatMore' | t }}</span>
+  </p>
+
+  <ui-field [label]="'csvImport.pasteLabel' | t">
+    <ui-textarea
+      [mono]="true"
+      [rows]="8"
+      [value]="text()"
+      (valueChange)="text.set($event)"
+      [placeholder]="'csvImport.pastePlaceholder' | t"
+    />
+  </ui-field>
+
+  <div class="sources">
+    <!-- The input is hidden and driven by a real button: a bare file input
+         cannot be styled to look like every other action on the screen, and it
+         is the one control here that is not a `ui-*` component. -->
+    <ui-button variant="ghost" size="sm" (click)="fileInput.click()">
+      {{ 'csvImport.chooseFile' | t }}
+    </ui-button>
+    <input
+      #fileInput
+      type="file"
+      accept=".csv,.txt,text/csv,text/plain"
+      hidden
+      [attr.aria-label]="'csvImport.chooseFile' | t"
+      (change)="readFile($event)"
+    />
+    <ui-button variant="ghost" size="sm" (click)="downloadTemplate()">
+      {{ 'csvImport.template' | t }}
+    </ui-button>
+    @if (fileName()) {
+      <span class="sources__file">{{ 'csvImport.fileChosen' | t: { name: fileName() } }}</span>
+    }
+    @if (fileError()) {
+      <span class="sources__error" role="status">{{ 'csvImport.fileFailed' | t }}</span>
+    }
+  </div>
+
+  <fieldset class="duplicates">
+    <legend>{{ 'csvImport.duplicatesLegend' | t }}</legend>
+    <label>
+      <input
+        type="radio"
+        name="csv-duplicates"
+        [checked]="duplicates() === 'skip'"
+        (change)="duplicates.set('skip')"
+      />
+      <span>{{ 'csvImport.duplicatesSkip' | t }}</span>
+    </label>
+    <label>
+      <input
+        type="radio"
+        name="csv-duplicates"
+        [checked]="duplicates() === 'update'"
+        (change)="duplicates.set('update')"
+      />
+      <span>{{ 'csvImport.duplicatesUpdate' | t }}</span>
+    </label>
+    @if (duplicates() === 'update') {
+      <p class="duplicates__hint">{{ 'csvImport.duplicatesHint' | t }}</p>
+    }
+  </fieldset>
+
+  <!-- Everything below is the answer to "what will this do", and it is derived
+       from the very object the Import button emits. `role="status"` so the
+       counts are announced as they change rather than only on submit. -->
+  <section class="summary" role="status">
+    <h3 class="summary__heading">{{ 'csvImport.summaryHeading' | t }}</h3>
+    @if (!hasInput()) {
+      <p class="summary__quiet">{{ 'csvImport.nothingYet' | t }}</p>
+    } @else {
+      <!-- The counts stay on screen even when the answer is "nothing". Hiding
+           them behind the sentence was the whole confusion: a disabled Import
+           button with no number beside it reads as "importing is broken here",
+           where "5 já estão aqui e ficam como estão" reads as the answer it is,
+           right above the radio that changes it. -->
+      <ul class="counts">
+        @for (part of summary(); track part) {
+          <li>{{ part }}</li>
+        }
+      </ul>
+      @if (inert()) {
+        <p class="summary__quiet">{{ 'csvImport.nothingToWrite' | t }}</p>
+      }
+    }
+  </section>
+
+  @if (plan().issues.length) {
+    <section class="issues">
+      <h3 class="issues__heading">{{ issuesHeading() }}</h3>
+      <ul>
+        @for (issue of previewIssues(); track $index) {
+          <li>
+            <span class="issues__where">{{ issueWhere(issue) }}</span>
+            {{ issueText(issue) }}
+          </li>
+        }
+        @if (hiddenIssues()) {
+          <li class="issues__more">{{ 'csvImport.moreRows' | t: { n: hiddenIssues() } }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (previewRows().length) {
+    <section class="preview">
+      <h3 class="preview__heading">{{ 'csvImport.previewHeading' | t }}</h3>
+      <!-- Its own scroller: a long name or a deep group path must not widen the
+           dialog past the viewport (rule 17). -->
+      <div class="preview__scroll">
+        <table [attr.aria-label]="'csvImport.previewAria' | t">
+          <thead>
+            <tr>
+              <th scope="col" class="num">{{ 'csvImport.col.line' | t }}</th>
+              <th scope="col">{{ 'csvImport.col.item' | t }}</th>
+              <th scope="col">{{ 'csvImport.col.group' | t }}</th>
+              <th scope="col">{{ 'csvImport.col.outcome' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of previewRows(); track row.line) {
+              <tr [class.row--skip]="row.outcome === 'skip'">
+                <td class="num">{{ row.line }}</td>
+                <td>{{ row.item.name }}</td>
+                <td>
+                  {{ row.groupPath }}
+                  @if (row.newGroup) {
+                    <span class="mark">{{ 'csvImport.newGroupMark' | t }}</span>
+                  }
+                </td>
+                <!-- The outcome is a word, never a colour on its own (rule 12). -->
+                <td class="outcome">{{ outcomeLabel(row) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (hiddenRows()) {
+        <p class="preview__more">{{ 'csvImport.moreRows' | t: { n: hiddenRows() } }}</p>
+      }
+    </section>
+  }
+
+  <ng-container dlgActions>
+    <ui-button variant="ghost" (click)="cancelled.emit()">
+      {{ 'csvImport.cancel' | t }}
+    </ui-button>
+    <ui-button [disabled]="!writes() || saving()" (click)="submit()">
+      {{ confirmLabel() }}
+    </ui-button>
+  </ng-container>
+</ui-dialog>
