@@ -118,6 +118,17 @@
       >
         <span class="btn-label"><ui-icon name="gear" [size]="14" />{{ 'hero.manage' | t }}</span>
       </ui-button>
+      <!-- Beside "add item" and not inside a menu: the two are the same act at
+           two scales, and the one that saves an afternoon is the one nobody
+           finds behind a chevron. -->
+      <ui-button
+        variant="ghost"
+        size="sm"
+        [title]="'csvImport.openTitle' | t"
+        (click)="importRequested.emit()"
+      >
+        <span class="btn-label"><ui-icon name="upload" [size]="14" />{{ 'csvImport.open' | t }}</span>
+      </ui-button>
       <ui-button
         size="sm"
         [routerLink]="['/c', collection().id, 'items', 'new']"

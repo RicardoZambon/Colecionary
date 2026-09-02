@@ -57,6 +57,8 @@ import { ItemGrid } from './item-grid/item-grid';
 import { ItemList, RowPick } from './item-list/item-list';
 import { BulkBar } from './bulk-bar/bulk-bar';
 import { BulkPatch, applyBulkPatch, removeItems } from './bulk-patch';
+import { CsvImportDialog } from '../csv-import/csv-import-dialog';
+import { CsvImportPlan, applyCsvImport } from '../csv-import/csv-import';
 import {
   EMPTY_SELECTION,
   SelectionState,
@@ -88,7 +90,7 @@ const WIDE_ENOUGH = '(min-width: 1200px)';
 @Component({
   selector: 'app-collection-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BulkBar, CollectionFilters, CollectionHero, CollectionToolbar, GroupBreadcrumb, GroupDashboard, GroupTree, ItemGrid, ItemList, RouterLink, TPipe, UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSkeleton],
+  imports: [BulkBar, CollectionFilters, CollectionHero, CollectionToolbar, CsvImportDialog, GroupBreadcrumb, GroupDashboard, GroupTree, ItemGrid, ItemList, RouterLink, TPipe, UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSkeleton],
   templateUrl: './collection-page.html',
   styleUrl: './collection-page.scss',
 })
@@ -184,6 +186,13 @@ export class CollectionPage {
 
   /** True while the delete confirmation is up. */
   protected readonly confirmingDelete = signal(false);
+  /**
+   * Whether the CSV import dialog is open. Not URL state: it holds a paste
+   * nobody else can reconstruct, so a link that reopened it would land on an
+   * empty box claiming to be mid-import (rule 11's test — would a recipient
+   * want this restored?).
+   */
+  protected readonly importOpen = signal(false);
   protected readonly treeExpanded = signal<ReadonlySet<string>>(new Set());
   protected readonly treeCollapsed = signal(false);
 
@@ -570,6 +579,45 @@ export class CollectionPage {
     }
     this.clearSelection();
     this.toast.flash(this.i18n.plural(count, one, other));
+  }
+
+  /**
+   * The import, as one full-document PUT — the same unit as a bulk edit, and
+   * for the same reasons (rule 14). It is also the only write in the app that
+   * moves items *and* groups in one request, which is precisely why it cannot
+   * be N calls: a run that created the group and then failed on item 12 would
+   * leave a half-filled group nobody asked for and no way to name what got in.
+   *
+   * The plan is applied to `sourceItems`, not to `collection.items`: a manual
+   * drag may be sitting in the debounce, and applying to the stale array would
+   * publish the pre-drag order as though the user had undone it.
+   */
+  protected async runCsvImport(plan: CsvImportPlan): Promise<void> {
+    const collection = this.collection();
+    const count = plan.created + plan.updated;
+    if (!collection || !count) return;
+
+    clearTimeout(this.orderTimer);
+    this.pendingOrder.set(null);
+
+    try {
+      await this.store.updateCollection(
+        applyCsvImport({ ...collection, items: this.sourceItems() }, plan),
+      );
+    } catch (err) {
+      // The dialog stays open on a failure, holding the paste: retyping four
+      // hundred rows because a save was refused is not a recovery.
+      if (!isReportedWriteFailure(err)) {
+        this.toast.flash(
+          err instanceof Error ? err.message : this.i18n.t('toast.csvImport.failed'),
+        );
+      }
+      return;
+    }
+    this.importOpen.set(false);
+    this.toast.flash(
+      this.i18n.plural(count, 'toast.csvImport.done.one', 'toast.csvImport.done.other'),
+    );
   }
 
   /** Whether anything is narrowing the list beyond the group itself. */

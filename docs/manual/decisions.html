@@ -707,6 +707,26 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-67</span> A importação é planejada e aplicada por funções diferentes, e o plano é o único canal</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Importar um CSV é a única escrita do app que acrescenta centenas de linhas a partir de um arquivo que o usuário não leu uma a uma — e a única que mexe em itens e grupos na mesma requisição. A decisão de apertar <em>Importar</em> é tomada olhando uma pré-visualização.</dd>
+    <dt>Decisão</dt><dd><code>planCsvImport</code> devolve um <code>CsvImportPlan</code> — linhas resolvidas, issues por número de linha, grupos e campos a criar, contagens. O diálogo desenha esse objeto e emite <em>esse mesmo objeto</em>; <code>applyCsvImport</code> não recebe mais nada. Ambas são puras: a coleção não é tocada, a árvore de grupos é clonada antes que uma linha possa acrescentar a ela.</dd>
+    <dt>Consequência</dt><dd>A pré-visualização não pode mentir. Se a tela fosse desenhada por um código e a escrita feita por outro, a divergência entre os dois seria invisível exatamente onde ela é mais cara — o usuário aprovou quatrocentas linhas confiando no que leu. Como efeito colateral, todo o comportamento é testável sem TestBed, sem HTTP e sem coleção viva: <code>csv-import.spec.ts</code> monta um documento e faz perguntas. O custo é uma alocação a mais por tecla no campo de colagem, aceito porque o caso real é uma colagem, não duas mil teclas.</dd>
+    <dt>Imposta por</dt><dd><code>csv-import-dialog.spec.ts</code> (“emits exactly the plan it drew”) e <code>collection-page.import.spec.ts</code>, que prova que o resultado é <strong>um</strong> PUT e zero <code>upsertItem</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-68</span> O formato do CSV é a tabela de itens, e não um esquema próprio</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um importador precisa de um formato, e a escolha usual é inventar um — cabeçalhos canônicos em inglês, um valor de enum por coluna, e uma página de documentação para explicá-lo.</dd>
+    <dt>Decisão</dt><dd>As colunas reconhecidas são as colunas da tabela de itens, sob os próprios títulos dela, nos dois idiomas — e as grafias que a tabela <em>imprime</em> são entrada legal: <code>—</code> para ausente, <code>Quero</code> para lista de desejos, <code>Perfeito ×2</code> para dois exemplares. O modelo que o download entrega é montado a partir do mesmo catálogo de mensagens que os títulos da tela. Cabeçalhos são comparados sem caixa, sem acento e sem ponto final.</dd>
+    <dt>Consequência</dt><dd>O formato não precisa de documentação além da tela: quem já usa o app já viu o formato. Selecionar a tabela, colar numa planilha, estender e colar de volta funciona por construção, e uma coluna renomeada na tela se renomeia no modelo — as duas não podem divergir. O custo é ambiguidade herdada: um <code>Ano</code> que também é campo custom resolve como coluna interna, e <code>12,500</code> é lido como doze mil e quinhentos porque nenhuma regra fixa distingue os dois locais sem que o arquivo diga qual escreveu. O modelo baixado <strong>não</strong> traz linhas de exemplo — um exemplo plausível é um exemplo que alguém importa sem apagar.</dd>
+    <dt>Imposta por</dt><dd><code>csv-import.spec.ts</code> (o arquivo do pedido original, palavra por palavra) e <code>money.util.spec.ts</code>, que prende a regra do “último separador decide”</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../../core/api/images-api';
@@ -74,6 +74,13 @@ export class CollectionHero {
   /** Name of the open group, or empty at the collection root. */
   readonly scopeName = input('');
   readonly members = input.required<Member[]>();
+
+  /**
+   * "Import" was pressed. An output rather than a dialog owned here: the page
+   * holds the collection and performs the write, and the hero is the surface
+   * that draws the action — the same division `applied` follows on the bulk bar.
+   */
+  readonly importRequested = output<void>();
   /**
    * Nothing catalogued *and* no declared set — the one case where the whole
    * numeric apparatus is meaningless rather than merely low.

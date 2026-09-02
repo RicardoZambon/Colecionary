@@ -41,6 +41,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(keydown.escape)': 'dismissed.emit()',
+    '[class.ui-dialog--wide]': "size() === 'wide'",
   },
   template: `
     <div class="scrim" (click)="dismissed.emit()"></div>
@@ -101,6 +102,16 @@ import {
       box-shadow: var(--shadow);
     }
 
+    /*
+     * One step wider, for the dialogs whose body is a table rather than a
+     * sentence. A width input rather than a page-side override: rule 2 puts
+     * every visual decision in the component, and a page that reached in to
+     * restyle .panel would be styling another component's private class.
+     */
+    :host(.ui-dialog--wide) .panel {
+      width: min(780px, 100%);
+    }
+
     .panel:focus-visible {
       outline: none;
     }
@@ -122,6 +133,26 @@ import {
       font-size: var(--fs-md);
       color: var(--text2);
       line-height: 1.5;
+
+      /*
+       * Room for a focus ring, given back to the layout.
+       *
+       * A tall dialog has to scroll its body, and asking for overflow-y: auto
+       * silently makes overflow-x compute to auto too — the spec forbids one
+       * axis being visible while the other is not. So this box clips
+       * horizontally, and the ring a full-width control draws OUTSIDE itself
+       * (outline-offset plus outline-width, then the halo box-shadow) is drawn
+       * into that clipped strip. The result is a focused textarea or text input
+       * whose ring is complete top and bottom and missing down both sides,
+       * which reads as a rendering fault rather than as focus.
+       *
+       * The padding buys the ring its space; the equal negative margin spends
+       * it back out of the panel's own padding, so the content stays aligned
+       * with the title above it and nothing moves.
+       */
+      --ring-room: calc(var(--focus-width) + var(--focus-offset) * 2);
+      padding-inline: var(--ring-room);
+      margin-inline: calc(var(--ring-room) * -1);
     }
 
     .panel__actions {
@@ -172,6 +203,13 @@ export class UiDialog {
    * `dialog` otherwise, and that stays the default.
    */
   readonly role = input<'dialog' | 'alertdialog'>('dialog');
+
+  /**
+   * `wide` for a dialog whose body is a table or a preview — content that reads
+   * as a column of fragments at the default width. It changes nothing below
+   * `560px`, where the panel is already docked to the full width of the screen.
+   */
+  readonly size = input<'default' | 'wide'>('default');
 
   /** Escape, or a click on the scrim. Always means "nothing happened". */
   readonly dismissed = output<void>();

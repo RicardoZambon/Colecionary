@@ -7,6 +7,7 @@
     [scopeName]="scopeName()"
     [members]="headerMembers()"
     [blank]="blank()"
+    (importRequested)="importOpen.set(true)"
   />
 
   <!-- Full width, above the split: it describes the whole page, not the pane
@@ -164,6 +165,14 @@
             >
               {{ 'hero.addItem' | t }}
             </ui-button>
+            <!-- An empty collection is where an import is worth the most: the
+                 alternative on offer is typing the first two hundred by hand.
+                 Guarded on canEdit because a reader is shown neither. -->
+            @if (canEdit()) {
+              <ui-button variant="ghost" size="sm" emptyActions (click)="importOpen.set(true)">
+                {{ 'csvImport.open' | t }}
+              </ui-button>
+            }
           </ui-empty>
         }
       }
@@ -188,6 +197,22 @@
       }
     </div>
   </div>
+
+  <!-- Guarded on canEdit as well as the flag: this is the largest write in the
+       app, and a route the client would offer a reader is one the server has to
+       refuse instead of one nobody was shown. `g()` carries the open group in,
+       which is what makes "import into this group" the same control. -->
+  @if (importOpen() && canEdit()) {
+    <app-csv-import-dialog
+      [collection]="coll"
+      [scopeId]="selectedGroup()?.id ?? ''"
+      [scopeName]="scopeName()"
+      [fields]="groupFields()"
+      [saving]="saving()"
+      (confirmed)="runCsvImport($event)"
+      (cancelled)="importOpen.set(false)"
+    />
+  }
 
   <!-- Guarded on the count as well as the flag: a filter change can empty the
        selection out from under an open dialog, and "Delete 0 items" is not a
