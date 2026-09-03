@@ -45,6 +45,17 @@ public sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
             copies.Property(c => c.Value).HasPrecision(12, 2).HasJsonPropertyName("Value");
             copies.Property(c => c.AcquiredOn).HasJsonPropertyName("AcquiredOn");
             copies.Property(c => c.Notes).HasJsonPropertyName("Notes");
+
+            // Values for the copy-scoped fields, nested one level deeper inside
+            // the same JSON document. A second level of ownership, which both
+            // CollectionVersionInterceptor.OwnerOf and TenantStampingInterceptor
+            // resolve through the ownership foreign keys rather than by guessing
+            // a name, so neither needed a change to see it.
+            copies.OwnsMany(c => c.Custom, custom =>
+            {
+                custom.Property(v => v.Key).HasJsonPropertyName("Key");
+                custom.Property(v => v.Value).HasJsonPropertyName("Value");
+            });
         });
     }
 }

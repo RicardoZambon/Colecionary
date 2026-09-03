@@ -40,6 +40,7 @@ const COLLECTION: Collection = {
   id: 'c1',
   name: 'Saint Seiya',
   description: '',
+  fields: [],
   groups: [group('ouro', 'Cavaleiros de Ouro'), group('bronze', 'Cavaleiros de Bronze')],
   sections: [],
   items: [item('i1', 'Mu Aries', 'ouro')],

@@ -14,7 +14,14 @@ import { CurrencyService } from '../../../core/state/currency.service';
 import { isOwned, newCopy, ownedValue, paidTotal, syncWantedTag } from '../../../core/utils/copies.util';
 import { tagsInUse } from '../../../core/utils/tags.util';
 import { currencyOf } from '../../../core/utils/currency.util';
-import { fieldsFor, flattenTree, groupById, resolveGroupId } from '../../../core/utils/groups.util';
+import {
+  copyFields,
+  fieldsFor,
+  flattenTree,
+  groupById,
+  itemFields,
+  resolveGroupId,
+} from '../../../core/utils/groups.util';
 import { resolveSectionId, sectionsOf } from '../../../core/utils/sections.util';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import { groupLinkParams } from '../browse-params';
@@ -58,6 +65,12 @@ interface CopyDraft {
   acquiredOn: string;
   status: CopyStatus;
   notes: string;
+  /**
+   * Values for the copy-scoped fields, by field name. A plain record for the
+   * same reason the item's own `custom` is one: the form edits by name, and the
+   * ordered key/value list is what the *model* wants, not what an input wants.
+   */
+  custom: Record<string, string>;
 }
 
 /**
@@ -79,7 +92,10 @@ function copyDraftHasContent(copy: CopyDraft): boolean {
     parseNumber(copy.value) ||
       parseNumber(copy.price) ||
       copy.acquiredOn.trim() ||
-      copy.notes.trim(),
+      copy.notes.trim() ||
+      // A copy whose only fact is its serial number still holds something a
+      // person typed, and that is exactly the copy whose removal must ask.
+      Object.values(copy.custom).some(value => value.trim()),
   );
 }
 
@@ -92,10 +108,18 @@ function toDraft(copy: ItemCopy): CopyDraft {
     acquiredOn: copy.acquiredOn ?? '',
     status: copy.status,
     notes: copy.notes,
+    custom: Object.fromEntries(copy.custom.map(entry => [entry.key, entry.value])),
   };
 }
 
-function fromDraft(draft: CopyDraft): ItemCopy {
+/**
+ * `fields` are the copy-scoped fields currently declared, and only those are
+ * written back — the same bargain the item's own `custom` makes in `draftItem`.
+ * A value whose field this group does not declare is dropped, which is
+ * defensible here and nowhere else: the person is looking at this copy's whole
+ * field set as they save it. A bulk apply must keep them (rule 14).
+ */
+function fromDraft(draft: CopyDraft, fields: readonly GroupField[]): ItemCopy {
   return {
     id: draft.id,
     condition: draft.condition,
@@ -104,6 +128,9 @@ function fromDraft(draft: CopyDraft): ItemCopy {
     acquiredOn: draft.acquiredOn.trim() || null,
     status: draft.status,
     notes: draft.notes.trim(),
+    custom: fields
+      .map(field => ({ key: field.name, value: (draft.custom[field.name] ?? '').trim() }))
+      .filter(entry => entry.value),
   };
 }
 
@@ -220,7 +247,7 @@ export class ItemFormPage {
       sectionId: this.sectionId(),
       year: this.year().trim(),
       value: this.value().trim(),
-      copies: this.copies().map(fromDraft),
+      copies: this.copies().map(copy => fromDraft(copy, this.copyFieldDefs())),
       custom: this.custom(),
       photoIds: this.photoIds(),
     }),
@@ -360,6 +387,17 @@ export class ItemFormPage {
     this.copies.update(copies => copies.map((c, i) => (i === index ? { ...c, ...patch } : c)));
   }
 
+  protected copyFieldValue(index: number, field: string): string {
+    return this.copies()[index]?.custom[field] ?? '';
+  }
+
+  /** Goes through `patchCopy`, so one copy's edit can never rewrite another's. */
+  protected setCopyFieldValue(index: number, field: string, value: string): void {
+    const current = this.copies()[index];
+    if (!current) return;
+    this.patchCopy(index, { custom: { ...current.custom, [field]: value } });
+  }
+
   // Leaving an item unfiled is a real choice, not the absence of one, so it is
   // an option like any other — and it is the one the form starts on when you
   // add from the collection root or from the unfiled bucket.
@@ -387,9 +425,21 @@ export class ItemFormPage {
     ];
   });
 
-  protected readonly groupFields = computed(() =>
-    fieldsFor(this.collection()?.groups ?? [], this.groupId() || null),
-  );
+  /** The whole set in force for the chosen group — both scopes, merged once. */
+  private readonly declaredFields = computed(() => {
+    const collection = this.collection();
+    return collection ? fieldsFor(collection, this.groupId() || null) : [];
+  });
+
+  /** Edited once, on the item. */
+  protected readonly groupFields = computed(() => itemFields(this.declaredFields()));
+
+  /**
+   * Edited once per copy. Empty is the normal case, and the copy editor draws
+   * nothing at all then — a heading over no inputs would suggest a setting had
+   * gone missing.
+   */
+  protected readonly copyFieldDefs = computed(() => copyFields(this.declaredFields()));
 
   /** A declared field type maps straight onto the native input type. */
   protected inputType(field: GroupField): string {
@@ -445,7 +495,7 @@ export class ItemFormPage {
       sectionId: this.sectionId(),
       year: parseNumber(this.year()) || new Date().getFullYear(),
       value: parseNumber(this.value()),
-      copies: this.copies().map(fromDraft),
+      copies: this.copies().map(copy => fromDraft(copy, this.copyFieldDefs())),
       tags: [...this.tags()],
       img: existing?.img ?? slugify(this.name().trim()) + '.jpg',
       photoIds: this.photoIds(),

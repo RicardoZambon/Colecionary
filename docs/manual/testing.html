@@ -16,8 +16,8 @@
 <p class="eyebrow">10 · Operação</p>
 <h1>Testes e as garantias que eles prendem</h1>
 <p class="lede">
-  190 testes unitários e 119 de integração no backend, em duas suítes, e 681
-  asserções em 58 specs no frontend. O que importa aqui não é a contagem: é
+  208 testes unitários e 120 de integração no backend, em duas suítes, e 871
+  testes em 67 specs no frontend. O que importa aqui não é a contagem: é
   <strong>qual invariante cada teste prende</strong> — porque quase toda
   regressão perigosa deste sistema deixa a outra suíte inteiramente verde. E há
   uma classe inteira que <em>nenhuma</em> das duas vê; está na última seção.
@@ -204,8 +204,53 @@ npm test -- --watch=false</code></pre>
     </tr>
     <tr>
       <td>Nomes de propriedade e conversões nas colunas JSON</td>
-      <td><code>ItemCopyJsonShapeTests</code>, <code>GroupFieldJsonShapeTests</code></td>
+      <td><code>ItemCopyJsonShapeTests</code>, <code>GroupFieldJsonShapeTests</code>
+          (hoje <code>["Name","Scope","Type"]</code>, mais
+          <code>FieldScope_IsPersistedAsAString</code>)</td>
       <td>Enum vira inteiro, ou um rename órfã dados existentes sem erro</td>
+    </tr>
+    <tr>
+      <td>A declaração de campo da coleção é <em>o mesmo</em> documento da do grupo</td>
+      <td><code>CollectionFieldJsonShapeTests</code> (coluna container
+          <code>Fields</code>, nomes JSON, os dois enums como string)</td>
+      <td>Nada lança: as chaves que não casam viram defaults do CLR, e um campo da
+          coleção volta como campo de texto sem nome, escopado ao item</td>
+    </tr>
+    <tr>
+      <td>O valor de um campo por exemplar mora <em>dentro</em> de <code>Copies</code></td>
+      <td><code>ItemCopyJsonShapeTests.CopyCustomValues_LiveInsideTheCopiesDocument</code></td>
+      <td>Um segundo nível de posse vira tabela própria — e uma cópia sem o item
+          dela não é nada</td>
+    </tr>
+    <tr>
+      <td>Escopo ausente no fio lê como <code>"item"</code>, e faz round-trip nos dois sentidos</td>
+      <td><code>DtoMapperTests.AFieldWithNoScopeOnTheWire_ReadsAsItemScoped</code>,
+          <code>ScopeRoundTripsThroughBothDirections</code>,
+          <code>ACollectionsOwnFieldsTravelBesideItsGroups</code>,
+          <code>ACopysOwnValuesRoundTrip</code></td>
+      <td>Todo arquivo anterior aos escopos falha na importação, ou o escopo
+          escolhido pelo usuário volta pelo default do servidor</td>
+    </tr>
+    <tr>
+      <td>Os dois escopos são aceitos, um terceiro é 400, e a coleção segue as regras do grupo</td>
+      <td><code>ValidatorTests.GroupValidator_AcceptsBothScopes</code>,
+          <code>GroupValidator_RejectsAnUnknownScope</code> (sensível a caixa),
+          <code>CollectionValidator_HoldsItsOwnFieldsToTheGroupRules</code>,
+          <code>CollectionValidator_LetsAGroupRedeclareACollectionWideName</code>,
+          <code>ItemValidator_ChecksACopysOwnFieldValues</code></td>
+      <td>Duas cópias das mesmas regras divergem, e a coleção passa a declarar
+          algo que um grupo não pode — ou o override deliberado de um nome vira
+          400</td>
+    </tr>
+    <tr>
+      <td>Campos dos dois escopos sobrevivem a um round-trip completo, e limpar a
+          declaração não apaga valor</td>
+      <td><span class="tag danger">crítico</span>
+          <code>ContractTests.Collection_CarriesFieldsOfBothScopes_ThroughAFullRoundTrip</code></td>
+      <td>O <code>MergeByKey</code> de <code>Collection.Fields</code> coalescido —
+          declarações que nunca somem — ou o valor de uma cópia sobrescrevendo o
+          da outra, que é o defeito que o escopo por exemplar existe para
+          consertar</td>
     </tr>
     <tr>
       <td>Toda coluna com forma de GUID é classificada</td>
@@ -267,6 +312,14 @@ npm test -- --watch=false</code></pre>
           drew</em>)</td>
       <td>A tela e a escrita divergem exatamente onde é mais caro — o usuário
           aprovou quatrocentas linhas confiando no que leu</td>
+    </tr>
+    <tr>
+      <td>Coluna de campo por exemplar é recusada no cabeçalho, e o resto importa</td>
+      <td><code>csv-import.spec.ts</code>
+          (<code>csvImport.error.copyScopedColumn</code>, uma issue na linha do
+          cabeçalho)</td>
+      <td>Valores de N cópias achatados numa linha e gravados sob um nome que
+          nenhuma tela lê</td>
     </tr>
     <tr>
       <td>Uma linha ilegível fica de fora e é nomeada; as outras entram</td>
@@ -360,6 +413,15 @@ npm test -- --watch=false</code></pre>
     <code>field-format.util.spec.ts</code> prende o eco de um valor que não
     parseia, nos dois tipos — o campo é texto livre por baixo, então devolver o
     que veio é a única leitura honesta.
+  </li>
+  <li>
+    Os dois eixos de um campo custom são prendidos onde cada um pode falhar em
+    silêncio: <code>groups.util.spec.ts</code> (os campos da coleção mesclam
+    primeiro, uma redeclaração mais funda troca tipo <em>e</em> escopo mantendo a
+    posição, e <code>itemFields</code>/<code>copyFields</code> partem o conjunto já
+    mesclado), <code>sort.util.spec.ts</code> (nenhum seletor oferece ordenar por
+    campo de escopo <code>copy</code>) e <code>browse.util.spec.ts</code> (a busca
+    alcança o valor de uma cópia e devolve o <em>item</em>).
   </li>
 </ul>
 

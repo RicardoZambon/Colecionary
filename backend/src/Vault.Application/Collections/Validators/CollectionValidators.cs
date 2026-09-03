@@ -35,6 +35,44 @@ public sealed class CreateCollectionRequestValidator : AbstractValidator<CreateC
     }
 }
 
+/// <summary>
+/// The rules for a list of field declarations, shared by the two things that
+/// declare them.
+/// </summary>
+/// <remarks>
+/// A collection's fields and a group's are the same declaration in the same
+/// shape, and the merge that resolves them (<c>fieldsFor</c> on the client)
+/// treats them as one list — so two copies of these rules would eventually let
+/// a collection declare something a group could not.
+/// </remarks>
+public static class FieldRules
+{
+    public static void DeclaredBy<T>(
+        AbstractValidator<T> validator,
+        System.Linq.Expressions.Expression<Func<T, IEnumerable<GroupFieldDto>>> fields)
+    {
+        // Field names double as the keys in an item's or a copy's `custom` list
+        // and as the tail of a "field:<name>" sort key, so they have to stay
+        // unique within one declaration. Across declarations they need not be:
+        // a group redeclaring a collection-wide name deliberately overrides it,
+        // which is the same rule that already lets it override an ancestor's.
+        validator.RuleFor(fields)
+            .Must(f => f.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() == f.Count())
+            .WithMessage(_ => Messages.FieldNamesMustBeUnique);
+        // A JSON column carries no per-field constraints of its own.
+        validator.RuleForEach(fields).ChildRules(field =>
+        {
+            field.RuleFor(f => f.Name).NotEmpty().MaximumLength(100);
+            field.RuleFor(f => f.Type).Must(t => t is "text" or "number" or "date")
+                .WithMessage(_ => Messages.FieldTypeInvalid);
+            // Absent on the wire normalises to "item" before it gets here, so
+            // this only ever refuses a value that was actually spelled wrong.
+            field.RuleFor(f => f.Scope).Must(sc => sc is "item" or "copy")
+                .WithMessage(_ => Messages.FieldScopeInvalid);
+        });
+    }
+}
+
 public sealed class GroupNodeDtoValidator : AbstractValidator<GroupNodeDto>
 {
     /// <summary>Ordering keys the frontend knows how to apply.</summary>
@@ -48,18 +86,7 @@ public sealed class GroupNodeDtoValidator : AbstractValidator<GroupNodeDto>
         RuleFor(g => g.Name).NotEmpty().MaximumLength(200);
         RuleFor(g => g.ParentId).Matches(IdRules.PublicId()).When(g => g.ParentId is not null);
 
-        // Field names double as the keys in an item's `custom` list and as the
-        // tail of a "field:<name>" sort key, so they have to stay unique.
-        RuleFor(g => g.Fields)
-            .Must(f => f.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() == f.Count)
-            .WithMessage(_ => Messages.FieldNamesMustBeUnique);
-        // A JSON column carries no per-field constraints of its own.
-        RuleForEach(g => g.Fields).ChildRules(field =>
-        {
-            field.RuleFor(f => f.Name).NotEmpty().MaximumLength(100);
-            field.RuleFor(f => f.Type).Must(t => t is "text" or "number" or "date")
-                .WithMessage(_ => Messages.FieldTypeInvalid);
-        });
+        FieldRules.DeclaredBy(this, g => g.Fields);
 
         // Null is "no declared target". Zero is not a series, and null is
         // already the single way to say "unset". The upper bound is not a
@@ -153,6 +180,13 @@ public sealed class ItemDtoValidator : AbstractValidator<ItemDto>
                 .When(c => c.AcquiredOn.HasValue)
                 .WithMessage(_ => Messages.AcquiredOnImplausible);
             copy.RuleFor(c => c.Notes).NotNull().MaximumLength(1000);
+            // Same limits as an item's own custom values — one field's value is
+            // the same kind of thing whichever of the two carries it.
+            copy.RuleForEach(c => c.Custom).ChildRules(custom =>
+            {
+                custom.RuleFor(v => v.Key).NotEmpty().MaximumLength(100);
+                custom.RuleFor(v => v.Value).NotNull().MaximumLength(1000);
+            });
         });
     }
 }
@@ -186,6 +220,7 @@ public sealed class CollectionDtoValidator : AbstractValidator<CollectionDto>
             .Must(Money.IsSupported)
             .When(c => c.Currency is not null)
             .WithMessage(_ => Messages.CurrencyInvalid);
+        FieldRules.DeclaredBy(this, c => c.Fields);
         RuleForEach(c => c.Groups).SetValidator(groupValidator);
         // The one place where a dangling reference IS refused, and the asymmetry
         // with sections and items is deliberate. Their references are allowed to

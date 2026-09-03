@@ -530,7 +530,7 @@ style the same raw element the same way, that's the signal to promote it here.
   caller already summed.
 - **Groups declare typed fields, their own ordering, and optionally the size of
   the set.** A `GroupNode` carries `fields: GroupField[]`
-  (`{ name, type: 'text' | 'number' | 'date' }`),
+  (`{ name, type: 'text' | 'number' | 'date', scope: 'item' | 'copy' }`),
   `sort: GroupSort | null` (`{ by, direction }`) and `target: number | null`.
   `target` is how many items the complete set has — a 120-issue run, a 24-card
   set — so a group's progress can be measured against the series and not merely
@@ -542,12 +542,12 @@ style the same raw element the same way, that's the signal to promote it here.
   `core/utils/group-stats.util.ts` — never count items inline, the same way
   `sort.util.ts` owns comparison. `by` is a built-in key
   (`manual`, `added`, `name`, `value`, `year`) or `field:<field name>`; `null`
-  means "inherit". Values still live on the item as `custom: CustomFieldValue[]`
+  means "inherit". Values live as `custom: CustomFieldValue[]`
   strings — the type belongs to the declaration, not the value, so retyping a
-  field never rewrites item data. Both are inherited down the tree, with
+  field never rewrites data. Both are inherited down the tree, with
   different rules: `fieldsFor()` merges every ancestor's fields (a redeclared
-  name overrides the type, keeping the ancestor's position) while `sortFor()`
-  takes only the nearest ancestor that sets one. Never compare items inline —
+  name overrides the earlier declaration entirely, keeping the ancestor's
+  position) while `sortFor()` takes only the nearest ancestor that sets one. Never compare items inline —
   `core/utils/sort.util.ts` owns it (`sortItems`, `sortChoices`, `sortLabel`,
   `applyManualOrder`, `moveInList`). Text fields compare through a numeric-aware
   `Intl.Collator`, so `1 · 2 · 10 · 12A` orders correctly even when the field is
@@ -614,6 +614,30 @@ style the same raw element the same way, that's the signal to promote it here.
   `groupDeletePlan()` (`core/utils/group-delete.util.ts`), which returns both
   the counts the dialog renders **and** the graph the page applies, from one
   function, so the number shown and the change made cannot disagree.
+- **A field is declared by the collection or by a group, and its `scope` says
+  which record holds the value.** The two axes are orthogonal. `collection.fields`
+  and `GroupNode.fields` are the same `GroupField`; the collection's merge
+  *first*, so it is the outermost ancestor of every group and a group
+  redeclaring a name still overrides it. `scope` decides where the value lands:
+  `'item'` in `item.custom` as before, `'copy'` in each `copy.custom`, which is
+  what tells two otherwise identical exemplars apart. Read the merged set only
+  through `fieldsFor(source, groupId)` — `source` is a `FieldDeclarations
+  { fields, groups }` and a `Collection` satisfies it structurally; the argument
+  is required rather than optional so a screen cannot silently drop the
+  collection's own — then narrow it with `itemFields()` / `copyFields()`, never
+  with an inline `scope ===` test. **The name is the identity**: it keys the
+  value and is the tail of a `field:<name>` sort key, so names are unique within
+  one declaration and deliberately not across them. **A copy-scoped field never
+  orders a list and never becomes a column** — an item has no single value for
+  one — so `sortByOptions`/`sortChoices` narrow to item scope themselves rather
+  than trusting their callers, the bulk bar offers only item fields, and
+  removing a field or moving it to copy scope clears any `sort` pointing at it.
+  Without that clearing nothing would fail: `keyOf` would simply rank every item
+  as valueless and re-sort the group alphabetically, in silence. **Changing a
+  scope moves no values** — they stay keyed by name where they already are,
+  dormant exactly as when a field is removed, and reappear if the scope goes
+  back. `scope` is required-nullable-style (required, never optional) for the
+  same full-document-PUT reason as `sort` and `target`.
 - **A section is a separator inside one group, never a level.** A `Section`
   (`{ id, groupId, name, target }`) labels a run of a group's items;
   `item.sectionId` points at it and `''` means none. It deliberately has **no
@@ -661,9 +685,9 @@ yourself computing one of these things inline, that is the bug.
 
 | Module | Owns |
 | --- | --- |
-| `core/utils/browse.util.ts` | `visibleItems`, `neighbours`, `scopeItems`, `hasTag` — exact and case-insensitive, decided by asking `withTagAdded` for the same reference back, so the filter can never disagree with the tag editor about what one tag is — and `matchesQuery` — search reaches an item's name, description, tags **and custom-field values**, which is where a catalogue number actually lives. It matched the name alone, so the single most common lookup a cataloguer performs could not find anything |
+| `core/utils/browse.util.ts` | `visibleItems`, `neighbours`, `scopeItems`, `hasTag` — exact and case-insensitive, decided by asking `withTagAdded` for the same reference back, so the filter can never disagree with the tag editor about what one tag is — and `matchesQuery` — search reaches an item's name, description, tags **and custom-field values**, on the item *and on each of its copies*, which is where a catalogue number or a slab number actually lives. It matched the name alone, so the single most common lookup a cataloguer performs could not find anything. The item is what comes back either way — there is no screen that lists copies |
 | `core/utils/sort.util.ts` | all comparison, plus `moveInList` / `applyManualOrder` |
-| `core/utils/groups.util.ts` | the tree: `childrenOf`, `flattenTree`, `visibleTree`, `pathOf`, `subtreeIds`, `fieldsFor`, `sortFor`, `resolveGroupId`, `canReparent`, `compareNames` |
+| `core/utils/groups.util.ts` | the tree: `childrenOf`, `flattenTree`, `visibleTree`, `pathOf`, `subtreeIds`, `sortFor`, `resolveGroupId`, `canReparent`, `compareNames` — and the field set: `fieldsFor` (takes a `FieldDeclarations { fields, groups }`, merging the collection's own declarations ahead of the ancestor path) with `fieldsInScope` / `itemFields` / `copyFields` beside it |
 | `core/utils/group-stats.util.ts` | every owned / missing / percentage figure |
 | `core/utils/group-move.util.ts` | `groupMoveImpact` — what a reparent will change, before it changes it |
 | `core/utils/group-delete.util.ts` | `groupDeletePlan` — the counts a deletion dialog shows *and* the graph it applies |

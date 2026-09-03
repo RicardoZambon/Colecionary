@@ -39,6 +39,7 @@ function collection(over: Partial<Collection> = {}): Collection {
     id: 'c1',
     name: ROOT,
     description: '',
+    fields: [],
     groups: [],
     sections: [],
     items: [],
@@ -344,7 +345,16 @@ describe('planCsvImport — duplicates', () => {
       items: [
         item('i1', 'Mu Aries', 'g1', {
           copies: [
-            { id: 'cp1', condition: 'Good', price: 45, value: null, acquiredOn: '2019-04-01', status: 'Keep', notes: 'da feira' },
+            {
+              id: 'cp1',
+              condition: 'Good',
+              price: 45,
+              value: null,
+              acquiredOn: '2019-04-01',
+              status: 'Keep',
+              notes: 'da feira',
+              custom: [],
+            },
           ],
         }),
       ],
@@ -377,7 +387,40 @@ describe('planCsvImport — custom fields', () => {
     const result = plan('Nome;Grupo;Nº\nSeiya;Bronze;01');
     expect(result.rows[0].item.custom).toEqual([{ key: 'Nº', value: '01' }]);
     expect(result.newFields).toHaveLength(1);
-    expect(result.newFields[0].field).toEqual({ name: 'Nº', type: 'number' });
+    expect(result.newFields[0].field).toEqual({ name: 'Nº', type: 'number', scope: 'item' });
+  });
+
+  it('treats a field the collection declares as already declared everywhere', () => {
+    // Declared for the whole collection, so there is nothing to add and no
+    // group grows a copy of it — including groups the file never mentions.
+    const coll = collection({
+      groups: [group('g1', 'Bronze')],
+      fields: [{ name: 'Nº', type: 'text', scope: 'item' }],
+    });
+    const result = plan('Nome;Grupo;Nº\nSeiya;Bronze;01', coll);
+    expect(result.newFields).toEqual([]);
+    expect(result.rows[0].item.custom).toEqual([{ key: 'Nº', value: '01' }]);
+  });
+
+  it('refuses a column naming a field somebody declared per copy', () => {
+    // The table has one row per item, so it carries one value where that field
+    // has one per exemplar. Writing it to `item.custom` would not be a near
+    // miss: it would file data under a name only the copies editor reads.
+    const coll = collection({
+      groups: [group('g1', 'Bronze')],
+      fields: [{ name: 'Lacre', type: 'text', scope: 'copy' }],
+    });
+    const result = plan('Nome;Grupo;Lacre\nSeiya;Bronze;82736411', coll);
+
+    expect(result.rows[0].item.custom).toEqual([]);
+    expect(result.newFields).toEqual([]);
+    // One issue, on the header line: the column is wrong for every row at once.
+    expect(result.issues).toEqual([
+      { line: 1, key: 'csvImport.error.copyScopedColumn', params: { name: 'Lacre' } },
+    ]);
+    // And the rest of the file still imports, as every other issue does.
+    expect(result.rows).toHaveLength(1);
+    expect(result.created).toBe(1);
   });
 
   it('declares once on the open group rather than on every destination', () => {
@@ -385,12 +428,14 @@ describe('planCsvImport — custom fields', () => {
     const result = plan('Nome;Grupo;Nº\nA;V1;01\nB;V2;02', collection({ groups }), {
       scopeId: 'g1',
     });
-    expect(result.newFields).toEqual([{ groupId: 'g1', field: { name: 'Nº', type: 'number' } }]);
+    expect(result.newFields).toEqual([
+      { groupId: 'g1', field: { name: 'Nº', type: 'number', scope: 'item' } },
+    ]);
   });
 
   it('does not redeclare a field the group already inherits', () => {
     const parent = group('g1', 'Bronze');
-    parent.fields = [{ name: 'Nº', type: 'text' }];
+    parent.fields = [{ name: 'Nº', type: 'text', scope: 'item' }];
     const result = plan('Nome;Grupo;Nº\nA;V1;01', collection({ groups: [parent, group('g2', 'V1', 'g1')] }));
     expect(result.newFields).toEqual([]);
   });
@@ -488,7 +533,9 @@ describe('applyCsvImport', () => {
   it('declares the planned fields on the group that is to hold them', () => {
     const before = collection({ groups: [group('g1', 'Ouro')] });
     const after = applyCsvImport(before, plan('Nome;Grupo;Nº\nMu;Ouro;07', before));
-    expect(after.groups.find(g => g.id === 'g1')!.fields).toEqual([{ name: 'Nº', type: 'number' }]);
+    expect(after.groups.find(g => g.id === 'g1')!.fields).toEqual([
+      { name: 'Nº', type: 'number', scope: 'item' },
+    ]);
     expect(before.groups[0].fields).toEqual([]);
   });
 

@@ -7,6 +7,7 @@ import {
   customFieldName,
   fieldSortKey,
   moveInList,
+  sortByOptions,
   sortChoices,
   sortItems,
   sortLabel,
@@ -47,8 +48,8 @@ function numbered(id: string, numero: string): Item {
   return item(id, { custom: [{ key: 'Número', value: numero }] });
 }
 
-const NUMERO_TEXT: GroupField[] = [{ name: 'Número', type: 'text' }];
-const NUMERO_NUMBER: GroupField[] = [{ name: 'Número', type: 'number' }];
+const NUMERO_TEXT: GroupField[] = [{ name: 'Número', type: 'text', scope: 'item' }];
+const NUMERO_NUMBER: GroupField[] = [{ name: 'Número', type: 'number', scope: 'item' }];
 
 const byNumero = (direction: 'asc' | 'desc'): GroupSort => ({
   by: fieldSortKey('Número'),
@@ -81,7 +82,7 @@ describe('sort.util', () => {
   });
 
   it('orders ISO dates', () => {
-    const fields: GroupField[] = [{ name: 'Lançamento', type: 'date' }];
+    const fields: GroupField[] = [{ name: 'Lançamento', type: 'date', scope: 'item' }];
     const dated = (id: string, value: string) => item(id, { custom: [{ key: 'Lançamento', value }] });
     const items = [dated('c', '2001-12-01'), dated('a', '1999-01-05'), dated('b', '2001-02-28')];
     const sort: GroupSort = { by: fieldSortKey('Lançamento'), direction: 'asc' };
@@ -138,6 +139,23 @@ describe('sort.util', () => {
       'asc',
       'desc',
     ]);
+  });
+
+  it('never offers a copy-scoped field as an ordering', () => {
+    // A list orders items, and an item has no single value for a field its
+    // copies each answer separately. The narrowing lives here rather than at
+    // the call sites: `keyOf` reads only `item.custom`, so such an ordering
+    // would not fail — it would rank every item as valueless and quietly
+    // re-sort the group by name.
+    const fields: GroupField[] = [
+      { name: 'Número', type: 'text', scope: 'item' },
+      { name: 'Slab no.', type: 'text', scope: 'copy' },
+    ];
+
+    expect(sortChoices(fields, t).filter(c => c.by === 'field:Slab no.')).toEqual([]);
+    expect(sortChoices(fields, t).some(c => c.by === 'field:Número')).toBe(true);
+    expect(sortByOptions(fields, t).map(o => o.value)).not.toContain('field:Slab no.');
+    expect(sortByOptions(fields, t).map(o => o.value)).toContain('field:Número');
   });
 
   it('moves an entry within a list', () => {

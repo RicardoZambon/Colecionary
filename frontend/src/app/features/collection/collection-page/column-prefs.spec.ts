@@ -21,9 +21,9 @@ function stubThrowingStorage(): void {
 }
 
 const FIELDS: GroupField[] = [
-  { name: 'Número', type: 'number' },
-  { name: 'Set', type: 'text' },
-  { name: 'Lançamento', type: 'date' },
+  { name: 'Número', type: 'number', scope: 'item' },
+  { name: 'Set', type: 'text', scope: 'item' },
+  { name: 'Lançamento', type: 'date', scope: 'item' },
 ];
 
 describe('column-prefs', () => {

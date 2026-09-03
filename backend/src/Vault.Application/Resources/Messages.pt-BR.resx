@@ -97,6 +97,9 @@
   <data name="FieldTypeInvalid" xml:space="preserve">
     <value>O tipo do campo precisa ser text, number ou date.</value>
   </data>
+  <data name="FieldScopeInvalid" xml:space="preserve">
+    <value>O escopo do campo precisa ser item ou copy.</value>
+  </data>
   <data name="TargetOutOfRange" xml:space="preserve">
     <value>A meta precisa estar entre 1 e 100000, ou ser nula para não ter meta.</value>
   </data>
@@ -210,6 +213,9 @@
   </data>
   <data name="UnknownGroupFieldType" xml:space="preserve">
     <value>Tipo de campo de grupo desconhecido: '{0}'.</value>
+  </data>
+  <data name="UnknownFieldScope" xml:space="preserve">
+    <value>Escopo de campo desconhecido: '{0}'.</value>
   </data>
   <data name="UnknownCondition" xml:space="preserve">
     <value>Estado desconhecido: '{0}'.</value>

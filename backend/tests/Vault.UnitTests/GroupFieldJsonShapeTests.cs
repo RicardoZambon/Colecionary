@@ -38,7 +38,24 @@ public class GroupFieldJsonShapeTests
             .Select(p => p.GetJsonPropertyName())
             .OrderBy(n => n, StringComparer.Ordinal);
 
-        Assert.Equal(["Name", "Type"], names);
+        // "Scope" was added after the backfill and is deliberately absent from
+        // it: a document the migration wrote carries no such property, and EF
+        // reads that absence as FieldScope.Item — which is what every field
+        // declared before scopes existed actually is. Adding it here is
+        // therefore not a claim that the backfill writes it, but the record
+        // that this is the third name the document may carry.
+        Assert.Equal(["Name", "Scope", "Type"], names);
+    }
+
+    [Fact]
+    public void FieldScope_IsPersistedAsAString()
+    {
+        // Same reason as the type: an unconverted enum is written as an integer,
+        // which neither the string-enum wire contract nor a human reading the
+        // column expects.
+        Assert.Equal(
+            typeof(string),
+            FieldType().FindProperty(nameof(GroupField.Scope))!.GetProviderClrType());
     }
 
     [Fact]

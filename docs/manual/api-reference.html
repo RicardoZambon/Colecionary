@@ -473,6 +473,61 @@ POST /api/import?confirmed=true&amp;replace=&lt;id&gt;&amp;replaceVersion=&lt;et
   <code>groupId</code> da própria seção e o <code>sectionId</code> de cada item.
 </p>
 
+<h3 id="campos-wire">Campos e escopo no fio</h3>
+
+<p>
+  Três campos novos, e os três seguem a mesma barganha das seções — opcionais na
+  entrada, normalizados, sempre preenchidos na saída. <code>CollectionDto</code>
+  <em>é</em> o formato do arquivo, então um export tirado antes dos escopos
+  existirem tem que restaurar, e não falhar.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Campo</th><th>Ausente lê como</th><th>Por que esse default</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>GroupFieldDto.Scope</code></td>
+      <td><code>"item"</code></td>
+      <td>Um arquivo anterior aos escopos descreve campos que eram todos do item.
+          Ausente tem que significar <code>"item"</code>, e não null</td>
+    </tr>
+    <tr>
+      <td><code>CollectionDto.Fields</code></td>
+      <td><code>[]</code></td>
+      <td>Antes disso a coleção não declarava nada por conta própria</td>
+    </tr>
+    <tr>
+      <td><code>ItemCopyDto.Custom</code></td>
+      <td><code>[]</code></td>
+      <td>Nenhuma cópia carregava valor de campo. O mesmo arranjo de
+          <code>copies</code> e <code>photoIds</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>Scope</code> viaja <strong>minúsculo</strong> —
+  <code>"item"</code> | <code>"copy"</code> — como <code>Type</code>, casando com
+  as uniões TypeScript. O validador aceita exatamente essas duas grafias, e uma
+  terceira é <code>400</code>: normalizar antes significa que a regra só recusa
+  algo que alguém realmente escreveu errado.
+  <code>FieldRules.DeclaredBy</code> é a mesma regra aplicada a
+  <code>CollectionDto.Fields</code> e a <code>GroupNodeDto.Fields</code> — nome
+  não vazio até 100, tipo na lista, escopo na lista, e nomes únicos
+  <strong>dentro de uma</strong> declaração. Entre declarações, não: um grupo
+  redeclarando um nome da coleção está sobrescrevendo-o de propósito. Os valores
+  de <code>ItemCopyDto.Custom</code> têm os mesmos limites dos do item
+  (chave até 100, valor até 1000).
+</p>
+
+<p>
+  Nada disso custou bump de versão de arquivo, pela regra de
+  <a href="#arquivos">versionamento</a>: são campos opcionais acrescentados, e um
+  leitor que não os conhece continua lendo o arquivo certo.
+</p>
+
 <div class="pagenav"></div>
 </main>
 </div>

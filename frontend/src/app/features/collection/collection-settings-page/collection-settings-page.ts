@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 
 import { I18nService, MessageKey } from '../../../core/i18n';
@@ -10,7 +11,11 @@ import { saveFile } from '../../../core/utils/download.util';
 import { VaultStore } from '../../../core/state/vault.store';
 import {
   Collection,
+  CustomFieldValue,
+  FIELD_SCOPES,
+  FieldScope,
   GROUP_FIELD_TYPES,
+  GroupField,
   GroupFieldType,
   GroupNode,
   MemberRole,
@@ -73,6 +78,20 @@ const INVITE_ROLE_KEYS: { value: MemberRole; label: MessageKey }[] = [
   { value: 'Editor', label: 'role.editor' },
 ];
 
+/**
+ * The owner id standing for the collection itself in every field handler.
+ *
+ * A literal rather than null so the handlers keep one signature and the
+ * template one set of bindings; `@` is outside the id pattern the server
+ * enforces (`^[A-Za-z0-9_.:-]{1,64}$`), so no group can ever answer to it.
+ */
+const COLLECTION_FIELDS = '@collection';
+
+const FIELD_SCOPE_KEYS: Record<FieldScope, MessageKey> = {
+  item: 'fieldScope.item',
+  copy: 'fieldScope.copy',
+};
+
 const FIELD_TYPE_KEYS: Record<GroupFieldType, MessageKey> = {
   text: 'fieldType.text',
   number: 'fieldType.number',
@@ -109,6 +128,7 @@ const PERSIST_DEBOUNCE_MS = 400;
   // count, target and four buttons stop fitting on one line.
   host: { '[class.wide]': "activeTab() === 'groups'" },
   imports: [
+    NgTemplateOutlet,
     RouterLink,
     TPipe,
     GroupDeleteDialog,
@@ -167,6 +187,10 @@ export class CollectionSettingsPage {
   protected readonly inviteRoleOptions = computed<SelectOption[]>(() =>
     INVITE_ROLE_KEYS.map(r => ({ value: r.value, label: this.i18n.t(r.label) })),
   );
+  protected readonly fieldScopeOptions = computed<SelectOption[]>(() =>
+    FIELD_SCOPES.map(scope => ({ value: scope, label: this.i18n.t(FIELD_SCOPE_KEYS[scope]) })),
+  );
+
   protected readonly fieldTypeOptions = computed<SelectOption[]>(() =>
     GROUP_FIELD_TYPES.map(t => ({ value: t, label: this.i18n.t(FIELD_TYPE_KEYS[t]) })),
   );
@@ -207,6 +231,10 @@ export class CollectionSettingsPage {
   /** The group whose deletion is being confirmed, if any. */
   protected readonly deletingGroupId = signal<string | null>(null);
   protected readonly pendingFieldType = signal<GroupFieldType>('text');
+  protected readonly pendingFieldScope = signal<FieldScope>('item');
+
+  /** Exposed so the shared field editor can be pointed at the collection. */
+  protected readonly collectionOwner = COLLECTION_FIELDS;
   protected readonly inviteEmail = signal('');
   protected readonly inviteRole = signal<string>('Viewer');
   /**
@@ -313,7 +341,7 @@ export class CollectionSettingsPage {
 
     // The picker offers inherited fields too — ordering by a field the
     // parent declared is exactly what a sub-group usually wants.
-    const fields = fieldsFor(draft.groups, node.id);
+    const fields = fieldsFor(draft, node.id);
     const parentSort = node.parentId ? sortFor(draft.groups, node.parentId) : null;
     const own = draft.items.filter(i => i.groupId === node.id);
     const children = childrenOf(draft.groups, node.id);
@@ -746,16 +774,58 @@ export class CollectionSettingsPage {
   }
 
   /**
-   * Drops a field declaration from a group, after asking.
+   * The declarations owned by one owner — a group's, or the collection's own.
+   *
+   * Every field handler below goes through this and {@link mutateFields}, so
+   * declaring a field for the whole collection and declaring one for a group
+   * are the same code path with a different owner. Two paths would have drifted
+   * the first time one of them learned something — as they nearly did over the
+   * scope selector, which the group editor needed and the collection editor
+   * needed identically.
+   */
+  protected fieldsOf(owner: string): GroupField[] {
+    const draft = this.draft();
+    if (!draft) return [];
+    return owner === COLLECTION_FIELDS
+      ? draft.fields
+      : (draft.groups.find(g => g.id === owner)?.fields ?? []);
+  }
+
+  private mutateFields(owner: string, fn: (fields: GroupField[]) => GroupField[]): void {
+    if (owner === COLLECTION_FIELDS) this.mutate(d => ({ ...d, fields: fn(d.fields) }));
+    else this.mutateGroup(owner, g => ({ ...g, fields: fn(g.fields) }));
+  }
+
+  /**
+   * Clears any group ordering that points at a field name.
+   *
+   * A `field:` sort whose field is gone — removed, or moved to copy scope —
+   * would not fail: `keyOf` would find no value on any item, rank them all as
+   * absent and quietly shuffle the group into alphabetical order. Silence is
+   * the whole problem, so the ordering is dropped where it can still be
+   * explained. Applied across every group, because a group may order by a field
+   * the collection declared.
+   */
+  private clearSortsFor(name: string): void {
+    const key = fieldSortKey(name);
+    this.mutate(d => ({
+      ...d,
+      groups: d.groups.map(g => (g.sort?.by === key ? { ...g, sort: null } : g)),
+    }));
+  }
+
+  /**
+   * Drops a field declaration, after asking.
    *
    * The values themselves survive — `custom` is keyed by field *name* on the
-   * item, so they go dormant and come back if the field is declared again. That
-   * is exactly why the question has to say so: refusing to explain would make a
-   * reversible act look like a deletion, and a count of the items holding a
-   * value is what tells somebody whether they are about to hide anything at all.
+   * item or the copy, so they go dormant and come back if the field is declared
+   * again. That is exactly why the question has to say so: refusing to explain
+   * would make a reversible act look like a deletion, and a count of the items
+   * holding a value is what tells somebody whether they are about to hide
+   * anything at all.
    */
-  protected async removeField(groupId: string, name: string): Promise<void> {
-    const holders = this.fieldHolderCount(groupId, name);
+  protected async removeField(owner: string, name: string): Promise<void> {
+    const holders = this.fieldHolderCount(owner, name);
     const confirmed = await this.confirm.ask({
       titleKey: 'confirm.removeField.title',
       bodyKey: holders
@@ -769,60 +839,82 @@ export class CollectionSettingsPage {
     });
     if (!confirmed) return;
 
-    this.mutateGroup(groupId, g => ({
-      ...g,
-      fields: g.fields.filter(f => f.name !== name),
-      // A sort pointing at a field that no longer exists would silently fall
-      // back to "everything missing" — drop it with the field.
-      sort: g.sort?.by === fieldSortKey(name) ? null : g.sort,
-    }));
+    this.mutateFields(owner, fields => fields.filter(f => f.name !== name));
+    this.clearSortsFor(name);
     this.toast.flash(this.i18n.t('toast.field.removed'));
   }
 
   /**
-   * How many items in a group's subtree hold a value for one of its fields.
+   * How many items hold a value for a field — in the group's subtree, or in the
+   * whole collection when the collection is the one declaring it.
    *
    * Counted the way `groupMoveImpact` counts it, and for the same reason: a
    * warning with a number in it is a warning somebody can act on, and one
-   * without is noise they learn to click through.
+   * without is noise they learn to click through. Copies are counted too: a
+   * copy-scoped field's values live nowhere else, and reporting "no values
+   * affected" for a field every copy carries is the one thing this number must
+   * never do.
    */
-  private fieldHolderCount(groupId: string, name: string): number {
+  private fieldHolderCount(owner: string, name: string): number {
     const draft = this.draft();
     if (!draft) return 0;
-    const ids = new Set(subtreeIds(draft.groups, groupId));
+    const ids =
+      owner === COLLECTION_FIELDS ? null : new Set(subtreeIds(draft.groups, owner));
+    const held = (values: readonly CustomFieldValue[]): boolean =>
+      values.some(entry => entry.key === name && entry.value.trim() !== '');
     return draft.items.filter(
-      item => ids.has(item.groupId) && item.custom.some(c => c.key === name && c.value.trim()),
+      item =>
+        (ids === null || ids.has(item.groupId)) &&
+        (held(item.custom) || item.copies.some(copy => held(copy.custom))),
     ).length;
   }
 
-  protected setFieldType(groupId: string, name: string, type: string): void {
-    this.mutateGroup(groupId, g => ({
-      ...g,
-      fields: g.fields.map(f => (f.name === name ? { ...f, type: type as GroupFieldType } : f)),
-    }));
+  protected setFieldType(owner: string, name: string, type: string): void {
+    this.mutateFields(owner, fields =>
+      fields.map(f => (f.name === name ? { ...f, type: type as GroupFieldType } : f)),
+    );
   }
 
-  protected newFieldKeydown(event: KeyboardEvent, groupId: string): void {
+  /**
+   * Moves a field between describing the item and describing each copy.
+   *
+   * The values do not move with it, and nothing pretends they do. They stay
+   * keyed by name on whichever record already held them, dormant exactly as
+   * they are when a field is removed — so flipping the scope back brings them
+   * into view again. Guessing which copy an item-level value belonged to is not
+   * a guess the app is entitled to make, and spreading it to all of them would
+   * invent data.
+   */
+  protected setFieldScope(owner: string, name: string, scope: string): void {
+    this.mutateFields(owner, fields =>
+      fields.map(f => (f.name === name ? { ...f, scope: scope as FieldScope } : f)),
+    );
+    if (scope === 'copy') this.clearSortsFor(name);
+  }
+
+  protected newFieldKeydown(event: KeyboardEvent, owner: string): void {
     const input = event.target as HTMLInputElement;
-    if (event.key === 'Enter') this.commitNewField(groupId, input.value);
+    if (event.key === 'Enter') this.commitNewField(owner, input.value);
     else if (event.key === 'Escape') {
       input.value = '';
       this.pendingFieldGroupId.set(null);
     }
   }
 
-  protected commitNewField(groupId: string, name: string): void {
-    if (this.pendingFieldGroupId() !== groupId) return;
+  protected commitNewField(owner: string, name: string): void {
+    if (this.pendingFieldGroupId() !== owner) return;
     const type = this.pendingFieldType();
+    const scope = this.pendingFieldScope();
     this.pendingFieldGroupId.set(null);
     this.pendingFieldType.set('text');
+    this.pendingFieldScope.set('item');
     const trimmed = name.trim();
     if (!trimmed) return;
-    if (this.draft()?.groups.find(g => g.id === groupId)?.fields.some(f => f.name === trimmed)) {
+    if (this.fieldsOf(owner).some(f => f.name === trimmed)) {
       this.toast.flash(this.i18n.t('toast.field.duplicate', { name: trimmed }));
       return;
     }
-    this.mutateGroup(groupId, g => ({ ...g, fields: [...g.fields, { name: trimmed, type }] }));
+    this.mutateFields(owner, fields => [...fields, { name: trimmed, type, scope }]);
     this.toast.flash(this.i18n.t('toast.field.added', { name: trimmed }));
   }
 

@@ -165,9 +165,11 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    `≈ $85`, with a genuine absence as `—` rather than `$0`.
 4. **Groups declare typed fields, their default order, and optionally how big
    the set is.** A `GroupNode` carries `fields: GroupField[]`
-   (`{ name, type: text|number|date }`), `sort: GroupSort | null` and
-   `target: number | null`; field *values* stay on the item as `custom`
-   strings, so retyping a field never rewrites data. Fields merge down the
+   (`{ name, type: text|number|date, scope: item|copy }`), `sort: GroupSort | null`
+   and `target: number | null`; field *values* stay as `custom`
+   strings, so retyping a field never rewrites data. **The collection declares
+   fields too** (`collection.fields`, same shape) and they merge *first*, so the
+   collection is the outermost ancestor of every group — see rule 22. Fields merge down the
    whole ancestor path, `sort` takes only the nearest ancestor that sets one,
    and all comparison lives in `core/utils/sort.util.ts` — never sort items
    inline. `target` is the declared size of the complete set, so progress can
@@ -378,15 +380,39 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    the write — the user approves four hundred rows on the strength of what they
    read. **The CSV format is the item table**, under the table's own headings in
    both languages, including the spellings it prints (`—`, `Quero`,
-   `Perfeito ×2`); any other column is a custom field, and a field the
+   `Perfeito ×2`); any other column is an item-scoped custom field, and a field the
    destination does not declare gets declared, or the values import and appear
-   nowhere. A row that cannot be read becomes an issue carrying a message *key*
+   nowhere. A column naming a field declared **per copy** anywhere in the
+   collection is refused with one issue on the header line: the table has one
+   row per item and that field has one value per exemplar, so importing it
+   would file data under a name nothing reads. A row that cannot be read becomes an issue carrying a message *key*
    and its line number, and the rest of the file still imports. **The open group
    answers to its own name**: a `Grupo` cell naming the group you are standing in
    resolves to it, never to a twin created inside it. Sections are
    matched, never created: a section's identity is its position (rule 5) and a
    file cannot say where a new one goes. Full detail in
    [`docs/manual/flows.html`](docs/manual/flows.html) §16 and ADR-67/68.
+
+22. **A field is declared by the collection or by a group, and its `scope` says
+   which record holds the value.** The two axes are orthogonal: `collection.fields`
+   and `GroupNode.fields` are the same `GroupField`, and `scope: 'item' | 'copy'`
+   decides whether the value lands in `item.custom` or in each `copy.custom`.
+   Read the merged set only through `fieldsFor({ fields, groups }, groupId)` —
+   its source argument is required, not optional, so a screen cannot silently
+   drop the collection's own — and narrow it with `itemFields` / `copyFields`,
+   never with an inline `scope ===` test. **The name is the identity**: it keys
+   the value and is the tail of a `field:<name>` sort key, so a deeper
+   declaration replaces an earlier one entirely — type *and* scope — and names
+   are unique within one declaration but deliberately not across them.
+   **A copy-scoped field never orders and never becomes a column.** An item has
+   no single value for one, so `sortByOptions`/`sortChoices` filter to item
+   scope themselves and the bulk bar offers only item fields; removing a field
+   or moving it to copy scope clears any `sort` pointing at it, because the
+   alternative is not an error but a group quietly re-sorted alphabetically.
+   **Changing a scope moves no values.** They stay keyed by name where they are,
+   dormant exactly as when a field is removed, and come back if the scope goes
+   back — guessing which copy an item-level value belonged to is not the app's
+   guess to make. New: ADR-69 and ADR-70.
 
 ## One trap that costs an hour every time
 
@@ -492,6 +518,8 @@ version-guarded — if the collection moved on, the restore is refused and the
 item stays deleted. A restored item lands at the end of its group, because
 manual order is the array index. Billing is not implemented and the plan control
 says so. `Item.img` is still on the wire, populated, validated and used by
-nothing. `GET /api/collections` still returns the whole vault with no
+nothing. Copy-scoped fields do not travel through the CSV item table in either
+direction — one row per item cannot carry N copies' values — though the
+full-document PUT and the archive export do carry them. `GET /api/collections` still returns the whole vault with no
 pagination, and the item list is not virtualised — fine at demo size, and the
 hardest ceiling in the codebase.

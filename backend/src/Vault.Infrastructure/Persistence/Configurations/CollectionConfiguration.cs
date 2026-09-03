@@ -28,6 +28,18 @@ public sealed class CollectionConfiguration : IEntityTypeConfiguration<Collectio
         // item edit writes no column here.
         builder.Property(c => c.Version).IsConcurrencyToken();
 
+        // Collection-wide field declarations, same JSON shape as a group's own
+        // Fields so one merge rule covers both. Property names are pinned for
+        // the same reason they are on Groups.Fields: the document is written
+        // and read by name, and a CLR rename would orphan it in silence.
+        builder.OwnsMany(c => c.Fields, fields =>
+        {
+            fields.ToJson("Fields");
+            fields.Property(f => f.Name).HasJsonPropertyName("Name");
+            fields.Property(f => f.Type).HasConversion<string>().HasJsonPropertyName("Type");
+            fields.Property(f => f.Scope).HasConversion<string>().HasJsonPropertyName("Scope");
+        });
+
         builder.HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Cascade);
 
         builder.HasMany(c => c.Groups)

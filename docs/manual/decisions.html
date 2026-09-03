@@ -727,6 +727,26 @@
   </dl></div>
 </details>
 
+<details>
+  <summary><span class="id">ADR-69</span> Um campo é declarado ou pela coleção ou por um grupo, e o nome é a identidade</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Campos só podiam ser declarados por um grupo. Grupos são uma taxonomia — o que a coisa <em>é</em> — e um campo que descreve a coleção inteira não tem casa taxonômica: onde a peça está guardada, de quem veio, quanto custou o frete. Na prática o campo era redeclarado em cada grupo raiz, e um grupo criado depois simplesmente não o tinha, sem nada na tela dizendo por quê.</dd>
+    <dt>Decisão</dt><dd>A coleção passa a declarar campos próprios (<code>Collection.Fields</code>), na <em>mesma</em> forma de <code>GroupField</code>. <code>fieldsFor</code> mescla os da coleção primeiro e os do caminho de ancestrais depois, de modo que a coleção é o ancestral mais externo de todo grupo. Um nome redeclarado mais fundo substitui o anterior por inteiro — tipo <em>e</em> escopo — mas mantém a posição do primeiro. Nomes precisam ser únicos <strong>dentro</strong> de uma declaração e nunca entre declarações: sobrescrever um campo herdado é justamente o que declarar mais fundo significa.</dd>
+    <dt>Consequência</dt><dd>Declarar uma vez cobre a coleção inteira, inclusive os grupos que ainda não existem — que era o caso que falhava em silêncio. A mesma regra de mesclagem, o mesmo validador e o mesmo editor servem aos dois, então o que um grupo pode declarar a coleção também pode. O custo é que o nome vira identidade de verdade: dois campos homônimos em escopos diferentes não coexistem, e o mais fundo vence. <code>fieldsFor</code> passou a receber <code>{ fields, groups }</code> em vez de só os grupos — obrigatório, não opcional, para que o compilador aponte cada chamada em vez de uma tela esquecer os campos da coleção em silêncio.</dd>
+    <dt>Imposta por</dt><dd><code>groups.util.spec.ts</code>, <code>ValidatorTests.CollectionValidator_LetsAGroupRedeclareACollectionWideName</code> e <code>ContractTests.Collection_CarriesFieldsOfBothScopes_ThroughAFullRoundTrip</code></dd>
+  </dl></div>
+</details>
+
+<details>
+  <summary><span class="id">ADR-70</span> O escopo de um campo diz qual registro guarda o valor, e trocá-lo não move nada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Valores de campo viviam só no item. Um item, porém, possui exemplares (<code>copies</code>), e há fatos que pertencem ao objeto físico e não ao catálogo: o número do lacre da slab, uma assinatura, a prateleira, o estado da caixa. Guardá-los no item significava um valor onde o colecionador tem vários — o segundo exemplar só podia sobrescrever o primeiro.</dd>
+    <dt>Decisão</dt><dd><code>GroupField</code> ganha <code>scope</code> (<code>item</code> | <code>copy</code>), ortogonal a quem declara: coleção e grupo declaram campos de qualquer escopo. Um valor <code>item</code> continua em <code>Item.Custom</code>; um valor <code>copy</code> vai para <code>ItemCopy.Custom</code>, aninhado um nível mais fundo <em>dentro</em> do documento JSON <code>Items.Copies</code> que já existia. <strong>Trocar o escopo não move valor nenhum</strong>: eles ficam onde estão, dormentes exatamente como quando um campo é removido, e voltam a aparecer se o escopo voltar.</dd>
+    <dt>Consequência</dt><dd>Dois exemplares do mesmo item passam a se distinguir por dados, não só por condição e preço — e a busca encontra o item por algo que só um exemplar carrega, porque <code>matchesQuery</code> lê os dois. Em troca, um campo por exemplar <strong>não ordena e não vira coluna</strong>: uma lista ordena itens, e um item não tem <em>um</em> valor desses. <code>sortByOptions</code> e <code>sortChoices</code> filtram para escopo de item, e remover um campo ou passá-lo para <code>copy</code> apaga qualquer <code>sort</code> que apontasse para ele — sem isso <code>keyOf</code> não falharia, apenas classificaria todo item como sem valor e reordenaria o grupo alfabeticamente, em silêncio. Pelo mesmo motivo o CSV recusa uma coluna com esse nome: a tabela tem uma linha por item. Adivinhar a qual exemplar pertencia um valor de item não é um palpite que o app tem o direito de dar, e espalhá-lo por todos inventaria dado.</dd>
+    <dt>Imposta por</dt><dd><code>sort.util.spec.ts</code>, <code>csv-import.spec.ts</code>, <code>ItemCopyJsonShapeTests.CopyCustomValues_LiveInsideTheCopiesDocument</code> e <code>DtoMapperTests.ACopysOwnValuesRoundTrip</code></dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

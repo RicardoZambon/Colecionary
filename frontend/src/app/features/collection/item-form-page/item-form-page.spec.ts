@@ -107,8 +107,8 @@ function group(id: string, parentId: string | null = null, fields: GroupField[] 
 
 /** `starwars` inherits `Series` from `bonecos` and declares `Issue` itself. */
 const GROUPS = [
-  group('bonecos', null, [{ name: 'Series', type: 'text' }]),
-  group('starwars', 'bonecos', [{ name: 'Issue', type: 'number' }]),
+  group('bonecos', null, [{ name: 'Series', type: 'text', scope: 'item' }]),
+  group('starwars', 'bonecos', [{ name: 'Issue', type: 'number', scope: 'item' }]),
   group('marvel', 'bonecos'),
 ];
 
@@ -121,6 +121,7 @@ function copy(patch: Partial<ItemCopy> = {}): ItemCopy {
     acquiredOn: null,
     status: 'Keep',
     notes: '',
+    custom: [],
     ...patch,
   };
 }
@@ -143,11 +144,12 @@ function item(patch: Partial<Item> = {}): Item {
   };
 }
 
-function collection(items: Item[]): Collection {
+function collection(items: Item[], fields: GroupField[] = []): Collection {
   return {
     id: 'c1',
     name: 'Vinyl',
     description: '',
+    fields,
     groups: structuredClone(GROUPS),
     sections: [],
     items,
@@ -160,9 +162,11 @@ function collection(items: Item[]): Collection {
 /** The fake resolves synchronously, so one macrotask drains a save. */
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-async function mount(opts: { g?: string; itemId?: string; items?: Item[] } = {}) {
+async function mount(
+  opts: { g?: string; itemId?: string; items?: Item[]; fields?: GroupField[] } = {},
+) {
   const api = new FakeVaultApi();
-  api.collections = [collection(opts.items ?? [])];
+  api.collections = [collection(opts.items ?? [], opts.fields ?? [])];
 
   TestBed.configureTestingModule({
     providers: [
@@ -211,6 +215,14 @@ async function mount(opts: { g?: string; itemId?: string; items?: Item[] } = {})
     fieldRows()
       .find(row => row.querySelector('.key')!.textContent!.trim() === name)!
       .querySelector('input') as HTMLInputElement;
+
+  /** The per-copy field inputs of one copy, by the copy's position. */
+  const copyFieldInput = (copyIndex: number, name: string) =>
+    [
+      ...[...el.querySelectorAll('.copies__row')][copyIndex].querySelectorAll<HTMLInputElement>(
+        '.copies__custom input',
+      ),
+    ].find(input => input.getAttribute('aria-label')?.startsWith(name));
 
   const tagChips = () =>
     [...el.querySelectorAll('ui-tag-input .tag')].map(c => c.textContent!.trim());
@@ -263,6 +275,7 @@ async function mount(opts: { g?: string; itemId?: string; items?: Item[] } = {})
     copyRows,
     fieldNames,
     fieldInput,
+    copyFieldInput,
     answerConfirm,
     tagChips,
     tagField,
@@ -415,6 +428,29 @@ describe('ItemFormPage', () => {
     await page.save();
 
     expect(page.lastSaved().custom).toEqual([{ key: 'Series', value: 'Original trilogy' }]);
+  });
+
+  it('edits a copy-scoped field on the copy, and saves it there', async () => {
+    // The whole point: two copies of one item, two different values, neither
+    // overwriting the other — which an item-level `custom` structurally cannot
+    // hold.
+    const page = await mount({
+      g: 'starwars',
+      fields: [{ name: 'Lacre', type: 'text', scope: 'copy' }],
+    });
+    page.type(page.nameInput(), 'Issue 3');
+    page.click(page.el.querySelector('.copies__actions button')!);
+
+    page.type(page.copyFieldInput(0, 'Lacre')!, '82736411');
+    page.type(page.copyFieldInput(1, 'Lacre')!, '91002244');
+    await page.save();
+
+    expect(page.lastSaved().copies.map(c => c.custom)).toEqual([
+      [{ key: 'Lacre', value: '82736411' }],
+      [{ key: 'Lacre', value: '91002244' }],
+    ]);
+    // And it is not offered on the item, where there is only one of it.
+    expect(page.fieldNames()).not.toContain('Lacre');
   });
 
   // --- photos (rule 7) ---
