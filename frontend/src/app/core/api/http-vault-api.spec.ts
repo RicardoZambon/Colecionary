@@ -30,6 +30,7 @@ const ITEM: Item = {
       acquiredOn: null,
       status: 'Keep' as const,
       notes: '',
+      custom: [],
     },
   ],
 };
@@ -38,6 +39,7 @@ const COLLECTION: Collection = {
   id: 'retro',
   name: 'Retro',
   description: '',
+  fields: [],
   groups: [],
   sections: [],
   items: [],

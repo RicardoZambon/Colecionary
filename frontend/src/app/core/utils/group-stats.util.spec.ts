@@ -25,6 +25,7 @@ function copy(value: number | null = null): ItemCopy {
     acquiredOn: null,
     status: 'Keep',
     notes: '',
+    custom: [],
   };
 }
 

@@ -53,8 +53,16 @@ public class ContractTests(VaultApiFactory factory)
         // Ownership is derived from the copies, never transported.
         Assert.DoesNotContain("\"owned\":", raw);
         Assert.Contains("\"parentId\":\"pk_cards\"", raw);
-        // Group fields are typed objects and the group's sort round-trips.
-        Assert.Contains("\"fields\":[{\"name\":\"Issue\",\"type\":\"number\"}", raw);
+        // Group fields are typed objects and the group's sort round-trips. The
+        // scope rides in the same object, lower-cased like every other enum.
+        Assert.Contains("\"fields\":[{\"name\":\"Issue\",\"type\":\"number\",\"scope\":\"item\"}", raw);
+        // A collection declares fields of its own, in the same shape, and a
+        // copy-scoped one says so on the wire.
+        Assert.Contains("\"name\":\"Box condition\",\"type\":\"text\",\"scope\":\"copy\"", raw);
+        // A copy's own values travel inside the copy, keyed exactly as an
+        // item's are.
+        Assert.Contains("\"notes\":\"Yellowed spare", raw);
+        Assert.Contains("{\"key\":\"Box condition\",\"value\":\"No box\"}", raw);
         Assert.Contains("\"sort\":{\"by\":\"field:Issue\",\"direction\":\"asc\"}", raw);
         // A declared series size travels as a number; an undeclared one travels
         // as an explicit null rather than being omitted, so the client can tell
@@ -62,6 +70,78 @@ public class ContractTests(VaultApiFactory factory)
         Assert.Contains("\"target\":24", raw);
         Assert.Contains("\"target\":null", raw);
         Assert.DoesNotContain("\"TenantId\"", raw);
+    }
+
+    /// <summary>
+    /// Both new field scopes survive a full round-trip through SQL Server —
+    /// declaration, values, and the removal of both.
+    /// </summary>
+    /// <remarks>
+    /// Worth an integration test rather than a mapper test because every part of
+    /// it is a place the data could vanish without an error. The collection's
+    /// own fields are a JSON column merged by plain assignment, so a coalesce
+    /// slipped into <c>ReplaceGraph</c> would make the first set of declarations
+    /// permanent; a copy's values are a second level of JSON ownership, so EF
+    /// giving them a table of their own would return an empty list for ever.
+    /// Neither failure throws — both just quietly answer "nothing here".
+    /// </remarks>
+    [Fact]
+    public async Task Collection_CarriesFieldsOfBothScopes_ThroughAFullRoundTrip()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+
+        var created = (await (await client.PostAsJsonAsync(
+            "/api/collections",
+            new CreateCollectionRequest("Slabs", "Graded cards")))
+            .Content.ReadFromJsonAsync<CollectionDto>())!;
+
+        var withFields = created with
+        {
+            // Declared on the collection, not on a group: every item has them,
+            // and the group tree here is empty on purpose to prove it.
+            Fields =
+            [
+                new GroupFieldDto("Shelf", "text"),
+                new GroupFieldDto("Slab no.", "text", "copy"),
+            ],
+            Items =
+            [
+                new ItemDto("i1", "Charizard", "", 1999, 4200, "", [], "",
+                    [new CustomFieldValueDto("Shelf", "Box A")],
+                    Copies:
+                    [
+                        new ItemCopyDto("c1", "Mint", 3100, Custom:
+                            [new CustomFieldValueDto("Slab no.", "82736411")]),
+                        new ItemCopyDto("c2", "Good", 900, Custom:
+                            [new CustomFieldValueDto("Slab no.", "91002244")]),
+                    ]),
+            ],
+        };
+
+        (await client.PutCollectionAsync(withFields)).EnsureSuccessStatusCode();
+
+        var fetched = (await client.GetCollectionsAsync())!.Single(c => c.Id == created.Id);
+        Assert.Equal(["Shelf", "Slab no."], fetched.Fields.Select(f => f.Name));
+        Assert.Equal(["item", "copy"], fetched.Fields.Select(f => f.Scope));
+
+        var item = Assert.Single(fetched.Items);
+        Assert.Equal("Box A", Assert.Single(item.Custom).Value);
+        // The whole point of the scope: two copies of one item, two different
+        // values, neither overwriting the other.
+        Assert.Equal(
+            ["82736411", "91002244"],
+            item.Copies.Select(copy => Assert.Single(copy.Custom).Value));
+
+        // And removing a declaration removes it, rather than being merged into
+        // what is already stored. The values stay put — they are dormant, not
+        // deleted — which is exactly what the settings screen promises.
+        (await client.PutCollectionAsync(fetched with { Fields = [] })).EnsureSuccessStatusCode();
+
+        var cleared = (await client.GetCollectionsAsync())!.Single(c => c.Id == created.Id);
+        Assert.Empty(cleared.Fields);
+        Assert.Single(Assert.Single(cleared.Items).Copies[0].Custom);
+
+        await client.DeleteAsync($"/api/collections/{created.Id}");
     }
 
     [Fact]

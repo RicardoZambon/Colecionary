@@ -1330,8 +1330,22 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     própria tabela imprime são entrada legal: <code>—</code> para valor ausente,
     <code>Quero</code> para lista de desejos, <code>Perfeito ×2</code> para dois
     exemplares perfeitos. <strong>Qualquer outra coluna é um campo custom</strong>,
-    casado por nome com os campos declarados do grupo.
+    casado por nome com os campos declarados — da coleção e do grupo.
     <span class="where">frontend: features/collection/csv-import/csv-import.ts</span>
+  </li>
+  <li>
+    <strong>Uma coluna de campo <em>por exemplar</em> é recusada, não adivinhada.</strong>
+    A tabela tem uma linha por item, então ela carrega <em>um</em> valor onde esse
+    campo tem um por exemplar. E o nome é a identidade do campo: escrever o valor
+    em <code>item.custom</code> não seria um erro por pouco — poria dado sob um
+    nome que ninguém lê, justamente na tela que mostra as cópias. A recusa é
+    <strong>uma issue só, na linha do cabeçalho</strong>, porque é ali que está o
+    erro: a coluna está errada para todas as linhas ao mesmo tempo, e uma issue
+    por linha soterraria as outras. E vale para a
+    <strong>coleção inteira</strong>, não por destino: um nome que significa “por
+    exemplar” num grupo não pode passar a significar “por item” no grupo seguinte.
+    As outras colunas do arquivo importam normalmente
+    (<code>csvImport.error.copyScopedColumn</code>).
   </li>
   <li>
     <strong>Resolver o grupo, em quatro tentativas nesta ordem.</strong> O
@@ -1378,8 +1392,12 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     lugar nenhum — a pior das duas falhas, porque nada na tela diria que o dado
     está lá. Com um grupo aberto a declaração vai <strong>nele</strong>, já que
     <code>fieldsFor</code> desce pela ancestralidade e uma declaração cobre a
-    subárvore inteira; na raiz, vai em cada destino. O tipo é inferido dos
-    próprios valores e <code>text</code> ganha qualquer desacordo.
+    subárvore inteira; na raiz, vai em cada destino. Um campo que a
+    <strong>coleção</strong> declara conta como declarado em todo lugar, então uma
+    coluna que casa com um deles importa e nada é acrescentado. O tipo é inferido
+    dos próprios valores e <code>text</code> ganha qualquer desacordo; o escopo é
+    <code>item</code>, explicitamente, e isso não é palpite — uma coluna por
+    exemplar nunca chega aqui, foi recusada no cabeçalho.
   </li>
   <li>
     <strong>Aplicar é um PUT só.</strong> <code>applyCsvImport</code> recebe o
@@ -1417,7 +1435,11 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     <strong>99 exemplares</strong> por linha (um erro de digitação vira objetos
     físicos que a coleção afirma ter). Seções são <em>casadas</em>, nunca criadas:
     a identidade de uma seção é a posição dela no array, e um arquivo não tem como
-    dizer onde uma nova entraria.
+    dizer onde uma nova entraria. E <strong>campos por exemplar não passam por
+    esta tabela em nenhuma direção</strong> — nem na importação, nem na exportação
+    dela: uma linha por item não tem como carregar os valores de N cópias. Quem
+    precisa deles inteiros usa o
+    <a href="#arquivo">arquivo de backup</a>, que carrega o documento completo.
   </p>
 </div>
 

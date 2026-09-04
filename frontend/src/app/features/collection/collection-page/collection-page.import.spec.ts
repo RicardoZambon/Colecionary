@@ -135,6 +135,7 @@ function collection(): Collection {
     id: 'c1',
     name: 'Saint Seiya',
     description: '',
+    fields: [],
     groups: [group('ouro', 'Cavaleiros de Ouro')],
     sections: [],
     items: [item('mu', 'Mu Aries', 'ouro')],

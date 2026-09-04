@@ -38,7 +38,7 @@
     <tr><td class="nowrap"><code>/store</code></td><td><code>StorePage</code></td><td>Checklists curados; “já está no seu vault” desabilitado</td></tr>
     <tr><td class="nowrap"><code>/settings</code></td><td><code>SettingsPage</code></td><td>Perfil, membros, tema, idioma, moeda, planos, export/import</td></tr>
     <tr><td class="nowrap"><code>/c/:collectionId</code></td><td><code>CollectionPage</code></td><td>Hero, toolbar, árvore de grupos, grade/lista de itens, dashboard de grupo</td></tr>
-    <tr><td class="nowrap"><code>/c/:collectionId/settings</code></td><td><code>CollectionSettingsPage</code></td><td>Metadados, grupos, campos, ordenação, target, membros, moeda, banner/ícone</td></tr>
+    <tr><td class="nowrap"><code>/c/:collectionId/settings</code></td><td><code>CollectionSettingsPage</code></td><td>Metadados, grupos, campos (da coleção e de cada grupo), ordenação, target, membros, moeda, banner/ícone</td></tr>
     <tr><td class="nowrap"><code>/c/:cid/items/new</code></td><td><code>ItemFormPage</code></td><td>Novo item; <code>?g=</code> e <code>?s=</code> decidem em que grupo e sob que separador ele nasce</td></tr>
     <tr><td class="nowrap"><code>/c/:cid/items/:itemId</code></td><td><code>ItemPage</code></td><td>Detalhe, galeria, cópias, navegação ←/→ entre vizinhos</td></tr>
     <tr><td class="nowrap"><code>/c/:cid/items/:itemId/edit</code></td><td><code>ItemFormPage</code></td><td>Mesmo componente, modo edição</td></tr>
@@ -617,10 +617,16 @@
   <thead><tr><th>Arquivo</th><th>Dono de</th></tr></thead>
   <tbody>
     <tr><td><code>copies.util.ts</code></td><td>Posse derivada, melhor condição, <code>copyValue</code> (a cadeia de estimativa), totais pagos, <code>syncWantedTag</code></td></tr>
-    <tr><td><code>sort.util.ts</code></td><td>Toda comparação de itens. <code>Intl.Collator</code> numérico, então <code>1 · 2 · 10 · 12A</code> ordena certo mesmo em campo de texto livre; sem valor sempre afunda</td></tr>
-    <tr><td><code>groups.util.ts</code></td><td><code>childrenOf</code> (alfabético, via <code>compareNames</code>), <code>flattenTree</code>, <code>visibleTree</code>, <code>fieldsFor</code>, <code>sortFor</code>, <code>resolveGroupId</code>, e agora <code>canReparent</code> — a regra inteira de “este grupo pode morar aqui?” num lugar só. <code>subtreeIds</code> ganhou guarda de ciclo (<code>Set</code> de visitados): <code>parentId</code> não carrega chave estrangeira, então um nó apontando para o próprio descendente é representável, e a caminhada sem guarda recursiona até a pilha acabar. <code>canReparent</code> depende dela terminar — é o que torna a pergunta do seletor respondível num grafo já quebrado</td></tr>
+    <tr><td><code>sort.util.ts</code></td><td>Toda comparação de itens. <code>Intl.Collator</code> numérico, então <code>1 · 2 · 10 · 12A</code> ordena certo mesmo em campo de texto livre; sem valor sempre afunda. <code>sortByOptions</code> e <code>sortChoices</code> oferecem <strong>só campos de escopo <code>item</code></strong>: uma lista ordena itens, e um item não guarda um valor para um campo por exemplar — as cópias dele guardam vários. Se uma chave dessas sobrevivesse, <code>keyOf</code> classificaria <em>todo</em> item como sem valor e embaralharia o grupo para a ordem alfabética, sem dizer nada. O estreitamento vive nessas duas funções e não em quem as chama, para que nenhum seletor consiga oferecer uma ordem que <code>sortItems</code> só responderia com um embaralhamento</td></tr>
+    <tr><td><code>groups.util.ts</code></td><td><code>childrenOf</code> (alfabético, via <code>compareNames</code>), <code>flattenTree</code>, <code>visibleTree</code>, <code>fieldsFor</code> — que agora recebe um
+        <code>FieldDeclarations { fields, groups }</code>, forma que um
+        <code>Collection</code> satisfaz estruturalmente, e mescla os campos da
+        coleção <em>antes</em> dos do caminho de ancestrais; uma interface e não
+        dois parâmetros justamente para que ninguém passe metade e mostre um
+        campo numa tela e não na seguinte —, <code>fieldsInScope</code> /
+        <code>itemFields</code> / <code>copyFields</code>, <code>sortFor</code>, <code>resolveGroupId</code>, e agora <code>canReparent</code> — a regra inteira de “este grupo pode morar aqui?” num lugar só. <code>subtreeIds</code> ganhou guarda de ciclo (<code>Set</code> de visitados): <code>parentId</code> não carrega chave estrangeira, então um nó apontando para o próprio descendente é representável, e a caminhada sem guarda recursiona até a pilha acabar. <code>canReparent</code> depende dela terminar — é o que torna a pergunta do seletor respondível num grafo já quebrado</td></tr>
     <tr><td><code>group-stats.util.ts</code></td><td>Toda aritmética de possuído/faltante/percentual, e o rollup contra <code>target</code></td></tr>
-    <tr><td><code>browse.util.ts</code></td><td><code>visibleItems</code>, <code>neighbours</code> e <code>matchesQuery</code> — a lista visível, quem vem a seguir, e se um item responde a uma busca. A busca era só o nome, que era o default errado para a consulta mais frequente do app: um catalogador digita um número de catálogo, e número de catálogo é precisamente um campo custom — o único lugar onde a busca antiga não olhava. Agora olha nome, descrição, tags e o <em>valor</em> de todo campo custom. <strong>Nomes de campo não são buscados</strong>: um grupo que declara “Número” faria todo item dele casar com “num”</td></tr>
+    <tr><td><code>browse.util.ts</code></td><td><code>visibleItems</code>, <code>neighbours</code> e <code>matchesQuery</code> — a lista visível, quem vem a seguir, e se um item responde a uma busca. A busca era só o nome, que era o default errado para a consulta mais frequente do app: um catalogador digita um número de catálogo, e número de catálogo é precisamente um campo custom — o único lugar onde a busca antiga não olhava. Agora olha nome, descrição, tags e o <em>valor</em> de todo campo custom — do item <em>e</em> de cada cópia, porque achar um item por algo que só um exemplar dele carrega (um número de lacre, uma assinatura) é o motivo inteiro de o escopo por cópia existir. O que a busca devolve continua sendo o <strong>item</strong>: não há tela que liste cópias, então uma resposta mais estreita seria uma que o app não sabe mostrar. <strong>Nomes de campo não são buscados</strong>: um grupo que declara “Número” faria todo item dele casar com “num”</td></tr>
     <tr><td><code>tree-keyboard.ts</code></td><td>Não é util puro (mexe em foco), mas é a mesma barganha: o padrão de teclado de árvore ARIA que o mapa da coleção e o seletor das configurações compartilham</td></tr>
     <tr><td><code>sections.util.ts</code></td><td><code>sectionsOf</code> (ordem do array, <strong>nunca</strong> alfabética), <code>sectionRank</code>, <code>resolveSectionId</code>, <code>chunkBySection</code></td></tr>
     <tr><td><code>focal.util.ts</code></td><td><code>focalToPosition</code>, <code>clampFocal</code>, <code>focalFromPoint</code></td></tr>
@@ -631,7 +637,7 @@
     <tr><td><code>download.util.ts</code></td><td>Âncora de download do arquivo</td></tr>
     <tr><td><code>field-format.util.ts</code></td><td><code>formatFieldValue</code>, <code>parseFieldNumber</code>, <code>isFieldRightAligned</code> — como o valor de um campo custom é <em>exibido</em>, nunca como é comparado. Um campo <code>number</code> passa por <code>Intl.NumberFormat</code> e <strong>nunca</strong> pelo formatador de dinheiro: um campo tipado <code>number</code> é um número de catálogo, uma tiragem, uma contagem de páginas, e renderizar <code>12</code> como <code>US$ 12,00</code> inventa uma moeda que o dado nunca alegou e uma precisão que ele nunca teve (<a href="decisions.html">ADR-48</a>). A ordenação continua no valor cru, em <code>sort.util.ts</code> — formatar é projeção de mão única, e ordenar <code>1.234</code> como texto porque ele renderiza com separador de milhar é exatamente a divergência que manter os dois separados evita. O parse casa com o de <code>keyOf</code> até a vírgula decimal, porque é o que um teclado brasileiro produz. Os formatadores são cacheados por locale: uma tabela de 8 colunas por 200 linhas são 1.600 chamadas por passe de render</td></tr>
     <tr><td><code>list-totals.util.ts</code></td><td><code>listTotals</code> — o que o rodapé diz sobre a lista acima dele: linhas, quantas possuídas, quantas cópias, e o valor estimado <strong>por moeda</strong>. Separado de <code>group-stats.util.ts</code> de propósito: aquele agrega o <em>subárvore de um grupo</em>, coisa estável e com <code>target</code> para medir progresso; este agrega a <em>lista visível e filtrada</em>, que não tem tamanho declarado — não existe “o total esperado das 14 linhas que sobraram depois que você filtrou por Mint”, então <code>pct</code>, <code>missing</code> e <code>target</code> não têm significado aqui. Lista vazia ainda reporta a moeda com total zero: rodapé que não renderiza nada lê como quebrado, onde <code>0</code> lê como “nada ainda”</td></tr>
-    <tr><td><code>group-move.util.ts</code></td><td><code>groupMoveImpact</code> — o que mover um grupo para outro pai <em>mudaria</em>, calculado antes de mudar. Campos ganhos; campos perdidos com <strong>quantos itens da subárvore guardam valor</strong> para cada um; a ordem que o galho vai herdar; e um irmão homônimo, avisado e nunca bloqueado (nome de irmão não é chave — identidade é o id). Os perdidos são contados por item e não pela subárvore inteira: um descendente que redeclara o campo continua exibindo, então os itens dele não são afetados e não podem ser contados como se fossem</td></tr>
+    <tr><td><code>group-move.util.ts</code></td><td><code>groupMoveImpact</code> — o que mover um grupo para outro pai <em>mudaria</em>, calculado antes de mudar. Campos ganhos; campos perdidos com <strong>quantos itens da subárvore guardam valor</strong> para cada um; a ordem que o galho vai herdar; e um irmão homônimo, avisado e nunca bloqueado (nome de irmão não é chave — identidade é o id). Os perdidos são contados por item e não pela subárvore inteira: um descendente que redeclara o campo continua exibindo, então os itens dele não são afetados e não podem ser contados como se fossem. A contagem olha o <code>custom</code> do item <strong>e o de cada cópia</strong>: reportar “nenhum valor afetado” para um campo cujos valores todas as cópias carregam é a única frase que essa pré-visualização não pode errar. Um campo declarado pela <em>coleção</em> está nos dois conjuntos aconteça o que acontecer com o pai, então nunca é ganho nem perdido — que é precisamente o que declarar um campo ali compra</td></tr>
     <tr><td><code>group-delete.util.ts</code></td><td><code>groupDeletePlan</code> — os números que o diálogo mostra <em>e</em> o grafo que a página aplica, na mesma chamada. Duas funções acabariam discordando, e o momento em que isso nunca pode acontecer é o em que alguém lê “12 itens” e aperta um botão que apaga quatorze. Em <strong>toda</strong> disposição as seções dos grupos removidos vão com eles e todo item sobrevivente que apontava para uma delas tem o <code>sectionId</code> limpo</td></tr>
   </tbody>
 </table>
@@ -651,7 +657,7 @@
   <tbody>
     <tr><td><code>collection-page/item-selection.ts</code></td><td>Quais linhas uma ação em massa atinge. <code>selectedIn</code>, <code>toggle</code>, <code>extendTo</code>, <code>setAll</code> e os três predicados do cabeçalho tri-estado. <strong>O conjunto nunca é podado</strong>: todo leitor cruza com o que está visível, então estreitar um filtro esconde parte da seleção sem destruí-la — e, muito mais importante, <em>nenhuma ação alcança uma linha que o usuário não vê</em>, porque a interseção é a única lista que qualquer uma delas recebe. O âncora do intervalo é guardado como <strong>id</strong>, não índice (índices se movem no primeiro filtro), e o intervalo em si é calculado por posição na lista plana visível — o que define bem um intervalo que cruza um cabeçalho de faixa: é a corrida de linhas que o leitor vê entre as duas. Um âncora que saiu de vista degrada para um toggle simples</td></tr>
     <tr><td><code>collection-page/bulk-patch.ts</code></td><td><code>BulkPatch</code>, <code>applyBulkPatch</code>, <code>removeItems</code>, <code>isEmptyPatch</code>, <code>distinctValues</code>. O critério do que é editável em massa é “um valor cujo significado não depende do item em que cai”: grupo, seção, ano, valor, campo custom, uma tag, e o <code>status</code> de uma cópia. Condição, preço, valor, data e notas de <em>cópia</em> falham no critério — uma cópia é um objeto físico com identidade própria, e “definir a condição de 40 itens” teria de escolher uma cópia por item, o que “a primeira” não é um conceito deste modelo. <code>status</code> é a exceção justamente por ser idempotente por cópia: toda cópia de todo item selecionado recebe. <strong>Presença significa “tocado”</strong>: chave ausente é deixada em paz, chave presente é aplicada, <em>string vazia incluída</em> — é o que torna limpar possível. Retorna um array do mesmo tamanho <strong>na mesma ordem</strong>, porque ordem manual é a ordem do array e reordenar aqui reescreveria em silêncio um arranjo feito à mão</td></tr>
-    <tr><td><code>csv-import/csv-import.ts</code></td><td><code>planCsvImport</code> e <code>applyCsvImport</code> — ler uma planilha e escrevê-la, deliberadamente separadas por um <code>CsvImportPlan</code> (<a href="decisions.html">ADR-67</a>). O plano carrega linhas resolvidas, issues por número de linha, grupos e campos a criar, e as três contagens. Nada aqui muta a coleção: a árvore de grupos é clonada antes que uma linha possa acrescentar a ela, e duas linhas que nomeiam o mesmo grupo faltante compartilham o que a primeira criou. Uma issue carrega <strong>chave</strong> de mensagem, nunca a frase — o util não tem injector. <code>applyCsvImport</code> mantém itens atualizados na <em>posição</em> deles (a ordem manual é a ordem do array) e acrescenta as criações no fim, em ordem de arquivo</td></tr>
+    <tr><td><code>csv-import/csv-import.ts</code></td><td><code>planCsvImport</code> e <code>applyCsvImport</code> — ler uma planilha e escrevê-la, deliberadamente separadas por um <code>CsvImportPlan</code> (<a href="decisions.html">ADR-67</a>). O plano carrega linhas resolvidas, issues por número de linha, grupos e campos a criar (sempre com <code>scope: 'item'</code> — o arquivo é a tabela de itens, e uma coluna dela descreve o item), e as três contagens. Nada aqui muta a coleção: a árvore de grupos é clonada antes que uma linha possa acrescentar a ela, e duas linhas que nomeiam o mesmo grupo faltante compartilham o que a primeira criou. Uma issue carrega <strong>chave</strong> de mensagem, nunca a frase — o util não tem injector. <code>applyCsvImport</code> mantém itens atualizados na <em>posição</em> deles (a ordem manual é a ordem do array) e acrescenta as criações no fim, em ordem de arquivo</td></tr>
     <tr><td><code>collection-page/column-prefs.ts</code></td><td>Quais colunas de campo a tabela esconde, em <code>localStorage['vault.cols.&lt;coleção&gt;.&lt;grupo&gt;']</code>. <strong>Guarda os nomes ocultos, nunca os visíveis</strong>: um campo declarado na semana que vem fica visível por default — guardar o conjunto visível esconderia toda coluna nova de quem já abriu o seletor. Chaveado por coleção <em>e</em> por grupo, porque o conjunto de campos é por grupo. Toda leitura e escrita é dentro de <code>try</code>: <code>localStorage</code> lança de saída no modo privado do Safari, e uma preferência perdida não pode levar a página com ela (<a href="decisions.html">ADR-47</a>)</td></tr>
     <tr><td><code>item-form-page/unsaved-item.guard.ts</code></td><td><code>unsavedItemGuard</code>, um <code>CanDeactivateFn</code>. O que ele precisa do componente é declarado como <strong>forma estrutural</strong> (<code>interface HasUnsavedCheck { canLeave(): boolean }</code>) e não como import: <code>app.routes.ts</code> é avaliado no load do módulo, então um guard que importasse <code>ItemFormPage</code> arrastaria o formulário inteiro, o photo manager e os pipes para o bundle inicial e desfaria o <code>loadComponent</code> em silêncio</td></tr>
     <tr><td><code>browse-params.ts</code> → <code>nextSortFor</code></td><td>A ordenação que um clique num cabeçalho de coluna pede. Compara contra a ordem <strong>efetiva</strong> (o override da URL, ou a ordem declarada do grupo, ou o default) e não contra o override sozinho — é o que faz o primeiro clique na coluna por que o grupo <em>já</em> ordena <em>inverter</em>, em vez de parecer não fazer nada. Sempre devolve uma ordenação, nunca <code>null</code>: “clique na coluna em que você já está para voltar ao default do grupo” não é um gesto que alguém adivinharia. Dinheiro abre em <code>desc</code> (a pergunta que uma coluna de valor responde é “qual é o caro”), o resto em <code>asc</code></td></tr>
@@ -740,6 +746,95 @@
   a quem estava nele.
 </p>
 
+<h2 id="campos">Campos: dois eixos, um editor</h2>
+
+<p>
+  O modelo está em <a href="domain-model.html#campos">Os dois eixos de um campo
+  declarado</a>. No app o que importa é que <strong>toda tela lê o conjunto
+  mesclado uma vez e depois escolhe o escopo que ela sabe mostrar</strong> —
+  nunca o contrário. Mesclar cada escopo separadamente deixaria o mesmo nome
+  resolver para declarações diferentes conforme a lista que se pediu.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Superfície</th><th>Mostra</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Colunas da tabela, seletor de ordenação, cabeçalhos da planilha</td>
+      <td><code>itemFields</code></td>
+      <td>São visões de <em>itens</em>. Uma coluna para um campo por exemplar
+          ficaria em branco em toda linha, porque não há um valor de item para
+          pôr nela</td>
+    </tr>
+    <tr>
+      <td>Barra em massa</td>
+      <td><code>itemFields</code></td>
+      <td>Uma aplicação em massa põe <strong>um</strong> valor em cada item
+          selecionado, e um campo por exemplar não tem onde recebê-lo — o
+          controle pediria um número e o guardaria em lugar nenhum</td>
+    </tr>
+    <tr>
+      <td>Formulário do item — bloco principal / editor de exemplares</td>
+      <td><code>itemFields</code> / <code>copyFields</code></td>
+      <td>O único lugar onde existe um valor por exemplar é o exemplar. Com zero
+          campos por cópia o editor não desenha nada: um cabeçalho sobre nenhum
+          input lê como configuração que sumiu</td>
+    </tr>
+    <tr>
+      <td>Página do item — ficha / linha de cada cópia</td>
+      <td><code>itemFields</code> / <code>copyFields</code></td>
+      <td><code>copy-row__fields</code> lista só os campos <em>declarados</em>, na
+          ordem declarada: um valor cujo campo um move ou uma redeclaração
+          deixaram sem declaração está dormente, não apagado, e exibi-lo
+          contradiria a pré-visualização que prometeu que ele deixaria de
+          aparecer</td>
+    </tr>
+    <tr>
+      <td>Busca (<code>matchesQuery</code>)</td>
+      <td>Os dois</td>
+      <td>É a única superfície que quer os dois escopos ao mesmo tempo, e ainda
+          assim devolve o item</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Um editor, dois donos</h3>
+
+<p>
+  Nas configurações da coleção, na aba <em>Grupos</em>, um card acima da árvore
+  declara os campos da <strong>coleção inteira</strong> — acima da árvore porque é
+  onde ele fica no modelo: são os campos que todo grupo herda e que um grupo pode
+  sobrescrever. Um único <code>&lt;ng-template #fieldEditor&gt;</code> desenha
+  esse card e o editor por grupo, parametrizado por um <code>owner</code>. Duas
+  cópias do mesmo markup teriam divergido na primeira vez que uma delas ganhasse
+  um controle — que é exatamente o que o seletor de escopo é.
+</p>
+
+<p>
+  O <code>owner</code> da coleção é a sentinela <code>'@collection'</code>, um
+  literal e não <code>null</code> para que os handlers mantenham uma assinatura
+  só. <code>@</code> está fora do padrão de id que o servidor impõe
+  (<code>^[A-Za-z0-9_.:-]{1,64}$</code>), então <strong>nenhum grupo pode
+  responder por ela</strong>. Cada linha de campo tem dois
+  <code>ui-select</code>: tipo e escopo.
+</p>
+
+<div class="callout warn">
+  <span class="label">Remover ou reescopar um campo limpa a ordenação que aponta para ele</span>
+  <p>
+    <code>clearSortsFor</code> roda em <strong>todos</strong> os grupos, porque um
+    grupo pode ordenar por um campo que a coleção declarou. Sem isso a ordenação
+    não falharia: <code>keyOf</code> não acharia valor em item nenhum,
+    classificaria todos como ausentes e devolveria a ordem alfabética — em
+    silêncio, que é o problema inteiro. A pergunta de remoção conta quantos itens
+    guardam valor, e essa contagem inclui os das <strong>cópias</strong>: dizer
+    “nenhum valor afetado” para um campo que todo exemplar carrega é a única
+    resposta que ela não pode dar.
+  </p>
+</div>
+
 <h2 id="colecao">A página da coleção</h2>
 
 <p>
@@ -756,7 +851,10 @@
   da página: com um grupo aberto, uma célula <code>Grupo</code> em branco
   significa <em>aquele</em> grupo e uma preenchida nomeia um subgrupo dele. É o
   que faz um único controle atender a “importar na coleção” e “importar direto
-  no grupo” sem dois botões que fariam a mesma coisa.
+  no grupo” sem dois botões que fariam a mesma coisa. Uma coluna que nomeia um
+  campo declarado <em>por exemplar</em> é recusada com uma issue na linha do
+  cabeçalho e não é importada — o porquê está em
+  <a href="flows.html#csv">Fluxos · 16</a>.
 </p>
 
 <p>
@@ -787,7 +885,12 @@
   em branco”, e um editor em massa que não expressa o primeiro é inútil enquanto
   um que faz o segundo em silêncio é perigoso. Onde os itens selecionados
   discordam, o controle reporta “3 valores” em vez de escolher um deles para
-  exibir (<code>distinctValues</code>). O <em>write</em> é um PUT de documento
+  exibir (<code>distinctValues</code>). Os campos que ela oferece são os do grupo
+  de destino <strong>de escopo <code>item</code></strong> — as declarações da
+  coleção chegam como <code>input</code> (<code>collectionFields</code>) e não por
+  leitura de store, pela mesma regra que vale para todo filho apresentacional:
+  injetar o store numa folha arrasta <code>VaultApi</code> para o TestBed de tudo
+  que a renderiza. O <em>write</em> é um PUT de documento
   inteiro e isso pertence a quem possui a coleção, então a barra emite um
   <code>BulkPatch</code> e a página decide — que é também o que torna uma recusa
   recuperável: a página mantém a seleção, o componente não é destruído, e o
@@ -810,9 +913,10 @@
 <h3>Colunas de campo custom, e o que rola</h3>
 
 <p>
-  A lista renderiza <strong>o conjunto de campos mesclado de toda a
-  ancestralidade</strong> (<code>fieldsFor</code>), menos as colunas escondidas
-  (<code>column-prefs.ts</code>), entre Cond e Valor — assim as duas colunas de
+  A lista renderiza <strong>os campos de escopo <code>item</code> do conjunto
+  mesclado</strong> — os da coleção mais os de toda a ancestralidade
+  (<code>fieldsFor</code> + <code>itemFields</code>) —, menos as colunas
+  escondidas (<code>column-prefs.ts</code>), entre Cond e Valor — assim as duas colunas de
   dinheiro alinhadas à direita continuam adjacentes. Oito campos declarados não
   cabem num laptop ao lado do nome, do grupo e de duas colunas de dinheiro, então:
 </p>

@@ -45,6 +45,32 @@ public class ItemCopyJsonShapeTests
             names);
     }
 
+    /// <summary>
+    /// A copy's own field values are a second level of ownership inside the
+    /// same document, not a column of their own.
+    /// </summary>
+    /// <remarks>
+    /// Worth pinning because nothing else would notice it moving: EF is happy
+    /// to give a nested owned collection its own table, and if it ever did, a
+    /// copy's values would silently stop travelling with the copy — no error,
+    /// no migration, just an empty list on every read. It also has to stay
+    /// inside `Copies` for `CollectionVersionInterceptor.OwnerOf` to walk two
+    /// hops up to the item and bump the collection's version.
+    /// </remarks>
+    [Fact]
+    public void CopyCustomValues_LiveInsideTheCopiesDocument()
+    {
+        var custom = CopyType().FindNavigation(nameof(ItemCopy.Custom))!.TargetEntityType;
+
+        Assert.Equal("Copies", custom.GetContainerColumnName());
+        Assert.Equal(
+            ["Key", "Value"],
+            custom.GetProperties()
+                .Where(p => !p.IsShadowProperty())
+                .Select(p => p.GetJsonPropertyName())
+                .OrderBy(n => n, StringComparer.Ordinal));
+    }
+
     [Theory]
     [InlineData(nameof(ItemCopy.Condition))]
     [InlineData(nameof(ItemCopy.Status))]

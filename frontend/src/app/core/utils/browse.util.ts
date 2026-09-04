@@ -2,7 +2,7 @@ import { Condition, GroupNode, GroupSort, Item, Section } from '../models';
 import { isOwned } from './copies.util';
 import { isReservedTag, normalizeTag, withTagAdded } from './tags.util';
 import { UNGROUPED_ID } from './group-stats.util';
-import { fieldsFor, sortFor, subtreeIds } from './groups.util';
+import { FieldDeclarations, fieldsFor, sortFor, subtreeIds } from './groups.util';
 import { UNSECTIONED_ID, sectionRank } from './sections.util';
 import { DEFAULT_SORT, sortItems } from './sort.util';
 
@@ -88,10 +88,11 @@ export function scopeItems(items: Item[], groups: GroupNode[], groupId: string |
  */
 export function visibleItems(
   items: Item[],
-  groups: GroupNode[],
+  source: FieldDeclarations,
   criteria: BrowseCriteria,
   sections: Section[] = [],
 ): Item[] {
+  const groups = source.groups;
   const query = criteria.query.trim().toLowerCase();
   const rank = sectionRank(sections, criteria.groupId);
 
@@ -106,7 +107,7 @@ export function visibleItems(
   );
 
   const sort = criteria.sort ?? sortFor(groups, criteria.groupId) ?? DEFAULT_SORT;
-  return sortItems(filtered, sort, fieldsFor(groups, criteria.groupId), rank);
+  return sortItems(filtered, sort, fieldsFor(source, criteria.groupId), rank);
 }
 
 /**
@@ -138,6 +139,12 @@ export function hasTag(item: Item, tag: string): boolean {
  * a search that finds fewer things than the data holds reads as broken rather
  * than as precise.
  *
+ * A copy's own field values count too, and finding an item by something only
+ * one of its copies carries — a slab number, a signature — is the whole reason
+ * copy-scoped fields exist. The item is what the search returns either way:
+ * there is no screen that lists copies, so a narrower answer would be one the
+ * app cannot show.
+ *
  * Field *names* are not searched, only their values. A group that declares
  * "Número" would otherwise make every one of its items match "num".
  *
@@ -151,7 +158,8 @@ export function matchesQuery(item: Item, query: string): boolean {
     item.name.toLowerCase().includes(query) ||
     item.description.toLowerCase().includes(query) ||
     item.tags.some(tag => tag.toLowerCase().includes(query)) ||
-    item.custom.some(field => field.value.toLowerCase().includes(query))
+    item.custom.some(field => field.value.toLowerCase().includes(query)) ||
+    item.copies.some(copy => copy.custom.some(field => field.value.toLowerCase().includes(query)))
   );
 }
 

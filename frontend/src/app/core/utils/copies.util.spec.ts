@@ -16,7 +16,17 @@ import {
 } from './copies.util';
 
 function copy(id: string, condition: Condition, price: number, overrides: Partial<ItemCopy> = {}): ItemCopy {
-  return { id, condition, price, value: null, acquiredOn: null, status: 'Keep', notes: '', ...overrides };
+  return {
+    id,
+    condition,
+    price,
+    value: null,
+    acquiredOn: null,
+    status: 'Keep',
+    notes: '',
+    custom: [],
+    ...overrides,
+  };
 }
 
 function item(copies: ItemCopy[], value = 100, tags: string[] = []): Item {

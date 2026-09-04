@@ -16,7 +16,7 @@
 <p class="eyebrow">04 · Backend</p>
 <h1>Modelo de domínio e banco</h1>
 <p class="lede">
-  Oito entidades, quatro schemas, três colunas JSON e um contador de
+  Oito entidades, quatro schemas, cinco colunas JSON e um contador de
   concorrência. O que dá forma a este modelo não são as tabelas: são as
   invariantes que ele carrega — posse derivada, nulls que significam algo, e
   chaves compostas que tornam referência entre tenants impossível no nível do
@@ -27,7 +27,7 @@
 
 <figure>
   <div class="diagram">
-    <svg viewBox="0 0 740 420" role="img" aria-labelledby="er-t">
+    <svg viewBox="0 0 740 442" role="img" aria-labelledby="er-t">
       <title id="er-t">Entidades e relações</title>
 
       <rect class="box dashed" x="6" y="6" width="220" height="126" rx="8"/>
@@ -46,7 +46,7 @@
       <rect class="box accent" x="266" y="34" width="268" height="52" rx="6"/>
       <text class="t b" x="278" y="52">Collection</text>
       <text class="t s" x="278" y="66">PK (TenantId, Id) · Version 🔒 · Currency?</text>
-      <text class="t s" x="278" y="80">BannerImageId? · IconImageId?</text>
+      <text class="t s" x="278" y="80">Fields ⌗ · BannerImageId? · IconImageId?</text>
 
       <rect class="box" x="266" y="112" width="128" height="66" rx="6"/>
       <text class="t b" x="278" y="130">Group</text>
@@ -98,6 +98,7 @@
       <text class="t s" x="14" y="360">🔒 token de concorrência otimista     ⌗ coluna JSON (OwnsMany().ToJson())     ᵁ índice único</text>
       <text class="t s" x="14" y="380">Bytes de imagem NÃO estão no banco: vivem em IImageStore, um diretório por tenant.</text>
       <text class="t s" x="14" y="400">Não há FK de Item/Collection para StoredImage — uma referência é apenas um id, e pode pender.</text>
+      <text class="t s" x="14" y="420">Items.Copies tem um ⌗ aninhado: o Custom de cada cópia. Collections.Fields e Groups.Fields são o mesmo documento.</text>
     </svg>
   </div>
 </figure>
@@ -121,7 +122,9 @@
     <tr><td class="nowrap"><code>Identity</code></td><td><code>Users</code></td><td><code>Id</code></td>
         <td>Tenant-owned. Único em <code>(TenantId, Email)</code> — <strong>não há índice em <code>Email</code> sozinho</strong></td></tr>
     <tr><td class="nowrap"><code>Catalog</code></td><td><code>Collections</code></td><td><code>(TenantId, Id)</code></td>
-        <td>Raiz de agregado. <code>Version</code> é token de concorrência</td></tr>
+        <td>Raiz de agregado. <code>Version</code> é token de concorrência.
+            <code>Fields</code> (<code>nvarchar(max)</code>, anulável) são os campos
+            declarados para a coleção inteira</td></tr>
     <tr><td class="nowrap"><code>Catalog</code></td><td><code>Groups</code></td><td><code>(TenantId, CollectionId, Id)</code></td>
         <td><code>ParentId</code> é string simples, sem FK — a árvore é substituída por inteiro</td></tr>
     <tr><td class="nowrap"><code>Catalog</code></td><td><code>Sections</code></td><td><code>(TenantId, CollectionId, Id)</code></td>
@@ -190,11 +193,11 @@
 <h2 id="json">Colunas JSON, e os nomes que estão fixados</h2>
 
 <p>
-  Quatro documentos JSON são mapeados com
+  Cinco documentos JSON são mapeados com
   <code>OwnsMany(...).ToJson(...)</code>: <code>Items.Copies</code>,
-  <code>Items.Custom</code>, <code>Groups.Fields</code> e
-  <code>StoreListings.Items</code>. Duas coisas neles são carga estrutural e têm
-  teste unitário dedicado:
+  <code>Items.Custom</code>, <code>Groups.Fields</code>,
+  <code>Collections.Fields</code> e <code>StoreListings.Items</code>. Três coisas
+  neles são carga estrutural e têm teste unitário dedicado:
 </p>
 
 <div class="table-wrap">
@@ -212,11 +215,34 @@
       <td>A migration escreveu aquele documento uma vez, em T-SQL cru, e nunca
           regenera: um rename <strong>órfã os dados existentes sem erro em lugar
           nenhum</strong></td>
-      <td class="nowrap"><code>GroupFieldJsonShapeTests</code></td>
+      <td class="nowrap"><code>GroupFieldJsonShapeTests</code>,
+          <code>CollectionFieldJsonShapeTests</code></td>
+    </tr>
+    <tr>
+      <td>A declaração da coleção e a do grupo são o <em>mesmo</em> documento —
+          mesmas chaves <code>Name</code>/<code>Type</code>/<code>Scope</code>,
+          mesmas conversões</td>
+      <td>Nada lança. As chaves que não casam desserializam nos defaults do CLR,
+          e um campo da coleção <strong>volta como um campo de texto sem nome,
+          escopado ao item</strong></td>
+      <td class="nowrap"><code>CollectionFieldJsonShapeTests</code></td>
     </tr>
   </tbody>
 </table>
 </div>
+
+<p>
+  <code>ItemCopy.Custom</code> não é um sexto documento: é um
+  <code>OwnsMany</code> <strong>dentro</strong> de <code>Items.Copies</code>, ou
+  seja, um segundo nível de posse no documento que já existia. O valor de um
+  campo por exemplar mora ali, e não numa tabela própria — não há tela que liste
+  cópias, e uma cópia sem o item dela não é nada.
+  <code>ItemCopyJsonShapeTests.CopyCustomValues_LiveInsideTheCopiesDocument</code>
+  fixa exatamente isso. Os dois interceptors que precisam enxergar essa entrada
+  (<code>CollectionVersionInterceptor.OwnerOf</code> e o de tenant) resolvem os
+  nomes pelas FKs de posse em vez de adivinhá-los, então nenhum dos dois precisou
+  mudar para vê-la.
+</p>
 
 <p>
   <code>SortBy</code>, <code>SortDirection</code> e <code>Target</code> são
@@ -279,10 +305,12 @@
   <tbody>
     <tr>
       <td><code>fields</code></td>
-      <td><code>{ Name, Type }</code> com <code>Type</code> em
-          <code>Text|Number|Date</code>, JSON</td>
-      <td><strong>Mescla o caminho inteiro de ancestrais</strong>; um nome
-          redeclarado sobrescreve o tipo e mantém a posição do ancestral</td>
+      <td><code>{ Name, Type, Scope }</code> com <code>Type</code> em
+          <code>Text|Number|Date</code> e <code>Scope</code> em
+          <code>Item|Copy</code>, JSON</td>
+      <td><strong>Mescla os campos da coleção e depois o caminho inteiro de
+          ancestrais</strong>; um nome redeclarado sobrescreve a declaração
+          inteira — tipo <em>e</em> escopo — e mantém a posição da primeira</td>
     </tr>
     <tr>
       <td><code>sort</code></td>
@@ -302,9 +330,10 @@
 <p>
   <code>by</code> é uma chave embutida (<code>manual</code>, <code>added</code>,
   <code>name</code>, <code>value</code>, <code>year</code>) ou
-  <code>field:&lt;nome do campo&gt;</code>. Os <em>valores</em> dos campos
-  continuam no item, em <code>Custom</code>, como strings: o tipo pertence à
-  declaração, então <strong>retipar um campo nunca reescreve dados de item</strong>.
+  <code>field:&lt;nome do campo&gt;</code>. Os <em>valores</em> dos campos são
+  strings em um <code>Custom</code> — do item ou da cópia, conforme o escopo. O
+  tipo e o escopo pertencem à declaração, então <strong>retipar ou reescopar um
+  campo nunca reescreve dado nenhum</strong>.
 </p>
 
 <p>
@@ -330,6 +359,69 @@
     impossível. <code>ContractTests</code> faz PUT da mesma coleção
     <strong>três vezes</strong> exatamente para pegar os dois casos — e o
     terceiro PUT limpa sort e target de volta para null.
+  </p>
+</div>
+
+<h2 id="campos">Os dois eixos de um campo declarado</h2>
+
+<p>
+  Um campo custom responde a duas perguntas independentes, e o modelo guarda
+  cada uma num lugar diferente. <strong>Elas são ortogonais de propósito</strong>:
+  tanto a coleção quanto um grupo declaram campos de qualquer um dos dois
+  escopos.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Eixo</th><th>Onde mora</th><th>Valores</th><th>O que ele existe para resolver</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Onde o campo é declarado</strong></td>
+      <td><code>Collections.Fields</code> ou <code>Groups.Fields</code> — a mesma
+          lista de <code>GroupField</code>, na mesma forma JSON</td>
+      <td>Não muda nada. A declaração não é o valor</td>
+      <td>Grupo é taxonomia. Um campo que descreve a coleção — onde a coisa fica
+          guardada, de quem ela veio — não tinha lar taxonômico: precisava ser
+          redeclarado em <em>todo</em> grupo raiz, e um grupo criado depois
+          ficava sem ele, em silêncio</td>
+    </tr>
+    <tr>
+      <td><strong>O que o campo descreve</strong></td>
+      <td><code>GroupField.Scope</code> (<code>FieldScope</code>:
+          <code>Item</code> ou <code>Copy</code>; no fio, minúsculo)</td>
+      <td><code>Item.Custom</code> para <code>Item</code>;
+          <code>ItemCopy.Custom</code> para <code>Copy</code></td>
+      <td>A lista do item guarda <strong>um</strong> valor onde o colecionador
+          tem vários exemplares. O número de lacre da segunda cópia só podia
+          sobrescrever o da primeira</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <strong>O nome é a identidade do campo</strong>: é a chave do valor em
+  <code>Custom</code> e é a cauda de uma chave de ordenação
+  <code>field:&lt;nome&gt;</code>. Por isso os nomes precisam ser únicos
+  <em>dentro de uma</em> declaração e deliberadamente <em>não</em> entre
+  declarações: um grupo que redeclara um nome da coleção está sobrescrevendo-o de
+  propósito — a mesma regra que já deixava um grupo sobrescrever a do ancestral.
+  <code>FieldRules.DeclaredBy</code> é uma regra de validação só, aplicada aos
+  dois: duas cópias das mesmas regras acabariam deixando a coleção declarar algo
+  que um grupo não pode.
+</p>
+
+<div class="callout plain">
+  <span class="label">Mudar o escopo não move valor nenhum</span>
+  <p>
+    Os valores ficam onde estão, indexados por nome no registro que já os
+    carregava — dormentes exatamente como quando um campo é removido, e de volta
+    à vista se o escopo for revertido. Adivinhar a qual cópia pertencia um valor
+    de item não é um palpite que o app tem direito de dar, e espalhá-lo por todas
+    inventaria dado. <code>ReplaceGraph</code> copia
+    <code>Collection.Fields</code> por atribuição simples, como
+    <code>Currency</code>: um coalesce tornaria permanente o primeiro conjunto de
+    declarações e um campo removido nunca sumiria.
   </p>
 </div>
 
@@ -467,6 +559,15 @@
 </div>
 
 <p>
+  <code>Catalog.Collections.Fields</code> é anulável e <strong>não</strong> está
+  nessa lista: ali <code>NULL</code> não afirma nada, o EF lê uma coluna JSON de
+  coleção nula como coleção vazia, e vazio é exatamente o que toda linha escrita
+  antes da coluna existir sempre significou. Foi por isso que a migration não
+  colocou <code>DEFAULT N'[]'</code>: um default só valeria para linhas inseridas
+  depois dele e deixaria as existentes nulas do mesmo jeito.
+</p>
+
+<p>
   No frontend, esses campos são <strong>obrigatórios-e-anuláveis</strong>, não
   opcionais (<code>target: number | null</code>, não <code>target?: number</code>).
   A coleção é salva como PUT de documento inteiro, onde um
@@ -475,11 +576,6 @@
 </p>
 
 <h2 id="parentid">A única referência que não pode ficar pendurada</h2>
-
-<p>
-  Nenhuma entidade, coluna ou migration mudou nesta rodada. Uma invariante,
-  porém, ficou explícita e agora é imposta pelo validador.
-</p>
 
 <p>
   <code>Group.ParentId</code> é uma string simples, sem FK — “trees are replaced
@@ -556,9 +652,10 @@
 <div class="callout warn">
   <span class="label">O interceptor sobe para o principal por um motivo</span>
   <p>
-    <code>Copies</code> e <code>Custom</code> de um item e <code>Fields</code> de
-    um grupo são entidades <em>owned</em> mapeadas em colunas JSON, e reescrever
-    uma deixa a linha que a carrega como <code>Unchanged</code>. Casar por tipo
+    <code>Copies</code> e <code>Custom</code> de um item, <code>Fields</code> de
+    um grupo e da coleção, e o <code>Custom</code> de uma cópia (aninhado dentro
+    de <code>Copies</code>) são entidades <em>owned</em> mapeadas em colunas JSON,
+    e reescrever uma deixa a linha que a carrega como <code>Unchanged</code>. Casar por tipo
     de entidade não via nada nesse caso: sem bump, e sem <code>UPDATE</code> da
     raiz — ou seja, o token de concorrência nunca era consultado e a escrita
     passava completamente desguardada. A entrada owned carrega a chave do
@@ -598,8 +695,43 @@
     <tr><td>11</td><td class="nowrap"><code>AddImageUnreferencedSince</code></td><td><code>UnreferencedSinceUtc</code> — o relógio da carência do coletor</td></tr>
     <tr><td>12</td><td class="nowrap"><code>AddCollectionVersion</code></td><td><code>Collections.Version</code>, começando em 1 nas linhas existentes</td></tr>
     <tr><td>13</td><td class="nowrap"><code>AddSections</code></td><td><code>Catalog.Sections</code> e <code>Items.SectionId</code> (<code>nvarchar(64)</code>, default <code>''</code>)</td></tr>
+    <tr><td>14</td><td class="nowrap"><code>AddFieldScopesAndCollectionFields</code></td><td><code>Collections.Fields</code> (<code>nvarchar(max)</code>, anulável). Uma coluna e nenhum backfill — <strong>e faltava um</strong>; veja abaixo</td></tr>
+    <tr><td>15</td><td class="nowrap"><code>BackfillCopyCustomJson</code></td><td>Escreve <code>"Custom": []</code> em toda cópia de todo <code>Items.Copies</code> que ainda não tem a chave. Guardada por <code>EXISTS</code>, então rodar de novo é no-op</td></tr>
   </tbody>
 </table>
+</div>
+
+<div class="callout warn">
+  <span class="label">Migration 14, o backfill que faltou, e o 500 que ele causou</span>
+  <p>
+    A #14 partiu de um raciocínio que vale para uma das duas propriedades novas e
+    não para a outra. O <code>Scope</code> de um campo é um <em>escalar</em> dentro
+    de um documento JSON: ausente, o EF materializa o default do CLR
+    (<code>FieldScope.Item</code>), que é exatamente o que aquelas linhas sempre
+    quiseram dizer. O <code>Custom</code> de uma cópia <strong>não</strong>: uma
+    cópia é uma entidade owned <em>aninhada</em> dentro do documento
+    <code>Copies</code>, e quando o array dela falta o EF lança
+    <code>NullReferenceException</code> ao montar o item. Não é um valor errado num
+    campo — é toda leitura do grafo da coleção falhando, ou seja
+    <code>GET /api/collections</code> respondendo 500 para o vault inteiro.
+  </p>
+  <p>
+    Nenhuma suíte viu isso porque <strong>toda linha que os testes escrevem é
+    escrita pelo código atual</strong>, que sempre emite a chave; só um vault que
+    já estava rodando tinha documentos na forma antiga. A #15 escreve a chave que
+    falta, e <code>LegacyRowCompatibilityTests</code> é o teste cuja ausência
+    deixou isso passar: ele migra um passo para trás — que é precisamente como se
+    produz a forma antiga —, prende o 500, migra para frente e prende a leitura.
+    Rodar a migration real, e não uma cópia do SQL dela, é o que faz esse teste
+    valer alguma coisa.
+  </p>
+  <p>
+    A lição generaliza: <em>ausência em JSON aninhado não é o default do CLR</em>.
+    Compare com a #4, que precisou de backfill de verdade porque a forma antiga
+    (<code>["Número"]</code>) e a nova não coincidem em leitura nenhuma — e note
+    que <code>Collections.Fields</code>, sendo coleção de <em>topo</em>, lê NULL
+    como lista vazia sem problema algum.
+  </p>
 </div>
 
 <p>

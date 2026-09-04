@@ -190,6 +190,16 @@
                 @if (copy.notes) {
                   <span class="copy-row__notes">{{ copy.notes }}</span>
                 }
+                @if (copy.fields.length) {
+                  <dl class="copy-row__fields">
+                    @for (field of copy.fields; track field.key) {
+                      <div class="copy-field">
+                        <dt>{{ field.key }}</dt>
+                        <dd>{{ field.value }}</dd>
+                      </div>
+                    }
+                  </dl>
+                }
               </div>
             }
             <div class="copies__total">{{ copiesTotal() }}</div>

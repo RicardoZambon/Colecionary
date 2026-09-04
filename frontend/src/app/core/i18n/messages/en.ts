@@ -592,9 +592,15 @@ export const en = {
   'collSettings.groups.fields': 'Fields',
   'collSettings.groups.removeField': 'Remove field {name}',
   'collSettings.groups.fieldTypeAria': 'Type of field {name}',
+  'collSettings.groups.fieldScopeAria': 'What field {name} describes',
   'collSettings.groups.fieldPlaceholder': 'Field name… (Enter)',
   'collSettings.groups.fieldAria': 'New field name',
   'collSettings.groups.newFieldTypeAria': 'Type of the new field',
+  'collSettings.groups.newFieldScopeAria': 'What the new field describes',
+  'collSettings.fields.heading': 'Whole collection',
+  'collSettings.fields.hint':
+    'Fields every item has, whatever group it is in. A group can redeclare one to override it.',
+  'collSettings.fields.label': 'Fields',
   'collSettings.groups.addField': '+ Field',
   'collSettings.groups.orderBy': 'Order by',
   'collSettings.groups.orderByAria': 'Order the items in {name} by',
@@ -710,6 +716,8 @@ export const en = {
   'fieldType.text': 'text',
   'fieldType.number': 'number',
   'fieldType.date': 'date',
+  'fieldScope.item': 'per item',
+  'fieldScope.copy': 'per copy',
 
   // --- first-run setup wizard --------------------------------------------
   'setup.brandSub': 'First-run setup',
@@ -959,6 +967,7 @@ export const en = {
   'itemForm.unsaved': 'Unsaved changes',
   'itemForm.leaveConfirm': 'This item has changes you have not saved. Leave anyway?',
   'itemForm.copyAcquiredAria': 'Date copy #{n} was acquired',
+  'itemForm.copyFieldAria': '{name} of copy #{n}',
 
   // --- CSV import ----------------------------------------------------------
   // The format is the item table, so the column names are the table's own
@@ -1020,6 +1029,8 @@ export const en = {
   'csvImport.importing': 'Importing…',
   'csvImport.error.noNameColumn':
     'This file has no Name column. The first line has to be the headings.',
+  'csvImport.error.copyScopedColumn':
+    'Column “{name}” names a per-copy field. The table has one row per item, so its values were not imported.',
   'csvImport.error.noName': 'This row has no name.',
   'csvImport.error.tooManyRows': 'More than {max} rows at once — split the file and import it in parts.',
   'csvImport.error.tooManyCopies': 'More than {max} copies on one row.',

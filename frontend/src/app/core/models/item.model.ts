@@ -25,6 +25,16 @@ export interface ItemCopy {
   acquiredOn: string | null;
   status: CopyStatus;
   notes: string;
+  /**
+   * Values for the fields declared with scope `copy`, keyed by field name
+   * exactly as an item's own `custom` is.
+   *
+   * This is what tells two otherwise identical copies apart — a slab number, a
+   * signature, a shelf. The item-level list structurally cannot: it holds one
+   * value where the collector has several, so the second copy's number could
+   * only ever overwrite the first's.
+   */
+  custom: CustomFieldValue[];
 }
 
 export interface Item {

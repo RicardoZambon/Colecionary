@@ -160,6 +160,7 @@ function collection(patch: Partial<Collection> = {}): Collection {
     id: 'c1',
     name: 'Vinyl',
     description: '',
+    fields: [],
     groups: [],
     sections: [],
     items: [],

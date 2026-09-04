@@ -9,7 +9,7 @@ import {
   Item,
   Section,
 } from '../../../../core/models';
-import { fieldsFor, flattenTree, resolveGroupId } from '../../../../core/utils/groups.util';
+import { fieldsFor, flattenTree, itemFields, resolveGroupId } from '../../../../core/utils/groups.util';
 import { sectionsOf } from '../../../../core/utils/sections.util';
 import { fieldValue } from '../../../../core/utils/sort.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
@@ -87,6 +87,13 @@ export class BulkBar {
    */
   readonly items = input.required<Item[]>();
   readonly groups = input.required<GroupNode[]>();
+  /**
+   * The collection's own field declarations. An input rather than a store read
+   * for the reason every presentational child here takes one: injecting the
+   * store into a leaf drags `VaultApi` into the TestBed of everything that
+   * renders it.
+   */
+  readonly collectionFields = input.required<GroupField[]>();
   readonly sections = input.required<Section[]>();
 
   /**
@@ -146,9 +153,20 @@ export class BulkBar {
    * one group, and guessing a union would offer a control whose value
    * `item-form-page` would later drop from half the items as undeclared. The
    * group row directly above is the way out of it.
+   *
+   * Narrowed to item scope. A bulk apply writes one value to every selected
+   * item, and a copy-scoped field has no item-level value to write — offering
+   * one would ask for a number and then quietly put it nowhere. Copy values are
+   * edited on the copy, which is the only place there is one of them per
+   * exemplar.
    */
   protected readonly fields = computed<GroupField[]>(() =>
-    fieldsFor(this.groups(), this.destinationGroupId()),
+    itemFields(
+      fieldsFor(
+        { fields: this.collectionFields(), groups: this.groups() },
+        this.destinationGroupId(),
+      ),
+    ),
   );
 
   protected readonly groupOptions = computed<SelectOption[]>(() => [

@@ -12,6 +12,7 @@ function copy(patch: Partial<ItemCopy> = {}): ItemCopy {
     acquiredOn: null,
     status: 'Keep',
     notes: '',
+    custom: [],
     ...patch,
   };
 }

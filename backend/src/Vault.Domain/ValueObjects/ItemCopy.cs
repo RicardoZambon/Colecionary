@@ -23,4 +23,13 @@ public class ItemCopy
     public CopyStatus Status { get; set; } = CopyStatus.Keep;
 
     public string Notes { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Values for the fields declared with <see cref="FieldScope.Copy"/>, keyed
+    /// by field name exactly as an item's own <c>Custom</c> list is. This is what tells
+    /// two otherwise identical copies apart — a slab number, a signature, a
+    /// shelf — which the item-level list structurally cannot: it has one value
+    /// where the collector has several.
+    /// </summary>
+    public List<CustomFieldValue> Custom { get; set; } = [];
 }

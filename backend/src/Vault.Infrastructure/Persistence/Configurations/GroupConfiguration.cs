@@ -30,6 +30,11 @@ public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
             // Without the string conversion the type is written as an integer,
             // which neither the backfill nor the string-enum contract expects.
             fields.Property(f => f.Type).HasConversion<string>().HasJsonPropertyName("Type");
+            // Absent from every document written before scopes existed, which
+            // EF materialises as the CLR default — FieldScope.Item, i.e. exactly
+            // what those fields have always been. That is why the backfill for
+            // this one is nothing at all.
+            fields.Property(f => f.Scope).HasConversion<string>().HasJsonPropertyName("Scope");
         });
     }
 }

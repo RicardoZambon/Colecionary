@@ -8,7 +8,7 @@ import { isReportedWriteFailure } from '../../../core/api/vault-api';
 import { ConfirmService } from '../../../core/state/confirm.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
-import { CopyStatus, Item } from '../../../core/models';
+import { CopyStatus, CustomFieldValue, GroupField, Item } from '../../../core/models';
 import { NO_FILTERS, Neighbours, neighbours, visibleItems } from '../../../core/utils/browse.util';
 import {
   copyValue,
@@ -22,8 +22,9 @@ import {
   valueIsPaid,
 } from '../../../core/utils/copies.util';
 import { formatDate } from '../../../core/utils/date.util';
+import { formatFieldValue } from '../../../core/utils/field-format.util';
 import { editableTags } from '../../../core/utils/tags.util';
-import { fieldsFor, groupById, pathOf } from '../../../core/utils/groups.util';
+import { copyFields, fieldsFor, groupById, itemFields, pathOf } from '../../../core/utils/groups.util';
 import { readCriteria } from '../browse-params';
 import { formatMoney } from '../../../core/utils/money.util';
 import { conditionLabelKey, conditionTone, itemBadgeLabel, itemTone } from '../../../shared/ui/badge/badge';
@@ -48,6 +49,22 @@ const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
   ForTrade: 'copyStatus.forTrade',
   ForSale: 'copyStatus.forSale',
 };
+
+
+/**
+ * One field's value as this page draws it: formatted by its declared type, and
+ * an em dash where there is none.
+ *
+ * Takes the value list rather than the record that holds it, because an item
+ * and a copy carry the same shape and the same rule — the only difference is
+ * which of them the value describes. Formatting goes through the same
+ * `formatFieldValue` the table uses, so a date field does not read `2024-03-11`
+ * here and `11/03/2024` one screen away.
+ */
+function fieldRow(values: CustomFieldValue[], field: GroupField, locale: string): string {
+  const raw = values.find(entry => entry.key === field.name)?.value ?? '';
+  return formatFieldValue(raw, field.type, locale) || '—';
+}
 
 @Component({
   selector: 'app-item-page',
@@ -159,7 +176,7 @@ export class ItemPage {
     if (!collection) return [];
     return visibleItems(
       collection.items,
-      collection.groups,
+      collection,
       readCriteria(
         {
           s: this.s(),
@@ -192,7 +209,7 @@ export class ItemPage {
     if (!collection) return inList;
     const canonical = visibleItems(
       collection.items,
-      collection.groups,
+      collection,
       { groupId: this.g() ?? null, ...NO_FILTERS },
       // The sections still apply: dropping the filters must not also reshuffle
       // the fallback order, or the arrows would step through a sequence the
@@ -285,8 +302,17 @@ export class ItemPage {
   protected readonly copyRows = computed(() => {
     const item = this.item();
     if (!item) return [];
+    const declared = copyFields(this.declaredFields());
     return item.copies.map(copy => ({
       ...copy,
+      // Only the declared ones, in the declared order: a value whose field a
+      // move or a rename left undeclared is dormant, not deleted, and showing
+      // it here would contradict the group-move preview that promised it would
+      // stop being displayed.
+      fields: declared.map(field => ({
+        key: field.name,
+        value: fieldRow(copy.custom, field, this.i18n.locale()),
+      })),
       tone: conditionTone(copy.condition),
       conditionKey: conditionLabelKey(copy.condition),
       value: copyValue(item, copy),
@@ -350,13 +376,19 @@ export class ItemPage {
     return path.length ? path.join(' / ') : item.groupId;
   });
 
-  protected readonly groupFieldRows = computed(() => {
+  /** The whole field set in force for this item — both scopes, merged once. */
+  private readonly declaredFields = computed(() => {
     const collection = this.collection();
     const item = this.item();
-    if (!collection || !item) return [];
-    return fieldsFor(collection.groups, item.groupId).map(field => ({
+    return collection && item ? fieldsFor(collection, item.groupId) : [];
+  });
+
+  protected readonly groupFieldRows = computed(() => {
+    const item = this.item();
+    if (!item) return [];
+    return itemFields(this.declaredFields()).map(field => ({
       key: field.name,
-      value: item.custom.find(c => c.key === field.name)?.value || '—',
+      value: fieldRow(item.custom, field, this.i18n.locale()),
     }));
   });
 

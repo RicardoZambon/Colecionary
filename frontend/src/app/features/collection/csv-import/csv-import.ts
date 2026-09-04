@@ -548,7 +548,21 @@ export function planCsvImport(
   const sectionColumn = by('section');
   const tagsColumn = by('tags');
   const descriptionColumn = by('description');
-  const fieldColumns = columns.filter(column => column.role === 'field');
+  // A column naming a field somebody declared *per copy* is refused rather than
+  // imported. The item table has one row per item, so it carries one value where
+  // that field has one per exemplar — and the name is the field's identity, so
+  // writing the value to `item.custom` instead would not be a near miss: it
+  // would put data under a name nothing reads, on the screen that shows the
+  // copies. Refused collection-wide, not per destination, because a name that
+  // means "per copy" in one group cannot quietly mean "per item" in the next.
+  const copyScopedNames = new Set(
+    [collection.fields, ...collection.groups.map(group => group.fields)]
+      .flat()
+      .filter(field => field.scope === 'copy')
+      .map(field => field.name),
+  );
+  const declaredColumns = columns.filter(column => column.role === 'field');
+  const fieldColumns = declaredColumns.filter(column => !copyScopedNames.has(column.field!));
 
   // Name → the item that answers to it, per group, so a duplicate is one lookup
   // rather than a scan per row. Rows planned in this run join it, so a file
@@ -560,6 +574,15 @@ export function planCsvImport(
   }
 
   const issues: CsvImportIssue[] = [];
+  // On the header line, because that is where the mistake is: the column is
+  // wrong for every row at once, and one issue per row would bury the rest.
+  for (const column of declaredColumns.filter(c => copyScopedNames.has(c.field!))) {
+    issues.push({
+      line: header.line,
+      key: 'csvImport.error.copyScopedColumn',
+      params: { name: column.field! },
+    });
+  }
   const rows: PlannedRow[] = [];
   const fieldValues = new Map<string, string[]>();
   const thisYear = new Date().getFullYear();
@@ -730,7 +753,7 @@ export function planCsvImport(
     rows,
     issues,
     newGroups,
-    newFields: planFields(groups, rows, fieldColumns, fieldValues, options.scopeId),
+    newFields: planFields(collection.fields, groups, rows, fieldColumns, fieldValues, options.scopeId),
     created: rows.filter(row => row.outcome === 'create').length,
     updated: rows.filter(row => row.outcome === 'update').length,
     skipped: rows.filter(row => row.outcome === 'skip').length,
@@ -760,6 +783,9 @@ function matchSection(sections: readonly Section[], groupId: string, raw: string
  * so an undeclared column would import perfectly and appear nowhere — the worse
  * of the two failures, because nothing on screen would say the data is there.
  *
+ * A field the collection declares for the whole of itself counts as declared
+ * everywhere, so a column matching one is imported and nothing is added.
+ *
  * The declaration goes on the **scope group** when the import is scoped to one:
  * `fieldsFor` merges down the ancestor path, so one declaration covers every
  * destination inside it and forty sibling groups do not each grow a copy of the
@@ -769,6 +795,7 @@ function matchSection(sections: readonly Section[], groupId: string, raw: string
  * there to hold one.
  */
 function planFields(
+  collectionFields: readonly GroupField[],
   groups: readonly GroupNode[],
   rows: readonly PlannedRow[],
   fieldColumns: readonly ResolvedColumn[],
@@ -786,12 +813,20 @@ function planFields(
   const tree = [...groups];
   const out: { groupId: string; field: GroupField }[] = [];
   for (const groupId of targets) {
-    const declared = new Set(fieldsFor(tree, groupId).map(field => field.name));
+    const declared = new Set(
+      fieldsFor({ fields: [...collectionFields], groups: tree }, groupId).map(f => f.name),
+    );
     for (const column of fieldColumns) {
       const name = column.field!;
       if (declared.has(name)) continue;
       declared.add(name);
-      out.push({ groupId, field: { name, type: inferFieldType(values.get(name) ?? []) } });
+      // Item scope: the file is the item table, and a column of it describes
+      // the item. A copy-scoped column never reaches here — it was refused at
+      // the header — so this is not a guess, it is the only thing it can be.
+      out.push({
+        groupId,
+        field: { name, type: inferFieldType(values.get(name) ?? []), scope: 'item' },
+      });
     }
   }
   return out;

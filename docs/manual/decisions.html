@@ -727,6 +727,36 @@
   </dl></div>
 </details>
 
+<details>
+  <summary><span class="id">ADR-69</span> Um campo é declarado ou pela coleção ou por um grupo, e o nome é a identidade</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Campos só podiam ser declarados por um grupo. Grupos são uma taxonomia — o que a coisa <em>é</em> — e um campo que descreve a coleção inteira não tem casa taxonômica: onde a peça está guardada, de quem veio, quanto custou o frete. Na prática o campo era redeclarado em cada grupo raiz, e um grupo criado depois simplesmente não o tinha, sem nada na tela dizendo por quê.</dd>
+    <dt>Decisão</dt><dd>A coleção passa a declarar campos próprios (<code>Collection.Fields</code>), na <em>mesma</em> forma de <code>GroupField</code>. <code>fieldsFor</code> mescla os da coleção primeiro e os do caminho de ancestrais depois, de modo que a coleção é o ancestral mais externo de todo grupo. Um nome redeclarado mais fundo substitui o anterior por inteiro — tipo <em>e</em> escopo — mas mantém a posição do primeiro. Nomes precisam ser únicos <strong>dentro</strong> de uma declaração e nunca entre declarações: sobrescrever um campo herdado é justamente o que declarar mais fundo significa.</dd>
+    <dt>Consequência</dt><dd>Declarar uma vez cobre a coleção inteira, inclusive os grupos que ainda não existem — que era o caso que falhava em silêncio. A mesma regra de mesclagem, o mesmo validador e o mesmo editor servem aos dois, então o que um grupo pode declarar a coleção também pode. O custo é que o nome vira identidade de verdade: dois campos homônimos em escopos diferentes não coexistem, e o mais fundo vence. <code>fieldsFor</code> passou a receber <code>{ fields, groups }</code> em vez de só os grupos — obrigatório, não opcional, para que o compilador aponte cada chamada em vez de uma tela esquecer os campos da coleção em silêncio.</dd>
+    <dt>Imposta por</dt><dd><code>groups.util.spec.ts</code>, <code>ValidatorTests.CollectionValidator_LetsAGroupRedeclareACollectionWideName</code> e <code>ContractTests.Collection_CarriesFieldsOfBothScopes_ThroughAFullRoundTrip</code></dd>
+  </dl></div>
+</details>
+
+<details>
+  <summary><span class="id">ADR-70</span> O escopo de um campo diz qual registro guarda o valor, e trocá-lo não move nada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Valores de campo viviam só no item. Um item, porém, possui exemplares (<code>copies</code>), e há fatos que pertencem ao objeto físico e não ao catálogo: o número do lacre da slab, uma assinatura, a prateleira, o estado da caixa. Guardá-los no item significava um valor onde o colecionador tem vários — o segundo exemplar só podia sobrescrever o primeiro.</dd>
+    <dt>Decisão</dt><dd><code>GroupField</code> ganha <code>scope</code> (<code>item</code> | <code>copy</code>), ortogonal a quem declara: coleção e grupo declaram campos de qualquer escopo. Um valor <code>item</code> continua em <code>Item.Custom</code>; um valor <code>copy</code> vai para <code>ItemCopy.Custom</code>, aninhado um nível mais fundo <em>dentro</em> do documento JSON <code>Items.Copies</code> que já existia. <strong>Trocar o escopo não move valor nenhum</strong>: eles ficam onde estão, dormentes exatamente como quando um campo é removido, e voltam a aparecer se o escopo voltar.</dd>
+    <dt>Consequência</dt><dd>Dois exemplares do mesmo item passam a se distinguir por dados, não só por condição e preço — e a busca encontra o item por algo que só um exemplar carrega, porque <code>matchesQuery</code> lê os dois. Em troca, um campo por exemplar <strong>não ordena e não vira coluna</strong>: uma lista ordena itens, e um item não tem <em>um</em> valor desses. <code>sortByOptions</code> e <code>sortChoices</code> filtram para escopo de item, e remover um campo ou passá-lo para <code>copy</code> apaga qualquer <code>sort</code> que apontasse para ele — sem isso <code>keyOf</code> não falharia, apenas classificaria todo item como sem valor e reordenaria o grupo alfabeticamente, em silêncio. Pelo mesmo motivo o CSV recusa uma coluna com esse nome: a tabela tem uma linha por item. Adivinhar a qual exemplar pertencia um valor de item não é um palpite que o app tem o direito de dar, e espalhá-lo por todos inventaria dado.</dd>
+    <dt>Imposta por</dt><dd><code>sort.util.spec.ts</code>, <code>csv-import.spec.ts</code>, <code>ItemCopyJsonShapeTests.CopyCustomValues_LiveInsideTheCopiesDocument</code> e <code>DtoMapperTests.ACopysOwnValuesRoundTrip</code></dd>
+  </dl></div>
+</details>
+
+<details>
+  <summary><span class="id">ADR-71</span> Ausência em JSON aninhado não é o default do CLR — toda propriedade nova dentro de um documento existente pede backfill</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A #14 acrescentou duas propriedades dentro de documentos JSON que já existiam: <code>Scope</code> em <code>Groups.Fields</code> e <code>Custom</code> em cada cópia de <code>Items.Copies</code>. Não fez backfill, no raciocínio de que um documento antigo apenas não tem a propriedade e o EF materializa a ausência como o default do CLR. Isso vale para um <strong>escalar</strong> e não vale para uma <strong>coleção owned aninhada</strong>: sem o array, o EF lança <code>NullReferenceException</code> montando o item, e <code>GET /api/collections</code> passa a responder 500 para o vault inteiro. O defeito não apareceu em nenhuma das duas suítes porque toda linha que elas escrevem é escrita pelo código atual, que sempre emite a chave — só um vault que já estava rodando tinha a forma antiga.</dd>
+    <dt>Decisão</dt><dd>Uma propriedade nova dentro de um documento JSON existente é backfillada, mesmo quando o valor parece ser “o default”. E o teste que a acompanha não escreve a forma antiga à mão: <code>LegacyRowCompatibilityTests</code> <strong>migra um passo para trás</strong> — o <code>Down()</code> da própria migration é o que produz a forma antiga — prende a falha, migra para frente e prende a leitura.</dd>
+    <dt>Consequência</dt><dd>O custo é uma migration a mais e uma reescrita que toca todo item com cópias; a #15 é guardada por <code>EXISTS</code>, então rodar de novo é no-op, e a ordem do array é preservada explicitamente porque <code>STRING_AGG</code> não tem ordenação própria e a posição de uma cópia é o que as telas renderizam. Em troca, a classe inteira de defeito passa a ter um teste que a vê: nenhuma suíte que só escreve com o código de hoje consegue observar o que o código de ontem deixou no disco. <code>Collections.Fields</code>, sendo coleção de topo, continua lendo NULL como lista vazia — a assimetria entre os dois é justamente o que torna a regra necessária.</dd>
+    <dt>Imposta por</dt><dd><code>LegacyRowCompatibilityTests</code></dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

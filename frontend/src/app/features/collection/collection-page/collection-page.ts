@@ -23,6 +23,7 @@ import {
 import {
   childrenOf,
   fieldsFor,
+  itemFields,
   groupById,
   pathOf,
   sortFor,
@@ -261,6 +262,13 @@ export class CollectionPage {
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
   protected readonly groups = computed(() => this.collection()?.groups ?? []);
+  /** The collection's own field declarations — the outermost ancestor of every group. */
+  protected readonly collectionFields = computed(() => this.collection()?.fields ?? []);
+  /** Everything `fieldsFor` needs, in one object, so no caller can pass half of it. */
+  protected readonly declarations = computed(() => ({
+    fields: this.collectionFields(),
+    groups: this.groups(),
+  }));
   protected readonly sections = computed(() => this.collection()?.sections ?? []);
   /** The dividers of the group actually open — the only ones that ever apply. */
   protected readonly groupSections = computed(() =>
@@ -370,8 +378,19 @@ export class CollectionPage {
     });
   });
 
-  /** Custom fields available in the current group, own plus inherited. */
-  protected readonly groupFields = computed(() => fieldsFor(this.groups(), this.g() ?? null));
+  /**
+   * Custom fields in force for the current group: the collection's own, plus
+   * every ancestor's, plus the group's.
+   *
+   * Narrowed to item scope, because every consumer of it is a view of *items* —
+   * the table's columns, the sort picker, the CSV dialog's headings. A
+   * copy-scoped field has no one value an item row could show, so a column for
+   * it would be blank on every line. It is edited and read on the copy, on the
+   * item form and the item page.
+   */
+  protected readonly groupFields = computed(() =>
+    itemFields(fieldsFor(this.declarations(), this.g() ?? null)),
+  );
 
   /** `''` for the collection root and the unfiled bucket — neither is a group. */
   protected readonly groupKey = computed(() =>
@@ -435,7 +454,7 @@ export class CollectionPage {
   }));
 
   protected readonly items = computed(() =>
-    visibleItems(this.sourceItems(), this.groups(), this.criteria(), this.sections()),
+    visibleItems(this.sourceItems(), this.declarations(), this.criteria(), this.sections()),
   );
 
   /**

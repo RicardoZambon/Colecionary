@@ -545,9 +545,15 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.groups.fields': 'Campos',
   'collSettings.groups.removeField': 'Remover o campo {name}',
   'collSettings.groups.fieldTypeAria': 'Tipo do campo {name}',
+  'collSettings.groups.fieldScopeAria': 'O que o campo {name} descreve',
   'collSettings.groups.fieldPlaceholder': 'Nome do campo… (Enter)',
   'collSettings.groups.fieldAria': 'Nome do novo campo',
   'collSettings.groups.newFieldTypeAria': 'Tipo do novo campo',
+  'collSettings.groups.newFieldScopeAria': 'O que o novo campo descreve',
+  'collSettings.fields.heading': 'Coleção inteira',
+  'collSettings.fields.hint':
+    'Campos que todo item tem, esteja em qual grupo estiver. Um grupo pode redeclarar um deles para sobrescrevê-lo.',
+  'collSettings.fields.label': 'Campos',
   'collSettings.groups.addField': '+ Campo',
   'collSettings.groups.orderBy': 'Ordenar por',
   'collSettings.groups.orderByAria': 'Ordenar os itens de {name} por',
@@ -657,6 +663,8 @@ export const ptBR: Record<MessageKey, string> = {
   'fieldType.text': 'texto',
   'fieldType.number': 'número',
   'fieldType.date': 'data',
+  'fieldScope.item': 'por item',
+  'fieldScope.copy': 'por exemplar',
 
   // --- first-run setup wizard --------------------------------------------
   'setup.brandSub': 'Configuração inicial',
@@ -892,6 +900,7 @@ export const ptBR: Record<MessageKey, string> = {
   'itemForm.unsaved': 'Alterações não salvas',
   'itemForm.leaveConfirm': 'Este item tem alterações que você não salvou. Sair mesmo assim?',
   'itemForm.copyAcquiredAria': 'Data de aquisição da cópia nº {n}',
+  'itemForm.copyFieldAria': '{name} da cópia nº {n}',
 
   // --- importação por CSV ---------------------------------------------------
   'csvImport.open': 'Importar',
@@ -951,6 +960,8 @@ export const ptBR: Record<MessageKey, string> = {
   'csvImport.importing': 'Importando…',
   'csvImport.error.noNameColumn':
     'Este arquivo não tem coluna Nome. A primeira linha precisa ser a dos títulos.',
+  'csvImport.error.copyScopedColumn':
+    'A coluna “{name}” é de um campo por exemplar. A tabela tem uma linha por item, então os valores dela não foram importados.',
   'csvImport.error.noName': 'Esta linha está sem nome.',
   'csvImport.error.tooManyRows': 'Mais de {max} linhas de uma vez — divida o arquivo e importe em partes.',
   'csvImport.error.tooManyCopies': 'Mais de {max} exemplares em uma linha só.',
