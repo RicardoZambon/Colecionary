@@ -16,7 +16,7 @@
 <p class="eyebrow">10 · Operação</p>
 <h1>Testes e as garantias que eles prendem</h1>
 <p class="lede">
-  208 testes unitários e 120 de integração no backend, em duas suítes, e 871
+  208 testes unitários e 121 de integração no backend, em duas suítes, e 871
   testes em 67 specs no frontend. O que importa aqui não é a contagem: é
   <strong>qual invariante cada teste prende</strong> — porque quase toda
   regressão perigosa deste sistema deixa a outra suíte inteiramente verde. E há
@@ -251,6 +251,17 @@ npm test -- --watch=false</code></pre>
           declarações que nunca somem — ou o valor de uma cópia sobrescrevendo o
           da outra, que é o defeito que o escopo por exemplar existe para
           consertar</td>
+    </tr>
+    <tr>
+      <td>Um vault gravado <strong>antes</strong> dos campos por exemplar continua
+          legível — e a ordem das cópias sobrevive à reescrita</td>
+      <td><span class="tag danger">crítico</span>
+          <code>LegacyRowCompatibilityTests</code></td>
+      <td>Exatamente o 500 que já aconteceu. Uma coleção owned <em>aninhada</em>
+          cuja chave falta não vira lista vazia: o EF lança e toda leitura do
+          grafo falha. O teste migra um passo para trás — que é como se produz a
+          forma antiga —, prende a falha, migra para frente e prende a leitura,
+          dirigindo as migrations de verdade e não uma cópia do SQL delas</td>
     </tr>
     <tr>
       <td>Toda coluna com forma de GUID é classificada</td>

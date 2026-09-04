@@ -695,24 +695,42 @@
     <tr><td>11</td><td class="nowrap"><code>AddImageUnreferencedSince</code></td><td><code>UnreferencedSinceUtc</code> — o relógio da carência do coletor</td></tr>
     <tr><td>12</td><td class="nowrap"><code>AddCollectionVersion</code></td><td><code>Collections.Version</code>, começando em 1 nas linhas existentes</td></tr>
     <tr><td>13</td><td class="nowrap"><code>AddSections</code></td><td><code>Catalog.Sections</code> e <code>Items.SectionId</code> (<code>nvarchar(64)</code>, default <code>''</code>)</td></tr>
-    <tr><td>14</td><td class="nowrap"><code>AddFieldScopesAndCollectionFields</code></td><td><code>Collections.Fields</code> (<code>nvarchar(max)</code>, anulável). Uma coluna e <strong>nenhum backfill</strong> — veja abaixo</td></tr>
+    <tr><td>14</td><td class="nowrap"><code>AddFieldScopesAndCollectionFields</code></td><td><code>Collections.Fields</code> (<code>nvarchar(max)</code>, anulável). Uma coluna e nenhum backfill — <strong>e faltava um</strong>; veja abaixo</td></tr>
+    <tr><td>15</td><td class="nowrap"><code>BackfillCopyCustomJson</code></td><td>Escreve <code>"Custom": []</code> em toda cópia de todo <code>Items.Copies</code> que ainda não tem a chave. Guardada por <code>EXISTS</code>, então rodar de novo é no-op</td></tr>
   </tbody>
 </table>
 </div>
 
-<div class="callout plain">
-  <span class="label">Migration 14 e o backfill que não existe</span>
+<div class="callout warn">
+  <span class="label">Migration 14, o backfill que faltou, e o 500 que ele causou</span>
   <p>
-    Duas das três mudanças de modelo não pedem DDL nenhum: o <code>Scope</code> de
-    um campo mora dentro do documento que <code>Groups.Fields</code> já é, e o
-    <code>Custom</code> de uma cópia dentro de <code>Items.Copies</code>. Um
-    documento escrito antes simplesmente não tem a propriedade, e o EF materializa
-    essa ausência como o default do CLR — <code>FieldScope.Item</code> e lista
-    vazia. <strong>É exatamente o que aquelas linhas sempre quiseram dizer</strong>,
-    então reescrever todos os documentos para dizê-lo explicitamente tocaria todo
-    item de todo vault para não mudar nada. Compare com a #4, que precisou de
-    backfill de verdade porque a forma antiga (<code>["Número"]</code>) e a nova
-    não coincidem em leitura nenhuma.
+    A #14 partiu de um raciocínio que vale para uma das duas propriedades novas e
+    não para a outra. O <code>Scope</code> de um campo é um <em>escalar</em> dentro
+    de um documento JSON: ausente, o EF materializa o default do CLR
+    (<code>FieldScope.Item</code>), que é exatamente o que aquelas linhas sempre
+    quiseram dizer. O <code>Custom</code> de uma cópia <strong>não</strong>: uma
+    cópia é uma entidade owned <em>aninhada</em> dentro do documento
+    <code>Copies</code>, e quando o array dela falta o EF lança
+    <code>NullReferenceException</code> ao montar o item. Não é um valor errado num
+    campo — é toda leitura do grafo da coleção falhando, ou seja
+    <code>GET /api/collections</code> respondendo 500 para o vault inteiro.
+  </p>
+  <p>
+    Nenhuma suíte viu isso porque <strong>toda linha que os testes escrevem é
+    escrita pelo código atual</strong>, que sempre emite a chave; só um vault que
+    já estava rodando tinha documentos na forma antiga. A #15 escreve a chave que
+    falta, e <code>LegacyRowCompatibilityTests</code> é o teste cuja ausência
+    deixou isso passar: ele migra um passo para trás — que é precisamente como se
+    produz a forma antiga —, prende o 500, migra para frente e prende a leitura.
+    Rodar a migration real, e não uma cópia do SQL dela, é o que faz esse teste
+    valer alguma coisa.
+  </p>
+  <p>
+    A lição generaliza: <em>ausência em JSON aninhado não é o default do CLR</em>.
+    Compare com a #4, que precisou de backfill de verdade porque a forma antiga
+    (<code>["Número"]</code>) e a nova não coincidem em leitura nenhuma — e note
+    que <code>Collections.Fields</code>, sendo coleção de <em>topo</em>, lê NULL
+    como lista vazia sem problema algum.
   </p>
 </div>
 

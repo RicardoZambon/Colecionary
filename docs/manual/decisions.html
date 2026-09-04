@@ -747,6 +747,16 @@
   </dl></div>
 </details>
 
+<details>
+  <summary><span class="id">ADR-71</span> Ausência em JSON aninhado não é o default do CLR — toda propriedade nova dentro de um documento existente pede backfill</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A #14 acrescentou duas propriedades dentro de documentos JSON que já existiam: <code>Scope</code> em <code>Groups.Fields</code> e <code>Custom</code> em cada cópia de <code>Items.Copies</code>. Não fez backfill, no raciocínio de que um documento antigo apenas não tem a propriedade e o EF materializa a ausência como o default do CLR. Isso vale para um <strong>escalar</strong> e não vale para uma <strong>coleção owned aninhada</strong>: sem o array, o EF lança <code>NullReferenceException</code> montando o item, e <code>GET /api/collections</code> passa a responder 500 para o vault inteiro. O defeito não apareceu em nenhuma das duas suítes porque toda linha que elas escrevem é escrita pelo código atual, que sempre emite a chave — só um vault que já estava rodando tinha a forma antiga.</dd>
+    <dt>Decisão</dt><dd>Uma propriedade nova dentro de um documento JSON existente é backfillada, mesmo quando o valor parece ser “o default”. E o teste que a acompanha não escreve a forma antiga à mão: <code>LegacyRowCompatibilityTests</code> <strong>migra um passo para trás</strong> — o <code>Down()</code> da própria migration é o que produz a forma antiga — prende a falha, migra para frente e prende a leitura.</dd>
+    <dt>Consequência</dt><dd>O custo é uma migration a mais e uma reescrita que toca todo item com cópias; a #15 é guardada por <code>EXISTS</code>, então rodar de novo é no-op, e a ordem do array é preservada explicitamente porque <code>STRING_AGG</code> não tem ordenação própria e a posição de uma cópia é o que as telas renderizam. Em troca, a classe inteira de defeito passa a ter um teste que a vê: nenhuma suíte que só escreve com o código de hoje consegue observar o que o código de ontem deixou no disco. <code>Collections.Fields</code>, sendo coleção de topo, continua lendo NULL como lista vazia — a assimetria entre os dois é justamente o que torna a regra necessária.</dd>
+    <dt>Imposta por</dt><dd><code>LegacyRowCompatibilityTests</code></dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

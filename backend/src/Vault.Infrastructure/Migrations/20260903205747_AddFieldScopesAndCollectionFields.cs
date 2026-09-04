@@ -5,18 +5,25 @@
 namespace Vault.Infrastructure.Migrations
 {
     /// <summary>
-    /// One column, and deliberately no backfill.
+    /// One column, and no backfill — which was half right, and the wrong half
+    /// shipped a 500. See <see cref="BackfillCopyCustomJson"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Two of the three model changes need no DDL at all. A field's new
-    /// <c>Scope</c> lives inside the JSON document that <c>Groups.Fields</c>
-    /// already is, and a copy's <c>Custom</c> inside <c>Items.Copies</c>; a
-    /// document written before either existed simply lacks the property, which
-    /// EF materialises as the CLR default — <c>FieldScope.Item</c> and an empty
-    /// list. Those defaults are exactly what those rows have always meant, so
-    /// rewriting the documents to say so explicitly would touch every item in
-    /// every vault to change nothing.
+    /// Two of the three model changes need no DDL. A field's new <c>Scope</c>
+    /// lives inside the JSON document that <c>Groups.Fields</c> already is, and
+    /// a copy's <c>Custom</c> inside <c>Items.Copies</c>.
+    /// </para>
+    /// <para>
+    /// <b>The reasoning held for one of them and not the other.</b> An absent
+    /// <c>Scope</c> does materialise as <c>FieldScope.Item</c>, because it is a
+    /// scalar. An absent <c>Custom</c> does <em>not</em> materialise as an empty
+    /// list: a copy is an owned entity nested inside the <c>Copies</c> document,
+    /// and EF throws a <c>NullReferenceException</c> building the item, which
+    /// fails every read of the collection graph. This migration is left as it
+    /// was applied — <c>BackfillCopyCustomJson</c> writes the missing key, and
+    /// <c>LegacyRowCompatibilityTests</c> is the test whose absence let this
+    /// through.
     /// </para>
     /// <para>
     /// <c>Collections.Fields</c> is nullable rather than defaulted to

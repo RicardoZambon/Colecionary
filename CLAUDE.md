@@ -103,6 +103,13 @@ Full detail in [`backend/README.md`](backend/README.md).
    `TableNamingConventionTests` fails the build otherwise. Migrations predating
    `UseSchemaQualifiedPascalCaseNames` keep their old lowercase names; never
    retro-edit an applied migration.
+   **A property added inside an existing JSON document needs a backfill**, even
+   when its value looks like the default. An absent *scalar* materialises as the
+   CLR default; an absent *nested owned collection* makes EF throw, and every
+   read of the aggregate fails with it (ADR-71 — this shipped a 500). Test it by
+   migrating one step **down**, which is what produces the old shape, never by
+   writing that shape by hand: every row a suite writes is written by today's
+   code, so no suite can otherwise see what yesterday's left on disk.
 8. **Image bytes live in `IImageStore`, never in the database.** The `Images`
    row is metadata only (id → tenant, content type). `FileSystemImageStore`
    writes `{ImageStorage:Root}/{tenantId}/{imageId}.{ext}` — **one directory per
