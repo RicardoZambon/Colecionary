@@ -55,12 +55,19 @@ const CSV = [
   'Shura Capricornio;Cavaleiros de Prata;2006;0;Quero;—',
 ].join('\n');
 
-function mount(opts: { scopeId?: string; scopeName?: string; saving?: boolean } = {}) {
+function mount(
+  opts: {
+    scopeId?: string;
+    scopeName?: string;
+    saving?: boolean;
+    collection?: Collection;
+  } = {},
+) {
   TestBed.configureTestingModule({});
   TestBed.inject(I18nService).apply('en');
 
   const fixture = TestBed.createComponent(CsvImportDialog);
-  fixture.componentRef.setInput('collection', COLLECTION);
+  fixture.componentRef.setInput('collection', opts.collection ?? COLLECTION);
   fixture.componentRef.setInput('scopeId', opts.scopeId ?? '');
   fixture.componentRef.setInput('scopeName', opts.scopeName ?? '');
   fixture.componentRef.setInput('saving', opts.saving ?? false);
@@ -127,6 +134,22 @@ describe('CsvImportDialog', () => {
     expect(rows[1][3]).toBe('Leave alone');
     expect(rows[2][2]).toContain('Cavaleiros de Prata');
     expect(rows[2][2]).toContain('new group');
+  });
+
+  // The destination cell is the whole preview: a `Grupo` cell may address a
+  // divider (see `resolveDestination`), and a cell that printed only the group
+  // would describe a different write than the button emits.
+  it('names the divider a row lands under, not only its group', () => {
+    const sectioned: Collection = {
+      ...COLLECTION,
+      sections: [{ id: 's1', groupId: 'ouro', name: 'Primeira série', target: null }],
+    };
+    const page = mount({ collection: sectioned });
+    page.paste('Nome;Grupo\nAldebaran;Cavaleiros de Ouro / Primeira série');
+    const cell = page.all('tbody tr td')[2];
+    expect(cell).toContain('Cavaleiros de Ouro');
+    expect(cell).toContain('Primeira série');
+    expect(cell).not.toContain('new group');
   });
 
   it('emits exactly the plan it drew', () => {

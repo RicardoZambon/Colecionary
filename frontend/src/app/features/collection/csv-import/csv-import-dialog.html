@@ -134,6 +134,13 @@
                 <td>{{ row.item.name }}</td>
                 <td>
                   {{ row.groupPath }}
+                  <!-- The divider, when the destination has one. Spelled out
+                       because the `Grupo` column can reach a section by name,
+                       and a preview that showed only the group would be
+                       describing a different write than the one it emits. -->
+                  @if (row.sectionName) {
+                    <span class="section">&rsaquo; {{ row.sectionName }}</span>
+                  }
                   @if (row.newGroup) {
                     <span class="mark">{{ 'csvImport.newGroupMark' | t }}</span>
                   }

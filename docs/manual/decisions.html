@@ -727,6 +727,16 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-69</span> O último nível de um caminho de grupo pode ser uma seção</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Uma seção não é um nível da árvore (ela ordena, não escopa — <a href="frontend.html">rule 5</a>), mas na tela lê exatamente como um: o item aparece sob um título chamado Ouro, dentro de Cavaleiros. Como o formato do CSV é a própria tabela (ADR-68), o arquivo que o usuário escreve olhando a tela diz <code>Cavaleiros / Ouro</code> — ou, de dentro de Cavaleiros, só <code>Ouro</code>. Lido ao pé da letra, isso criava um <em>grupo</em> Ouro ao lado da divisória Ouro e enchia esse grupo com uma segunda cópia de cada item.</dd>
+    <dt>Decisão</dt><dd><code>resolveDestination</code> devolve <code>{ id, sectionId }</code>: antes de criar qualquer grupo, o <strong>último</strong> segmento do caminho é oferecido às seções do grupo a que a caminhada chegou. Só o último — um segmento intermediário não pode ser seção, porque seção não contém grupo — e só depois que nenhum grupo atende ao nome, porque a coluna se chama <code>Grupo</code>: onde os dois existem, o grupo ganha e a seção continua endereçável pela coluna <code>Seção</code>, que tem a última palavra quando nomeia uma divisória existente. Seções continuam sendo <em>casadas</em>, nunca criadas.</dd>
+    <dt>Consequência</dt><dd>O item cai na prateleira que o arquivo nomeou, e é reconhecido como duplicado do que já está lá — o estrago visível era a cópia extra, o silencioso era a prateleira pretendida continuar vazia. Em troca, um grupo e uma seção homônimos irmãos ficam com uma ordem de preferência que o arquivo não consegue inverter sem a coluna <code>Seção</code>; é o preço de a coluna ter um nome só. A pré-visualização passa a imprimir o destino inteiro (<code>PlannedRow.sectionName</code>), senão a tela descreveria uma escrita diferente da que o botão emite.</dd>
+    <dt>Imposta por</dt><dd><code>csv-import.spec.ts</code> (“planCsvImport — a section named in the Grupo column”: o caminho, o nome simples de dentro do grupo, o item atualizado em vez de duplicado, o grupo homônimo ganhando, o nível intermediário nunca sendo seção) e <code>csv-import-dialog.spec.ts</code> (a célula “Cai em” nomeando a divisória)</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

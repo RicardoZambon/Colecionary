@@ -683,7 +683,10 @@ same way — `collection-page/drag-order.ts`, `tree-prefs.ts`,
 `csv-import/csv-import.ts` (`planCsvImport` / `applyCsvImport` — reading a
 spreadsheet and writing it, deliberately two functions with a `CsvImportPlan`
 as the only channel between them, so the preview cannot describe something
-other than what gets written), and
+other than what gets written; its `resolveDestination` reads the **last** level
+of a `Grupo` path as a section of the group it reached when no group answers to
+the name, because on screen a divider reads as a level of the tree and a file
+written from the screen says `Cavaleiros / Ouro`), and
 `item-form-page/unsaved-item.guard.ts`.
 
 ### The store's failure contract

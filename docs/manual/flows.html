@@ -1334,7 +1334,7 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     <span class="where">frontend: features/collection/csv-import/csv-import.ts</span>
   </li>
   <li>
-    <strong>Resolver o grupo, em quatro tentativas nesta ordem.</strong> O
+    <strong>Resolver o destino, em cinco tentativas nesta ordem.</strong> O
     <strong>nome do próprio grupo aberto</strong> resolve para ele — estar dentro
     de Ouro e colar uma tabela cujas linhas todas dizem Ouro significa que elas
     são de Ouro, e não de um Ouro novo aninhado dentro dele (foi assim que o
@@ -1348,6 +1348,25 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     regra: um descendente homônimo do ancestral não é endereçável por nome
     simples de dentro dele; importe do nível de cima, onde o caminho separa os
     dois.
+  </li>
+  <li>
+    <strong>O último nível do caminho pode ser uma seção.</strong> Antes de criar
+    qualquer grupo, o último segmento é oferecido às seções do grupo a que a
+    caminhada chegou: <code>Cavaleiros / Ouro</code> — e, de dentro de
+    Cavaleiros, só <code>Ouro</code> — chega à <em>divisória</em> Ouro, com
+    <code>sectionId</code> preenchido e nenhum grupo criado. Uma seção não é um
+    nível da árvore (<a href="frontend.html">rule 5</a>), mas na tela lê como um:
+    o item está sob um título chamado Ouro, dentro de Cavaleiros, e é assim que o
+    usuário escreve o arquivo. Só o <strong>último</strong> segmento — um
+    intermediário não pode ser seção, porque seção não contém grupo — e só quando
+    nenhum grupo atende ao nome primeiro, já que a coluna se chama
+    <code>Grupo</code> e a seção continua endereçável pela coluna
+    <code>Seção</code>, que tem a última palavra quando nomeia uma divisória
+    existente. Seção continua sendo <em>casada</em>, nunca criada.
+    <strong>Sem isso</strong>, a importação criava um grupo Ouro ao lado da
+    divisória Ouro e enchia esse grupo com uma segunda cópia de cada item: o
+    duplicado era o estrago visível, e o silencioso era que a prateleira
+    pretendida continuava vazia.
   </li>
   <li>
     <strong>Uma linha ruim não recusa o arquivo.</strong> Ela vira uma
@@ -1402,6 +1421,12 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
 
 <div class="callout">
   <span class="label">A consequência que vale escrever</span>
+  <p>
+    A célula “Cai em” imprime o grupo <em>e</em> a divisória
+    (<code>PlannedRow.sectionName</code>), porque o destino pode ter sido
+    alcançado pelo nome de uma seção e uma célula que mostrasse só o grupo estaria
+    descrevendo uma escrita diferente da que o botão emite.
+  </p>
   <p>
     O que a tela mostra <em>é</em> o objeto aplicado — não uma descrição dele. Se
     a pré-visualização fosse calculada por um código e a escrita por outro, a

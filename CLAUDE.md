@@ -383,10 +383,13 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    nowhere. A row that cannot be read becomes an issue carrying a message *key*
    and its line number, and the rest of the file still imports. **The open group
    answers to its own name**: a `Grupo` cell naming the group you are standing in
-   resolves to it, never to a twin created inside it. Sections are
+   resolves to it, never to a twin created inside it. **The last level of a
+   `Grupo` path may be a section** — a divider reads as a level of the tree on
+   screen, so `Cavaleiros / Ouro` reaches the Ouro *divider* when no group answers
+   to the name; only the last level, and a group of that name wins. Sections are
    matched, never created: a section's identity is its position (rule 5) and a
    file cannot say where a new one goes. Full detail in
-   [`docs/manual/flows.html`](docs/manual/flows.html) §16 and ADR-67/68.
+   [`docs/manual/flows.html`](docs/manual/flows.html) §16 and ADR-67/68/69.
 
 ## One trap that costs an hour every time
 

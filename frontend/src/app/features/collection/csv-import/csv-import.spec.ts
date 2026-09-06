@@ -442,6 +442,90 @@ describe('planCsvImport — sections', () => {
   });
 });
 
+describe('planCsvImport — a section named in the Grupo column', () => {
+  const sections: Section[] = [
+    { id: 's1', groupId: 'g1', name: 'Bronze', target: null },
+    { id: 's2', groupId: 'g1', name: 'Ouro', target: null },
+  ];
+  const groups = [group('g1', 'Cavaleiros')];
+  const coll = collection({ groups, sections });
+
+  it('resolves the last level of a path to a divider rather than a new group', () => {
+    const result = plan('Nome;Grupo\nMu;Cavaleiros / Bronze', coll);
+    expect(result.newGroups).toEqual([]);
+    expect(result.rows[0].item).toMatchObject({ groupId: 'g1', sectionId: 's1' });
+  });
+
+  it('resolves a bare divider name from inside the group that owns it', () => {
+    const result = plan('Nome;Grupo\nMu;Bronze', coll, { scopeId: 'g1' });
+    expect(result.newGroups).toEqual([]);
+    expect(result.rows[0].item).toMatchObject({ groupId: 'g1', sectionId: 's1' });
+  });
+
+  // The reported defect, end to end: the file names the shelf the item is
+  // already on, so it is the same item — not a second copy in a twin group.
+  it('updates the item already on that shelf instead of duplicating it', () => {
+    const stocked = collection({
+      groups,
+      sections,
+      items: [item('i1', 'Mu', 'g1', { sectionId: 's1', year: 2006 })],
+    });
+    const result = plan(
+      'Nome;Grupo;Ano\nMu;Cavaleiros / Bronze;2019',
+      stocked,
+      { duplicates: 'update' },
+    );
+    expect(result.newGroups).toEqual([]);
+    expect(result.rows[0]).toMatchObject({ outcome: 'update', newGroup: false });
+    expect(result.rows[0].item).toMatchObject({ id: 'i1', groupId: 'g1', sectionId: 's1' });
+    const after = applyCsvImport(stocked, result);
+    expect(after.items).toHaveLength(1);
+    expect(after.items[0].year).toBe(2019);
+  });
+
+  it('lets a group of that name win, since the column is Grupo', () => {
+    const both = collection({
+      groups: [...groups, group('g2', 'Bronze', 'g1')],
+      sections,
+    });
+    const [row] = plan('Nome;Grupo\nMu;Cavaleiros / Bronze', both).rows;
+    expect(row.item).toMatchObject({ groupId: 'g2', sectionId: '' });
+  });
+
+  it('never reads an intermediate level as a divider — a section holds no groups', () => {
+    const result = plan('Nome;Grupo\nMu;Cavaleiros / Bronze / Aço', coll);
+    expect(result.newGroups.map(node => node.name)).toEqual(['Bronze', 'Aço']);
+    expect(result.rows[0].item.sectionId).toBe('');
+  });
+
+  it('still creates a group when the name is nobody’s divider', () => {
+    const result = plan('Nome;Grupo\nMu;Cavaleiros / Prata', coll);
+    expect(result.newGroups.map(node => node.name)).toEqual(['Prata']);
+    expect(result.rows[0]).toMatchObject({ newGroup: true });
+  });
+
+  it('gives the explicit Seção column the last word', () => {
+    const [row] = plan('Nome;Grupo;Seção\nMu;Cavaleiros / Bronze;Ouro', coll).rows;
+    expect(row.item).toMatchObject({ groupId: 'g1', sectionId: 's2' });
+  });
+
+  it('spells the whole destination in the preview, divider included', () => {
+    const [row] = plan('Nome;Grupo\nMu;Cavaleiros / Bronze', coll).rows;
+    expect(row.groupPath).toBe('Cavaleiros');
+    expect(row.sectionName).toBe('Bronze');
+  });
+
+  it('leaves a divider alone when the cell names the group itself', () => {
+    const stocked = collection({
+      groups,
+      sections,
+      items: [item('i1', 'Mu', 'g1', { sectionId: 's1' })],
+    });
+    const [row] = plan('Nome;Grupo\nMu;Cavaleiros', stocked, { duplicates: 'update' }).rows;
+    expect(row.item.sectionId).toBe('s1');
+  });
+});
+
 describe('planCsvImport — limits and edges', () => {
   it('refuses a file past the row ceiling, in one message', () => {
     const rows = Array.from({ length: MAX_IMPORT_ROWS + 1 }, (_, i) => `Item ${i}`);

@@ -205,3 +205,12 @@ th {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
 }
+
+/* The divider inside the destination group. A separator glyph rather than a
+   badge: it is part of the address, not an annotation on it — and it must not
+   look like the "new group" mark next to it, which is a claim about what the
+   import will create. */
+.section {
+  margin-left: var(--sp-1);
+  color: var(--muted-strong);
+}
