@@ -282,6 +282,15 @@ npm test -- --watch=false</code></pre>
       <td>Uma reimportação para corrigir o ano apaga fotos, notas e preços pagos</td>
     </tr>
     <tr>
+      <td>Um arquivo restaura as divisórias, e uma sobrescrita não as apaga</td>
+      <td><code>CollectionArchiveTests</code>
+          (<em>Import_BringsBackTheDividersItsItemsAreFiledUnder</em>,
+          <em>Import_ThatOverwrites_RestoresTheDividersInsteadOfDeletingThem</em>)</td>
+      <td>O restore devolve itens apontando para divisórias que não existem — e a
+          sobrescrita leva a lista vazia ao <code>ReplaceGraph</code>, apagando as
+          divisórias da coleção viva</td>
+    </tr>
+    <tr>
       <td>Um <code>Grupo</code> que nomeia uma seção cai na seção</td>
       <td><code>csv-import.spec.ts</code> (<em>a section named in the Grupo
           column</em>: caminho, nome simples no escopo, atualiza em vez de

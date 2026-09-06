@@ -384,6 +384,49 @@ public class CollectionArchiveTests(VaultApiFactory factory)
     }
 
     [Fact]
+    public async Task Import_BringsBackTheDividersItsItemsAreFiledUnder()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+        var sectioned = await SeedSectionedCollectionAsync(client);
+
+        var archive = await DownloadBytesAsync(client, $"/api/export/collections/{sectioned.Id}");
+        var imported = Assert.Single(await ImportAsync(client, archive));
+
+        // Order is a section's identity — Bronze then Ouro is a progression, and
+        // the alphabet would answer Bronze, Ouro for a different reason and get
+        // the next pair wrong. So this asserts the sequence, not the set.
+        Assert.Equal(["Bronze", "Ouro"], imported.Sections.Select(section => section.Name));
+
+        // The dividers have to come back *and* still be the ones the items point
+        // at. Restoring the list but not the references is the same screen as
+        // restoring neither: every item falls into the unsectioned bucket.
+        var bronze = imported.Sections.Single(section => section.Name == "Bronze");
+        Assert.Equal(bronze.GroupId, imported.Groups.Single().Id);
+        Assert.Equal(bronze.Id, imported.Items.Single(item => item.Name == "Filed").SectionId);
+    }
+
+    [Fact]
+    public async Task Import_ThatOverwrites_RestoresTheDividersInsteadOfDeletingThem()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync("marcus@example.com");
+        var sectioned = await SeedSectionedCollectionAsync(client);
+        var archive = await DownloadBytesAsync(client, $"/api/export/collections/{sectioned.Id}");
+
+        var imported = Assert.Single(await ImportAsync(client, archive, sectioned.Id));
+
+        // The overwrite runs the same ReplaceGraph the full-document PUT runs,
+        // so a restored collection that carried no sections did not merely fail
+        // to bring its own back — it deleted the ones the live collection had.
+        Assert.Equal(sectioned.Id, imported.Id);
+        Assert.Equal(["Bronze", "Ouro"], imported.Sections.Select(section => section.Name));
+        var stored = await client.GetCollectionsAsync();
+        Assert.Equal(
+            ["Bronze", "Ouro"],
+            stored.Single(collection => collection.Id == sectioned.Id)
+                .Sections.Select(section => section.Name));
+    }
+
+    [Fact]
     public async Task Import_RequiresAuthentication()
     {
         var response = await PostArchiveAsync(factory.CreateClient(), TinyPng);
@@ -428,6 +471,38 @@ public class CollectionArchiveTests(VaultApiFactory factory)
 
         var filled = created! with { BannerImageId = banner, Items = [item] };
         var saved = await (await client.PutCollectionAsync(filled))
+            .Content.ReadFromJsonAsync<CollectionDto>();
+        return saved!;
+    }
+
+    /// <summary>
+    /// A collection with one group, two dividers in a deliberately
+    /// non-alphabetical order, and an item filed under the first of them.
+    /// </summary>
+    private static async Task<CollectionDto> SeedSectionedCollectionAsync(HttpClient client)
+    {
+        var created = await SeedCollectionAsync(client, banner: null, photo: null);
+
+        var group = new GroupNodeDto("cavaleiros", "Cavaleiros", null, []);
+        var sections = new[]
+        {
+            new SectionDto("bronze", group.Id, "Bronze"),
+            new SectionDto("ouro", group.Id, "Ouro"),
+        };
+        var filed = new ItemDto(
+            Id: "filed-item",
+            Name: "Filed",
+            Description: string.Empty,
+            Year: 1994,
+            Value: 12m,
+            GroupId: group.Id,
+            Tags: [],
+            Img: string.Empty,
+            Custom: [],
+            SectionId: "bronze");
+
+        var saved = await (await client.PutCollectionAsync(
+                created with { Groups = [group], Sections = sections, Items = [filed] }))
             .Content.ReadFromJsonAsync<CollectionDto>();
         return saved!;
     }

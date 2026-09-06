@@ -75,8 +75,13 @@ Full detail in [`backend/README.md`](backend/README.md).
 4. **The aggregate is Collection + Groups + Sections + Items + Members.**
    Every one of them needs a `MergeByKey` block in
    `CollectionRepository.ReplaceGraph` (plain assignment, never a coalesce —
-   clearing a target back to null is a legitimate edit) and needs to be
-   recognised by `CollectionVersionInterceptor`. A child written without moving
+   clearing a target back to null is a legitimate edit), needs to be
+   recognised by `CollectionVersionInterceptor`, and must be built by **every**
+   place that constructs the whole graph — `CollectionService.ReplaceAsync`,
+   `PublicIdRepair` *and* the archive restore in `ImportService`. Sections were
+   missing from that last one: a restore brought back items pointing at dividers
+   that no longer existed, and an overwrite carried the empty list into
+   `ReplaceGraph` and deleted the live collection's dividers. A child written without moving
    the root's version is a silently lost update, which is the one failure that
    whole feature exists to prevent.
 5. **Tests:** integration tests run against real SQL Server (Testcontainers);

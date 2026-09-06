@@ -1151,6 +1151,20 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     os links continuam funcionando.
   </li>
   <li>
+    <strong>A coleção restaurada é o agregado inteiro</strong> — grupos, seções,
+    itens e membros. Vale dizer explicitamente porque é o que faltou: o
+    <code>ImportService</code> montava a coleção sem <code>Sections</code>, e como
+    <code>PublicIdRepair</code> e o export já as tratavam, o arquivo estava
+    correto e só a leitura descartava. O sintoma tinha duas caras: restaurar como
+    coleção nova trazia todo item apontando para uma divisória que não existia
+    mais (tudo caía no balde sem seção), e <em>sobrescrever</em> era pior — a
+    lista vazia entrava no <code>ReplaceGraph</code> e <strong>apagava as
+    divisórias que a coleção viva tinha</strong>. Qualquer filho novo do agregado
+    passa pelos mesmos quatro lugares: DTO, <code>PublicIdRepair</code>,
+    <code>ReplaceGraph</code> e este restore.
+    <span class="where">backend: Vault.Application/Import/ImportService.cs</span>
+  </li>
+  <li>
     Criar em vez de sobrescrever mantém o id do arquivo quando ele está livre
     (restaurar algo que você apagou traz os links de volta) e renomeia quando o
     nome está ocupado.

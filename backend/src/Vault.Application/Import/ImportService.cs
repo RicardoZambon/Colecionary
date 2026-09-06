@@ -351,6 +351,14 @@ public sealed class ImportService(
             Currency = dto.Currency,
             CreatedAtUtc = now,
             Groups = [.. dto.Groups.Select((group, i) => group.ToEntity(dto.Id, tenantId, i))],
+            // Part of the aggregate like everything else here. Array order is a
+            // section's identity — Bronze then Prata then Ouro is a progression
+            // the alphabet would not reproduce — so the index goes in as its
+            // SortOrder, exactly as the collection PUT does it. Leaving this out
+            // restored a collection whose items all pointed at dividers that no
+            // longer existed, and, worse, an overwrite carried the empty list
+            // into ReplaceGraph and deleted the live collection's dividers.
+            Sections = [.. dto.Sections.Select((section, i) => section.ToEntity(dto.Id, tenantId, i))],
             Items =
             [
                 .. dto.Items.Select((item, i) =>
