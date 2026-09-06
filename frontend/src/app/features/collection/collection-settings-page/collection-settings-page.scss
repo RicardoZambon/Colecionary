@@ -67,6 +67,14 @@ h1 {
   }
 }
 
+/* The one line the collection's field card does not share with the group cards:
+   a sentence of explanation above the declarations, which no other card has. */
+.collection-fields__hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text2);
+}
+
 /*
  * The editor for one group. These used to be rows of a flat list, nested under
  * a `.group-row` element that the master-detail split removed — so the rules

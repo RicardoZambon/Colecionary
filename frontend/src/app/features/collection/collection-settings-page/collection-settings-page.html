@@ -76,7 +76,11 @@
            came to fix is somewhere in the middle of it. -->
       <!-- Above the tree, because it is above it in the model: these are the
            fields every group inherits, and a group may override one. -->
-      <ui-card class="collection-fields">
+      <!-- `groups-card` is the box every card in this tab shares, and this one
+           already borrowed its head; saying so is what keeps the two from
+           drifting. `ui-card` paints a border and no padding, so a card that
+           names neither sits flush against its own edge. -->
+      <ui-card class="groups-card collection-fields">
         <div class="groups-card__head">
           <span class="heading">{{ 'collSettings.fields.heading' | t }}</span>
         </div>
