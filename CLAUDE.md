@@ -386,7 +386,13 @@ Full detail and rationale in [`docs/frontend-standards.md`](docs/frontend-standa
    `Perfeito ×2`); any other column is a custom field, and a field the
    destination does not declare gets declared, or the values import and appear
    nowhere. A row that cannot be read becomes an issue carrying a message *key*
-   and its line number, and the rest of the file still imports. **The open group
+   and its line number, and the rest of the file still imports. **A blank cell never destroys what it
+   does not name.** Empty `Exemp.`/`Estado` cells leave the copies alone — a copy
+   carries the price paid, the acquisition date and the notes, and none of those
+   columns mentions any of them; zero is still sayable, as `0` or a wantlist word.
+   `Ano` likewise, for want of a way to spell "unknown". Where the cell *is* the
+   whole datum — `Valor`, `Descrição`, a custom column — blank clears,
+   deliberately: `0` is what "not estimated" means (rule 3). **The open group
    answers to its own name**: a `Grupo` cell naming the group you are standing in
    resolves to it, never to a twin created inside it. **The last level of a
    `Grupo` path may be a section** — a divider reads as a level of the tree on

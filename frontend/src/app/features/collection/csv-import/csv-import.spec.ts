@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Collection, GroupNode, Item, Section } from '../../../core/models';
+import { newCopy } from '../../../core/utils/copies.util';
 import {
   CsvImportOptions,
   MAX_COPIES_PER_ROW,
@@ -229,6 +230,44 @@ describe('planCsvImport — copies and condition', () => {
     const [row] = plan('Nome;Ano\nSeiya;2010', before, { duplicates: 'update' }).rows;
     expect(row.item.copies).toEqual([]);
     expect(row.item.year).toBe(2010);
+  });
+
+  // Silence is not zero. A partial file carrying the columns but not the values
+  // used to empty the shelf on every row it touched, and a copy is where the
+  // price paid, the acquisition date and the notes live — none of which the
+  // file that erased them ever mentioned.
+  it('leaves copies untouched when the columns are there but the cells are empty', () => {
+    const owned = [
+      { ...newCopy(), id: 'k1', condition: 'Mint' as const, price: 520, notes: 'lacrado' },
+    ];
+    const before = collection({ items: [item('i1', 'Seiya', '', { copies: owned })] });
+    const [row] = plan('Nome;Exemp.;Estado;Ano\nSeiya;;;2010', before, {
+      duplicates: 'update',
+    }).rows;
+    expect(row.item.copies).toEqual(owned);
+    expect(row.item.year).toBe(2010);
+  });
+
+  it('still empties the shelf when the file says zero', () => {
+    const before = collection({
+      items: [item('i1', 'Seiya', '', { copies: [{ ...newCopy(), id: 'k1', price: 520 }] })],
+    });
+    const [row] = plan('Nome;Exemp.\nSeiya;0', before, { duplicates: 'update' }).rows;
+    expect(row.item.copies).toEqual([]);
+  });
+
+  it('still empties the shelf when the file says the item is wanted', () => {
+    const before = collection({
+      items: [item('i1', 'Seiya', '', { copies: [{ ...newCopy(), id: 'k1', price: 520 }] })],
+    });
+    const [row] = plan('Nome;Estado\nSeiya;Quero', before, { duplicates: 'update' }).rows;
+    expect(row.item.copies).toEqual([]);
+  });
+
+  it('creates a wantlist item from empty cells, as it always did', () => {
+    const [row] = plan('Nome;Exemp.;Estado\nSeiya;;').rows;
+    expect(row.outcome).toBe('create');
+    expect(row.item.copies).toEqual([]);
   });
 });
 

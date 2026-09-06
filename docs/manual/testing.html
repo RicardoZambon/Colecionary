@@ -282,6 +282,14 @@ npm test -- --watch=false</code></pre>
       <td>Uma reimportação para corrigir o ano apaga fotos, notas e preços pagos</td>
     </tr>
     <tr>
+      <td>Célula vazia de <code>Exemp.</code>/<code>Estado</code> não zera a prateleira</td>
+      <td><code>csv-import.spec.ts</code> (<em>leaves copies untouched when the
+          columns are there but the cells are empty</em>, mais o <code>0</code> e a
+          palavra de lista de desejos, que continuam esvaziando)</td>
+      <td>Um arquivo parcial apaga exemplares — e com eles o preço pago, a data de
+          aquisição e as notas, que ele nunca citou</td>
+    </tr>
+    <tr>
       <td>Um arquivo restaura as divisórias, e uma sobrescrita não as apaga</td>
       <td><code>CollectionArchiveTests</code>
           (<em>Import_BringsBackTheDividersItsItemsAreFiledUnder</em>,

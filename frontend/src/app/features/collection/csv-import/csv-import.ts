@@ -719,10 +719,18 @@ export function planCsvImport(
     }
 
     // A stated count wins over the count the badge prints, and the badge's own
-    // count wins over the absence of a column. With neither, a stated condition
+    // count wins over the absence of a column; a stated condition on its own
     // means one copy and a wantlist word means none.
-    const count = declared ?? condition.count ?? (condition.condition ? 1 : 0);
-    if (count > MAX_COPIES_PER_ROW) {
+    //
+    // Null is the fourth answer and it is **not** zero: the columns are there
+    // but this row's cells are empty, so the file says nothing about copies and
+    // the item keeps the ones it has. It used to read as zero, which on an
+    // update emptied the shelf — and a copy carries the price paid, the
+    // condition, the acquisition date and the notes, none of which the file
+    // that erased them ever mentioned. Zero is still sayable, twice over:
+    // `0` in the count, or a wantlist word in the condition. Silence is not.
+    const stated = declared ?? condition.count ?? (condition.condition ? 1 : null);
+    if (stated !== null && stated > MAX_COPIES_PER_ROW) {
       issues.push({
         line: record.line,
         key: 'csvImport.error.tooManyCopies',
@@ -730,8 +738,8 @@ export function planCsvImport(
       });
       continue;
     }
-    if (copiesColumn || conditionColumn) {
-      item.copies = reconcileCopies(base.copies, count, condition.condition);
+    if (stated !== null) {
+      item.copies = reconcileCopies(base.copies, stated, condition.condition);
     }
 
     // The `Seção` column is the explicit spelling and wins wherever it names a
