@@ -350,6 +350,7 @@ public sealed class ImportService(
             // amounts silently re-read as some other money.
             Currency = dto.Currency,
             CreatedAtUtc = now,
+            Fields = [.. dto.Fields.Select(DtoMapper.ToEntity)],
             Groups = [.. dto.Groups.Select((group, i) => group.ToEntity(dto.Id, tenantId, i))],
             // Part of the aggregate like everything else here. Array order is a
             // section's identity — Bronze then Prata then Ouro is a progression

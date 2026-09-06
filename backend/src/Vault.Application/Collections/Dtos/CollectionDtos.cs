@@ -6,7 +6,16 @@ namespace Vault.Application.Collections.Dtos;
 
 public sealed record CustomFieldValueDto(string Key, string Value);
 
-public sealed record GroupFieldDto(string Name, string Type);
+/// <summary>
+/// One field declaration. Scope is optional on the wire and normalised to
+/// "item" — this DTO is also the archive format, and an export taken before
+/// scopes existed describes fields that were all item-scoped, so absent has to
+/// mean "item" rather than null. Same bargain as <c>ItemDto.SectionId</c>.
+/// </summary>
+public sealed record GroupFieldDto(string Name, string Type, string? Scope = null)
+{
+    public string Scope { get; init; } = Scope ?? "item";
+}
 
 /// <summary>
 /// A group's default ordering. By is a built-in key ("manual", "added",
@@ -42,11 +51,19 @@ public sealed record ItemCopyDto(
     decimal? Value = null,
     DateOnly? AcquiredOn = null,
     string? Status = null,
-    string? Notes = null)
+    string? Notes = null,
+    IReadOnlyList<CustomFieldValueDto>? Custom = null)
 {
     public string Status { get; init; } = Status ?? "Keep";
 
     public string Notes { get; init; } = Notes ?? string.Empty;
+
+    /// <summary>
+    /// Values for the copy-scoped fields, keyed by field name exactly as an
+    /// item's own Custom is. Optional on the wire and normalised to empty, for
+    /// the reason on <see cref="ItemDto.SectionId"/>.
+    /// </summary>
+    public IReadOnlyList<CustomFieldValueDto> Custom { get; init; } = Custom ?? [];
 }
 
 /// <summary>
@@ -100,8 +117,16 @@ public sealed record CollectionDto(
     Guid? BannerImageId = null,
     Guid? IconImageId = null,
     string? Currency = null,
-    IReadOnlyList<SectionDto>? Sections = null)
+    IReadOnlyList<SectionDto>? Sections = null,
+    IReadOnlyList<GroupFieldDto>? Fields = null)
 {
+    /// <summary>
+    /// Fields declared for the whole collection, merged ahead of every group's
+    /// own. Optional on the wire and normalised to empty, for the reason on
+    /// <see cref="Sections"/>.
+    /// </summary>
+    public IReadOnlyList<GroupFieldDto> Fields { get; init; } = Fields ?? [];
+
     /// <summary>
     /// Item-level dividers, in the order they are shown. Optional on the wire
     /// and normalised to empty, for the reason on <see cref="ItemDto.SectionId"/>:

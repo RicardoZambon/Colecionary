@@ -235,7 +235,10 @@ h1 {
 }
 
 .field-chip {
-  .type {
+  /* Both selects get the same box: they answer two questions about one field
+     and a row where one is wider reads as one of them mattering more. */
+  .type,
+  .scope {
     width: 110px;
     flex: none;
 
@@ -243,6 +246,31 @@ h1 {
       border: none;
       background: none;
       padding: 0 2px;
+    }
+  }
+}
+
+/* A field row now carries a name and *two* selects, and on a phone those three
+   cannot share a line: the name is the only one whose width is not fixed, so it
+   is the one that collapses, and a name like "Box condition" wrapped into the
+   type select beside it. Below the breakpoint the name takes the whole first
+   line and the controls line up under it — which is the same shape the fields
+   list already takes against the detail column, one declaration per line. */
+@include upto($bp-md) {
+  .field-chip {
+    flex-wrap: wrap;
+    padding-top: 6px;
+    padding-bottom: 6px;
+
+    .name {
+      flex: 1 0 100%;
+    }
+
+    .type,
+    .scope {
+      flex: 1;
+      width: auto;
+      min-width: 0;
     }
   }
 }

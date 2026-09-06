@@ -151,6 +151,9 @@ public class ValidatorTests
     private static GroupNodeDto ValidGroup() =>
         new("Marvel", "Marvel", null, [new GroupFieldDto("Issue", "number")]);
 
+    private static CollectionDto ValidCollection() =>
+        new("c1", "Comics", "", [ValidGroup()], [ValidItem() with { GroupId = "Marvel" }], [], true);
+
     [Fact]
     public void GroupValidator_AcceptsANullTarget()
     {
@@ -355,6 +358,93 @@ public class ValidatorTests
         Assert.NotEqual(
             Messages.In(nameof(Messages.GroupParentCycle), CultureInfo.InvariantCulture),
             Messages.In(nameof(Messages.GroupParentCycle), ptBr));
+    }
+
+    [Theory]
+    [InlineData("item")]
+    [InlineData("copy")]
+    public void GroupValidator_AcceptsBothScopes(string scope)
+    {
+        var group = ValidGroup() with { Fields = [new GroupFieldDto("Issue", "number", scope)] };
+        Assert.True(new GroupNodeDtoValidator().Validate(group).IsValid);
+    }
+
+    [Theory]
+    [InlineData("exemplar")]
+    [InlineData("Item")]
+    [InlineData("")]
+    public void GroupValidator_RejectsAnUnknownScope(string scope)
+    {
+        // The whitelist is simultaneously the SQL representation and the wire
+        // contract, exactly like the condition and role lists, so it is
+        // case-sensitive on purpose: "Item" is not the spelling the client
+        // sends and accepting it would put two of them in the database.
+        var group = ValidGroup() with { Fields = [new GroupFieldDto("Issue", "number", scope)] };
+        Assert.False(new GroupNodeDtoValidator().Validate(group).IsValid);
+    }
+
+    [Fact]
+    public void CollectionValidator_HoldsItsOwnFieldsToTheGroupRules()
+    {
+        // One rule set, two declarers. A collection-wide list that could carry a
+        // duplicate name where a group's could not would break the merge:
+        // `fieldsFor` keys by name, so the second declaration would silently
+        // erase the first.
+        var duplicated = ValidCollection() with
+        {
+            Fields = [new GroupFieldDto("Shelf", "text"), new GroupFieldDto("Shelf", "date")],
+        };
+        Assert.False(CollectionValidator().Validate(duplicated).IsValid);
+
+        var badScope = ValidCollection() with
+        {
+            Fields = [new GroupFieldDto("Shelf", "text", "everywhere")],
+        };
+        Assert.False(CollectionValidator().Validate(badScope).IsValid);
+
+        var good = ValidCollection() with
+        {
+            Fields = [new GroupFieldDto("Shelf", "text"), new GroupFieldDto("Box", "text", "copy")],
+        };
+        Assert.True(CollectionValidator().Validate(good).IsValid);
+    }
+
+    [Fact]
+    public void CollectionValidator_LetsAGroupRedeclareACollectionWideName()
+    {
+        // Deliberately legal: a name is unique within one declaration, never
+        // across them, because overriding an inherited field is the whole point
+        // of declaring one deeper down.
+        var collection = ValidCollection() with
+        {
+            Fields = [new GroupFieldDto("Grade", "text")],
+            Groups = [ValidGroup() with { Fields = [new GroupFieldDto("Grade", "number")] }],
+        };
+        Assert.True(CollectionValidator().Validate(collection).IsValid);
+    }
+
+    [Fact]
+    public void ItemValidator_ChecksACopysOwnFieldValues()
+    {
+        var tooLong = ValidItem() with
+        {
+            Copies =
+            [
+                new ItemCopyDto("i1_c1", "Mint", 260, Custom:
+                    [new CustomFieldValueDto("Box", new string('x', 1001))]),
+            ],
+        };
+        Assert.False(new ItemDtoValidator().Validate(tooLong).IsValid);
+
+        var fine = ValidItem() with
+        {
+            Copies =
+            [
+                new ItemCopyDto("i1_c1", "Mint", 260, Custom:
+                    [new CustomFieldValueDto("Box", "No box")]),
+            ],
+        };
+        Assert.True(new ItemDtoValidator().Validate(fine).IsValid);
     }
 
     private static CollectionDtoValidator CollectionValidator() =>

@@ -22,16 +22,27 @@ public static class DtoMapper
         collection.BannerImageId,
         collection.IconImageId,
         collection.Currency,
-        [.. collection.Sections.OrderBy(s => s.SortOrder).Select(ToDto)]);
+        [.. collection.Sections.OrderBy(s => s.SortOrder).Select(ToDto)],
+        [.. collection.Fields.Select(ToDto)]);
 
     public static GroupNodeDto ToDto(this Group group) => new(
         group.Id,
         group.Name,
         group.ParentId,
-        [.. group.Fields.Select(f => new GroupFieldDto(f.Name, f.Type.ToString().ToLowerInvariant()))],
+        [.. group.Fields.Select(ToDto)],
         // Both columns travel together; half a configuration is no configuration.
         group.SortBy is null ? null : new GroupSortDto(group.SortBy, group.SortDirection ?? "asc"),
         group.Target);
+
+    /// <summary>
+    /// Both enums travel lower-cased, matching the frontend's `'text' | 'number'
+    /// | 'date'` and `'item' | 'copy'` unions. One mapping for a collection's
+    /// fields and a group's, because they are the same declaration.
+    /// </summary>
+    public static GroupFieldDto ToDto(this GroupField field) => new(
+        field.Name,
+        field.Type.ToString().ToLowerInvariant(),
+        field.Scope.ToString().ToLowerInvariant());
 
     public static SectionDto ToDto(this Section section) =>
         new(section.Id, section.GroupId, section.Name, section.Target);
@@ -58,7 +69,8 @@ public static class DtoMapper
         copy.Value,
         copy.AcquiredOn,
         copy.Status.ToString(),
-        copy.Notes);
+        copy.Notes,
+        [.. copy.Custom.Select(c => new CustomFieldValueDto(c.Key, c.Value))]);
 
     public static MemberDto ToDto(this CollectionMember member) =>
         new(member.Name, member.Email, member.Initials, member.Role.ToString());
@@ -91,7 +103,7 @@ public static class DtoMapper
         Id = dto.Id,
         Name = dto.Name,
         ParentId = dto.ParentId,
-        Fields = [.. dto.Fields.Select(f => new GroupField { Name = f.Name, Type = ParseGroupFieldType(f.Type) })],
+        Fields = [.. dto.Fields.Select(ToEntity)],
         SortBy = dto.Sort?.By,
         SortDirection = dto.Sort?.Direction,
         Target = dto.Target,
@@ -139,6 +151,14 @@ public static class DtoMapper
         AcquiredOn = dto.AcquiredOn,
         Status = ParseCopyStatus(dto.Status),
         Notes = dto.Notes,
+        Custom = [.. dto.Custom.Select(c => new CustomFieldValue { Key = c.Key, Value = c.Value })],
+    };
+
+    public static GroupField ToEntity(this GroupFieldDto dto) => new()
+    {
+        Name = dto.Name,
+        Type = ParseGroupFieldType(dto.Type),
+        Scope = ParseFieldScope(dto.Scope),
     };
 
     public static CollectionMember ToEntity(this MemberDto dto, string collectionId, Guid tenantId) => new()
@@ -171,6 +191,11 @@ public static class DtoMapper
         Enum.TryParse<GroupFieldType>(value, ignoreCase: true, out var parsed)
             ? parsed
             : throw new DomainRuleException(Messages.UnknownGroupFieldTypeFor(value));
+
+    public static FieldScope ParseFieldScope(string value) =>
+        Enum.TryParse<FieldScope>(value, ignoreCase: true, out var parsed)
+            ? parsed
+            : throw new DomainRuleException(Messages.UnknownFieldScopeFor(value));
 
     public static Condition ParseCondition(string value) =>
         Enum.TryParse<Condition>(value, ignoreCase: true, out var parsed)

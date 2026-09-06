@@ -117,6 +117,7 @@ public class CollectionService(
             BannerImageId = dto.BannerImageId,
             IconImageId = dto.IconImageId,
             Currency = dto.Currency,
+            Fields = [.. dto.Fields.Select(DtoMapper.ToEntity)],
             Groups = [.. dto.Groups.Select((g, i) => g.ToEntity(id, tenantId, i))],
             // Array order is the order they are shown in, exactly like items:
             // a section's position is editorial, not alphabetical.

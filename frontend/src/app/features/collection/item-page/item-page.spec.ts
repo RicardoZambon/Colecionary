@@ -124,6 +124,7 @@ const OWNED: Item['copies'] = [
     acquiredOn: null,
     status: 'Keep',
     notes: '',
+    custom: [],
   },
 ];
 
@@ -132,6 +133,7 @@ function collection(items: Item[]): Collection {
     id: 'c1',
     name: 'Retro',
     description: '',
+    fields: [],
     groups: [group('retro')],
     sections: [],
     items,

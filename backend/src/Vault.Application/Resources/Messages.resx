@@ -108,6 +108,9 @@
   <data name="FieldTypeInvalid" xml:space="preserve">
     <value>Field type must be text, number or date.</value>
   </data>
+  <data name="FieldScopeInvalid" xml:space="preserve">
+    <value>Field scope must be item or copy.</value>
+  </data>
   <data name="TargetOutOfRange" xml:space="preserve">
     <value>Target must be between 1 and 100000, or null for no target.</value>
   </data>
@@ -239,6 +242,10 @@
   <!-- Mapping -->
   <data name="UnknownGroupFieldType" xml:space="preserve">
     <value>Unknown group field type '{0}'.</value>
+    <comment>{0} = the value received</comment>
+  </data>
+  <data name="UnknownFieldScope" xml:space="preserve">
+    <value>Unknown field scope '{0}'.</value>
     <comment>{0} = the value received</comment>
   </data>
   <data name="UnknownCondition" xml:space="preserve">

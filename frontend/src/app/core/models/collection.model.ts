@@ -1,4 +1,4 @@
-import { GroupNode } from './group.model';
+import { GroupField, GroupNode } from './group.model';
 import { Item } from './item.model';
 import { Member } from './member.model';
 import { Section } from './section.model';
@@ -8,6 +8,18 @@ export interface Collection {
   id: string;
   name: string;
   description: string;
+  /**
+   * Fields every item in the collection has, whatever group it sits in — and
+   * whatever group it is moved to later.
+   *
+   * Groups are a taxonomy, so a field that describes the collection rather than
+   * a kind of thing in it (where it is stored, who it came from) had no home:
+   * it had to be redeclared in every root group, and a group created afterwards
+   * silently lacked it. These merge *first* in `fieldsFor`, so a group
+   * redeclaring the same name still overrides them — the same rule that already
+   * lets a group override its ancestor.
+   */
+  fields: GroupField[];
   groups: GroupNode[];
   /** Item-level dividers, in display order. Each belongs to one group. */
   sections: Section[];

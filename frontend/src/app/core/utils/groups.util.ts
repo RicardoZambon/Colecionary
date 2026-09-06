@@ -1,4 +1,4 @@
-import { GroupField, GroupNode, GroupSort } from '../models';
+import { FieldScope, GroupField, GroupNode, GroupSort } from '../models';
 import { UNGROUPED_ID } from './group-stats.util';
 import { compareNames } from './sort.util';
 
@@ -92,19 +92,61 @@ export function pathOf(groups: GroupNode[], id: string | null): GroupNode[] {
 }
 
 /**
- * Custom fields a group inherits from its ancestors plus its own. Redeclaring
- * a name deeper in the tree overrides the ancestor's type but keeps the
- * ancestor's position, so the field order a user sees stays stable as they
- * drill down.
+ * Everything that declares fields, in the order they are merged: the collection
+ * itself, then the group tree.
+ *
+ * A `Collection` satisfies this structurally, so the call is `fieldsFor(collection, id)`
+ * at almost every site. It is an interface and not two parameters because the
+ * two lists are one field set — a caller that could pass the groups and forget
+ * the collection's own would show a field on one screen and not on the next.
  */
-export function fieldsFor(groups: GroupNode[], id: string | null): GroupField[] {
+export interface FieldDeclarations {
+  /** Declared for the whole collection; every group inherits them. */
+  fields: GroupField[];
+  groups: GroupNode[];
+}
+
+/**
+ * The whole field set in force for a group: the collection's own, then each
+ * ancestor's, then the group's.
+ *
+ * Redeclaring a name deeper down overrides the earlier declaration — its type
+ * *and* its scope — but keeps the earlier position, so the field order a user
+ * sees stays stable as they drill down. The collection's fields merge first,
+ * which is what makes them the outermost ancestor: a group may override one,
+ * and a group that declares nothing still has them all.
+ *
+ * The result mixes both scopes on purpose. Which of them a screen wants is the
+ * screen's business — {@link itemFields} and {@link copyFields} name it — and
+ * merging them separately would let the same name resolve to a different
+ * declaration depending on which list you asked for.
+ */
+export function fieldsFor(source: FieldDeclarations, id: string | null): GroupField[] {
   const byName = new Map<string, GroupField>();
-  for (const group of pathOf(groups, id)) {
+  for (const field of source.fields) {
+    byName.set(field.name, field);
+  }
+  for (const group of pathOf(source.groups, id)) {
     for (const field of group.fields) {
       byName.set(field.name, field);
     }
   }
   return [...byName.values()];
+}
+
+/** The subset of a merged field set with one scope, in the merged order. */
+export function fieldsInScope(fields: readonly GroupField[], scope: FieldScope): GroupField[] {
+  return fields.filter(field => field.scope === scope);
+}
+
+/** Fields whose value lives on the item. The ones every screen used to assume. */
+export function itemFields(fields: readonly GroupField[]): GroupField[] {
+  return fieldsInScope(fields, 'item');
+}
+
+/** Fields whose value lives on each copy — one value per exemplar, not per item. */
+export function copyFields(fields: readonly GroupField[]): GroupField[] {
+  return fieldsInScope(fields, 'copy');
 }
 
 /**

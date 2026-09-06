@@ -121,11 +121,14 @@ function item(id: string, patch: Partial<Item> = {}): Item {
 const GROUPS = [
   group('espanha', {
     fields: [
-      { name: 'Número', type: 'number' },
-      { name: 'Set', type: 'text' },
+      { name: 'Número', type: 'number', scope: 'item' },
+      { name: 'Set', type: 'text', scope: 'item' },
     ],
   }),
-  group('bronze', { parentId: 'espanha', fields: [{ name: 'Grade', type: 'text' }] }),
+  group('bronze', {
+    parentId: 'espanha',
+    fields: [{ name: 'Grade', type: 'text', scope: 'item' }],
+  }),
 ];
 
 const SECTIONS: Section[] = [
@@ -137,6 +140,7 @@ function collection(patch: Partial<Collection> = {}): Collection {
     id: 'c1',
     name: 'Saint Seiya',
     description: '',
+    fields: [],
     groups: GROUPS,
     sections: SECTIONS,
     items: [
@@ -160,6 +164,7 @@ function copy(id: string): Item['copies'][number] {
     acquiredOn: null,
     status: 'Keep',
     notes: '',
+    custom: [],
   };
 }
 

@@ -1,4 +1,4 @@
-import { Collection, GroupNode, GroupSort } from '../models';
+import { Collection, GroupNode, GroupSort, Item } from '../models';
 import { fieldsFor, groupById, sortFor, subtreeIds } from './groups.util';
 
 /**
@@ -44,12 +44,28 @@ export interface GroupMoveImpact {
   siblingClash: string | null;
 }
 
+/**
+ * Whether an item has anything to lose for a field name — on itself or on any
+ * of its copies.
+ *
+ * Both are checked because the name is the only identity a value has, and a
+ * field that is about to stop being displayed may be either scope. Counting
+ * only `item.custom` would report "no values affected" for a copy-scoped field
+ * whose values every copy carries, which is the one sentence this preview must
+ * never say wrongly.
+ */
+function holdsValue(item: Item, name: string): boolean {
+  const held = (values: readonly { key: string; value: string }[]): boolean =>
+    values.some(entry => entry.key === name && entry.value.trim() !== '');
+  return held(item.custom) || item.copies.some(copy => held(copy.custom));
+}
+
 export function groupMoveImpact(
-  collection: Pick<Collection, 'groups' | 'items'>,
+  collection: Pick<Collection, 'fields' | 'groups' | 'items'>,
   groupId: string,
   parentId: string | null,
 ): GroupMoveImpact {
-  const { groups, items } = collection;
+  const { fields, groups, items } = collection;
   const node = groupById(groups, groupId);
   const empty: GroupMoveImpact = {
     gained: [],
@@ -62,9 +78,12 @@ export function groupMoveImpact(
   if (!node || node.parentId === parentId) return empty;
 
   const after = groups.map(group => (group.id === groupId ? { ...group, parentId } : group));
+  const moved = { fields, groups: after };
 
-  const before = fieldsFor(groups, groupId).map(field => field.name);
-  const now = fieldsFor(after, groupId).map(field => field.name);
+  // A collection-wide field is in both sets whatever the move does, so it can
+  // never be gained or lost — which is precisely what declaring one there buys.
+  const before = fieldsFor(collection, groupId).map(field => field.name);
+  const now = fieldsFor(moved, groupId).map(field => field.name);
   const gained = now.filter(name => !before.includes(name));
 
   // Counted per item rather than for the subtree as a whole: a descendant that
@@ -78,8 +97,8 @@ export function groupMoveImpact(
       name,
       holders: affected.filter(
         item =>
-          item.custom.some(value => value.key === name && value.value.trim() !== '') &&
-          !fieldsFor(after, item.groupId).some(field => field.name === name),
+          holdsValue(item, name) &&
+          !fieldsFor(moved, item.groupId).some(field => field.name === name),
       ).length,
     }));
 

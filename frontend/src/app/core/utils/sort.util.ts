@@ -1,6 +1,7 @@
 import { MessageKey, Translate } from '../i18n/messages/keys';
 import { GroupField, GroupSort, Item, SortDirection } from '../models';
 import { sortValue } from './copies.util';
+import { itemFields } from './groups.util';
 import { rankOf } from './sections.util';
 
 /**
@@ -91,6 +92,14 @@ export function sortByLabel(by: string, t: Translate): string {
  * Choices for an "order by" picker — built-in keys plus one entry per custom
  * field. Shaped like `SelectOption` without core having to know about
  * `shared/ui`.
+ *
+ * Copy-scoped fields are **not** offered, here or in {@link sortChoices}. A
+ * list orders items, and an item holds no value for such a field — its copies
+ * hold several, and "the year of the copy" is not one number an item can be
+ * ranked by. The narrowing lives in these two functions rather than at their
+ * call sites so a picker cannot offer an ordering `sortItems` would answer with
+ * nothing but a shuffle; `keyOf` reads only `item.custom` and would rank every
+ * item as valueless.
  */
 export function sortByOptions(
   fields: GroupField[],
@@ -98,7 +107,7 @@ export function sortByOptions(
 ): { value: string; label: string }[] {
   return [
     ...BUILTIN_SORTS.map(by => ({ value: by, label: sortByLabel(by, t) })),
-    ...fields.map(field => ({ value: fieldSortKey(field.name), label: field.name })),
+    ...itemFields(fields).map(field => ({ value: fieldSortKey(field.name), label: field.name })),
   ];
 }
 
@@ -121,7 +130,7 @@ export function sortChoices(fields: GroupField[], t: Translate): SortChoice[] {
     choice('value', 'asc'),
     choice('year', 'asc'),
     choice('year', 'desc'),
-    ...fields.flatMap(field => [
+    ...itemFields(fields).flatMap(field => [
       choice(fieldSortKey(field.name), 'asc'),
       choice(fieldSortKey(field.name), 'desc'),
     ]),

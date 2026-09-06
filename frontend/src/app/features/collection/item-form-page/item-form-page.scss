@@ -187,6 +187,16 @@ h1 {
     gap: 10px;
   }
 
+  // The declared fields, on the same grid as the copy's own figures so a serial
+  // number lines up with the price above it rather than starting a second,
+  // narrower column of its own.
+  &__custom {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    padding-top: 4px;
+  }
+
   &__empty {
     font-size: 11.5px;
     color: var(--muted);
@@ -200,7 +210,8 @@ h1 {
 /* Migrated off a magic 720px onto the shared scale — four stylesheets used to
    break at four different widths, none of them the same. */
 @include upto($bp-md) {
-  .copies__fields {
+  .copies__fields,
+  .copies__custom {
     grid-template-columns: 1fr;
   }
 }

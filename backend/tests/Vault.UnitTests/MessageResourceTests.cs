@@ -30,6 +30,7 @@ public class MessageResourceTests
         nameof(Messages.ImportedCollectionName),
         nameof(Messages.ArchiveFromNewerVersion),
         nameof(Messages.UnknownGroupFieldType),
+        nameof(Messages.UnknownFieldScope),
         nameof(Messages.UnknownCondition),
         nameof(Messages.UnknownCopyStatus),
         nameof(Messages.UnknownRole),

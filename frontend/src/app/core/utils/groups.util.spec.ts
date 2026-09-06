@@ -5,16 +5,19 @@ import { UNGROUPED_ID } from './group-stats.util';
 import {
   canReparent,
   childrenOf,
+  copyFields,
   fieldsFor,
   flattenTree,
   pathOf,
+  itemFields,
   resolveGroupId,
   sortFor,
   subtreeIds,
   visibleTree,
 } from './groups.util';
 
-const text = (name: string): GroupField => ({ name, type: 'text' });
+const text = (name: string): GroupField => ({ name, type: 'text', scope: 'item' });
+const perCopy = (name: string): GroupField => ({ name, type: 'text', scope: 'copy' });
 
 const TREE: GroupNode[] = [
   {
@@ -38,7 +41,7 @@ const TREE: GroupNode[] = [
     name: 'Regular cards',
     parentId: 'cards',
     // Redeclares an ancestor's field with a different type.
-    fields: [{ name: 'Set no.', type: 'number' }],
+    fields: [{ name: 'Set no.', type: 'number', scope: 'item' }],
     sort: { by: 'name', direction: 'asc' },
     target: null,
   },
@@ -187,15 +190,63 @@ describe('groups.util', () => {
   });
 
   it('inherits custom fields from ancestors', () => {
-    expect(fieldsFor(TREE, 'rare')).toEqual([text('Set no.'), text('Language'), text('Grade')]);
-    expect(fieldsFor(TREE, null)).toEqual([]);
+    expect(fieldsFor({ fields: [], groups: TREE }, 'rare')).toEqual([
+      text('Set no.'),
+      text('Language'),
+      text('Grade'),
+    ]);
+    expect(fieldsFor({ fields: [], groups: TREE }, null)).toEqual([]);
   });
 
   it('lets a sub-group override an inherited field type without moving it', () => {
-    expect(fieldsFor(TREE, 'regular')).toEqual([
-      { name: 'Set no.', type: 'number' },
+    expect(fieldsFor({ fields: [], groups: TREE }, 'regular')).toEqual([
+      { name: 'Set no.', type: 'number', scope: 'item' },
       text('Language'),
     ]);
+  });
+
+  it('merges the collection\'s own fields ahead of every group\'s', () => {
+    // The point of declaring one there: a group that declares nothing still has
+    // it, and so does a group created tomorrow.
+    const shelf = text('Shelf');
+    expect(fieldsFor({ fields: [shelf], groups: TREE }, 'games')).toEqual([
+      shelf,
+      text('Completeness'),
+    ]);
+    expect(fieldsFor({ fields: [shelf], groups: TREE }, 'rare')).toEqual([
+      shelf,
+      text('Set no.'),
+      text('Language'),
+      text('Grade'),
+    ]);
+  });
+
+  it('lets a group override a collection-wide field, keeping its position', () => {
+    // Same rule as overriding an ancestor's — the collection is simply the
+    // outermost one — and the whole declaration is replaced, scope included.
+    const merged = fieldsFor(
+      { fields: [text('Set no.'), text('Shelf')], groups: TREE },
+      'regular',
+    );
+    expect(merged).toEqual([
+      { name: 'Set no.', type: 'number', scope: 'item' },
+      text('Shelf'),
+      text('Language'),
+    ]);
+  });
+
+  it('splits a merged set by scope without reordering it', () => {
+    const merged = fieldsFor(
+      { fields: [perCopy('Slab no.'), text('Shelf')], groups: TREE },
+      'rare',
+    );
+    expect(itemFields(merged)).toEqual([
+      text('Shelf'),
+      text('Set no.'),
+      text('Language'),
+      text('Grade'),
+    ]);
+    expect(copyFields(merged)).toEqual([perCopy('Slab no.')]);
   });
 
   it('takes the sort from the nearest ancestor that defines one', () => {

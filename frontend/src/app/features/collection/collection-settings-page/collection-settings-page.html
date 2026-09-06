@@ -1,3 +1,66 @@
+<!-- One editor, two owners. The collection's declarations and a group's are
+     the same list edited the same way, so they are the same markup driven by
+     `owner`; two copies would drift the first time one grew a control, which
+     is exactly what the scope selector is. -->
+<ng-template #fieldEditor let-owner="owner" let-fields="fields" let-label="label">
+  <div class="detail__fields">
+    <span class="fields-label">{{ label }}</span>
+    @for (field of fields; track field.name) {
+      <span class="field-chip">
+        <span class="name">{{ field.name }}</span>
+        <ui-select
+          class="compact type"
+          [ariaLabel]="'collSettings.groups.fieldTypeAria' | t: { name: field.name }"
+          [options]="fieldTypeOptions()"
+          [value]="field.type"
+          (valueChange)="setFieldType(owner, field.name, $event)"
+        />
+        <ui-select
+          class="compact scope"
+          [ariaLabel]="'collSettings.groups.fieldScopeAria' | t: { name: field.name }"
+          [options]="fieldScopeOptions()"
+          [value]="field.scope"
+          (valueChange)="setFieldScope(owner, field.name, $event)"
+        />
+        <ui-button
+          variant="icon"
+          size="sm"
+          [ariaLabel]="'collSettings.groups.removeField' | t: { name: field.name }"
+          (click)="removeField(owner, field.name)"
+        ><ui-icon name="close" [size]="13" /></ui-button>
+      </span>
+    }
+    @if (pendingFieldGroupId() === owner) {
+      <span class="field-chip field-chip--new">
+        <input
+          class="field-input"
+          [placeholder]="'collSettings.groups.fieldPlaceholder' | t"
+          [attr.aria-label]="'collSettings.groups.fieldAria' | t"
+          autofocus
+          (keydown)="newFieldKeydown($event, owner)"
+          (blur)="commitNewField(owner, $any($event.target).value)"
+        />
+        <ui-select
+          class="compact type"
+          [ariaLabel]="'collSettings.groups.newFieldTypeAria' | t"
+          [options]="fieldTypeOptions()"
+          [value]="pendingFieldType()"
+          (valueChange)="pendingFieldType.set($any($event))"
+        />
+        <ui-select
+          class="compact scope"
+          [ariaLabel]="'collSettings.groups.newFieldScopeAria' | t"
+          [options]="fieldScopeOptions()"
+          [value]="pendingFieldScope()"
+          (valueChange)="pendingFieldScope.set($any($event))"
+        />
+      </span>
+    }
+    <ui-button variant="link" size="sm" (click)="pendingFieldGroupId.set(owner)"
+      >{{ 'collSettings.groups.addField' | t }}</ui-button>
+  </div>
+</ng-template>
+
 @if (draft(); as d) {
   <a class="back" [routerLink]="['/c', d.id]" [queryParams]="g() ? { g: g() } : {}"
     ><ui-icon name="chevron-left" [size]="13" />{{ d.name }}</a
@@ -11,6 +74,23 @@
       <!-- Master–detail. A collection five levels deep with dividers at the
            bottom is unreadable as one column of editors, and the branch you
            came to fix is somewhere in the middle of it. -->
+      <!-- Above the tree, because it is above it in the model: these are the
+           fields every group inherits, and a group may override one. -->
+      <ui-card class="collection-fields">
+        <div class="groups-card__head">
+          <span class="heading">{{ 'collSettings.fields.heading' | t }}</span>
+        </div>
+        <p class="collection-fields__hint">{{ 'collSettings.fields.hint' | t }}</p>
+        <ng-container
+          [ngTemplateOutlet]="fieldEditor"
+          [ngTemplateOutletContext]="{
+            owner: collectionOwner,
+            fields: d.fields,
+            label: 'collSettings.fields.label' | t
+          }"
+        />
+      </ui-card>
+
       <div class="groups-split">
         <ui-card class="groups-card groups-split__tree">
           <div class="groups-card__head">
@@ -152,48 +232,14 @@
               />
             </div>
 
-            <div class="detail__fields">
-              <span class="fields-label">{{ 'collSettings.groups.fields' | t }}</span>
-              @for (field of sel.node.fields; track field.name) {
-                <span class="field-chip">
-                  <span class="name">{{ field.name }}</span>
-                  <ui-select
-                    class="compact type"
-                    [ariaLabel]="'collSettings.groups.fieldTypeAria' | t: { name: field.name }"
-                    [options]="fieldTypeOptions()"
-                    [value]="field.type"
-                    (valueChange)="setFieldType(sel.node.id, field.name, $event)"
-                  />
-                  <ui-button
-                    variant="icon"
-                    size="sm"
-                    [ariaLabel]="'collSettings.groups.removeField' | t: { name: field.name }"
-                    (click)="removeField(sel.node.id, field.name)"
-                  ><ui-icon name="close" [size]="13" /></ui-button>
-                </span>
-              }
-              @if (pendingFieldGroupId() === sel.node.id) {
-                <span class="field-chip field-chip--new">
-                  <input
-                    class="field-input"
-                    [placeholder]="'collSettings.groups.fieldPlaceholder' | t"
-                    [attr.aria-label]="'collSettings.groups.fieldAria' | t"
-                    autofocus
-                    (keydown)="newFieldKeydown($event, sel.node.id)"
-                    (blur)="commitNewField(sel.node.id, $any($event.target).value)"
-                  />
-                  <ui-select
-                    class="compact type"
-                    [ariaLabel]="'collSettings.groups.newFieldTypeAria' | t"
-                    [options]="fieldTypeOptions()"
-                    [value]="pendingFieldType()"
-                    (valueChange)="pendingFieldType.set($any($event))"
-                  />
-                </span>
-              }
-              <ui-button variant="link" size="sm" (click)="pendingFieldGroupId.set(sel.node.id)"
-                >{{ 'collSettings.groups.addField' | t }}</ui-button>
-            </div>
+            <ng-container
+              [ngTemplateOutlet]="fieldEditor"
+              [ngTemplateOutletContext]="{
+                owner: sel.node.id,
+                fields: sel.node.fields,
+                label: 'collSettings.groups.fields' | t
+              }"
+            />
 
             <div class="detail__sections">
               <span class="fields-label">{{ 'collSettings.sections.label' | t }}</span>
