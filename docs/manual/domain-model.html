@@ -238,7 +238,16 @@
   campo por exemplar mora ali, e não numa tabela própria — não há tela que liste
   cópias, e uma cópia sem o item dela não é nada.
   <code>ItemCopyJsonShapeTests.CopyCustomValues_LiveInsideTheCopiesDocument</code>
-  fixa exatamente isso. Os dois interceptors que precisam enxergar essa entrada
+  fixa exatamente isso. Por ser aninhada, ela é a <strong>única</strong> coleção
+  owned do modelo cuja ausência no documento não vira lista vazia: o EF atribui
+  null à navegação, depois do inicializador da propriedade. Por isso
+  <code>ItemCopy.Custom</code> guarda no <em>getter</em> — e não num
+  inicializador, que já rodou, nem no setter, que o EF pode não usar. Sem a
+  guarda, <b>uma</b> cópia em forma antiga faz
+  <code>GET /api/collections</code> responder 500 para a conta inteira; a
+  migration repara as linhas que existiam quando rodou, e a guarda é o que
+  impede uma linha que ela nunca viu de derrubar tudo (ADR-73).
+  Os dois interceptors que precisam enxergar essa entrada
   (<code>CollectionVersionInterceptor.OwnerOf</code> e o de tenant) resolvem os
   nomes pelas FKs de posse em vez de adivinhá-los, então nenhum dos dois precisou
   mudar para vê-la.

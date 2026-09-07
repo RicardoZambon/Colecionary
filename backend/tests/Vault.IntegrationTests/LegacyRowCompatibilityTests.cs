@@ -19,8 +19,17 @@ namespace Vault.IntegrationTests;
 /// rows with the current code, so every <c>Copies</c> document they read already
 /// carries a <c>Custom</c> key; nothing exercised a document without one. A
 /// nested owned JSON collection does <b>not</b> materialise as an empty list
-/// when its key is missing — EF throws while building the item, and the whole
-/// collection graph fails with it.
+/// when its key is missing — EF assigns the navigation null, and mapping the
+/// item threw, taking the whole collection graph with it.
+/// </para>
+/// <para>
+/// Two things are pinned here, and the pair is the point. The <b>read</b>
+/// survives the legacy shape, because a migration is a one-time repair and
+/// cannot stop an older build from writing that shape again afterwards — which
+/// is how the 500 came back on a database whose backfill had already run.
+/// And the <b>backfill still repairs storage</b>, asserted against the raw
+/// document rather than the response, so tolerance on the read can never be
+/// mistaken for the migration having become optional.
 /// </para>
 /// <para>
 /// It drives the real migrations rather than a copy of their SQL: migrating one
@@ -76,6 +85,12 @@ public class LegacyRowCompatibilityTests(VaultApiFactory factory)
         }
     }
 
+    /// <summary>One item's <c>Copies</c> document, verbatim, to assert on shape.</summary>
+    private async Task<string> StoredCopies(string collectionId, string itemId) =>
+        (await SnapshotCopies())
+            .Single(row => row.Collection == collectionId && row.Item == itemId)
+            .Copies;
+
     private async Task MigrateTo(string target)
     {
         using var scope = factory.Services.CreateScope();
@@ -118,14 +133,29 @@ public class LegacyRowCompatibilityTests(VaultApiFactory factory)
             // a vault running yesterday's build has on disk.
             await MigrateTo(BeforeTheBackfill);
 
-            // Pinned deliberately: this is the failure the user saw, and it is
-            // the reason the backfill is not optional. If a future EF release
-            // starts tolerating the absent key this assertion fails, and the
-            // right response is to read the release notes, not to delete it.
+            // The shape really is the legacy one — asserted against the stored
+            // document, so the rest of this test cannot pass vacuously if a
+            // future Down() stops stripping the key.
+            Assert.DoesNotContain("\"Custom\"", await StoredCopies(created.Id, "i1"));
+
+            // And the read survives it. One copy in this shape used to answer
+            // 500 for every collection the account had, which is a blast radius
+            // out of all proportion to a missing empty array — and the migration
+            // cannot prevent a recurrence, because an older build writes the old
+            // shape again the moment it is deployed over the new schema.
             var beforeBackfill = await client.GetAsync("/api/collections");
-            Assert.Equal(HttpStatusCode.InternalServerError, beforeBackfill.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, beforeBackfill.StatusCode);
+            Assert.All(
+                (await beforeBackfill.Content.ReadFromJsonAsync<List<VersionedCollectionDto>>())!
+                    .Single(c => c.Collection.Id == created.Id).Collection.Items
+                    .SelectMany(i => i.Copies),
+                copy => Assert.Empty(copy.Custom));
 
             await MigrateTo(AfterTheBackfill);
+
+            // Storage is repaired, not merely tolerated. This is what keeps the
+            // migration from looking optional now that the read no longer fails.
+            Assert.Contains("\"Custom\"", await StoredCopies(created.Id, "i1"));
 
             var response = await client.GetAsync("/api/collections");
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);

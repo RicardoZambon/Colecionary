@@ -301,6 +301,26 @@ public class DtoMapperTests
         Assert.Empty(new ItemCopyDto("c2", "Mint", 0).Custom);
     }
 
+    /// <summary>
+    /// The wire has the empty list covered; storage does not. EF assigns an
+    /// owned nested collection, so a stored copy whose document carries no
+    /// <c>Custom</c> array arrives with the navigation null, past the property
+    /// initialiser. Mapping it threw, and because the whole vault is mapped in
+    /// one request, one such copy answered 500 for every collection the account
+    /// had.
+    /// </summary>
+    [Fact]
+    public void ACopyMaterialisedWithoutItsCustomArray_ReadsAsEmptyRatherThanThrowing()
+    {
+        var copy = new ItemCopy { Id = "c3", Custom = null! };
+
+        Assert.Empty(copy.Custom);
+        Assert.Empty(copy.ToDto().Custom);
+
+        var item = new Item { Id = "i1", Name = "Legacy", Copies = [copy] };
+        Assert.Empty(Assert.Single(item.ToDto().Copies).Custom);
+    }
+
     [Fact]
     public void ToProfileDto_LowercasesThePlan()
     {

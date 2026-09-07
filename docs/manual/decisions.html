@@ -766,6 +766,16 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-73</span> A leitura tolera a forma antiga de um documento aninhado; a migration continua reparando o armazenado</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A ADR-71 acrescentou o backfill e deixou a leitura estrita, prendendo em teste que a chave ausente responde 500 — justamente para que ninguém achasse a migration opcional. Só que uma migration é reparo <em>de uma vez só</em>: ela não impede um build anterior de gravar a forma velha depois dela. Foi o que aconteceu num banco de DEV cujo backfill já estava aplicado — 181 itens voltaram à forma antiga porque o app antigo seguiu rodando sobre o schema novo — e <code>GET /api/collections</code> passou a responder 500 para a conta inteira.</dd>
+    <dt>Decisão</dt><dd><code>ItemCopy.Custom</code> guarda no <em>getter</em> (<code>custom ??= []</code>). No getter porque o inicializador da propriedade já rodou quando o EF atribui a navegação, e porque o EF pode gravar o campo de apoio direto, contornando o setter. A guarda fica na propriedade e não no <code>DtoMapper</code>, que é só um dos leitores — <code>ReplaceGraph</code> e os validadores também leem <code>copy.Custom</code>. O backfill <strong>fica</strong>, e <code>LegacyRowCompatibilityTests</code> passa a prender o par: a leitura sobrevive à forma antiga, e depois da migration o documento <em>armazenado</em> carrega a chave — verificado no JSON cru, não na resposta.</dd>
+    <dt>Consequência</dt><dd>Uma cópia em forma antiga custa os valores por exemplar daquela cópia — que ela estruturalmente não tem — em vez de custar toda a conta. A degradação é exata, não um palpite: a forma velha não tem onde guardar esses valores, então vazio é a leitura verdadeira, a mesma que o DTO já dava para “ausente no fio”. E a primeira gravação daquela coleção reescreve a linha na forma atual, então o banco se cura sozinho. O custo é que a ausência deixa de ser observável pelo 500; é a asserção sobre o JSON cru que a mantém observável, e apagar <em>essa</em> é o que voltaria a esconder o problema.</dd>
+    <dt>Imposta por</dt><dd><code>LegacyRowCompatibilityTests.AVaultStoredBeforePerCopyFields_StillReads</code> (as duas metades) e <code>DtoMapperTests.ACopyMaterialisedWithoutItsCustomArray_ReadsAsEmptyRatherThanThrowing</code></dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>
