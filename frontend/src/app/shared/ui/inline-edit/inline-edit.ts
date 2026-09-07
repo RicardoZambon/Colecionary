@@ -1,13 +1,16 @@
+import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   afterNextRender,
+  inject,
   input,
   linkedSignal,
   output,
   viewChild,
 } from '@angular/core';
 
+import { returnFocus } from '../focus-return';
 import { UiTextInput } from '../text-input/text-input';
 
 /**
@@ -47,6 +50,14 @@ import { UiTextInput } from '../text-input/text-input';
  *   vanishes when you click elsewhere is indistinguishable from a save that
  *   dropped it. Set `commitOnBlur` to false where a click elsewhere is more
  *   likely to mean "never mind".
+ * - **Enter and Escape give focus back to whatever opened the box.** The
+ *   caller's `@if` removes the box, and the focused input goes with it: focus
+ *   landed on `<body>`, so the next Tab restarted at the skip link ~20 stops
+ *   from the `+ Sub` button just pressed. Handed back *before* the emit, which
+ *   is what `ui-reorder` does for the same reason — move focus while the thing
+ *   losing it is still there. A blur is deliberately excluded: focus has
+ *   already gone somewhere the user chose, and taking it back would be the
+ *   theft this is meant to prevent.
  */
 @Component({
   selector: 'ui-inline-edit',
@@ -97,6 +108,17 @@ export class UiInlineEdit {
   /** Committing and cancelling are both terminal: neither may fire twice. */
   private done = false;
 
+  private readonly document = inject(DOCUMENT);
+
+  /**
+   * What had focus when the box appeared — the control that revealed it.
+   *
+   * Read in the field initialiser, i.e. while the click or keypress that opened
+   * the box is still the reason anything is focused. Same trick, same reason,
+   * as `ui-dialog`'s own opener.
+   */
+  private readonly opener = this.document.activeElement as HTMLElement | null;
+
   constructor() {
     afterNextRender(() => {
       // A rename opens on the existing name selected, so typing replaces it;
@@ -110,13 +132,32 @@ export class UiInlineEdit {
     if (event.key === 'Enter') {
       event.preventDefault();
       this.commit();
+      this.handBack();
     } else if (event.key === 'Escape') {
       event.preventDefault();
       // Stop it here: this box is often inside a dialog, and one Escape must
       // not both abandon the name and close the dialog around it.
       event.stopPropagation();
       this.cancel();
+      this.handBack();
     }
+  }
+
+  /**
+   * After the terminal act, and still in the same task.
+   *
+   * **After**, because moving focus fires `blur` synchronously and `onBlur`
+   * would then commit — which on Escape is the one thing this component
+   * promises never to happen. `commit`/`cancel` have already set `done` by
+   * here, so that blur is a no-op.
+   *
+   * **Same task**, because the emit only writes a signal: the caller's `@if`
+   * drops this box on the next change detection, so the input and the opener
+   * are both still in the document right now. That is the window `ui-reorder`
+   * uses for the same purpose.
+   */
+  private handBack(): void {
+    returnFocus(this.document, this.opener);
   }
 
   protected onBlur(): void {

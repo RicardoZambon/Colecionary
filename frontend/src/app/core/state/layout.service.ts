@@ -1,7 +1,9 @@
 import { DOCUMENT } from '@angular/common';
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, Injector, afterNextRender, inject, signal } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs/operators';
+
+import { MAIN_LANDMARK_ID } from '../../shared/ui/focus-return';
 
 /**
  * The width at which the sidebar stops being a column and becomes a drawer.
@@ -29,6 +31,7 @@ const COMPACT_QUERY = '(max-width: 900px)';
 export class LayoutService {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
 
   readonly navOpen = signal(false);
 
@@ -41,7 +44,10 @@ export class LayoutService {
     // and the user has to dismiss it to see what they picked.
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
-      .subscribe(() => this.closeNav());
+      .subscribe(() => {
+        this.closeNav();
+        this.rescueFocus();
+      });
 
     const media = this.document.defaultView?.matchMedia?.(COMPACT_QUERY);
     if (media) {
@@ -62,5 +68,43 @@ export class LayoutService {
 
   closeNav(): void {
     this.navOpen.set(false);
+  }
+
+  /**
+   * Puts focus back in the document when a navigation dropped it.
+   *
+   * Nothing focuses anything on a route change, so whenever the element that
+   * had focus went with the outgoing page — a nav row in the drawer that is
+   * about to close, a link inside the component being destroyed — focus fell to
+   * `<body>` and the next Tab restarted at the skip link, ~20 stops of chrome
+   * from the content. The shell's `<main>` is `tabindex="-1"` for exactly this.
+   *
+   * **Only when focus was actually lost.** Moving it on *every* navigation is
+   * the more common pattern and it is the wrong one here: the item page's
+   * previous/next links navigate in place, and a reader stepping through a
+   * collection with them would be thrown to the top of the page after every
+   * step. An element that survived the navigation still holds focus, and
+   * nothing may take it away from there.
+   *
+   * `afterNextRender` because `<main>` is `inert` while the drawer is open, and
+   * `closeNav()` above only lifts that on the next render — `.focus()` inside
+   * an inert subtree is silently ignored. Same reason as `focusNavToggle`.
+   */
+  private rescueFocus(): void {
+    const active = this.document.activeElement as HTMLElement | null;
+    const lost = !active || active === this.document.body || !active.isConnected;
+    if (!lost) return;
+
+    afterNextRender(
+      () => {
+        // Re-checked on the far side of the render: the page that just rendered
+        // may have focused something of its own (a fresh collection's name box
+        // does), and that choice outranks this one.
+        const now = this.document.activeElement as HTMLElement | null;
+        if (now && now !== this.document.body) return;
+        this.document.getElementById(MAIN_LANDMARK_ID)?.focus({ preventScroll: true });
+      },
+      { injector: this.injector },
+    );
   }
 }

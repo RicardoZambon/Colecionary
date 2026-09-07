@@ -1,20 +1,16 @@
 <h1>{{ 'settings.title' | t }}</h1>
 
 <!--
-  `[panels]="true"` and a real `role="tabpanel"` below. Declaring `role="tab"`
-  without the panel it controls is worse than plain buttons: the role tells the
-  user which keys to press, and choosing a tab was then announced as nothing at
-  all because the content that changed was not identified as this tab's panel.
+  `[uiTabPanel]` on the block below is what makes `role="tab"` honest. Declaring
+  the role without the panel it controls is worse than plain buttons: the role
+  tells the user which keys to press, and choosing a tab was then announced as
+  nothing at all because the content that changed was not identified as this
+  tab's panel. The directive owns the role, the id and the aria-labelledby, so
+  the four bindings that used to be written out here cannot disagree.
 -->
-<ui-tabs #tabstrip [tabs]="tabs()" [active]="activeTab()" [panels]="true" (activeChange)="onTabChange($event)" />
+<ui-tabs #tabstrip [tabs]="tabs()" [active]="activeTab()" (activeChange)="onTabChange($event)" />
 
-<div
-  role="tabpanel"
-  class="panel"
-  [id]="tabstrip.panelDomId(activeTab())"
-  [attr.aria-labelledby]="tabstrip.tabDomId(activeTab())"
-  tabindex="0"
->
+<div class="panel" [uiTabPanel]="tabstrip">
   @switch (activeTab()) {
     @case ('plan') {
       <section class="section">

@@ -27,10 +27,14 @@ import { UiEmpty } from '../../shared/ui/empty/empty';
   imports: [RouterLink, TPipe, UiButton, UiEmpty],
   template: `
     <ui-empty icon="search" [title]="'shell.notFound.title' | t" [body]="body()">
-      <div emptyActions>
-        <ui-button variant="primary" routerLink="/dashboard">{{ 'nav.dashboard' | t }}</ui-button>
-        <ui-button variant="ghost" routerLink="/store">{{ 'nav.store' | t }}</ui-button>
-      </div>
+      <!-- emptyActions on the buttons, not on a box around them: the slot is
+           what carries the gap, so a single projected wrapper put the two
+           buttons edge to edge — they read as one segmented control, and on a
+           phone the boundary between them is a coin-flip. -->
+      <ui-button emptyActions variant="primary" routerLink="/dashboard">{{
+        'nav.dashboard' | t
+      }}</ui-button>
+      <ui-button emptyActions variant="ghost" routerLink="/store">{{ 'nav.store' | t }}</ui-button>
     </ui-empty>
   `,
   styles: `

@@ -46,6 +46,16 @@
  *     an `aria-label` and still have no `<label for>`, so it is announced but
  *     its label is not clickable; the check here measures the announced name,
  *     which is the stricter half.
+ *
+ * And one more, found by the second audit pass: a *measured* tap target says
+ * nothing about whether pressing it does anything. `data-tap-ok` exempts a
+ * control from the size sweep on the strength of a claim that it grows its own
+ * target — and that claim was false, because the pseudo-element was hung on a
+ * component host, which is not a control and has no handler. The area was
+ * hit-testable and completely inert. So there is now a check that *presses*
+ * inside a claimed target and asserts the input flips, and a companion that
+ * asserts nothing covers an element carrying a tooltip — the same question, and
+ * a stretched card link had silently swallowed two of them.
  */
 import { chromium } from 'playwright';
 
@@ -709,6 +719,96 @@ await touch.close();
       `${hits.length}: ${hits.slice(0, 4).join(' | ')}`,
     );
   }
+}
+
+// 5. A grown tap target actually *does* something when you press it.
+//
+// This is the check that `data-tap-ok` needed and did not have. The tap sweep
+// above measures `getBoundingClientRect().height` and skips anything carrying
+// that attribute — so it takes the claim "this control grows its own target"
+// entirely on trust. The claim was false: `ui-checkbox` grew its 44px area with
+// a pseudo-element hung on the *component host*, and a pseudo-element's hit test
+// resolves to the element that owns it. The host is not a control and has no
+// handler, so the area was hit-testable and completely inert. Measuring the box
+// could never see that; only pressing it can.
+//
+// It has to be a **real** pointer press, through Playwright, not a synthetic
+// `MouseEvent` dispatched in the page. Two reasons, and the first attempt at
+// this check hit both: `new MouseEvent('click')` is not `cancelable` unless you
+// say so, so a handler's `preventDefault()` silently does nothing; and a label's
+// *activation behaviour* — the thing that forwards a press on the padding to the
+// input inside it — runs only for trusted events. A synthetic click therefore
+// reports every label-based control as inert, which is a bug in the check.
+if (collection) {
+  const press = await browser.newContext({
+    viewport: { width: 768, height: 900 },
+    storageState: await context.storageState(),
+  });
+  const pp2 = await press.newPage();
+  await pp2.goto(`${BASE}${collection}?v=list`, { waitUntil: 'networkidle' });
+  await pp2.waitForTimeout(1200);
+
+  const boxes = pp2.locator('ui-checkbox[data-tap-ok], [data-tap-ok] ui-checkbox');
+  const total = await boxes.count();
+  // Three is plenty: this is about the component's contract, not about coverage.
+  const sample = Math.min(total, 3);
+  check('a claimed 44px target is probed at all', sample > 0, `${total} claimed`);
+
+  const inert = [];
+  for (let i = 0; i < sample; i++) {
+    const box = boxes.nth(i);
+    await box.scrollIntoViewIfNeeded();
+    const input = box.locator('input').first();
+    const r = await box.boundingBox();
+    if (!r) continue;
+    // 18px below the centre: inside the claimed 44px target, outside the 15px
+    // paint. If the claim is honest, a press here flips the input.
+    const before = await input.isChecked();
+    await pp2.mouse.click(Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2 + 18));
+    await pp2.waitForTimeout(150);
+    const after = await input.isChecked();
+    if (after === before) inert.push(`#${i} at +18px below centre`);
+    else await pp2.mouse.click(Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2));
+  }
+  check(
+    'a claimed 44px target actually toggles when pressed',
+    inert.length === 0,
+    `${inert.length} inert of ${sample}: ${inert.join(', ')}`,
+  );
+
+  // The companion question: does anything *decorative* sit over an element that
+  // carries a tooltip? A stretched card link's `inset: 0` pseudo-element paints
+  // above every statically positioned descendant whatever the DOM order, and it
+  // had silently swallowed the one sentence explaining a derived value.
+  //
+  // Only a non-interactive coverer counts. A tap target legitimately overlapping
+  // a neighbour that happens to carry a `title` is a density trade-off, not a
+  // stolen tooltip, and reporting it makes the check cry wolf.
+  await pp2.goto(`${BASE}${collection}?v=grid`, { waitUntil: 'networkidle' });
+  await pp2.waitForTimeout(1000);
+  const covered = await pp2.evaluate(() => {
+    const interactive = 'a[href], button, input, select, textarea, label, [role="button"]';
+    const out = [];
+    for (const el of document.querySelectorAll('[title]:not([title=""])')) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8 || r.top < 0 || r.bottom > innerHeight) continue;
+      const hit = document.elementFromPoint(
+        Math.round(r.left + r.width / 2),
+        Math.round(r.top + r.height / 2),
+      );
+      if (!hit || el.contains(hit) || hit === el) continue;
+      if (hit.closest(interactive)) continue;
+      out.push(`${el.tagName.toLowerCase()} under ${hit.tagName.toLowerCase()}`);
+    }
+    return [...new Set(out)];
+  });
+  check(
+    'nothing decorative covers an element that carries a tooltip',
+    covered.length === 0,
+    `${covered.length}: ${covered.slice(0, 3).join(', ')}`,
+  );
+
+  await press.close();
 }
 
 check('no uncaught errors on any page', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));

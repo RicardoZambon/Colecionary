@@ -214,14 +214,10 @@ export const ptBR: Record<MessageKey, string> = {
   'settings.plan.billingNote':
     'A cobrança ainda não existe, então não é possível trocar de plano por aqui — e hoje nada no aplicativo é limitado pelo seu plano. Isto é o que cada faixa vai cobrir.',
 
-  'settings.access.heading': 'Membros do tenant',
-  'settings.access.subBefore': 'Todo mundo com acesso ao tenant',
-  'settings.access.subAfter':
-    '. Coleções individuais também podem ser compartilhadas na própria página.',
   'settings.access.removeMember': 'Remover {name}',
   'settings.access.memberRoleAria': 'Papel de {name}',
   'settings.access.policyNote':
-    'O acesso é controlado aqui, pessoa por pessoa, e o compartilhamento por link fica na página de cada coleção. Ainda não existem chaves de compartilhamento para o tenant inteiro.',
+    'O acesso é controlado aqui, pessoa por pessoa, e o compartilhamento por link fica na página de cada coleção. Ainda não existem chaves de compartilhamento para a conta inteira.',
   'settings.access.remove.confirm.title': 'Remover {name}?',
   'settings.access.remove.confirm.body':
     'A pessoa perde o acesso a este acervo na hora. As coleções e os itens continuam exatamente como estão, e você pode convidá-la de volta depois.',
@@ -636,7 +632,7 @@ export const ptBR: Record<MessageKey, string> = {
   'collSettings.sharing.memberRoleAria': 'Papel de {name}',
   'collSettings.sharing.linkShare': 'Compartilhamento por link',
   'collSettings.sharing.linkShareSoon': 'Ainda não disponível — a página pública de coleção não foi construída.',
-  'collSettings.sharing.finePrint': 'As regras de acesso de todo o tenant ficam em',
+  'collSettings.sharing.finePrint': 'O acesso de toda a conta é definido em',
   'collSettings.sharing.finePrintLink': 'Configurações, em Compartilhamento e acesso',
 
   'collSettings.general.name': 'Nome',

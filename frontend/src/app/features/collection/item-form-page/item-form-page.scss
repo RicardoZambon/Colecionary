@@ -285,9 +285,15 @@ h1 {
     /* Reserves the line so the bar does not jump the first time it appears. */
     min-height: 1em;
 
+    /* The unsaved mark. A shape, so its size is 7px at every font and every
+       language, and `aria-hidden` on an element with no text content is exactly
+       true — the sentence beside it is the announcement. */
     .dot {
-      color: var(--warn-strong);
-      font-size: 9px;
+      flex: none;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--warn-strong);
     }
   }
 }

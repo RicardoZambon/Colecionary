@@ -88,6 +88,26 @@ describe('UiDialog', () => {
     expect(document.activeElement).toBe(opener());
   });
 
+  it('lands on the main landmark when the opener was destroyed with the answer', () => {
+    // The deleted-row case: the ✕ that opened the dialog belongs to the thing
+    // the dialog removed, so there is no opener left. Declining to focus a
+    // detached element was right and was only half of it — the other half left
+    // focus on <body>, which is the state the restore exists to avoid.
+    const main = document.createElement('main');
+    main.id = 'main-content';
+    main.tabIndex = -1;
+    document.body.appendChild(main);
+    open();
+    const gone = opener();
+    gone.remove();
+
+    fixture.componentInstance.open.set(false);
+    fixture.detectChanges();
+
+    expect(document.activeElement).toBe(main);
+    main.remove();
+  });
+
   it('answers Escape even when focus never reached it', () => {
     open();
     (el.querySelector('#behind') as HTMLElement).focus();

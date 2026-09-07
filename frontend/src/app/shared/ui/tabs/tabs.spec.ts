@@ -2,7 +2,7 @@ import { Component, signal, viewChild } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { TabDef, UiTabs } from './tabs';
+import { TabDef, UiTabPanel, UiTabs } from './tabs';
 
 const TABS: TabDef[] = [
   { id: 'appearance', label: 'Aparência' },
@@ -12,20 +12,19 @@ const TABS: TabDef[] = [
 ];
 
 @Component({
-  imports: [UiTabs],
+  imports: [UiTabPanel, UiTabs],
   template: `
-    <ui-tabs #strip [tabs]="tabs" [(active)]="active" [panels]="panels()" />
-    <div
-      role="tabpanel"
-      [id]="strip.panelDomId(active())"
-      [attr.aria-labelledby]="strip.tabDomId(active())"
-    ></div>
+    <ui-tabs #strip [tabs]="tabs" [(active)]="active" />
+    @if (panel()) {
+      <div [uiTabPanel]="strip"></div>
+    }
   `,
 })
 class Host {
   readonly tabs = TABS;
   readonly active = signal('appearance');
-  readonly panels = signal(true);
+  /** The caller's panel, behind an @if — the shape the registration exists for. */
+  readonly panel = signal(true);
   readonly strip = viewChild.required(UiTabs);
 }
 
@@ -56,17 +55,42 @@ describe('UiTabs', () => {
     expect(tabs().map(t => t.getAttribute('tabindex'))).toEqual(['0', '-1', '-1', '-1']);
   });
 
-  it('names the panel each tab controls, and the panel names the tab back', () => {
+  it('names the panel the selected tab controls, and the panel names the tab back', () => {
     const panel = el.querySelector('[role=tabpanel]') as HTMLElement;
     expect(tabs()[0].getAttribute('aria-controls')).toBe(panel.id);
     expect(panel.getAttribute('aria-labelledby')).toBe(tabs()[0].id);
   });
 
-  it('claims nothing when the caller renders no panel', () => {
-    fixture.componentInstance.panels.set(false);
+  it('advertises aria-controls on the selected tab only, and it resolves', () => {
+    // The defect this replaces: all four tabs claimed a panel while the page
+    // rendered one, so three of the four ids were not in the document at all.
+    const claiming = tabs().filter(t => t.getAttribute('aria-controls'));
+    expect(claiming).toEqual([tabs()[0]]);
+    expect(document.getElementById(claiming[0].getAttribute('aria-controls') as string)).toBe(
+      el.querySelector('[role=tabpanel]'),
+    );
+  });
+
+  it('follows the selection, so the claim never outlives the panel it names', () => {
+    fixture.componentInstance.active.set('access');
     fixture.detectChanges();
-    // An aria-controls pointing at an id that does not exist is worse than none.
-    expect(tabs()[0].getAttribute('aria-controls')).toBe(null);
+
+    const panel = el.querySelector('[role=tabpanel]') as HTMLElement;
+    const claiming = tabs().filter(t => t.getAttribute('aria-controls'));
+    expect(claiming).toEqual([tabs()[2]]);
+    expect(claiming[0].getAttribute('aria-controls')).toBe(panel.id);
+  });
+
+  it('claims nothing when the caller renders no panel', () => {
+    fixture.componentInstance.panel.set(false);
+    fixture.detectChanges();
+    // An aria-controls pointing at an id that does not exist is worse than none,
+    // and with no uiTabPanel registered there is no id to point at.
+    expect(tabs().some(t => t.getAttribute('aria-controls'))).toBe(false);
+  });
+
+  it('does not make the panel a tab stop: its own content already is', () => {
+    expect(el.querySelector('[role=tabpanel]')?.getAttribute('tabindex')).toBe(null);
   });
 
   it('moves with the arrows, which role=tab promises and this did not deliver', () => {

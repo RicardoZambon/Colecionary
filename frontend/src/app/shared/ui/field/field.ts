@@ -108,13 +108,24 @@ export class UiField implements UiFieldOwner {
   protected readonly hintId = `${this.id}-hint`;
   protected readonly errorId = `${this.id}-err`;
 
-  private claimed = false;
+  /**
+   * Which control currently holds the minted id, or null.
+   *
+   * The identity and not a boolean: a control that is destroyed hands the claim
+   * back, and only the holder may do that — see {@link UiFieldOwner.claimId}.
+   */
+  private claimant: object | null = null;
 
   /** @see UiFieldOwner.claimId */
-  claimId(): string | null {
-    if (this.claimed) return null;
-    this.claimed = true;
+  claimId(claimant: object): string | null {
+    if (this.claimant && this.claimant !== claimant) return null;
+    this.claimant = claimant;
     return this.controlId() || this.id;
+  }
+
+  /** @see UiFieldOwner.releaseId */
+  releaseId(claimant: object): void {
+    if (this.claimant === claimant) this.claimant = null;
   }
 
   /** The hint and the error, in reading order — the error last, being the news. */

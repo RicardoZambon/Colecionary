@@ -124,6 +124,12 @@ export class ToastService {
     // exactly the fact the stale error contradicts. So it supersedes it. An
     // `info` message does not: it says nothing about whether the failure still
     // holds, and that is the case the queue-holding rule was written for.
+    //
+    // Which is why the tone a caller picks now carries weight. On an autosaving
+    // page, "group added" is a change to the *draft* — it says nothing about
+    // whether the last save reached the server, so it is `flash`. Reserve
+    // `success` for a write that actually landed, or a local confirmation will
+    // retract a save failure that still holds.
     if (tone === 'success') {
       this.queueState.update(queue => queue.filter(t => t.tone !== 'error'));
       clearTimeout(this.timer);

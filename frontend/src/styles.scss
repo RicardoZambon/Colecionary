@@ -291,26 +291,6 @@ textarea::placeholder {
     }
   }
 
-  /* Same trade for a selection box, and the same reason: 15px is the size it
-     should look, and growing it would wreck the density of the table row it
-     lives in. It stays here rather than in `checkbox.ts` to sit beside the
-     other pseudo-element targets, which is the same reason the chips above are
-     here. (This comment used to say an inline styles block *cannot* `@use` the
-     breakpoint mixins. It can — `ui-select`, `ui-text-input`, `ui-tabs` and
-     `ui-toggle` all do — so that was never the reason.) */
-  ui-checkbox {
-    position: relative;
-
-    &::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: var(--tap);
-      height: var(--tap);
-      transform: translate(-50%, -50%);
-    }
-  }
 }
 
 /**

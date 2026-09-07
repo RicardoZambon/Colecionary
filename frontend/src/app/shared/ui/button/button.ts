@@ -16,6 +16,7 @@ export type ButtonSize = 'md' | 'sm';
       [type]="type()"
       [disabled]="disabled() || pending()"
       [attr.aria-busy]="pending() || null"
+      [attr.aria-disabled]="muted() || null"
       [attr.aria-label]="ariaLabel() || null"
       [attr.id]="controlId() || null"
       [attr.aria-expanded]="ariaExpanded() ?? null"
@@ -207,10 +208,14 @@ export type ButtonSize = 'md' | 'sm';
     }
 
     /*
-     * Looks unavailable, still clicks. The disabled attribute would be the
-     * obvious thing and is the wrong one: a dead control cannot say why, and
-     * these are the cases with something to say — removing the tenant's owner,
-     * for instance. The click is what surfaces the explanation.
+     * Looks unavailable, still focusable. The disabled attribute would be the
+     * obvious thing and is the wrong one twice over: a dead control cannot say
+     * why — and these are the cases with something to say, like refusing to
+     * remove the account's owner — and the browser blows focus off an element
+     * the moment it becomes disabled, which loses a keyboard user their place
+     * exactly when a control at the end of a list stops being available.
+     * aria-disabled on the element above is the other half: without it the
+     * state was carried by colour alone.
      */
     .btn--muted:not(:disabled) {
       color: var(--border);
@@ -250,9 +255,20 @@ export class UiButton {
   /** Stretch to the full width of the container (e.g. plan cards). */
   readonly block = input(false);
   /**
-   * Reads as unavailable but still fires. For actions that are refused with a
-   * reason the user deserves to hear — see the styles for why this is not
-   * `disabled`.
+   * The soft disable: reads and announces as unavailable, keeps the browser's
+   * `disabled` off it.
+   *
+   * Two things follow, and both are the point. It stays **focusable**, so a
+   * keyboard user is not thrown to `<body>` when the control they are pressing
+   * becomes unavailable — the end of a reorderable list is exactly that case.
+   * And it still **fires**, so a refusal can say why (removing the account's
+   * owner). A caller for which the act is genuinely a no-op at that moment
+   * simply returns; what the click does is the caller's business, and either
+   * way the user is told what the state is rather than shown a dimmer colour.
+   *
+   * Use plain `disabled` where the control is unavailable *and* nothing needs
+   * saying *and* nobody is standing on it — a submit button under an empty
+   * form.
    */
   readonly muted = input(false);
 

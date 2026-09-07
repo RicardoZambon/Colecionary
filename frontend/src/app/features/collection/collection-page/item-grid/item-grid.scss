@@ -46,10 +46,21 @@
    * takes focus and carries the accessible name is a real `<a>` sitting in the
    * reading order where the name is.
    *
-   * `z-index: 1` puts the cover above the artwork and the badges but below
-   * `&__pick` and `ui-reorder` at 2 — a control drawn on top of a link has to
-   * be *reachable* on top of it too, or ticking a card would navigate instead
-   * of selecting.
+   * `z-index: 1` puts the cover above the artwork, and everything that has to
+   * be reachable in its own right sits at 2: `&__pick`, `ui-reorder` — a
+   * control drawn on top of a link has to be *reachable* on top of it too, or
+   * ticking a card would navigate instead of selecting — and the two elements
+   * that carry a hint.
+   *
+   * The hints are the part that was missed. An inset-0 pseudo-element paints
+   * above every statically positioned descendant whatever the DOM order, so
+   * `elementFromPoint` over the value, over the field chip and over the
+   * condition badge all returned the anchor, and their `title` never appeared:
+   * on a grid where every card reads `≈ R$20.00`, the one sentence that
+   * explains the `≈` — nobody estimated this, so we are showing what you paid —
+   * was unreachable, while the identical tooltip worked in the list view. Two
+   * small boxes therefore no longer open the card, which is the same trade the
+   * list view already makes.
    */
   &__link {
     color: inherit;
@@ -95,16 +106,46 @@
     z-index: 2;
   }
 
-  /** Over the top-right corner, opposite the field chip. */
+  /**
+   * Over the top-right corner, opposite the field chip.
+   *
+   * A real `<label>` wrapping the box, and that is load-bearing. `ui-checkbox`
+   * grows its 44px target with a pseudo-element on its own host
+   * (`styles.scss`) — but a pseudo-element's hit test resolves to the element
+   * that owns it, and the host is not the control, so a press landing on that
+   * target reached a `<ui-checkbox>` with no handler and did nothing at all.
+   * Implicit label association is what turns it into a press of the input,
+   * because the input is a descendant.
+   *
+   * The other half is that `ui-card` computes `overflow: hidden`, so a 44px
+   * target centred 8px in from two edges had its outer halves clipped away and
+   * measured ~30px. Below the breakpoint the label takes the whole 44px box
+   * flush in the corner — where the card has nothing to clip — and centres the
+   * 15px paint inside it. The paint stays 15px because that is the size the
+   * table's density needs, and the chrome moves to the inner box so the target
+   * does not become a 44px panel square over the artwork.
+   */
   &__pick {
     position: absolute;
     top: var(--sp-2);
     right: var(--sp-2);
     z-index: 2;
-    display: flex;
-    padding: 2px;
-    border-radius: var(--radius);
-    background: var(--panel);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+
+    ui-checkbox {
+      padding: 2px;
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    @include upto($bp-lg) {
+      top: 0;
+      right: 0;
+      width: var(--tap);
+      height: var(--tap);
+    }
   }
 
   &__img {
@@ -151,12 +192,16 @@
     opacity: 0.45;
   }
 
-  /** The value the list is ordered by, so it needn't be repeated in the name. */
+  /**
+   * The value the list is ordered by, so it needn't be repeated in the name.
+   * `z-index: 2` rather than 1: it carries the "Field: value" tooltip, and at 1
+   * it tied with the link's cover and lost on DOM order.
+   */
   &__img ui-badge {
     position: absolute;
     top: 7px;
     left: 7px;
-    z-index: 1;
+    z-index: 2;
     background: var(--panel);
     text-transform: none;
     font-size: 10px;
@@ -196,7 +241,13 @@
     margin-top: 2px;
   }
 
+  /**
+   * Above the link's cover, so the `title` explaining a `≈` value is hoverable.
+   * Not `pointer-events: none`, which would remove the hover the tooltip needs.
+   */
   &__value {
+    position: relative;
+    z-index: 2;
     font-size: 13px;
     font-weight: 700;
     color: var(--accent2-strong);

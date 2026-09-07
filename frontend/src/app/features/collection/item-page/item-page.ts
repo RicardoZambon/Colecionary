@@ -2,6 +2,9 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -127,6 +130,8 @@ export class ItemPage {
    * per-file failure reporting that `images.upload` on its own has none of.
    */
   protected readonly uploads = inject(PhotoUploadService);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly injector = inject(Injector);
 
   readonly collectionId = input.required<string>();
   readonly itemId = input.required<string>();
@@ -544,6 +549,15 @@ export class ItemPage {
       if (!(await this.write({ ...current, photoIds: [...current.photoIds, ...ids] }))) return;
       this.selectedPhoto.set(before);
       this.toast.flash(this.i18n.t('toast.photo.added'));
+      // The button that was pressed is destroyed by its own success: with no
+      // photos the frame *is* the add control, and the first upload replaces it
+      // with the photograph. Without a successor the browser drops focus to
+      // <body> and the next Tab restarts at the skip link. The thumb for the
+      // photo that just landed is the honest place to be — it is the thing that
+      // changed — and the frame itself when there are no thumbs yet.
+      // By the photo's own id, never by index, so a re-render cannot land it on
+      // the wrong tile — the same rule ui-photo-manager's removal follows.
+      this.focusIn(`.thumb--photo[data-photo-id="${ids[0]}"]`, '.gallery__main');
     };
     picker.click();
   }
@@ -569,6 +583,35 @@ export class ItemPage {
     const next = item.photoIds.filter(id => id !== imageId);
     if (!(await this.write({ ...item, photoIds: next }))) return;
     this.selectedPhoto.update(i => Math.max(0, Math.min(i, next.length - 1)));
+    // Focus again goes nowhere on its own. The dialog restores it to the button
+    // that opened it, but that button is inside the block that only renders
+    // while there *is* a photo — so removing the last one detaches it — and even
+    // with photos left it spends the write disabled, which the browser treats
+    // the same way. Land on "remove" again while there is still something to
+    // remove, otherwise on the frame, which is the add control by then.
+    this.focusIn(next.length ? '.gallery__remove button' : '.gallery__main', '.gallery__main');
+  }
+
+  /**
+   * Moves focus to the first of two selectors that exists, once the DOM has
+   * caught up with the signals.
+   *
+   * `afterNextRender` rather than a microtask: neither element exists until
+   * Angular has re-rendered the gallery. A miss is silent on purpose — a
+   * control that moved is not worth an exception on a page whose write already
+   * succeeded.
+   */
+  private focusIn(selector: string, fallback: string): void {
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement as HTMLElement;
+        (
+          host.querySelector<HTMLElement>(selector) ??
+          host.querySelector<HTMLElement>(fallback)
+        )?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   /**

@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { Observable, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +19,7 @@ import {
 import { I18nService } from '../../../core/i18n';
 import { ConfirmService } from '../../../core/state/confirm.service';
 import { ImageFocusService } from '../../../core/state/image-focus.service';
+import { PhotoUploadService } from '../../../core/state/photo-upload.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { WANTED_TAG } from '../../../core/utils/tags.util';
 import { ItemPage } from './item-page';
@@ -186,6 +187,37 @@ async function mount(
     chips,
     labels: () => chips().map(a => (a.textContent ?? '').trim()),
     hrefs: () => chips().map(a => a.getAttribute('href')),
+  };
+}
+
+/**
+ * Drives the file picker `addPhoto` builds on the fly.
+ *
+ * That element never enters the document — it is created, wired and clicked
+ * inside one method — so `createElement` is the only seam there is. Call this
+ * before the control is pressed, then call what it returns with the ids the
+ * upload queue would have produced.
+ */
+function pickFile(fixture: ComponentFixture<ItemPage>) {
+  const create = document.createElement.bind(document);
+  let picker: HTMLInputElement | null = null;
+  const spy = vi
+    .spyOn(document, 'createElement')
+    .mockImplementation(((tag: string, options?: ElementCreationOptions) => {
+      const made = create(tag as 'input', options);
+      if (tag === 'input') picker = made as HTMLInputElement;
+      return made;
+    }) as typeof document.createElement);
+
+  return async (ids: string[]) => {
+    spy.mockRestore();
+    vi.spyOn(TestBed.inject(PhotoUploadService), 'add').mockResolvedValue(ids);
+    Object.defineProperty(picker!, 'files', {
+      value: [new File([new Uint8Array(2)], 'front.png', { type: 'image/png' })],
+    });
+    await picker!.onchange!(new Event('change'));
+    fixture.detectChanges();
+    await fixture.whenStable();
   };
 }
 
@@ -411,5 +443,81 @@ describe('ItemPage — the page is not a dead end', () => {
     expect(empty).not.toBeNull();
     expect(empty!.textContent).toContain(TestBed.inject(I18nService).t('item.notFound'));
     expect(empty!.querySelector('[emptyActions] button')).not.toBeNull();
+  });
+});
+
+describe('ItemPage — the keyboard keeps its place across a photo edit', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  /**
+   * Both halves of the photo flow destroy the button that was pressed.
+   *
+   * With no photo the frame *is* the add control, so the first upload replaces
+   * it with the photograph; "Remove the photo" only renders while there is one,
+   * so removing the last detaches it — and even with photos left it spends the
+   * write disabled, which the browser treats the same way. In every case focus
+   * fell to `<body>` and the next Tab restarted at the skip link. The
+   * confirmation dialog does restore focus to its opener, correctly, but the
+   * opener went away with the photo it belonged to.
+   */
+  const photographed = (ids: string[]) => {
+    const it = item('contra', [], OWNED);
+    it.photoIds = ids;
+    return it;
+  };
+
+  it('lands on the mark it just added, not on the body', async () => {
+    const page = await mount([photographed([])], 'contra');
+    // The empty frame is the add control, and it is what focus starts on.
+    const frame = page.el.querySelector<HTMLElement>('.gallery__main--empty')!;
+    frame.focus();
+    expect(document.activeElement).toBe(frame);
+
+    // The picker is created and clicked programmatically, so the file arrives
+    // by driving the element the component made rather than one in the DOM.
+    const picked = pickFile(page.fixture);
+    frame.click();
+    await picked(['p-new']);
+
+    expect(document.activeElement).not.toBe(document.body);
+    expect((document.activeElement as HTMLElement).dataset['photoId']).toBe('p-new');
+  });
+
+  /**
+   * Pins the branch rather than the fall to `<body>`: with a synchronous fake
+   * API the dialog's own restore happens to land on a button that is still
+   * connected, so what this can prove is that the successor chosen is "remove"
+   * again and not the frame. In the browser the same press spends the write
+   * `disabled`, which drops focus exactly as a detach does.
+   */
+  it('stays on "remove" while there is still something to remove', async () => {
+    const page = await mount([photographed(['p1', 'p2'])], 'contra');
+    const remove = page.el.querySelector<HTMLElement>('.gallery__remove button')!;
+    remove.focus();
+    remove.click();
+    TestBed.inject(ConfirmService).answer(true);
+    await page.fixture.whenStable();
+    page.fixture.detectChanges();
+    await page.fixture.whenStable();
+
+    expect(document.activeElement).toBe(page.el.querySelector('.gallery__remove button'));
+  });
+
+  it('falls back to the frame when the last photo goes', async () => {
+    const page = await mount([photographed(['p1'])], 'contra');
+    page.el.querySelector<HTMLElement>('.gallery__remove button')!.click();
+    TestBed.inject(ConfirmService).answer(true);
+    await page.fixture.whenStable();
+    page.fixture.detectChanges();
+    await page.fixture.whenStable();
+
+    // Which by then is the add control again, so the flow can be repeated
+    // without a traversal of the page.
+    const frame = page.el.querySelector('.gallery__main--empty');
+    expect(frame).not.toBeNull();
+    expect(document.activeElement).toBe(frame);
   });
 });

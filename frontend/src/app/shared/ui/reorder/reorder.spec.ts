@@ -62,13 +62,37 @@ describe('UiReorder', () => {
     expect(host.opened).toBe(0);
   });
 
-  it('disables the edges so an item cannot move past the ends', () => {
+  it('reads as unavailable at the edges, and still cannot move past them', () => {
+    // aria-disabled and not the disabled attribute: the browser blows focus off
+    // an element the moment it becomes disabled, and the button that completes
+    // the last move is the button that is about to be it. So the arrow stays
+    // focusable, announces the boundary, and the handler declines.
     const { host, buttons } = mount({ first: true, last: true });
 
-    expect(buttons.map(b => b.disabled)).toEqual([true, true]);
+    expect(buttons.map(b => b.getAttribute('aria-disabled'))).toEqual(['true', 'true']);
+    expect(buttons.map(b => b.disabled)).toEqual([false, false]);
     buttons[0].click();
     buttons[1].click();
     expect(host.moves).toEqual([]);
+  });
+
+  it('leaves focus on the arrow that was pressed, once it becomes the boundary', async () => {
+    // The old answer focused the *sibling*, pre-emptively, before the emit —
+    // which moved the user off the control they were operating and aimed at an
+    // element the caller's re-render could destroy. Focus reached <body>.
+    const { fixture, host, buttons } = mount();
+    document.body.appendChild(fixture.nativeElement);
+
+    buttons[0].focus();
+    buttons[0].click();
+    // What the caller's re-render does: this row is now at the top.
+    host.first = true;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(host.moves).toEqual([-1]);
+    expect(document.activeElement).toBe(buttons[0]);
+    fixture.nativeElement.remove();
   });
 
   it('names each direction for screen readers', () => {

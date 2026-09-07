@@ -264,7 +264,12 @@
       <div class="actions">
         <span class="actions__state" aria-live="polite">
           @if (unsaved()) {
-            <span class="dot" aria-hidden="true">●</span>{{ 'itemForm.unsaved' | t }}
+            <!-- Drawn by the stylesheet, not typed: a text ● resolves from
+                 whatever font happens to cover U+25CF, so its size and baseline
+                 differed from the label beside it, and a reader announced it as
+                 "black circle". ICON_NAMES has no filled dot and adding one is a
+                 change to shared/ui/icon, which this file does not own. -->
+            <span class="dot" aria-hidden="true"></span>{{ 'itemForm.unsaved' | t }}
           }
         </span>
         <ui-button variant="ghost" (click)="cancel()">{{ 'itemForm.cancel' | t }}</ui-button>

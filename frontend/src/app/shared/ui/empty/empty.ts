@@ -20,7 +20,11 @@ import { IconName, UiIcon } from '../icon/icon';
  *   paragraph is a missing feature wearing a message.
  * - `[emptyActions]` is projected rather than an input, because the way out of
  *   an empty state is a real `ui-button` or a router link, and inventing an
- *   `action`/`actionLink` input pair would only reimplement one badly.
+ *   `action`/`actionLink` input pair would only reimplement one badly. **The
+ *   attribute goes on each action, never on a box holding them:** the slot is
+ *   what carries the gap, so a single projected wrapper puts two buttons edge
+ *   to edge — they then read as one segmented control, and on a phone the
+ *   boundary between them is a coin-flip. `NotFound` shipped exactly that.
  * - `compact` drops the panel for use inside a row or a card that already has
  *   its own border — the section divider's "no items in this run" is a caption,
  *   not a landing pad.

@@ -11,6 +11,9 @@ import { UiInlineEdit } from './inline-edit';
 @Component({
   imports: [UiInlineEdit],
   template: `
+    <!-- A real opener, because where focus goes when the box closes is the
+         property under test and it has to have come from somewhere. -->
+    <button type="button" (click)="open.set(true)">+ Sub</button>
     <div (keydown)="bubbled = bubbled + 1">
     @if (open()) {
       <ui-inline-edit
@@ -26,6 +29,7 @@ import { UiInlineEdit } from './inline-edit';
 })
 class Host {
   readonly open = signal(true);
+
   readonly value = signal('');
   readonly commitOnBlur = signal(true);
   readonly committed: string[] = [];
@@ -137,6 +141,75 @@ describe('UiInlineEdit', () => {
 
     expect(fixture.componentInstance.committed).toEqual([]);
     expect(fixture.componentInstance.cancelled).toBe(1);
+  });
+
+  describe('where focus lands when the box goes away', () => {
+    /** Opens the composer the way a user does: from the button. */
+    async function openFromButton() {
+      fixture = TestBed.createComponent(Host);
+      el = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(el);
+      fixture.componentInstance.open.set(false);
+      fixture.detectChanges();
+      const opener = el.querySelector('button') as HTMLButtonElement;
+      opener.focus();
+      opener.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      return opener;
+    }
+
+    it('gives focus back to the button that opened it, on Escape', async () => {
+      // It used to land on <body>, so the next Tab restarted at the skip link
+      // ~20 stops from the button just pressed.
+      const opener = await openFromButton();
+
+      key('Escape');
+
+      expect(document.activeElement).toBe(opener);
+    });
+
+    it('gives focus back on Enter too, and still commits', async () => {
+      const opener = await openFromButton();
+      type('Prata');
+
+      key('Enter');
+
+      expect(fixture.componentInstance.committed).toEqual(['Prata']);
+      expect(document.activeElement).toBe(opener);
+    });
+
+    it('does not take focus back on a blur: it went where the user put it', async () => {
+      const opener = await openFromButton();
+      const elsewhere = document.createElement('button');
+      document.body.appendChild(elsewhere);
+      type('Ouro');
+
+      elsewhere.focus();
+      input().dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.committed).toEqual(['Ouro']);
+      expect(document.activeElement).toBe(elsewhere);
+      expect(document.activeElement).not.toBe(opener);
+      elsewhere.remove();
+    });
+
+    it('lands on the main landmark when the opener went with the answer', async () => {
+      // The delete case: the control that opened the box is destroyed by what
+      // the box did, so there is nothing to give focus back to.
+      const main = document.createElement('main');
+      main.id = 'main-content';
+      main.tabIndex = -1;
+      document.body.appendChild(main);
+      const opener = await openFromButton();
+      opener.remove();
+
+      key('Escape');
+
+      expect(document.activeElement).toBe(main);
+      main.remove();
+    });
   });
 
   it('answers once: Enter followed by the blur it causes commits a single time', async () => {

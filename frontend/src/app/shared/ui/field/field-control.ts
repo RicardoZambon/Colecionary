@@ -1,4 +1,5 @@
 import {
+  DestroyRef,
   Directive,
   ElementRef,
   InjectionToken,
@@ -21,13 +22,32 @@ let nextControlId = 0;
  */
 export interface UiFieldOwner {
   /**
-   * Hands out the id the field's `<label for>` points at — **once**.
+   * Hands out the id the field's `<label for>` points at — to **one** control
+   * at a time.
    *
-   * A second control inside the same `ui-field` gets `null` and falls back to
-   * its own generated id, because two elements sharing an id is worse than one
-   * of them being unlabelled: it makes the *first* label ambiguous too.
+   * A *second, coexisting* control inside the same `ui-field` gets `null` and
+   * falls back to its own generated id, because two elements sharing an id is
+   * worse than one of them being unlabelled: it makes the *first* label
+   * ambiguous too (ADR-78).
+   *
+   * "At a time" is the part that was missing. The claim used to be permanent,
+   * so a control *swapped* inside a field — an `@if`/`@else` on a custom
+   * field's declared type, which flips the moment the item form's group select
+   * moves to a group that types the same field name differently — handed the id
+   * to a destroyed element and left the label pointing at nothing. The claimant
+   * identifies itself so the release can only ever clear its own claim, never
+   * one already handed on.
    */
-  claimId(): string | null;
+  claimId(claimant: object): string | null;
+  /**
+   * Gives the id back, so the next control in this field can have it.
+   *
+   * A no-op unless `claimant` is the one currently holding it: Angular destroys
+   * the outgoing view before it creates the incoming one, but a release that
+   * did not check would, in the other order, take the id off a control that had
+   * just legitimately claimed it.
+   */
+  releaseId(claimant: object): void;
   /** Space-separated ids of the field's hint and error, or `''`. */
   readonly describedBy: Signal<string>;
   /** True while the field is showing an error message. */
@@ -97,8 +117,17 @@ export abstract class UiFieldControl {
   readonly invalid = input(false);
 
   /** Claimed at construction, so the id is stable for the element's lifetime. */
-  private readonly claimedId = this.owner?.claimId() ?? null;
+  private readonly claimedId = this.owner?.claimId(this) ?? null;
   private readonly generatedId = `ui-ctl-${nextControlId++}`;
+
+  constructor() {
+    // Handed back on destroy — see UiFieldOwner.claimId. Without it the label of
+    // a field whose control is swapped keeps pointing at the element that was
+    // removed, so clicking the label does nothing and the new control announces
+    // as unnamed. Field initialisers all run before this body, so `claimedId`
+    // above has already been taken by the time the release is registered.
+    inject(DestroyRef).onDestroy(() => this.owner?.releaseId(this));
+  }
 
   /** The id that actually lands on the control. See the class note for why. */
   protected readonly fieldId = computed(

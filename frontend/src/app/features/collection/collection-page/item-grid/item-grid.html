@@ -28,15 +28,21 @@
       >
         <!-- Over the corner, and swallowing its own click: the card is the
              link, so without that a tick would navigate. Absent for a reader,
-             because selecting is only ever a prelude to editing. -->
+             because selecting is only ever a prelude to editing.
+
+             A <label>, not a <span>: below the breakpoint this box is the
+             checkbox's whole 44px target (see item-grid.scss), and only
+             implicit label association makes a press anywhere in it a press of
+             the input. It contributes no accessible name of its own — the
+             input's aria-label wins — so it stays a wrapper, not a caption. -->
         @if (canEdit()) {
-          <span class="item-card__pick" (click)="contain($event)">
+          <label class="item-card__pick" (click)="contain($event)">
             <ui-checkbox
               [checked]="isSelected(entry.item)"
               [ariaLabel]="selectLabel(entry.item)"
               (picked)="pick(entry.item, $event)"
             />
-          </span>
+          </label>
         }
         <div class="item-card__img" [class.dim]="!isOwned(entry.item)">
           @if (fieldChip(entry.item); as chip) {

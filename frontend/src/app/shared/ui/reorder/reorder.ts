@@ -1,7 +1,10 @@
+import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  Injector,
+  afterNextRender,
   inject,
   input,
   output,
@@ -35,17 +38,22 @@ import { UiIcon } from '../icon/icon';
   imports: [UiButton, UiIcon],
   host: { '(click)': 'contain($event)' },
   template: `
+    <!--
+      [muted], not [disabled], at either end. See move() for why: the browser
+      blows focus off an element the moment it becomes disabled, and the button
+      that completes the last move is the button that is about to be it.
+    -->
     <ui-button
       variant="ghost"
       size="sm"
-      [disabled]="first()"
+      [muted]="first()"
       [ariaLabel]="moveLabel(-1)"
       (click)="move(-1)"
     ><ui-icon name="chevron-up" [size]="12" /></ui-button>
     <ui-button
       variant="ghost"
       size="sm"
-      [disabled]="last()"
+      [muted]="last()"
       [ariaLabel]="moveLabel(1)"
       (click)="move(1)"
     ><ui-icon name="chevron-down" [size]="12" /></ui-button>
@@ -89,20 +97,26 @@ import { UiIcon } from '../icon/icon';
     }
 
     /*
-     * At either end of the list one arrow is disabled, and ui-button dims the
-     * whole button to say so — which over a photo dims the chip back towards
-     * transparent, the very thing this fixes. The chip stays solid and only the
-     * mark fades, so "can't move further" still reads as a button.
+     * At either end of the list one arrow is unavailable, and ui-button dims it
+     * to say so — which over a photo dims the chip back towards transparent,
+     * the very thing this fixes. The chip stays solid and only the mark fades,
+     * so "can't move further" still reads as a button. --text2 rather than
+     * ui-button's own muted colour, which is a border token and unreadable on
+     * this chip; the state is announced through aria-disabled either way, so
+     * this is not colour carrying it alone.
      */
-    :host ::ng-deep .btn.btn:disabled {
+    :host ::ng-deep .btn.btn[aria-disabled='true'] {
       opacity: 1;
       color: var(--text2);
+      cursor: default;
     }
   `,
 })
 export class UiReorder {
   protected readonly i18n = inject(I18nService);
   private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
 
   /** Names the thing being moved, for the buttons' accessible labels. */
   readonly label = input('item');
@@ -131,24 +145,34 @@ export class UiReorder {
   }
 
   /**
-   * Moves, and keeps focus somewhere.
+   * Moves, and stays under the finger that pressed it.
    *
-   * The button that completes the last move is the button that is about to be
-   * `disabled`, and the browser blows focus off a disabled element — so the
-   * next Tab restarts at the top of the document and the user cannot tell "it
-   * stopped moving" from "the control vanished". Focus goes to the sibling
-   * first, which stays live.
+   * **Why the arrows are not `disabled`.** The button that completes the last
+   * move is the button that is about to be unavailable, and the browser blows
+   * focus off an element the moment it becomes disabled — so the next Tab
+   * restarted at the top of the document and the user could not tell "it
+   * stopped moving" from "the control vanished". This used to answer that by
+   * focusing the *sibling* arrow, pre-emptively, before the emit. Two things
+   * were wrong with it: it moved the user off the control they were operating,
+   * so pressing "move earlier" four times left them somewhere else; and it
+   * focused a sibling that the caller's re-render could destroy along with the
+   * pressed one, which is how focus still reached `<body>`. `muted` keeps both
+   * arrows focusable and announces the boundary through `aria-disabled`, so
+   * nothing has to be handed anywhere.
+   *
+   * **Why the re-focus is after the render.** Whether the caller's list moves
+   * its rows (`track` by id) or rebuilds them, that is decided long after this
+   * handler returns. If the view survived, this puts focus back on the arrow
+   * that was pressed; if it was destroyed, this hook is discarded with it and
+   * the shell's own navigation rescue is the floor. Never before the render:
+   * that is what made the old attempt aim at an element that no longer existed.
    */
   protected move(direction: -1 | 1): void {
     const next = this.index() + direction;
     const total = this.count();
-    const willDisable = total ? next <= 0 || next >= total - 1 : false;
-    if (willDisable) {
-      const buttons = (this.host.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
-        'button',
-      );
-      buttons[direction === -1 ? 1 : 0]?.focus();
-    }
+    // A boundary arrow is focusable and reads as unavailable, so it can be
+    // pressed. Pressing it is a no-op — moving past the end is not a move.
+    if (direction === -1 ? this.first() : this.last()) return;
 
     this.moved.emit(direction);
     this.announcement.set(
@@ -160,6 +184,19 @@ export class UiReorder {
           })
         : this.i18n.t('ui.reorder.movedPlain', { name: this.label() }),
     );
+
+    afterNextRender(
+      () => {
+        const active = this.document.activeElement as HTMLElement | null;
+        if (active && active !== this.document.body && active.isConnected) return;
+        this.buttons()[direction === -1 ? 0 : 1]?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private buttons(): HTMLElement[] {
+    return [...(this.host.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('button')];
   }
 
   /**

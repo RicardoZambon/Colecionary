@@ -17,39 +17,84 @@ import { UiFieldControl } from '../field/field-control';
 @Component({
   selector: 'ui-checkbox',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  /*
+   * The claim, on the element the claim is about.
+   *
+   * It sat on the inner input, where it exempted that input from the tap-size
+   * sweep (which walks up with `closest`) but matched nothing that names
+   * ui-checkbox — so the companion check that *presses* a claimed target found
+   * nothing to press, and the exemption was on trust in both directions. On the
+   * host it does both jobs: the input is still inside a [data-tap-ok] ancestor,
+   * and the component is now findable as the thing making the promise.
+   */
+  host: { 'data-tap-ok': '' },
   template: `
-    <input
-      data-tap-ok
-      #control
-      type="checkbox"
-      [checked]="checked()"
-      [indeterminate]="indeterminate()"
-      [attr.id]="fieldId()"
-      [attr.aria-label]="ariaLabel() || null"
-      [attr.aria-describedby]="ariaDescribedBy()"
-      [attr.aria-checked]="ariaChecked()"
-      [disabled]="disabled()"
-      (click)="onClick($event)"
-      (keydown.shift.enter)="onShiftEnter($event)"
-    />
+    <!--
+      The label is the touch target, and it has to be an element that can act.
+      A pseudo-element's hit test resolves to the element that owns it, so the
+      44px area used to belong to <ui-checkbox> itself — not a control, no
+      handler — and a press 18px below the box hit-tested fine and toggled
+      nothing. An <input> is a replaced element and cannot carry a pseudo-element
+      of its own, so the target needs a real box around it: this one.
+    -->
+    <label class="hit" (click)="onLabelClick($event)">
+      <input
+        #control
+        type="checkbox"
+        [checked]="checked()"
+        [indeterminate]="indeterminate()"
+        [attr.id]="fieldId()"
+        [attr.aria-label]="ariaLabel() || null"
+        [attr.aria-describedby]="ariaDescribedBy()"
+        [attr.aria-checked]="ariaChecked()"
+        [disabled]="disabled()"
+        (click)="onClick($event)"
+        (keydown.shift.enter)="onShiftEnter($event)"
+      />
+    </label>
   `,
   styles: `
+    @use '../../../../styles/mixins' as *;
+
     :host {
       display: inline-flex;
       align-items: center;
-      /* The pseudo-element target below is positioned against this. */
+    }
+
+    .hit {
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      /* The target below is positioned against this. */
       position: relative;
     }
 
     /*
-     * The 44px touch target is not here but in styles.scss, beside the other
-     * tap-target rules. (An inline styles block *can* @use the breakpoint
-     * mixins — ui-select, ui-text-input, ui-tabs and ui-toggle now do, and this
-     * comment used to claim otherwise. The reason it stays in styles.scss is
-     * that the rule needs to grow the target without growing the 15px box a
-     * dense table row depends on, which is the same pseudo-element trade the
-     * chips beside it make; the two belong together.)
+     * The 44px touch target, on the label rather than on the host.
+     *
+     * It lived in styles.scss on ui-checkbox itself, and it was hit-testable
+     * without being actionable: a press in the grown area returned
+     * UI-CHECKBOX from elementFromPoint and left the box unchanged, everywhere
+     * in the app. The data-tap-ok on the host exempts this control from the
+     * automated tap sweep, so that made the exemption a false claim — worse
+     * than the original miss, because it silenced the check that would have
+     * found it.
+     *
+     * 15px is still the size it should *look*: growing the box itself would
+     * wreck the density of the table row it lives in, which is the same trade
+     * the filter chips make.
      */
+    @include upto($bp-lg) {
+      .hit::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: var(--tap);
+        height: var(--tap);
+        transform: translate(-50%, -50%);
+      }
+    }
 
     input {
       /*
@@ -111,6 +156,36 @@ export class UiCheckbox extends UiFieldControl {
   protected readonly ariaChecked = computed(() =>
     this.indeterminate() && !this.checked() ? 'mixed' : String(this.checked()),
   );
+
+  /**
+   * A press in the grown target, which lands on the label and not on the input.
+   *
+   * Written out rather than left to the label's own activation behavior for one
+   * reason: that behavior synthesises a click on the control, and the synthetic
+   * event does **not** carry the modifier keys — so shift-click range selection
+   * would work on the 15px box and silently stop working in the 44px area
+   * around it, which is the harder half to notice. `preventDefault` cancels the
+   * synthesis so this can do the toggle with the real event.
+   *
+   * A press on the input itself arrives here too, by bubbling, and is left
+   * alone: `onClick` has already handled it, and the label's own activation
+   * behavior is skipped by the platform for a target inside its control.
+   */
+  protected onLabelClick(event: MouseEvent): void {
+    if (event.target !== event.currentTarget) return;
+    if (this.disabled()) return;
+
+    event.preventDefault();
+    const input = this.control()?.nativeElement as HTMLInputElement | undefined;
+    if (!input) return;
+    const next = !input.checked;
+    input.checked = next;
+    // Clicking a checkbox focuses it, and preventDefault took that away with
+    // the synthesis. It matters beyond the ring: the next Space, and a
+    // shift-click range that starts from wherever focus is.
+    input.focus();
+    this.commit(next, event.shiftKey);
+  }
 
   protected onClick(event: MouseEvent): void {
     const input = event.target as HTMLInputElement;

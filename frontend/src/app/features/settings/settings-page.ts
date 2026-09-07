@@ -24,7 +24,7 @@ import { UiFlag } from '../../shared/ui/flag/flag';
 import { UiIcon } from '../../shared/ui/icon/icon';
 import { UiReadOnlyNotice } from '../../shared/ui/read-only-notice/read-only-notice';
 import { SelectOption, UiSelect } from '../../shared/ui/select/select';
-import { TabDef, UiTabs } from '../../shared/ui/tabs/tabs';
+import { TabDef, UiTabPanel, UiTabs } from '../../shared/ui/tabs/tabs';
 import { TPipe } from '../../shared/pipes/t.pipe';
 
 const TAB_KEYS: { id: string; label: MessageKey }[] = [
@@ -63,7 +63,7 @@ const ROLE_KEYS: { value: MemberRole; label: MessageKey }[] = [
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ImportDialog, TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiIcon, UiReadOnlyNotice, UiSelect, UiTabs],
+  imports: [ImportDialog, TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiIcon, UiReadOnlyNotice, UiSelect, UiTabPanel, UiTabs],
   templateUrl: './settings-page.html',
   styleUrl: './settings-page.scss',
 })

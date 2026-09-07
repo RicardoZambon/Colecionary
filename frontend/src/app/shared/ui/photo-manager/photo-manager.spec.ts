@@ -96,8 +96,11 @@ describe('UiPhotoManager', () => {
     const firstUp = el.querySelectorAll('.photo')[0].querySelectorAll('ui-reorder button')[0];
     const lastDown = el.querySelectorAll('.photo')[2].querySelectorAll('ui-reorder button')[1];
 
-    expect((firstUp as HTMLButtonElement).disabled).toBe(true);
-    expect((lastDown as HTMLButtonElement).disabled).toBe(true);
+    // aria-disabled, not the disabled attribute: ui-reorder keeps a boundary
+    // arrow focusable on purpose — the browser blows focus off an element the
+    // moment it becomes disabled. See UiReorder.move.
+    expect(firstUp.getAttribute('aria-disabled')).toBe('true');
+    expect(lastDown.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('removes a photo by position, not by id', () => {

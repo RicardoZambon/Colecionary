@@ -10,6 +10,7 @@ import {
   output,
 } from '@angular/core';
 
+import { returnFocus } from '../focus-return';
 import { focusableIn } from '../focusable';
 
 /**
@@ -203,10 +204,19 @@ const openDialogs: UiDialog[] = [];
 
       .panel__actions {
         /*
-         * Stacked and reversed: the confirming action is the one a thumb
-         * reaches first, and it is the one that was read last.
+         * Stacked, in the order they were written.
+         *
+         * This was column-reverse, whose comment argued that the confirming
+         * action is the one a thumb reaches first — and got the opposite: on a
+         * sheet docked to the bottom of the screen the *last* row is the one
+         * nearest the thumb, so reversing put the confirm furthest away and
+         * drew the row as [Confirm, Cancel] against a DOM order of [Cancel,
+         * Confirm]. Tab then moved up the screen, and the primary sat exactly
+         * where Cancel looked like it was. Plain column gives the comment
+         * what it wanted: reading order, focus order and paint order agree, and
+         * the confirm lands at the bottom under the thumb.
          */
-        flex-direction: column-reverse;
+        flex-direction: column;
       }
     }
   `,
@@ -261,8 +271,11 @@ export class UiDialog {
       openDialogs.splice(openDialogs.indexOf(this), 1);
       if (!openDialogs.length) this.document.body.style.overflow = previousOverflow;
       // A detached opener cannot take focus back, and asking would silently
-      // drop it on <body> — which is the state this exists to avoid.
-      if (this.opener?.isConnected) this.opener.focus({ preventScroll: true });
+      // drop it on <body> — which is the state this exists to avoid. Declining
+      // to ask was only half of it: the dialog that *deletes* a row is the one
+      // whose opener is reliably gone, so declining left focus on <body> too.
+      // returnFocus falls through to the main landmark instead.
+      returnFocus(this.document, this.opener);
     });
 
     afterRenderEffect(() => {

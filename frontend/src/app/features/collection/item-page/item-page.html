@@ -127,6 +127,7 @@
             <button
               type="button"
               class="thumb thumb--photo"
+              [attr.data-photo-id]="photo.id"
               [attr.aria-label]="'item.showPhoto' | t: { n: $index + 1 }"
               [attr.aria-pressed]="$index === selectedPhoto()"
               [class.thumb--active]="$index === selectedPhoto()"

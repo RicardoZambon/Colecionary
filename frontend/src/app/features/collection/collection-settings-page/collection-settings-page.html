@@ -116,23 +116,11 @@
     </div>
   }
 
-  <ui-tabs
-    #tabStrip
-    [tabs]="tabs()"
-    [active]="activeTab()"
-    [panels]="true"
-    (activeChange)="onTabChange($event)"
-  />
+  <ui-tabs #tabStrip [tabs]="tabs()" [active]="activeTab()" (activeChange)="onTabChange($event)" />
 
-  <!-- One panel for all three tabs: the id follows the selection, which is
-       what `aria-controls` on the strip points at. -->
-  <div
-    class="tab-panel"
-    role="tabpanel"
-    tabindex="0"
-    [id]="tabStrip.panelDomId(activeTab())"
-    [attr.aria-labelledby]="tabStrip.tabDomId(activeTab())"
-  >
+  <!-- One panel for all three tabs: uiTabPanel gives it the id the strip points
+       aria-controls at, and moves both with the selection. -->
+  <div class="tab-panel" [uiTabPanel]="tabStrip">
     @switch (activeTab()) {
       @case ('groups') {
         <!-- Master–detail. A collection five levels deep with dividers at the
@@ -438,9 +426,14 @@
             @for (row of memberRows(); track row.member.email) {
               <div class="member-row">
                 <ui-avatar [initials]="row.member.initials" />
+                <!-- ui-truncate, not two bare spans: at 390px the address ran
+                     out under the role select with no ellipsis to say it had
+                     been cut and no way to read the rest, so two people at the
+                     same domain were indistinguishable on the one screen whose
+                     job is deciding who may change the collection. -->
                 <span class="who">
-                  <span class="name">{{ row.member.name }}</span>
-                  <span class="email">{{ row.member.email }}</span>
+                  <ui-truncate class="name" [text]="row.member.name" />
+                  <ui-truncate class="email" [text]="row.member.email" />
                 </span>
                 <ui-select
                   class="compact"

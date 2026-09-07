@@ -66,6 +66,7 @@
         [filters]="activeFilters()"
         [filtering]="filtering()"
         [canEdit]="canEdit()"
+        [selectable]="items().length > 0"
         [allSelected]="headerAllSelected()"
         [someSelected]="headerSomeSelected()"
         (removed)="removeFilter($event)"

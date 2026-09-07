@@ -243,14 +243,10 @@ export const en = {
   'settings.plan.billingNote':
     'Billing isn’t built yet, so plans can’t be changed from here — and nothing in the app is limited by your plan today. This is what the tiers will cover.',
 
-  'settings.access.heading': 'Tenant members',
-  'settings.access.subBefore': 'Everyone with access to the',
-  'settings.access.subAfter':
-    'tenant. Individual collections can also be shared from their own page.',
   'settings.access.removeMember': 'Remove {name}',
   'settings.access.memberRoleAria': 'Role for {name}',
   'settings.access.policyNote':
-    'Access is controlled here, per person, and on each collection’s own page for link sharing. There are no tenant-wide sharing switches yet.',
+    'Access is controlled here, per person, and on each collection’s own page for link sharing. There are no account-wide sharing switches yet.',
   'settings.access.remove.confirm.title': 'Remove {name}?',
   'settings.access.remove.confirm.body':
     'They lose access to this vault straight away. Their collections and items stay exactly as they are, and you can invite them back later.',
@@ -687,7 +683,7 @@ export const en = {
   'collSettings.sharing.memberRoleAria': 'Role for {name}',
   'collSettings.sharing.linkShare': 'Link sharing',
   'collSettings.sharing.linkShareSoon': 'Not available yet — a public collection page has not been built.',
-  'collSettings.sharing.finePrint': 'Tenant-wide access rules live in',
+  'collSettings.sharing.finePrint': 'Access for the whole account is set in',
   'collSettings.sharing.finePrintLink': 'Settings, under Sharing & access',
 
   'collSettings.general.name': 'Name',

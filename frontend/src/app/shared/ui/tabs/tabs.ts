@@ -1,4 +1,17 @@
-import { ChangeDetectionStrategy, Component, ElementRef, inject, input, model } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  Directive,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  afterRenderEffect,
+  computed,
+  inject,
+  input,
+  model,
+  signal,
+} from '@angular/core';
 
 export interface TabDef {
   id: string;
@@ -20,49 +33,81 @@ let nextId = 0;
  * cards sideways — with nothing on screen to say it existed. The strip owns its
  * own overflow now, and the fade on the right edge is what says there is more.
  *
- * **The panel is the caller's.** Wrap the block each tab reveals in
- * `role="tabpanel"`, give it `panelDomId(active())` and point its
- * `aria-labelledby` at `tabDomId(active())`, then set `[panels]="true"` so the
- * tabs advertise what they control:
+ * **The panel is the caller's element, and this component wires it.** Put
+ * {@link UiTabPanel} on the block the tabs reveal and hand it the strip:
  *
  * ```html
- * <ui-tabs #tabs [tabs]="tabs" [(active)]="tab" [panels]="true" />
- * <div role="tabpanel" [id]="tabs.panelDomId(tab())"
- *      [attr.aria-labelledby]="tabs.tabDomId(tab())" tabindex="0"> … </div>
+ * <ui-tabs #strip [tabs]="tabs()" [active]="tab()" (activeChange)="go($event)" />
+ * <div class="panel" [uiTabPanel]="strip"> … </div>
  * ```
  *
- * `panels` defaults to false because an `aria-controls` pointing at an id that
- * does not exist is worse than none.
+ * That is the whole contract: the directive gives its own host the `role`, the
+ * `id` the strip points `aria-controls` at, and the `aria-labelledby` back at
+ * the selected tab — and it *registers*, so the strip knows a panel exists.
+ *
+ * **Why the caller no longer says so with a boolean.** There used to be a
+ * `panels` input, defaulting to false with the honest note that "an
+ * `aria-controls` pointing at an id that does not exist is worse than none" —
+ * and then `aria-controls` was emitted for *every* tab while both call sites
+ * rendered **one** panel whose id followed the selection. Three of four ids
+ * never existed, which is exactly what the note forbade. A boolean cannot
+ * prevent that, because it is a promise the caller makes about a relationship
+ * it does not own. Now the relationship is one object: no registered panel, no
+ * `aria-controls` anywhere; a registered panel, and the attribute goes on the
+ * one tab whose panel that is — the selected one. The single-swapped-panel
+ * pattern both consumers use is therefore correct by construction, and there is
+ * no longer a way to spell the broken state.
  */
 @Component({
   selector: 'ui-tabs',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // A narrower window can turn a strip that fitted into one that does not, and
+  // no render follows a resize on its own — so the fade would then be missing
+  // exactly when it is needed.
+  host: { '(window:resize)': 'measure()' },
   template: `
-    <div class="tabs" role="tablist" (keydown)="onKeydown($event)">
-      @for (tab of tabs(); track tab.id) {
-        <button
-          type="button"
-          role="tab"
-          class="tab"
-          [id]="tabDomId(tab.id)"
-          [class.active]="tab.id === active()"
-          [attr.aria-selected]="tab.id === active()"
-          [attr.aria-controls]="panels() ? panelDomId(tab.id) : null"
-          [attr.tabindex]="tab.id === active() ? 0 : -1"
-          (click)="active.set(tab.id)"
-        >
-          {{ tab.label }}
-        </button>
-      }
+    <div class="strip">
+      <div
+        class="tabs"
+        role="tablist"
+        [class.more]="more()"
+        (keydown)="onKeydown($event)"
+        (scroll)="onScroll()"
+      >
+        @for (tab of tabs(); track tab.id) {
+          <button
+            type="button"
+            role="tab"
+            class="tab"
+            [id]="tabDomId(tab.id)"
+            [class.active]="tab.id === active()"
+            [attr.aria-selected]="tab.id === active()"
+            [attr.aria-controls]="tab.id === active() ? panelId() : null"
+            [attr.tabindex]="tab.id === active() ? 0 : -1"
+            (click)="active.set(tab.id)"
+          >
+            {{ tab.label }}
+          </button>
+        }
+      </div>
     </div>
   `,
   styles: `
     @use '../../../../styles/mixins' as *;
 
+    /*
+     * The rule under the strip lives out here, on a box that does not scroll.
+     * It used to be on the scroller itself, where the fade below ate its last
+     * 20px on every screen width — the line that says where the tab strip ends
+     * simply stopped short of the end of the tab strip.
+     */
+    .strip {
+      border-bottom: var(--bw) solid var(--border);
+    }
+
     .tabs {
       display: flex;
       gap: 2px;
-      border-bottom: var(--bw) solid var(--border);
       /*
        * The strip absorbs its own overflow. Without this the page did: .main
        * has overflow-y: auto, and the spec forbids one axis being visible while
@@ -74,12 +119,31 @@ let nextId = 0;
       scrollbar-width: thin;
       scroll-snap-type: x proximity;
       /*
-       * Says "there is more to the right" without a control that needs one.
-       * The two stops are alpha, not colour: a mask reads only the alpha
-       * channel, so #000 here means "keep" and transparent means "fade".
-       * Invisible when nothing overflows, because the faded strip is then
-       * empty space.
+       * Room for a focus ring, given back to the layout — the same trade
+       * ui-dialog's body makes, and for the same reason. Asking for overflow-x
+       * makes overflow-y compute to auto too, so this box clips vertically, and
+       * the ring a 34px tall tab draws OUTSIDE itself was clipped away top and
+       * bottom: a focused tab showed two short bars either side of its label
+       * and nothing above or below, which reads as a rendering fault rather
+       * than as focus. The padding buys the ring its space and the equal
+       * negative margin spends it straight back, so nothing moves.
        */
+      --ring-room: calc(var(--focus-width) + var(--focus-offset) * 2);
+      padding-block: var(--ring-room);
+      margin-block: calc(var(--ring-room) * -1);
+    }
+
+    /*
+     * Says "there is more to the right" without a control that needs one. The
+     * two stops are alpha, not colour: a mask reads only the alpha channel, so
+     * #000 here means "keep" and transparent means "fade".
+     *
+     * Conditional, because it used to be unconditional: the selected last tab
+     * stayed half-faded even with the strip scrolled fully to its end, so the
+     * one tab the user had just chosen was the one they could not read. The
+     * class is set from the scroll position — see onScroll.
+     */
+    .tabs.more {
       -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
       mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
     }
@@ -128,19 +192,96 @@ export class UiTabs {
   readonly tabs = input.required<TabDef[]>();
   readonly active = model.required<string>();
 
-  /** True once the caller renders a `role="tabpanel"` per tab. See the class note. */
-  readonly panels = input(false);
-
   private readonly uid = `tabs-${nextId++}`;
 
-  /** The DOM id of one tab, for a panel's `aria-labelledby`. */
+  /**
+   * The panel currently registered through {@link UiTabPanel}, or null.
+   *
+   * A signal and not a plain field: `aria-controls` is read from it during
+   * rendering, and a panel that appears behind an `@if` has to move the
+   * attribute with it.
+   */
+  private readonly panel = signal<UiTabPanel | null>(null);
+
+  /** True while the strip's own scroller has content off its right edge. */
+  protected readonly more = signal(false);
+
+  /**
+   * What the selected tab controls: the registered panel's id, or nothing.
+   *
+   * There is no third answer, which is the point — see the class note.
+   */
+  protected readonly panelId = computed(() =>
+    this.panel() ? this.panelDomId(this.active()) : null,
+  );
+
+  /** The DOM id of one tab, for the panel's `aria-labelledby`. */
   tabDomId(id: string): string {
     return `${this.uid}-t-${id}`;
   }
 
-  /** The DOM id the caller must give the panel that tab reveals. */
+  /** The DOM id of the panel the given tab reveals. Set by {@link UiTabPanel}. */
   panelDomId(id: string): string {
     return `${this.uid}-p-${id}`;
+  }
+
+  /** @see UiTabPanel — the registration that makes `aria-controls` resolvable. */
+  attachPanel(panel: UiTabPanel): void {
+    this.panel.set(panel);
+  }
+
+  /** @see UiTabPanel */
+  detachPanel(panel: UiTabPanel): void {
+    if (this.panel() === panel) this.panel.set(null);
+  }
+
+  /**
+   * Whether the fade on the right edge is telling the truth.
+   *
+   * 1px of slack: a scroller at its end can report a fractional remainder from
+   * the device pixel ratio, and a fade that never quite lifts is the defect
+   * this replaces.
+   */
+  protected onScroll(): void {
+    this.measure();
+  }
+
+  protected measure(): void {
+    const el = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>('.tabs');
+    if (!el) return;
+    this.more.set(el.scrollWidth - el.clientWidth - el.scrollLeft > 1);
+  }
+
+  private buttons(): HTMLElement[] {
+    return [...(this.host.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.tab')];
+  }
+
+  /** The selection this has already scrolled to, so it does so once. */
+  private revealed = '';
+
+  constructor() {
+    afterRenderEffect(() => {
+      // The selected tab has to be *visible*. The strip scrolls, and nothing
+      // scrolled it: in pt-BR at 390px the four settings tabs are wider than
+      // the column, so arriving on `?tab=access` — or the last tab of any
+      // strip — showed the chosen tab half off the right edge, under the fade
+      // that says there is more. Once per selection, so a user who has
+      // scrolled the strip by hand is not fought.
+      const active = this.active();
+      if (active !== this.revealed) {
+        this.revealed = active;
+        const at = this.tabs().findIndex(t => t.id === active);
+        // inline/block both 'nearest': this must move the strip's own
+        // scroller and never the page around it.
+        this.buttons()[at]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+      }
+
+      // Measured after every render rather than once: switching to pt-BR runs
+      // the labels ~20% longer and can turn a strip that fitted into one that
+      // does not. Reading `tabs()` is what makes a different tab set re-run it.
+      this.tabs();
+      this.measure();
+    });
   }
 
   /**
@@ -174,8 +315,57 @@ export class UiTabs {
     this.active.set(ids[next]);
     // Focus follows, or the roving tabindex leaves focus on a tab that is no
     // longer selected and the next arrow starts from the wrong place.
-    (this.host.nativeElement as HTMLElement)
-      .querySelectorAll<HTMLElement>('.tab')
-      [next]?.focus();
+    this.buttons()[next]?.focus();
+  }
+}
+
+/**
+ * The block a {@link UiTabs} strip reveals — `role`, `id` and
+ * `aria-labelledby`, from the strip that owns the selection.
+ *
+ * ```html
+ * <ui-tabs #strip [tabs]="tabs()" [active]="tab()" (activeChange)="go($event)" />
+ * <div class="panel" [uiTabPanel]="strip"> … </div>
+ * ```
+ *
+ * It exists so that the relationship has one owner. Written out by hand it was
+ * four bindings per call site, and both call sites got the same one wrong: the
+ * strip advertised `aria-controls` on all four tabs while the page rendered one
+ * panel whose id followed the selection, so three of the four pointed at
+ * nothing. Here the id can only come from the strip, and the strip only
+ * advertises it because this directive registered — so "a tab controls a panel
+ * that does not exist" has no spelling.
+ *
+ * **No `tabindex`.** These panels are full of focusable content, so making the
+ * wrapper itself a stop only costs a keypress on the way in. A panel whose
+ * whole body is text is the case that wants one, and it can ask for it.
+ */
+@Directive({
+  selector: '[uiTabPanel]',
+  host: {
+    role: 'tabpanel',
+    '[id]': 'domId()',
+    '[attr.aria-labelledby]': 'labelId()',
+  },
+})
+export class UiTabPanel implements OnInit, OnDestroy {
+  /** The strip this panel belongs to — a template reference to the `ui-tabs`. */
+  readonly strip = input.required<UiTabs>({ alias: 'uiTabPanel' });
+
+  protected readonly domId = computed(() => this.strip().panelDomId(this.strip().active()));
+  protected readonly labelId = computed(() => this.strip().tabDomId(this.strip().active()));
+
+  /**
+   * Registration happens in `ngOnInit`, not the constructor: a required input
+   * is not yet bound while the constructor runs. It lands before the strip's
+   * own view is refreshed, so the first paint already carries the attribute.
+   */
+  ngOnInit(): void {
+    this.strip().attachPanel(this);
+  }
+
+  /** Handed back on destroy, so a panel behind an `@if` takes it with it. */
+  ngOnDestroy(): void {
+    this.strip().detachPanel(this);
   }
 }

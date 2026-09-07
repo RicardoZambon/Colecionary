@@ -75,10 +75,12 @@ import {
   UiReorder,
   UiSelect,
   UiSkeleton,
+  UiTabPanel,
   UiTabs,
   UiTextInput,
   UiTextarea,
   UiToggle,
+  UiTruncate,
 } from '../../../shared/ui';
 
 const TAB_KEYS: { id: string; label: MessageKey }[] = [
@@ -173,10 +175,12 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     UiReorder,
     UiSelect,
     UiSkeleton,
+    UiTabPanel,
     UiTabs,
     UiTextInput,
     UiTextarea,
     UiToggle,
+    UiTruncate,
   ],
   templateUrl: './collection-settings-page.html',
   styleUrl: './collection-settings-page.scss',
@@ -456,7 +460,20 @@ export class CollectionSettingsPage {
     // nothing while the switch fell through to General.
     effect(() => {
       const wanted = this.tab();
-      this.activeTab.set(TAB_KEYS.some(t => t.id === wanted) ? wanted : 'general');
+      const resolved = TAB_KEYS.some(t => t.id === wanted) ? wanted : 'general';
+      this.activeTab.set(resolved);
+      // And corrected in place, the way the account settings page does it. This
+      // only set the signal, so `?tab=bogus` stayed in the address bar
+      // describing a screen that was not showing: clicking another tab and
+      // pressing Back returned to the bad value, and a link shared from there
+      // stayed broken. `replaceUrl` so the bad value is not a Back destination.
+      if (wanted && wanted !== resolved) {
+        void this.router.navigate([], {
+          queryParams: { tab: resolved },
+          queryParamsHandling: 'merge',
+          replaceUrl: true,
+        });
+      }
     });
 
     // A five-level branch renders the preview below the fold, where a panel
@@ -981,10 +998,10 @@ export class CollectionSettingsPage {
     this.exporting.set(true);
     try {
       saveFile(await this.archives.downloadCollection(draft.id));
-      this.toast.flash(this.i18n.t('toast.export.collectionDone'));
+      this.toast.success(this.i18n.t('toast.export.collectionDone'));
     } catch {
       // Otherwise silent: a failed download just never starts.
-      this.toast.flash(this.i18n.t('toast.export.failed'));
+      this.toast.error(this.i18n.t('toast.export.failed'));
     } finally {
       this.exporting.set(false);
     }
@@ -1019,7 +1036,7 @@ export class CollectionSettingsPage {
     if (!confirmed) return;
 
     await this.store.deleteCollection(draft.id);
-    this.toast.flash(this.i18n.t('toast.collection.deleted'));
+    this.toast.success(this.i18n.t('toast.collection.deleted'));
     void this.router.navigate(['/dashboard']);
   }
 

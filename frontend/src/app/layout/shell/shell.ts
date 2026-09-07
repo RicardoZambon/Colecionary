@@ -12,6 +12,7 @@ import { TPipe } from '../../shared/pipes/t.pipe';
 // downloads even on the login screen.
 import { UiButton } from '../../shared/ui/button/button';
 import { UiConfirm } from '../../shared/ui/confirm/confirm';
+import { MAIN_LANDMARK_ID } from '../../shared/ui/focus-return';
 import { UiImageFocus } from '../../shared/ui/image-focus/image-focus';
 import { UiToast } from '../../shared/ui/toast/toast';
 import { ConflictNotice } from '../conflict-notice/conflict-notice';
@@ -43,8 +44,22 @@ import { Topbar } from '../topbar/topbar';
       First focusable element in the document. ~20 tab stops of chrome sit
       between the address bar and the page content, which is a keyboard user
       pressing Tab twenty times on every single navigation.
+
+      Inert with the rest of the page while the drawer is open. It is a sibling
+      of the topbar and main, so it was the one hole in the containment: Tab
+      walked the drawer's nav rows, then landed here — outside the drawer,
+      outside the scrim — and activating it aimed at a main region that is
+      itself inert, i.e. a control that does nothing. While a modal drawer is
+      open there is nothing to skip to.
     -->
-    <a class="skip" href="#main-content" (click)="layout.closeNav()">{{ 'shell.skipToContent' | t }}</a>
+    <a
+      class="skip"
+      [attr.href]="'#' + mainId"
+      [inert]="navModal()"
+      [attr.aria-hidden]="navModal() ? 'true' : null"
+      (click)="layout.closeNav()"
+      >{{ 'shell.skipToContent' | t }}</a
+    >
 
     <!--
       The drawer is presented modally — scrim, page dimmed, Escape closes it —
@@ -76,7 +91,7 @@ import { Topbar } from '../topbar/topbar';
 
       <main
         class="main"
-        id="main-content"
+        [id]="mainId"
         tabindex="-1"
         [inert]="navModal()"
         [attr.aria-hidden]="navModal() ? 'true' : null"
@@ -253,6 +268,12 @@ export class Shell {
   private readonly injector = inject(Injector);
 
   protected readonly drawerId = NAV_DRAWER_ID;
+  /**
+   * From `shared/ui`, not written out here: the skip link's target, this
+   * element's id and `returnFocus`'s last resort are one id, and two of them
+   * disagreeing gives you a fallback that silently does nothing.
+   */
+  protected readonly mainId = MAIN_LANDMARK_ID;
 
   /**
    * True while the drawer is open over the page — the predicate the scrim, the

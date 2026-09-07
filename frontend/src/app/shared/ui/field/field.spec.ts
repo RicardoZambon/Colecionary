@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { UiCheckbox } from '../checkbox/checkbox';
+import { UiDateInput } from '../date-input/date-input';
 import { UiSelect } from '../select/select';
 import { UiTextInput } from '../text-input/text-input';
 import { UiTextarea } from '../textarea/textarea';
@@ -51,6 +52,27 @@ class EveryControlHost {}
 })
 class TwoControlHost {}
 
+/**
+ * A control *swapped* inside one field — the shape the item form takes when a
+ * custom field's declared type differs between two groups and the group select
+ * moves between them.
+ */
+@Component({
+  imports: [UiField, UiDateInput, UiTextInput],
+  template: `
+    <ui-field [label]="'Released'">
+      @if (asDate()) {
+        <ui-date-input />
+      } @else {
+        <ui-text-input />
+      }
+    </ui-field>
+  `,
+})
+class SwappedControlHost {
+  readonly asDate = signal(false);
+}
+
 function render<T>(type: new () => T) {
   const fixture = TestBed.createComponent(type);
   fixture.detectChanges();
@@ -71,7 +93,10 @@ describe('UiField', () => {
 
   it('labels every control kind in the library, not only the text box', () => {
     const el = render(EveryControlHost).nativeElement as HTMLElement;
-    const labels = [...el.querySelectorAll('label')];
+    // `ui-field > label`, not every label on the page: ui-checkbox wraps its
+    // input in a label of its own to carry the 44px touch target, and that one
+    // labels by containment rather than by `for`.
+    const labels = [...el.querySelectorAll('ui-field > label')];
     const controls = [
       el.querySelector('textarea'),
       el.querySelector('select'),
@@ -138,6 +163,29 @@ describe('UiField', () => {
     fixture.componentInstance.input().focus();
 
     expect(document.activeElement).toBe(input);
+  });
+
+  it('follows the control when one is swapped inside the field', () => {
+    // The minted id used to be claimed once and never released, so the label of
+    // a field whose control is replaced kept naming the destroyed element:
+    // clicking the label did nothing and the live control announced as unnamed.
+    const fixture = render(SwappedControlHost);
+    const el = fixture.nativeElement as HTMLElement;
+    const resolves = () => {
+      const label = el.querySelector('label') as HTMLLabelElement;
+      const target = document.getElementById(label.getAttribute('for') as string);
+      return target === el.querySelector('input');
+    };
+
+    expect(resolves()).toBe(true);
+
+    fixture.componentInstance.asDate.set(true);
+    fixture.detectChanges();
+    expect(resolves()).toBe(true);
+
+    fixture.componentInstance.asDate.set(false);
+    fixture.detectChanges();
+    expect(resolves()).toBe(true);
   });
 
   it('selects the existing text, for a box that opens on a value being replaced', () => {

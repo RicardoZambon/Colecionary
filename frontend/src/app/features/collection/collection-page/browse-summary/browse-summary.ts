@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiButton, UiCheckbox, UiChip } from '../../../../shared/ui';
+import { UiButton, UiCheckbox, UiChip, UiIcon } from '../../../../shared/ui';
 
 /** Which narrowing a chip stands for, and what removing it clears. */
 export type BrowseFilterKind = 'condition' | 'own' | 'section' | 'tag' | 'search';
@@ -56,7 +56,7 @@ export interface BrowseFilterChip {
 @Component({
   selector: 'app-browse-summary',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiButton, UiCheckbox, UiChip],
+  imports: [TPipe, UiButton, UiCheckbox, UiChip, UiIcon],
   template: `
     <!--
       tabindex="-1" is load-bearing: removing a chip navigates, so the button
@@ -65,7 +65,7 @@ export interface BrowseFilterChip {
       on this region first, which also makes a reader hear the new count.
     -->
     <div class="summary" tabindex="-1" [attr.aria-label]="'browse.summaryAria' | t">
-      @if (canEdit()) {
+      @if (canEdit() && selectable()) {
         <span class="summary__pick" [attr.title]="'select.rangeHint' | t">
           <ui-checkbox
             [checked]="allSelected()"
@@ -88,7 +88,7 @@ export interface BrowseFilterChip {
               [ariaLabel]="'browse.filter.remove' | t: { label: filter.label }"
               [hint]="'browse.filter.remove' | t: { label: filter.label }"
               (click)="remove(filter.kind)"
-            >{{ filter.label }}<span class="drop" aria-hidden="true">&times;</span></ui-chip>
+            >{{ filter.label }}<span class="drop"><ui-icon name="close" [size]="10" [strokeWidth]="2.4" /></span></ui-chip>
           }
         }
       </span>
@@ -152,10 +152,19 @@ export interface BrowseFilterChip {
     }
 
     /* Decoration only — the accessible name says what the click does, and the
-       chip's own text is the filter. */
+       chip's own text is the filter. The mark is the app's close icon rather
+       than a text multiplication sign: a raw glyph resolves from whatever font
+       happens to cover it, so it never matched the stroke weight or the optical
+       alignment of the identical control in the toast, the dialog and the
+       upload rows. The three glyphs the app keeps on purpose are the ones that
+       are vocabulary rather than chrome — the copy count's multiplier, "nothing
+       here", and the approximation mark on a value standing in for an estimate. */
     .drop {
       margin-left: 5px;
       opacity: 0.7;
+      display: inline-flex;
+      align-items: center;
+      vertical-align: middle;
     }
   `,
 })
@@ -178,6 +187,19 @@ export class BrowseSummary {
    * everything that renders it.
    */
   readonly canEdit = input(true);
+  /**
+   * Whether there is anything on screen to select.
+   *
+   * Separate from `canEdit` because they answer different questions: one is the
+   * session's role, the other is the state of the list. Narrow a group to
+   * nothing and the summary used to read "0 of 9 items" beside a live select-all
+   * that could not do anything — `allSelected` guards the empty list so the box
+   * never came back *checked*, and `setAll` over nothing is a no-op, so the
+   * control was simply dead. The region itself stays rendered either way: a
+   * live region only announces changes inside one already being observed, so
+   * removing it would silence the count it exists to speak.
+   */
+  readonly selectable = input(true);
   readonly allSelected = input(false);
   readonly someSelected = input(false);
 
