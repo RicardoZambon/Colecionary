@@ -9,7 +9,7 @@ import {
   Item,
   Section,
 } from '../../../../core/models';
-import { fieldsFor, flattenTree, itemFields, resolveGroupId } from '../../../../core/utils/groups.util';
+import { fieldsFor, flattenTree, groupOptionLabel, itemFields, resolveGroupId } from '../../../../core/utils/groups.util';
 import { sectionsOf } from '../../../../core/utils/sections.util';
 import { fieldValue } from '../../../../core/utils/sort.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
@@ -174,7 +174,7 @@ export class BulkBar {
     { value: '', label: this.i18n.t('group.none') },
     ...flattenTree(this.groups()).map(({ node, depth }) => ({
       value: node.id,
-      label: (depth ? '   '.repeat(depth) + '↳ ' : '') + node.name,
+      label: groupOptionLabel(node.name, depth),
     })),
   ]);
 

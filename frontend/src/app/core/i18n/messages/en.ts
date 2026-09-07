@@ -53,7 +53,7 @@ export const en = {
   'confirm.removePhoto.confirm': 'Remove the photo',
   'common.collectionNotFound': 'Collection not found —',
   'common.backToDashboard': 'back to Dashboard',
-  'common.active': '● Active',
+  'common.active': 'Active',
   'common.clickToApply': 'Click to apply',
   // The text alternative behind a skeleton. Said once, by the region that is
   // loading — the skeletons themselves are aria-hidden pictures of a layout.
@@ -160,7 +160,7 @@ export const en = {
   'store.curated': 'Curated',
   'store.listingMeta': 'by {publisher} · {items} · {groups}',
   'store.estimate': 'est {value}',
-  'store.inVault': '✓ In your vault',
+  'store.inVault': 'In your vault',
   'store.add': '+ Add to vault',
 
   // --- shared/ui ---------------------------------------------------------
@@ -236,7 +236,7 @@ export const en = {
   'settings.plan.heading': 'Plan',
   'settings.plan.onPro': 'You are on Pro — thanks for supporting Vault.',
   'settings.plan.onFree': 'You are on Free — upgrade to unlock custom fields, photos and backups.',
-  'settings.plan.current': '● Current plan',
+  'settings.plan.current': 'Current plan',
   // No client-set plan any more: there is no billing behind it and nothing in
   // the app is gated on the plan, so the control says so instead of pretending.
   'settings.plan.unavailable': 'Not available yet',
@@ -523,7 +523,6 @@ export const en = {
   'item.paid': 'paid {value}',
   'item.marketEstimate': 'market estimate',
   'item.onWantlist': 'On your wantlist — not in your vault yet.',
-  'item.markOwned': '✓ I own one — add a copy',
   'item.details': 'Details',
   'item.year': 'Year',
   'item.group': 'Group',
@@ -568,11 +567,10 @@ export const en = {
   'itemForm.notes': 'Notes',
   'itemForm.notesPlaceholder': 'sealed · box A shelf 2 · missing manual…',
   'itemForm.noCopies': 'No copies yet — this item stays on your wantlist.',
-  'itemForm.addCopy': '+ Add copy',
   'itemForm.groupFieldsHeading': 'Group fields · {name}',
   'itemForm.noGroupFields': 'This group has no custom fields yet.',
   'itemForm.groupFieldsHint': "Fields come from the item's group — manage them in",
-  'itemForm.groupFieldsLink': 'Collection settings ▸ Groups & fields',
+  'itemForm.groupFieldsLink': 'Collection settings, under Groups & fields',
   'itemForm.cancel': 'Cancel',
   'itemForm.save': 'Save item',
   'itemForm.saving': 'Saving\u2026',
@@ -609,8 +607,8 @@ export const en = {
   'collSettings.groups.notSet': 'Not set',
   'collSettings.groups.newPlaceholder': 'Group name… (Enter to create, Esc to cancel)',
   'collSettings.groups.newGroupAria': 'New group name',
-  'collSettings.groups.inParent': '↳ in {name}',
-  'collSettings.groups.atRoot': '↳ at the top level',
+  'collSettings.groups.inParent': 'in {name}',
+  'collSettings.groups.atRoot': 'at the top level',
 
   // Moving a group. A picker rather than a drag: groups list alphabetically and
   // nothing persists a position for one, so a drop *between* rows would mean
@@ -690,7 +688,7 @@ export const en = {
   'collSettings.sharing.linkShare': 'Link sharing',
   'collSettings.sharing.linkShareSoon': 'Not available yet — a public collection page has not been built.',
   'collSettings.sharing.finePrint': 'Tenant-wide access rules live in',
-  'collSettings.sharing.finePrintLink': 'Settings ▸ Sharing & access',
+  'collSettings.sharing.finePrintLink': 'Settings, under Sharing & access',
 
   'collSettings.general.name': 'Name',
   'collSettings.general.description': 'Description',
@@ -709,8 +707,8 @@ export const en = {
   'collSettings.done': 'Back to the collection',
   'collSettings.autosave': 'Every change here is saved as you make it.',
 
-  'direction.asc': '↑ Asc',
-  'direction.desc': '↓ Desc',
+  'direction.asc': 'Ascending',
+  'direction.desc': 'Descending',
   'fieldType.text': 'text',
   'fieldType.number': 'number',
   'fieldType.date': 'date',
@@ -803,13 +801,13 @@ export const en = {
   'toast.member.removeFailed': 'Could not remove that person',
   'toast.member.ownerImmutable': "The owner can't be removed",
   'toast.member.removed': 'Access removed',
-  'toast.export.done': 'Exported vault-export.zip ✓',
+  'toast.export.done': 'Exported vault-export.zip',
   'toast.export.failed': "Export failed — couldn't build the archive",
-  'toast.export.collectionDone': 'Collection exported ✓',
+  'toast.export.collectionDone': 'Collection exported',
   // Not pluralised in code: the count is spelled into the sentence, and one
   // collection restoring is the common case worth reading naturally.
-  'toast.import.done.one': 'Imported 1 collection ✓',
-  'toast.import.done.other': 'Imported {n} collections ✓',
+  'toast.import.done.one': 'Imported 1 collection',
+  'toast.import.done.other': 'Imported {n} collections',
   'toast.import.failed': 'Import failed — the archive could not be read',
 
   // --- import dialog -------------------------------------------------------
@@ -834,27 +832,27 @@ export const en = {
   'import.importing': 'Importing…',
   'toast.collection.created': 'Collection created — name it here',
   'toast.collection.createFailed': 'Could not create the collection',
-  'toast.collection.added': 'Added to your vault ✓',
+  'toast.collection.added': 'Added to your vault',
   'toast.collection.addFailed': 'Could not add checklist',
-  'toast.image.updated': 'Image updated ✓',
+  'toast.image.updated': 'Image updated',
   'toast.photo.limit': 'Up to 8 photos per item',
-  'toast.photo.added': 'Photo added ✓',
+  'toast.photo.added': 'Photo added',
   'toast.framing.failed': "Couldn't save the framing",
   'toast.photo.uploadFailed': 'Upload failed',
-  'toast.copy.added': 'Copy added ✓',
+  'toast.copy.added': 'Copy added',
   'toast.item.deleted': 'Item deleted',
   'toast.item.restored': '“{name}” is back',
   'toast.item.undoFailed':
     'Couldn’t bring “{name}” back — the collection changed in the meantime. Reload and add it again.',
-  'toast.order.saved': 'Order saved ✓',
+  'toast.order.saved': 'Order saved',
   'toast.order.failed': 'Could not save the order',
   'toast.group.added': 'Group "{name}" added',
   'toast.copy.limit': 'Up to {n} copies per item',
   'toast.item.needsName': 'Give the item a name',
-  'toast.item.saved': 'Saved ✓',
+  'toast.item.saved': 'Saved',
   'toast.collection.deleted': 'Collection deleted',
-  'toast.collection.updated': 'Collection updated ✓',
-  'toast.currency.saved': 'Currency updated ✓',
+  'toast.collection.updated': 'Collection updated',
+  'toast.currency.saved': 'Currency updated',
   'toast.currency.failed': "Couldn't change the currency — only an Owner can.",
   'toast.group.removed': 'Group removed',
   'toast.group.moved': 'Group "{name}" moved',
@@ -1036,8 +1034,8 @@ export const en = {
   'csvImport.error.copies': '“{value}” is not a number of copies.',
   'csvImport.error.ambiguousGroup':
     'More than one group is called “{name}”. Write the whole path instead, like Bronze / V1.',
-  'toast.csvImport.done.one': 'Imported 1 item ✓',
-  'toast.csvImport.done.other': 'Imported {n} items ✓',
+  'toast.csvImport.done.one': 'Imported 1 item',
+  'toast.csvImport.done.other': 'Imported {n} items',
   'toast.csvImport.failed': 'Could not import — nothing was written',
 
   'sort.field.asc': '{name} ascending',
@@ -1144,7 +1142,7 @@ export const en = {
   'collSettings.sharing.add': 'Add to this collection',
   'collSettings.sharing.inviteInvalid': 'Write a whole email address, like ana@example.com.',
   'collSettings.sharing.inviteDuplicate': '{name} is already on this collection.',
-  'collSettings.sharing.accessNote': 'Adding somebody here records them on the collection. It grants nothing by itself: access is decided account-wide in Settings ▸ Sharing & access, and a person without an account cannot sign in yet.',
+  'collSettings.sharing.accessNote': 'Adding somebody here records them on the collection. It grants nothing by itself: access is decided account-wide in Settings, under Sharing & access, and a person without an account cannot sign in yet.',
   'conflict.inCollection': 'In {name}',
   'confirm.rescopeField.title': 'Move «{name}» to per-copy?',
   'confirm.rescopeField.body.one': '1 item holds a value for «{name}» on the item itself. Nothing is deleted — the value stays where it is and shows again if you move the field back — but it stops being displayed anywhere until then.',

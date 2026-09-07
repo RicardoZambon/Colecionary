@@ -448,7 +448,11 @@ h1 {
 
   &__note {
     font-size: var(--fs-xs);
-    color: var(--muted);
+    /* A sentence telling the user their work is being saved is the thing they
+       read to know the page is safe to leave. Measured 3.65:1 / 3.14:1 on
+       --muted; --muted is documented as decoration and excluded from the AA
+       spec on purpose. */
+    color: var(--muted-strong);
   }
 
   // The secondary type layer, not the decorative grey: this is the one line
@@ -460,10 +464,6 @@ h1 {
   }
 }
 
-.missing {
-  color: var(--muted);
-  font-size: 13px;
-}
 
 /* Only what differs: the row's frame and its fixed columns are both declared
    once, above. No max-width on the name on purpose — `.rename` flexes at the

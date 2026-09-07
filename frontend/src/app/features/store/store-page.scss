@@ -69,8 +69,10 @@ h1 {
       font-size: 9.5px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--accent);
-      border: 1px solid var(--accent);
+      /* Type, so the readable tier — measured 4.20:1 in devdark and 3.80:1 in
+         paper on the raw fill. The border keeps --accent: a border is a fill. */
+      color: var(--accent-strong);
+      border: var(--bw) solid var(--accent);
       border-radius: var(--pill);
       padding: 2px 9px;
     }

@@ -243,7 +243,19 @@ textarea::placeholder {
   .panel-toggle,
   .sort-trigger,
   .manage,
-  .toast__close {
+  .toast__close,
+  /* The "‹ Retro Consoles" link back out of a page. 16px tall on the collection
+     settings page, the item form and the item page — measured, not guessed. It
+     is the only way back on those screens, and the first thing a thumb reaches
+     for. Named here rather than in three stylesheets for the reason above, and
+     because the settings page had ~10 bytes of its 6 kB style budget left. */
+  .back,
+  /* The ← / → stepper between items: 37x23. */
+  .browse__step,
+  /* A table row is a target too. 39px at 390px, so it misses by five. */
+  .list-row,
+  /* The value of a custom field, when it is a link. `display: block`, 16px. */
+  .field-row a {
     min-height: var(--tap);
   }
 
@@ -256,7 +268,9 @@ textarea::placeholder {
    */
   ui-button > button.btn.btn--icon,
   .view-toggle button,
-  .toast__close {
+  .toast__close,
+  /* 37px wide, so it needs the width as well as the height. */
+  .browse__step {
     min-width: var(--tap);
   }
 
@@ -274,27 +288,6 @@ textarea::placeholder {
       top: 50%;
       height: var(--tap);
       transform: translateY(-50%);
-    }
-  }
-
-  /* The ✕ inside a tag chip, same trade again. It measured 27×10 on the item
-     form at 390px — a 10px-tall target for a destructive action, sitting
-     directly beside the text the user is trying to read. The chip is dense by
-     design, so the paint stays and the target grows around it. `right`/`left`
-     are not pinned the way the filter-chip rule pins them: this target is
-     centred on a mark near the chip's trailing edge, and stretching it edge to
-     edge would swallow taps meant for the label. */
-  ui-tag-input .tag__remove {
-    position: relative;
-
-    &::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: var(--tap);
-      height: var(--tap);
-      transform: translate(-50%, -50%);
     }
   }
 

@@ -78,6 +78,7 @@ import { IconName, UiIcon } from '../icon/icon';
         <button
           type="button"
           class="reframe"
+          data-tap-ok
           [title]="'ui.imageSlot.reframe' | t"
           [attr.aria-label]="'ui.imageSlot.reframe' | t"
           (click)="requestReframe($event)"

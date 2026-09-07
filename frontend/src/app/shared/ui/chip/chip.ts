@@ -30,6 +30,7 @@ import { Params, RouterLink } from '@angular/router';
     @if (link(); as target) {
       <a
         class="chip"
+        data-tap-ok
         [routerLink]="target"
         [queryParams]="queryParams()"
         queryParamsHandling="merge"
@@ -46,6 +47,7 @@ import { Params, RouterLink } from '@angular/router';
       <button
         type="button"
         class="chip"
+        data-tap-ok
         [attr.aria-label]="ariaLabel() || null"
         [attr.title]="hint() || null"
         [class.chip--selected]="selected()"

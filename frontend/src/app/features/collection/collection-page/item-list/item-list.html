@@ -28,6 +28,7 @@
           <button
             type="button"
             class="col col--sortable"
+            data-tap-ok
             [attr.aria-sort]="ariaSort('name')"
             [attr.aria-label]="sortTitle('name', 'itemList.name' | t)"
             [title]="sortTitle('name', 'itemList.name' | t)"
@@ -37,6 +38,7 @@
           <button
             type="button"
             class="col col--sortable"
+            data-tap-ok
             [attr.aria-sort]="ariaSort('year')"
             [attr.aria-label]="sortTitle('year', 'itemList.year' | t)"
             [title]="sortTitle('year', 'itemList.year' | t)"
@@ -50,6 +52,7 @@
             <button
               type="button"
               class="col col--sortable"
+            data-tap-ok
               [class.right]="rightAligned(field)"
               [attr.aria-sort]="ariaSort(fieldKey(field))"
               [attr.aria-label]="sortTitle(fieldKey(field), field.name)"
@@ -60,6 +63,7 @@
           <button
             type="button"
             class="col col--sortable right"
+            data-tap-ok
             [attr.aria-sort]="ariaSort('value')"
             [attr.aria-label]="sortTitle('value', 'itemList.value' | t)"
             [title]="sortTitle('value', 'itemList.value' | t)"

@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { I18nService } from './i18n.service';
+import { en } from './messages/en';
 
 /** jsdom exposes `language` on the prototype, so redefine rather than spy. */
 function browserLanguage(value: string): void {
@@ -83,12 +84,18 @@ describe('I18nService', () => {
     expect(i18n.header()).toBe('en');
   });
 
+  // The two keys are arbitrary fixtures — any pair of distinct, placeholder-free
+  // messages would do. They are compared against the dictionary rather than
+  // against typed-out English: a literal here is a second copy of the
+  // translation, and it drifts silently the moment the wording changes. (It
+  // did: this asserted '● Active' until the leading glyph was removed, and the
+  // failure named the plural rule rather than the string it had duplicated.)
   it('picks the singular only for exactly one', () => {
     const i18n = freshService();
     i18n.apply('en');
-    expect(i18n.plural(1, 'common.active', 'common.clickToApply')).toBe('● Active');
-    expect(i18n.plural(0, 'common.active', 'common.clickToApply')).toBe('Click to apply');
-    expect(i18n.plural(2, 'common.active', 'common.clickToApply')).toBe('Click to apply');
+    expect(i18n.plural(1, 'common.active', 'common.clickToApply')).toBe(en['common.active']);
+    expect(i18n.plural(0, 'common.active', 'common.clickToApply')).toBe(en['common.clickToApply']);
+    expect(i18n.plural(2, 'common.active', 'common.clickToApply')).toBe(en['common.clickToApply']);
   });
 
   it('carries the other placeholders of a counted sentence, and owns {n}', () => {

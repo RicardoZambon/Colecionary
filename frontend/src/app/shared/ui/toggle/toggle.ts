@@ -11,6 +11,7 @@ import { UiFieldControl } from '../field/field-control';
       type="button"
       role="switch"
       class="track"
+      data-tap-ok
       [attr.id]="fieldId()"
       [attr.aria-label]="ariaLabel() || null"
       [attr.aria-describedby]="ariaDescribedBy()"

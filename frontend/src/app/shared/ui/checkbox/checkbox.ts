@@ -19,6 +19,7 @@ import { UiFieldControl } from '../field/field-control';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <input
+      data-tap-ok
       #control
       type="checkbox"
       [checked]="checked()"

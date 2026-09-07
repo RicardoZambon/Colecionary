@@ -50,6 +50,7 @@ import { UiIcon } from '../icon/icon';
             <button
               type="button"
               class="tag__remove"
+              data-tap-ok
               [attr.aria-label]="removeLabel(tag)"
               [title]="removeLabel(tag)"
               (click)="remove(tag)"
@@ -93,6 +94,8 @@ import { UiIcon } from '../icon/icon';
     }
   `,
   styles: `
+    @use '../../../../styles/mixins' as *;
+
     :host {
       display: flex;
       flex-direction: column;
@@ -182,7 +185,7 @@ import { UiIcon } from '../icon/icon';
       }
     }
 
-    @media (max-width: 900px) {
+    @include upto($bp-lg) {
       .add__field {
         min-height: var(--tap);
       }

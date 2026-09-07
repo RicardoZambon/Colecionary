@@ -28,14 +28,7 @@ import { isOwned, newCopy, ownedValue, paidTotal, syncWantedTag } from '../../..
 import { tagsInUse } from '../../../core/utils/tags.util';
 import { currencyOf } from '../../../core/utils/currency.util';
 import { formatMoney, parseAmount } from '../../../core/utils/money.util';
-import {
-  copyFields,
-  fieldsFor,
-  flattenTree,
-  groupById,
-  itemFields,
-  resolveGroupId,
-} from '../../../core/utils/groups.util';
+import { copyFields, fieldsFor, flattenTree, groupById, groupOptionLabel, itemFields, resolveGroupId } from '../../../core/utils/groups.util';
 import { resolveSectionId, sectionsOf } from '../../../core/utils/sections.util';
 import { MoneyPipe } from '../../../shared/pipes/money.pipe';
 import { groupLinkParams } from '../browse-params';
@@ -512,7 +505,7 @@ export class ItemFormPage {
     { value: '', label: this.i18n.t('group.none') },
     ...flattenTree(this.collection()?.groups ?? []).map(({ node, depth }) => ({
       value: node.id,
-      label: (depth ? '   '.repeat(depth) + '↳ ' : '') + node.name,
+      label: groupOptionLabel(node.name, depth),
     })),
   ]);
 

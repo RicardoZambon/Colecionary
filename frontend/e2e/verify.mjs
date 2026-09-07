@@ -104,12 +104,25 @@ const painted = await page.evaluate(() => ({
 check('first paint honours the stored theme', painted.theme === 'devdark', painted.theme);
 check('first paint honours the stored language', painted.lang === 'pt-BR', painted.lang);
 
+// Named by role and type, not by position.
+//
+// This used to fill `input` first-of-any and click `button` first-with-text.
+// Both were positional, and a language picker added to the login page silently
+// became the first button: the run then switched the UI to English instead of
+// signing in, and failed thirty seconds later on a sidebar locator with no hint
+// that the login had not happened.
 if (page.url().includes('login')) {
-  await page.locator('input').first().fill(EMAIL);
+  await page.locator('input[type="email"]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await page.locator('button').filter({ hasText: /.+/ }).first().click();
-  await page.waitForURL(/dashboard/, { timeout: 20000 });
+  await page.locator('button[type="submit"]').first().click();
+  // The predicate reads the *path*, not the whole URL. `/dashboard/` as a regex
+  // matches "/login?returnUrl=%2Fdashboard" — the query names the destination —
+  // so it resolved immediately, before any navigation, and every later step ran
+  // against whatever happened to load next.
+  await page.waitForURL(u => new URL(u).pathname === '/dashboard', { timeout: 20000 });
+  await page.waitForLoadState('networkidle');
 }
+check('signing in reaches the app', !page.url().includes('login'), page.url());
 
 // Idle on the dashboard. Any toast here is an alarm nobody asked for.
 await page.waitForTimeout(3500);
@@ -428,6 +441,13 @@ for (const [name, url] of routes) {
       if (r.width === 0 || r.height === 0) continue;
       const cs = getComputedStyle(el);
       if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+      // A link inline in a sentence is exempt, and not as a convenience: WCAG
+      // 2.5.8 carves out exactly this case, because the target of a word inside
+      // running prose is set by the line height, and padding it to 44px would
+      // either break the paragraph's rhythm or overlap the line above. The test
+      // is `display: inline` — a standalone control in this app is flex, grid,
+      // block or inline-block, so only a genuine in-sentence link qualifies.
+      if (el.tagName === 'A' && cs.display === 'inline') continue;
       if (r.height + 0.5 < tap) {
         const id = `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).trim().split(/\s+/)[0] : ''}`;
         short.push(`${id} ${Math.round(r.width)}x${Math.round(r.height)}`);
