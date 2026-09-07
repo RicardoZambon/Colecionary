@@ -884,6 +884,24 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-86</span> O <code>ui-tabs</code> não aceita promessa: o painel se <em>registra</em>, e o estado quebrado deixa de ser escrevível</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Todo aba não-selecionada apontava <code>aria-controls</code> para um id que não existia — exatamente o que o docblock do próprio componente proibia, e a razão pela qual ele tinha um input <code>panels</code> com padrão <code>false</code>. Um booleano não impede isso: ele é uma <em>promessa que o chamador faz sobre uma relação que ele não controla</em>. Marcar <code>[panels]="true"</code> e esquecer de embrulhar um dos corpos em <code>role="tabpanel"</code> compila, passa em teste e mente para o leitor de tela.</dd>
+    <dt>Decisão</dt><dd>O booleano sai. Uma diretiva <code>UiTabPanel</code> vai no bloco que as abas revelam, recebe a tira (<code>[uiTabPanel]="strip"</code>), põe <code>role</code>, <code>id</code> e <code>aria-labelledby</code> <strong>no próprio host</strong> e se <em>registra</em> na tira no <code>ngOnInit</code> (desregistra ao destruir). O <code>UiTabs</code> passa a emitir <code>aria-controls</code> só quando existe painel registrado, e só na aba selecionada — cujo painel é, por construção, o registrado. Nenhum painel registrado, nenhum <code>aria-controls</code> em lugar nenhum; um painel atrás de um <code>@if</code> que fecha leva o atributo consigo.</dd>
+    <dt>Consequência</dt><dd>A relação virou um objeto, então não há como escrever o estado quebrado. De brinde, as quatro ligações que cada chamador escrevia à mão saíram, e o <code>tabindex="0"</code> dos painéis passou a ser centralizado em vez de repetido. O custo é uma diretiva a mais para conhecer, e a escolha de <em>registro</em> em vez de renderizar o painel dentro do <code>ui-tabs</code>: as páginas estilizam <code>.panel</code> elas mesmas, e um wrapper do componente perderia essas regras para a encapsulação de view.</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-87</span> Uma isenção de alvo de toque é <em>pressionada</em>, não medida — e um clique sintético não serve</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A ADR-81 criou o <code>data-tap-ok</code>: quem cresce o alvo com pseudo-elemento se declara, porque a varredura automática mede <code>getBoundingClientRect</code> e acusaria justamente os controles corretos. Só que a varredura passou a <em>confiar</em> na declaração — e a declaração estava falsa. O <code>ui-checkbox</code> pendurava o <code>::after</code> de 44px no <strong>host do componente</strong>, e o hit test de um pseudo-elemento resolve para o elemento que o possui: o host, que não é controle e não tem handler. A área de 44px era clicável e completamente <strong>inerte</strong> em todo o app. Medir a caixa nunca veria isso.</dd>
+    <dt>Decisão</dt><dd>O <code>&lt;input&gt;</code> passa a ser embrulhado por um <code>&lt;label&gt;</code>, que pode agir, e o alvo mora no label. O comportamento de ativação nativo do label <em>não</em> é usado: ele sintetiza um clique que <strong>perde as teclas modificadoras</strong>, então seleção por shift-clique funcionaria na pintura de 15px e falharia silenciosamente nos 44px em volta. E o <code>verify.mjs</code> ganha a checagem que faltava: ela <em>pressiona</em> dentro do alvo declarado e afirma que o input virou. Com <strong>ponteiro real</strong> — um <code>MouseEvent</code> sintético não é <code>cancelable</code> por padrão, então o <code>preventDefault()</code> de um handler não faz nada, e a ativação de label só roda para evento confiável; a primeira versão da checagem acusou todo controle baseado em label como inerte, o que era defeito da checagem, não do app.</dd>
+    <dt>Consequência</dt><dd>Uma declaração que a ferramenta aceita sem verificar é pior que a ausência dela, porque silencia o teste que pegaria o problema. Agora as duas coisas andam juntas: quem se declara é pressionado. O custo é que a checagem precisa de ponteiro real e de rolar o elemento até a viewport (o <code>elementFromPoint</code> devolve <code>null</code> fora dela, e uma checagem que mede zero elementos passa em silêncio — daí a asserção separada de que <em>alguma coisa</em> foi pressionada). A checagem companheira, "nada decorativo cobre um elemento com tooltip", nasceu do mesmo caso: um link esticado sobre um card pinta acima de todo descendente estático, e havia engolido a única frase que explicava um valor derivado.</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>
