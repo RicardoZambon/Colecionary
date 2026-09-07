@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, signal } from '@angular/core';
 
 /** A save the server refused because the collection had moved on. */
 export interface Conflict {
@@ -28,7 +28,28 @@ export interface Conflict {
 export class ConflictService {
   private readonly state = signal<Conflict | null>(null);
 
-  readonly pending = this.state.asReadonly();
+  /**
+   * The collection whose page is already saying this in its own words.
+   *
+   * See {@link claim}. Null means nobody has, which is the normal case: the
+   * shell notice is the only voice for every write in the app except the
+   * collection settings page's autosave.
+   */
+  private readonly claimed = signal<string | null>(null);
+
+  /**
+   * The conflict the shell should render, or null.
+   *
+   * Not the raw state: a refusal whose collection has been claimed is being
+   * explained by the page itself, and two alerts for one event are two things
+   * to answer — where answering either leaves the other on screen still
+   * contradicting it.
+   */
+  readonly pending = computed(() => {
+    const conflict = this.state();
+    if (!conflict) return null;
+    return conflict.collectionId === this.claimed() ? null : conflict;
+  });
 
   /**
    * Raises the notice. Last one wins — a second refusal while the first is
@@ -40,5 +61,26 @@ export class ConflictService {
 
   dismiss(): void {
     this.state.set(null);
+  }
+
+  /**
+   * Says that one collection's own page is showing this refusal itself, so the
+   * shell notice must stand down for it.
+   *
+   * A refused autosave on the collection settings page used to produce two
+   * alerts at once — the page's `.moved-on` banner and the shell's notice —
+   * with four buttons between them, both announced, and each unaware of the
+   * other: answering the banner left the notice claiming "nothing was saved"
+   * over a page that was saving normally again. The banner is the better of the
+   * two (it sits with the work, and its buttons act on the draft), so it is the
+   * one that speaks.
+   *
+   * Deliberately one claim and not a set. Only one page holds a draft at a
+   * time, and `raise` already keeps only one conflict. Pass null to release —
+   * the claimant must, on destroy as well as when it stops showing its banner,
+   * or a later refusal of that collection from anywhere else would be silent.
+   */
+  claim(collectionId: string | null): void {
+    this.claimed.set(collectionId);
   }
 }

@@ -58,16 +58,30 @@
 </p>
 
 <p>
-  As duas rotas do formulário de item — <code>items/new</code> e
-  <code>items/:itemId/edit</code> — carregam <code>canDeactivate:
-  [unsavedItemGuard]</code>. É o mesmo componente nas duas, e os rascunhos vivem
-  em signals dele: sair da página <strong>era</strong> destruí-los sem toast e sem
-  undo, numa tela a um clique de qualquer coleção da sidebar. O guard chama
-  <code>ItemFormPage.canLeave()</code>, que usa o <code>confirm()</code> nativo do
-  navegador e não o <code>ui-dialog</code> — <code>CanDeactivate</code> tem de
-  responder de forma síncrona, e a alternativa era estacionar meia navegação
-  dentro do estado do componente cuja única função é não perder dados
-  (<a href="decisions.html">ADR-59</a>).
+  Três rotas são guardadas <em>na saída</em>. As duas do formulário de item —
+  <code>items/new</code> e <code>items/:itemId/edit</code> — carregam
+  <code>canDeactivate: [unsavedItemGuard]</code>, e
+  <code>c/:collectionId/settings</code> carrega
+  <code>[unsavedCollectionGuard]</code>: aquela página faz autosave, então
+  normalmente não tem nada a segurar, mas a faixa de conflito
+  (<a href="decisions.html">ADR-83</a>) <strong>desarma o autosave de
+  propósito</strong> — e sair enquanto ela estava de pé descartava toda edição
+  feita desde que ela apareceu (<a href="decisions.html">ADR-85</a>). Esse guard
+  pergunta só quando há o que perder: página limpa sai calada, debounce pendente
+  é gravado em vez de questionado.
+</p>
+
+<p>
+  Sobre as duas do formulário de item: é o mesmo componente nas duas, e os
+  rascunhos vivem em signals dele — sair da página <strong>era</strong>
+  destruí-los sem toast e sem undo, numa tela a um clique de qualquer coleção da
+  sidebar (<a href="decisions.html">ADR-59</a>). O guard chama
+  <code>ItemFormPage.confirmLeave()</code>, que devolve a <code>Promise</code> do
+  <code>ConfirmService.ask()</code>: o <code>ui-dialog</code> pode dizer nos
+  botões o que cada um faz, coisa que o <code>confirm()</code> do navegador não
+  pode, e nada fica meio-feito enquanto ele espera — o router simplesmente
+  aguarda a promise, porque <code>CanDeactivateFn</code> devolve
+  <code>MaybeAsync&lt;GuardResult&gt;</code>.
 </p>
 
 <h2 id="shell">A casca responsiva</h2>
@@ -322,7 +336,10 @@
           mesmo estado é como elas passam a discordar. Guarda
           ainda <strong>quais coleções têm escrita em voo</strong>: no máximo
           uma por coleção (<code>exclusive</code>), lida pela UI através de
-          <code>saving(id)</code>. E tem <code>reset()</code>, registrado em
+          <code>saving(id)</code>. <code>refreshCollection(id)</code> relê
+          <em>uma</em> coleção e só o token dela — é o que permite reafirmar um
+          save recusado sem recarregar o acervo e, com isso, sem jogar o rascunho
+          fora (<a href="decisions.html">ADR-85</a>). E tem <code>reset()</code>, registrado em
           <code>SessionReset</code> no construtor: sem ele, entrar como outra
           pessoa no mesmo tab mostrava o acervo da conta anterior, porque
           <code>ensureLoaded()</code> retorna na primeira linha enquanto
@@ -403,7 +420,12 @@
       <td>A recusa de escrita mais recente</td>
       <td>Levantado por <code>VaultStore.guard</code> em <em>um</em> lugar: sete
           pontos salvam coleção ou item, e um conflito que um deles esquecesse de
-          exibir é um save que o usuário acredita ter acontecido</td>
+          exibir é um save que o usuário acredita ter acontecido. O
+          <code>pending</code> é <em>computado</em>: <code>claim(id)</code> deixa
+          a página de ajustes assumir a voz da própria coleção enquanto mostra a
+          faixa dela, porque dois alertas para um evento são duas coisas a
+          responder e responder uma deixava a outra contradizendo-a
+          (<a href="decisions.html">ADR-85</a>)</td>
     </tr>
     <tr>
       <td><code>ToastService</code></td>
@@ -723,7 +745,8 @@
     <tr><td><code>collection-page/bulk-patch.ts</code></td><td><code>BulkPatch</code>, <code>applyBulkPatch</code>, <code>removeItems</code>, <code>isEmptyPatch</code>, <code>distinctValues</code>. O critério do que é editável em massa é “um valor cujo significado não depende do item em que cai”: grupo, seção, ano, valor, campo custom, uma tag, e o <code>status</code> de uma cópia. Condição, preço, valor, data e notas de <em>cópia</em> falham no critério — uma cópia é um objeto físico com identidade própria, e “definir a condição de 40 itens” teria de escolher uma cópia por item, o que “a primeira” não é um conceito deste modelo. <code>status</code> é a exceção justamente por ser idempotente por cópia: toda cópia de todo item selecionado recebe. <strong>Presença significa “tocado”</strong>: chave ausente é deixada em paz, chave presente é aplicada, <em>string vazia incluída</em> — é o que torna limpar possível. Retorna um array do mesmo tamanho <strong>na mesma ordem</strong>, porque ordem manual é a ordem do array e reordenar aqui reescreveria em silêncio um arranjo feito à mão</td></tr>
     <tr><td><code>csv-import/csv-import.ts</code></td><td><code>planCsvImport</code> e <code>applyCsvImport</code> — ler uma planilha e escrevê-la, deliberadamente separadas por um <code>CsvImportPlan</code> (<a href="decisions.html">ADR-67</a>). O plano carrega linhas resolvidas, issues por número de linha, grupos e campos a criar (sempre com <code>scope: 'item'</code> — o arquivo é a tabela de itens, e uma coluna dela descreve o item), e as três contagens. Nada aqui muta a coleção: a árvore de grupos é clonada antes que uma linha possa acrescentar a ela, e duas linhas que nomeiam o mesmo grupo faltante compartilham o que a primeira criou. Uma issue carrega <strong>chave</strong> de mensagem, nunca a frase — o util não tem injector. <code>applyCsvImport</code> mantém itens atualizados na <em>posição</em> deles (a ordem manual é a ordem do array) e acrescenta as criações no fim, em ordem de arquivo</td></tr>
     <tr><td><code>collection-page/column-prefs.ts</code></td><td>Quais colunas de campo a tabela esconde, em <code>localStorage['vault.cols.&lt;coleção&gt;.&lt;grupo&gt;']</code>. <strong>Guarda os nomes ocultos, nunca os visíveis</strong>: um campo declarado na semana que vem fica visível por default — guardar o conjunto visível esconderia toda coluna nova de quem já abriu o seletor. Chaveado por coleção <em>e</em> por grupo, porque o conjunto de campos é por grupo. Toda leitura e escrita é dentro de <code>try</code>: <code>localStorage</code> lança de saída no modo privado do Safari, e uma preferência perdida não pode levar a página com ela (<a href="decisions.html">ADR-47</a>)</td></tr>
-    <tr><td><code>item-form-page/unsaved-item.guard.ts</code></td><td><code>unsavedItemGuard</code>, um <code>CanDeactivateFn</code>. O que ele precisa do componente é declarado como <strong>forma estrutural</strong> (<code>interface HasUnsavedCheck { canLeave(): boolean }</code>) e não como import: <code>app.routes.ts</code> é avaliado no load do módulo, então um guard que importasse <code>ItemFormPage</code> arrastaria o formulário inteiro, o photo manager e os pipes para o bundle inicial e desfaria o <code>loadComponent</code> em silêncio</td></tr>
+    <tr><td><code>item-form-page/unsaved-item.guard.ts</code></td><td><code>unsavedItemGuard</code>, um <code>CanDeactivateFn</code>. O que ele precisa do componente é declarado como <strong>forma estrutural</strong> (<code>interface HasUnsavedCheck { confirmLeave(): boolean | Promise&lt;boolean&gt; }</code>) e não como import: <code>app.routes.ts</code> é avaliado no load do módulo, então um guard que importasse <code>ItemFormPage</code> arrastaria o formulário inteiro, o photo manager e os pipes para o bundle inicial e desfaria o <code>loadComponent</code> em silêncio</td></tr>
+    <tr><td><code>collection-settings-page/unsaved-collection.guard.ts</code></td><td><code>unsavedCollectionGuard</code>, na mesma forma estrutural (<code>interface HasUnsavedCheck { confirmLeave(): boolean | Promise&lt;boolean&gt; }</code>) e pela mesma razão. A resposta pode ser uma <code>Promise</code> — <code>CanDeactivateFn</code> devolve <code>MaybeAsync&lt;GuardResult&gt;</code> —, então a página consegue esvaziar o debounce e só então pôr um <code>ui-dialog</code> de verdade na frente do usuário, com a consequência escrita nos botões</td></tr>
     <tr><td><code>browse-params.ts</code> → <code>nextSortFor</code></td><td>A ordenação que um clique num cabeçalho de coluna pede. Compara contra a ordem <strong>efetiva</strong> (o override da URL, ou a ordem declarada do grupo, ou o default) e não contra o override sozinho — é o que faz o primeiro clique na coluna por que o grupo <em>já</em> ordena <em>inverter</em>, em vez de parecer não fazer nada. Sempre devolve uma ordenação, nunca <code>null</code>: “clique na coluna em que você já está para voltar ao default do grupo” não é um gesto que alguém adivinharia. Dinheiro abre em <code>desc</code> (a pergunta que uma coluna de valor responde é “qual é o caro”), o resto em <code>asc</code></td></tr>
   </tbody>
 </table>

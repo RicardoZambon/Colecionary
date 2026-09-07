@@ -117,7 +117,7 @@ import { UiButton } from '../../shared/ui/button/button';
 
     .notice__hint {
       margin: 0;
-      color: var(--muted);
+      color: var(--muted-strong);
       font-size: 12px;
       line-height: 1.5;
     }

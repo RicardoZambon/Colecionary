@@ -2,11 +2,12 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import { Observable, of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   VaultApi,
+  VaultConflictError,
   VersionedCollection,
   VersionedItem,
 } from '../../../core/api/vault-api';
@@ -22,6 +23,7 @@ import {
 import { I18nService } from '../../../core/i18n';
 import { UNGROUPED_ID } from '../../../core/utils/group-stats.util';
 import { ConfirmService } from '../../../core/state/confirm.service';
+import { ConflictService } from '../../../core/state/conflict.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CollectionSettingsPage } from './collection-settings-page';
 
@@ -31,20 +33,54 @@ class FakeVaultApi extends VaultApi {
   readonly puts: Collection[] = [];
 
   /**
-   * The version every write quotes back. A constant here because these tests
-   * are not about the guard — they only have to satisfy it, the way a client in
-   * sync with the server always does.
+   * One version per collection, moved by every accepted write and demanded back
+   * by the next one — a real server rather than a permissive one.
+   *
+   * It used to be a constant that `updateCollection` never even looked at,
+   * which is exactly why this file could not see that "Keep mine" re-quoted a
+   * dead token and was refused for ever.
    */
-  private static readonly VERSION = '"1"';
+  private readonly versions = new Map<string, number>();
+  /** Every `If-Match` the page's saves quoted, in order. */
+  readonly preconditions: string[] = [];
+  /**
+   * The next write finds the collection already moved on — a second writer that
+   * got in between the version refresh and the PUT.
+   */
+  raceNextWrite = false;
+
+  /** Moves a collection on behind the page's back, as another tab would. */
+  moveOn(id: string): void {
+    this.versions.set(id, (this.versions.get(id) ?? 1) + 1);
+  }
 
   listCollections(): Observable<VersionedCollection[]> {
-    return of(structuredClone(this.collections).map(collection => this.versioned(collection)));
+    return of(
+      structuredClone(this.collections).map(collection => {
+        this.versions.set(collection.id, this.versions.get(collection.id) ?? 1);
+        return this.versioned(collection);
+      }),
+    );
   }
   createCollection(): Observable<VersionedCollection> {
     return of(this.versioned(structuredClone(this.collections[0])));
   }
-  updateCollection(collection: Collection): Observable<VersionedCollection> {
+  updateCollection(collection: Collection, version: string): Observable<VersionedCollection> {
+    // Recorded before the precondition, because `puts` means "what the page
+    // sent" — a refused attempt is exactly the thing these tests count.
     this.puts.push(structuredClone(collection));
+    if (this.raceNextWrite) {
+      this.raceNextWrite = false;
+      this.moveOn(collection.id);
+    }
+    this.preconditions.push(version);
+    if (version !== this.tag(collection.id)) {
+      return throwError(() => new VaultConflictError(collection.id, 'Changed somewhere else.'));
+    }
+    this.moveOn(collection.id);
+    this.collections = this.collections.map(c =>
+      c.id === collection.id ? structuredClone(collection) : c,
+    );
     return of(this.versioned(collection));
   }
   deleteCollection(): Observable<void> {
@@ -53,15 +89,21 @@ class FakeVaultApi extends VaultApi {
   importStoreListing(): Observable<VersionedCollection> {
     return of(this.versioned(structuredClone(this.collections[0])));
   }
-  upsertItem(_collectionId: string, item: Item): Observable<VersionedItem> {
-    return of({ version: FakeVaultApi.VERSION, item });
+  upsertItem(collectionId: string, item: Item): Observable<VersionedItem> {
+    this.moveOn(collectionId);
+    return of({ version: this.tag(collectionId), item });
   }
-  deleteItem(): Observable<string> {
-    return of(FakeVaultApi.VERSION);
+  deleteItem(collectionId: string): Observable<string> {
+    this.moveOn(collectionId);
+    return of(this.tag(collectionId));
+  }
+
+  private tag(id: string): string {
+    return `"${this.versions.get(id) ?? 1}"`;
   }
 
   private versioned(collection: Collection): VersionedCollection {
-    return { version: FakeVaultApi.VERSION, collection };
+    return { version: this.tag(collection.id), collection };
   }
   listStoreListings(): Observable<StoreListing[]> {
     return of([]);
@@ -214,10 +256,16 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
   const byLabel = (aria: string) =>
     el.querySelector(`[aria-label="${aria}"]`) as HTMLInputElement & HTMLSelectElement;
 
+  /** The banner's two buttons: take the latest, then keep mine. */
+  const movedOnButtons = () =>
+    [...el.querySelectorAll('.moved-on ui-button button')] as HTMLButtonElement[];
+
   return {
     api,
     el,
     fixture,
+    page: fixture.componentInstance,
+    movedOnButtons,
     navigate,
     pick,
     type,
@@ -293,6 +341,138 @@ describe('CollectionSettingsPage', () => {
 
     expect(page.lastPut().name).toBe('Mine');
     expect(page.el.querySelector('.moved-on')).toBeNull();
+  });
+
+  it('writes the kept draft over the other save, instead of being refused for ever', async () => {
+    // The blocker. A 412 never moved the store's version token, so "Keep mine
+    // (writes over the other save)" re-armed the debounce, re-quoted the dead
+    // token and earned an identical refusal — the banner came back, the line
+    // above Done advised trying again in a moment, and nothing would ever save.
+    // The only sequence that worked was the *shell* notice's reload followed by
+    // this button, which nothing told anybody about.
+    const page = await mount();
+    const name = () => page.el.querySelector('.general ui-text-input input') as HTMLInputElement;
+    page.type(name(), 'Mine');
+    // Somebody else saves while the debounce is running.
+    page.api.moveOn('c1');
+    await page.done();
+
+    expect(page.el.querySelector('.moved-on')).not.toBeNull();
+    expect(page.api.puts).toHaveLength(1);
+
+    // One event, one voice: the shell notice stands down while this page is
+    // showing the banner for the same collection.
+    expect(TestBed.inject(ConflictService).pending()).toBeNull();
+
+    page.click(page.movedOnButtons()[1]);
+    await tick();
+    page.fixture.detectChanges();
+
+    // It wrote, and the draft was never touched on the way.
+    expect(page.el.querySelector('.moved-on')).toBeNull();
+    expect(name().value).toBe('Mine');
+    expect(page.lastPut().name).toBe('Mine');
+    expect(page.api.collections[0].name).toBe('Mine');
+    // The refused attempt quoted the version the page loaded with; the second
+    // quoted the refreshed one. Re-quoting '"1"' is the bug.
+    expect(page.api.preconditions).toEqual(['"1"', '"2"']);
+  });
+
+  it('says a second writer got in, rather than appearing to do nothing twice', async () => {
+    const page = await mount();
+    const name = () => page.el.querySelector('.general ui-text-input input') as HTMLInputElement;
+    page.type(name(), 'Mine');
+    page.api.moveOn('c1');
+    await page.done();
+    const i18n = TestBed.inject(I18nService);
+    expect(page.el.querySelector('.moved-on__body')!.textContent).toContain(
+      i18n.t('collSettings.movedOn.body'),
+    );
+
+    // A save lands in the window between the version refresh and the PUT.
+    page.api.raceNextWrite = true;
+    page.click(page.movedOnButtons()[1]);
+    await tick();
+    page.fixture.detectChanges();
+
+    expect(page.el.querySelector('.moved-on')).not.toBeNull();
+    expect(page.el.querySelector('.moved-on__body')!.textContent).toContain(
+      i18n.t('collSettings.movedOn.stillRefused'),
+    );
+
+    // And pressing it again is the right move, which is what that sentence says.
+    page.click(page.movedOnButtons()[1]);
+    await tick();
+    page.fixture.detectChanges();
+    expect(page.el.querySelector('.moved-on')).toBeNull();
+    expect(page.lastPut().name).toBe('Mine');
+  });
+
+  it('does not advise waiting while the banner is what saving is waiting on', async () => {
+    // `collSettings.notSaved` ends with "try again in a moment", which cannot
+    // work: nothing saves until the banner is answered.
+    const page = await mount();
+    const name = page.el.querySelector('.general ui-text-input input') as HTMLInputElement;
+    page.type(name, 'Mine');
+    page.api.moveOn('c1');
+    await page.done();
+
+    const i18n = TestBed.inject(I18nService);
+    expect(page.el.querySelector('.done-row [role="status"]')?.textContent?.trim()).toBe(
+      i18n.t('collSettings.savePaused'),
+    );
+  });
+
+  // --- leaving with work the page is knowingly not saving (the other blocker) ---
+
+  it('asks before leaving while the banner has autosave disarmed', async () => {
+    // Reproduced: banner up, type, click Dashboard — every edit gone, with no
+    // question, no toast and no trace. The route had `canActivate` and no
+    // `canDeactivate`, while the item form has had one all along.
+    const page = await mount();
+    const name = () => page.el.querySelector('.general ui-text-input input') as HTMLInputElement;
+    page.type(name(), 'Mine');
+    page.api.collections = [collection({ name: 'Theirs' })];
+    await TestBed.inject(VaultStore).load();
+    page.fixture.detectChanges();
+    expect(page.el.querySelector('.moved-on')).not.toBeNull();
+
+    page.type(name(), 'MY IMPORTANT UNSAVED WORK');
+
+    const leaving = page.page.confirmLeave();
+    await tick();
+    const confirm = TestBed.inject(ConfirmService);
+    expect(confirm.pending()?.titleKey).toBe('confirm.leaveSettings.title');
+
+    // Staying keeps every keystroke, which is the whole point of asking.
+    confirm.answer(false);
+    expect(await leaving).toBe(false);
+    page.fixture.detectChanges();
+    expect(name().value).toBe('MY IMPORTANT UNSAVED WORK');
+
+    // And discarding is allowed — it is a question, not a trap.
+    const again = page.page.confirmLeave();
+    await tick();
+    confirm.answer(true);
+    expect(await again).toBe(true);
+  });
+
+  it('leaves a clean page silently, and flushes a pending save instead of asking', async () => {
+    // A guard that asks on every exit is a guard people click through.
+    const page = await mount();
+    const confirm = TestBed.inject(ConfirmService);
+    expect(await page.page.confirmLeave()).toBe(true);
+    expect(confirm.pending()).toBeNull();
+
+    const name = page.el.querySelector('.general ui-text-input input') as HTMLInputElement;
+    page.type(name, 'Mine');
+    // Debounced: nothing has been sent, and this is the window that used to
+    // cost 400 ms worth of typing.
+    expect(page.api.puts).toHaveLength(0);
+
+    expect(await page.page.confirmLeave()).toBe(true);
+    expect(confirm.pending()).toBeNull();
+    expect(page.lastPut().name).toBe('Mine');
   });
 
   // --- sharing: what the card can actually promise ---

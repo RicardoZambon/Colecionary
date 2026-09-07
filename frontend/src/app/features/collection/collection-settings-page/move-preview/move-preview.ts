@@ -109,7 +109,7 @@ export interface MoveImpactCopy {
       }
 
       &__note {
-        color: var(--muted);
+        color: var(--muted-strong);
         font-size: var(--fs-xs);
       }
 

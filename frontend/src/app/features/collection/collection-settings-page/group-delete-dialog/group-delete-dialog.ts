@@ -112,7 +112,7 @@ const NAMED_SUB_GROUPS = 4;
       flex-direction: column;
       gap: var(--sp-1);
       font-size: var(--fs-sm);
-      color: var(--muted);
+      color: var(--muted-strong);
     }
 
     .choices {
@@ -161,7 +161,7 @@ const NAMED_SUB_GROUPS = 4;
 
     .choice__sub {
       font-size: var(--fs-sm);
-      color: var(--muted);
+      color: var(--muted-strong);
     }
 
     .undo {
@@ -187,7 +187,7 @@ const NAMED_SUB_GROUPS = 4;
     }
 
     .undo__link:disabled {
-      color: var(--muted);
+      color: var(--muted-strong);
       cursor: default;
       text-decoration: none;
     }

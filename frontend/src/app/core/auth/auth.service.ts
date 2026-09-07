@@ -50,9 +50,20 @@ export class AuthService {
    * without it the next person to sign in on this tab is shown the previous
    * account's collections, totals and role — see {@link SessionReset}.
    */
-  logout(): void {
+  async logout(): Promise<void> {
+    // Navigate **first**, and only end the session if the navigation actually
+    // happened.
+    //
+    // A page holding unsaved work protects it with a `canDeactivate` guard, and
+    // a guard only runs on a router navigation. Tearing the session down before
+    // navigating meant the guard was asked *after* the state it was guarding had
+    // already been destroyed — so signing out with the collection settings page
+    // mid-edit discarded the draft in silence, which is exactly what the guard
+    // exists to prevent. `navigate` resolves `false` when a guard cancels, and
+    // then the right thing is to stay signed in: the user answered "stay".
+    const left = await this.router.navigate(['/login']);
+    if (!left) return;
     this.endSession();
-    void this.router.navigate(['/login']);
   }
 
   /**

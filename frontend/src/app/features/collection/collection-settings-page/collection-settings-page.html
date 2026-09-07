@@ -97,12 +97,22 @@
   @if (stale()) {
     <div class="moved-on" role="alert">
       <p class="moved-on__title">{{ 'collSettings.movedOn.title' | t }}</p>
-      <p class="moved-on__body">{{ 'collSettings.movedOn.body' | t }}</p>
-      <div class="moved-on__actions">
-        <ui-button variant="ghost" (click)="takeLatest()"
-          >{{ 'collSettings.movedOn.take' | t }}</ui-button>
-        <ui-button (click)="keepMine()">{{ 'collSettings.movedOn.keep' | t }}</ui-button>
-      </div>
+      <!-- One sentence, replaced rather than stacked: which of the three
+           situations this is decides what to do next, and two paragraphs
+           arguing about it is what the shell notice and this banner were
+           already doing to each other. See movedOnBody. -->
+      <p class="moved-on__body">{{ movedOnBody() | t }}</p>
+      <!-- Deleted under us. Neither button can do anything about that, so
+           neither is offered and the sentence names the only way out. -->
+      @if (!collectionGone()) {
+        <div class="moved-on__actions">
+          <ui-button variant="ghost" [disabled]="keeping()" (click)="takeLatest()"
+            >{{ 'collSettings.movedOn.take' | t }}</ui-button>
+          <ui-button [disabled]="keeping()" (click)="keepMine()">{{
+            (keeping() ? 'collSettings.movedOn.keeping' : 'collSettings.movedOn.keep') | t
+          }}</ui-button>
+        </div>
+      }
     </div>
   }
 

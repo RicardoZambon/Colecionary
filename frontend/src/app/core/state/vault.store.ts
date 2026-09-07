@@ -418,6 +418,38 @@ export class VaultStore {
     });
   }
 
+  /**
+   * Re-reads one collection and the version token that goes with it, leaving
+   * the rest of the vault alone.
+   *
+   * Exists because "keep mine" had nothing to quote. A 412 does not move
+   * {@link versions} — {@link guard} raises the notice and rethrows, and there
+   * is nowhere in that path for a fresh token to come from — so a page that
+   * answered a refusal by re-arming its save quoted the same dead version and
+   * earned the same refusal, for ever. The only way through was to reload the
+   * whole vault, which throws the draft away: the button that promised to keep
+   * the user's work was the one that could never write it.
+   *
+   * The version comes from `listCollections` and not from a narrower fetch
+   * because that is where the app synchronises: the envelope's token and the
+   * document beside it describe the same read, so the write that follows quotes
+   * a version that genuinely describes what it is overwriting.
+   *
+   * Undefined means the collection is no longer in the vault — deleted
+   * elsewhere, or never visible to this session. State is left untouched in
+   * that case: the caller is holding a draft of it and is the only one that can
+   * decide what to say.
+   */
+  async refreshCollection(id: string): Promise<Collection | undefined> {
+    const versioned = (await firstValueFrom(this.api.listCollections())).find(
+      v => v.collection.id === id,
+    );
+    if (!versioned) return undefined;
+    const fresh = this.remember(versioned);
+    this.replace(fresh);
+    return fresh;
+  }
+
   async deleteCollection(id: string): Promise<void> {
     await this.write(firstValueFrom(this.api.deleteCollection(id)));
     this.versions.delete(id);

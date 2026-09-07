@@ -317,6 +317,40 @@ describe('VaultStore versions', () => {
     });
   });
 
+  it('refreshes one collection’s version so a refused save can be repeated', async () => {
+    // The bug this exists for: a 412 never moved `versions`, so the collection
+    // settings page's "Keep mine (writes over the other save)" re-quoted the
+    // dead token and earned the same refusal, for ever. The only way to get a
+    // fresh one was `load()`, which throws the draft away — so the button that
+    // promised to keep the user's work was the one that could never write it.
+    const { api, store } = await mount();
+    api.moveOn('c1');
+    await expect(store.updateCollection(collection({ name: 'Mine' }))).rejects.toBeInstanceOf(
+      VaultConflictError,
+    );
+
+    const fresh = await store.refreshCollection('c1');
+    expect(fresh).toBeTruthy();
+
+    // The same payload, unchanged, now goes through — which is what "writes
+    // over the other save" means.
+    await store.updateCollection(collection({ name: 'Mine' }));
+    expect(api.collections[0].name).toBe('Mine');
+    // And it quoted the refreshed token, not the dead one.
+    expect(api.preconditions).toEqual(['"1"', '"2"']);
+  });
+
+  it('answers undefined for a collection that is no longer in the vault', async () => {
+    // Deleted from another tab. There is nothing to write over and nothing to
+    // reload, and the caller is holding the only remaining copy of it — so
+    // state is left exactly as it was for the page to speak for.
+    const { api, store } = await mount();
+    api.collections = [];
+
+    expect(await store.refreshCollection('c1')).toBeUndefined();
+    expect(store.collection('c1')).toBeTruthy();
+  });
+
   it('guards item writes with the same version, and keeps it fresh afterwards', async () => {
     const { api, store } = await mount();
 

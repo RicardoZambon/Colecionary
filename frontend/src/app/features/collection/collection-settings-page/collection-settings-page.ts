@@ -20,6 +20,7 @@ import {
   isReportedWriteFailure,
 } from '../../../core/api/vault-api';
 import { ConfirmService } from '../../../core/state/confirm.service';
+import { ConflictService } from '../../../core/state/conflict.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { ArchiveApi } from '../../../core/api/archive-api';
 import { saveFile } from '../../../core/utils/download.util';
@@ -194,6 +195,7 @@ export class CollectionSettingsPage {
   protected readonly itemCount = (n: number): string => this.i18n.count(n, 'item');
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
+  private readonly conflicts = inject(ConflictService);
   private readonly router = inject(Router);
   private readonly archives = inject(ArchiveApi);
 
@@ -300,6 +302,38 @@ export class CollectionSettingsPage {
    */
   protected readonly stale = signal(false);
 
+  /** "Keep mine" is refreshing the version and writing. */
+  protected readonly keeping = signal(false);
+
+  /**
+   * "Keep mine" refreshed the version, wrote, and was refused all over again.
+   *
+   * Only reachable by losing a second race — somebody saved in the window
+   * between the refresh and the PUT — but it is the one outcome where pressing
+   * the same button again is the right move, and the banner said nothing about
+   * it. Silence there was the whole of the original bug: the button appeared to
+   * do nothing, twice, and the only sentence on screen advised waiting.
+   */
+  protected readonly keepRefused = signal(false);
+
+  /** The collection vanished from the vault while this page held a draft of it. */
+  protected readonly collectionGone = signal(false);
+
+  /**
+   * Which of the banner's three sentences to print.
+   *
+   * Replaced, not stacked. Each one implies a different next move — answer the
+   * two buttons, press the same button again, or export because there is
+   * nothing left to write over — and a banner that printed the general
+   * explanation *and* the specific one would be doing to itself what it and the
+   * shell notice were already doing to each other.
+   */
+  protected readonly movedOnBody = computed<MessageKey>(() => {
+    if (this.collectionGone()) return 'collSettings.movedOn.gone';
+    if (this.keepRefused()) return 'collSettings.movedOn.stillRefused';
+    return 'collSettings.movedOn.body';
+  });
+
   /** The last save this page asked for landed, and nothing has changed since. */
   private readonly lastSaveOk = signal(false);
 
@@ -314,7 +348,11 @@ export class CollectionSettingsPage {
    */
   protected readonly saveState = computed(() => {
     if (this.store.saving(this.collectionId())) return this.i18n.t('collSettings.saving');
-    if (this.stale()) return this.i18n.t('collSettings.notSaved');
+    // Its own sentence, not the transient one. `collSettings.notSaved` ends
+    // with "try again in a moment", which is advice that cannot work here:
+    // nothing will save until the banner above is answered, and waiting is
+    // exactly the wrong thing to do with the only copy of your work.
+    if (this.stale()) return this.i18n.t('collSettings.savePaused');
     return this.lastSaveOk() ? this.i18n.t('collSettings.saved') : '';
   });
 
@@ -470,6 +508,18 @@ export class CollectionSettingsPage {
       const name = this.draft()?.groups.find(g => g.id === pending.groupId)?.name ?? '';
       this.toast.flash(this.i18n.t('toast.group.moveDiscarded', { name }));
     });
+
+    // While the banner is up, this page is the voice for this collection's
+    // refusals and the shell's notice stands down. One refused autosave used to
+    // raise both at once — two `role="alert"` boxes, four buttons, neither
+    // aware of the other — and answering the banner left the notice in the
+    // corner still saying nothing had been saved. The cleanup releases the
+    // claim on destroy as well as on every flip, or a refusal from anywhere
+    // else in the app would be silent for the rest of the session.
+    effect(onCleanup => {
+      this.conflicts.claim(this.stale() ? this.collectionId() : null);
+      onCleanup(() => this.conflicts.claim(null));
+    });
   }
 
   /** Clones a fresh document and forgets everything the old draft was mid-way through. */
@@ -478,6 +528,8 @@ export class CollectionSettingsPage {
     this.draftSource = collection;
     this.awaitingEcho = false;
     this.stale.set(false);
+    this.keepRefused.set(false);
+    this.collectionGone.set(false);
     clearTimeout(this.persistTimer);
     this.persistTimer = undefined;
     this.draft.set(structuredClone(collection));
@@ -499,20 +551,98 @@ export class CollectionSettingsPage {
     }
     const fresh = this.store.collection(this.collectionId());
     if (fresh) this.adopt(fresh);
+    // One event, one voice. The shell notice reports the same refusal from the
+    // corner of the screen, and leaving it up after the banner was answered
+    // left it claiming "nothing was saved" over a page that had just reloaded
+    // and was saving normally again.
+    this.conflicts.dismiss();
   }
 
   /**
-   * Keeps the draft and re-arms the save, which overwrites what was stored.
+   * Keeps the draft and writes it over what was stored, as the label promises.
    *
-   * Informed, and that is the whole difference from what this page used to do
-   * on its own. `draftSource` moves to the document being written over so the
-   * same banner does not fire again on the echo.
+   * The refresh is the load-bearing half, and it is what this method was
+   * missing. A 412 never moves the store's version token, so re-arming the
+   * debounce quoted the same dead version and earned the same refusal — for
+   * ever. The banner came back, the only sentence on screen advised trying
+   * again in a moment, and the one sequence that did work (the *shell* notice's
+   * "Reload the latest version", then this button) was two presses in two
+   * components that nothing told anybody about.
+   *
+   * `VaultStore.refreshCollection` moves the token without touching the draft,
+   * which is the distinction "keep mine" rests on: `takeLatest` reloads *and*
+   * re-clones, this one reloads the token *only*. Then it writes immediately
+   * rather than re-arming the debounce — the user has just pressed a button
+   * whose label says it writes, so 400 ms of nothing is not an answer.
+   *
+   * The overwrite is real and the label says so: the draft was cloned before
+   * the other save, so writing it discards what that save added. That is the
+   * choice being offered, informed, next to the one that keeps it.
    */
-  protected keepMine(): void {
-    const current = this.store.collection(this.collectionId());
-    if (current) this.draftSource = current;
-    this.stale.set(false);
-    this.schedulePersist();
+  protected async keepMine(): Promise<void> {
+    if (this.keeping()) return;
+    this.keeping.set(true);
+    try {
+      const fresh = await this.store.refreshCollection(this.collectionId());
+      if (!fresh) {
+        // Nothing to write over and nothing to reload. The banner stays up with
+        // a different sentence, because the draft on screen is now the only
+        // copy of this collection anywhere and the export is the only way out.
+        this.collectionGone.set(true);
+        return;
+      }
+      // The draft is untouched — that is the entire point of this button. Only
+      // the document it is measured against moves, so the echo of our own write
+      // does not raise the banner again.
+      this.draftSource = fresh;
+      this.stale.set(false);
+      this.keepRefused.set(false);
+      this.conflicts.dismiss();
+      // Directly, not `schedulePersist`: this is an explicit save, and the
+      // outcome has to be known before the pending flag comes off the button.
+      const outcome = await this.persist();
+      // `persist` has already set `stale` again; all that is added here is the
+      // sentence saying a second writer got in, since pressing the same button
+      // once more is the right move and the banner's body does not say that.
+      if (outcome === 'refused') this.keepRefused.set(true);
+    } catch {
+      // The refresh itself failed — no version, so nothing was written and the
+      // banner has to stay exactly as it was.
+      this.toast.error(this.i18n.t('conflict.reloadFailed'));
+    } finally {
+      this.keeping.set(false);
+    }
+  }
+
+  /**
+   * Answers the router on the way out of this page. See
+   * `unsaved-collection.guard.ts`.
+   *
+   * Three outcomes, in the order they cost the user least. A page with nothing
+   * pending leaves silently — a question asked on every exit is a question
+   * people stop reading. A page mid-debounce flushes it, because the edit is
+   * seconds old and saving it is what the user already asked for. Only a page
+   * whose autosave is *disarmed* asks, and there the draft really is the only
+   * copy of itself: the banner has been up since the document moved, and every
+   * keystroke since then is held nowhere else.
+   */
+  async confirmLeave(): Promise<boolean> {
+    if (!this.stale() && this.persistTimer !== undefined) {
+      // Not a question: this is the save the debounce was already going to make.
+      // A refusal sets `stale`, which falls through to the question below. A
+      // 'busy' re-arms the debounce instead, and that timer still fires after
+      // this page is gone — the draft it closes over is written to the store,
+      // which outlives the component, so the edit lands rather than being lost.
+      await this.persist();
+    }
+    if (!this.stale()) return true;
+    return this.confirm.ask({
+      titleKey: 'confirm.leaveSettings.title',
+      bodyKey: 'confirm.leaveSettings.body',
+      confirmKey: 'confirm.leaveSettings.discard',
+      cancelKey: 'confirm.leaveSettings.stay',
+      tone: 'danger',
+    });
   }
 
   /** The group the tree has selected, or null when nothing is. */
@@ -1582,8 +1712,12 @@ export class CollectionSettingsPage {
     if (outcome !== 'saved') {
       // Stay put. The work on screen is the only copy of itself, and telling
       // someone it saved while walking them off the page is how it gets lost.
-      // A conflict already has the notice; the other two have nothing else.
-      if (outcome !== 'refused') this.toast.error(this.i18n.t('collSettings.notSaved'));
+      // A conflict already has the banner; the other two have nothing else —
+      // and they need different sentences. 'busy' is transient and "try again
+      // in a moment" is the right advice; 'paused' means the banner above is
+      // waiting for an answer, and waiting is what must not be advised.
+      if (outcome === 'paused') this.toast.error(this.i18n.t('collSettings.savePaused'));
+      else if (outcome !== 'refused') this.toast.error(this.i18n.t('collSettings.notSaved'));
       return;
     }
 

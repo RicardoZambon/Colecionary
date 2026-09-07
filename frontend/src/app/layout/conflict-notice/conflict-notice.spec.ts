@@ -134,6 +134,29 @@ describe('ConflictNotice', () => {
     );
   });
 
+  it('stands down for a collection whose own page is saying it', () => {
+    // One refused autosave used to raise this notice *and* the collection
+    // settings page's own banner: two `role="alert"` boxes, four buttons,
+    // neither aware of the other — and answering the banner left this one in
+    // the corner still claiming nothing had been saved over a page that was
+    // saving normally again.
+    conflicts.claim('c1');
+    raise();
+    expect(el.querySelector('.notice')).toBeNull();
+
+    // Another collection is not the claimant's business.
+    conflicts.raise({ collectionId: 'c2', message: 'Nothing was saved.' });
+    fixture.detectChanges();
+    expect(el.querySelector('.notice')).toBeTruthy();
+
+    // And releasing the claim brings the original one back: the refusal never
+    // stopped being true, it was only being explained elsewhere.
+    conflicts.raise({ collectionId: 'c1', message: 'Nothing was saved.' });
+    conflicts.claim(null);
+    fixture.detectChanges();
+    expect(el.querySelector('.notice')).toBeTruthy();
+  });
+
   it('follows the language', () => {
     raise();
     const i18n = TestBed.inject(I18nService);

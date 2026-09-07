@@ -1111,4 +1111,12 @@ export const ptBR: Record<MessageKey, string> = {
   'import.exportingVault': 'Preparando a exportação…',
   'import.exportFailed': 'Não foi possível preparar a exportação',
   'collection.backToDashboard': 'Voltar ao painel',
+  'collSettings.savePaused': 'Pausado — responda ao aviso acima para salvar ou descartar.',
+  'collSettings.movedOn.keeping': 'Mantendo a sua…',
+  'collSettings.movedOn.stillRefused': 'Recusado de novo — alguém salvou nesse meio-tempo. Pressione mais uma vez ou pegue a mais recente.',
+  'collSettings.movedOn.gone': 'Esta coleção não está mais no acervo, então não há mais nada para sobrescrever. Exporte antes de sair desta página.',
+  'confirm.leaveSettings.title': 'Sair com estas edições sem salvar?',
+  'confirm.leaveSettings.body': 'O salvamento está pausado porque a coleção foi salva em outro lugar, então o que está nesta página é a única cópia. Sair agora descarta tudo.',
+  'confirm.leaveSettings.discard': 'Descartar as edições desta página',
+  'confirm.leaveSettings.stay': 'Ficar e responder ao aviso',
 };

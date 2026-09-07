@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { Router, provideRouter } from '@angular/router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthService, AuthSession } from './auth.service';
 import { environment } from '../../../environments/environment';
@@ -46,9 +46,32 @@ describe('AuthService', () => {
     expect(service.token()).toBe('jwt-token');
     expect(localStorage.getItem('vault.auth')).toContain('jwt-token');
 
-    service.logout();
+    // Awaited, because `logout` navigates *first* and only ends the session if
+    // the navigation actually happened — see the method's own note.
+    await service.logout();
     expect(service.isAuthenticated()).toBe(false);
     expect(localStorage.getItem('vault.auth')).toBeNull();
+  });
+
+  /**
+   * A page holding unsaved work protects it with a `canDeactivate`, and a guard
+   * only runs on a navigation. Ending the session first meant the guard was
+   * asked after the state it guards had already been destroyed, so signing out
+   * mid-edit discarded the draft in silence.
+   */
+  it('stays signed in when a guard refuses the navigation away', async () => {
+    const pending = service.login('marcus@example.com', 'vault-demo');
+    http.expectOne(`${environment.apiBaseUrl}/auth/login`).flush(SESSION);
+    await pending;
+
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(false);
+
+    await service.logout();
+
+    expect(navigate, 'it tries to leave before tearing anything down').toHaveBeenCalled();
+    expect(service.isAuthenticated(), 'the user answered "stay"').toBe(true);
+    expect(localStorage.getItem('vault.auth')).toContain('jwt-token');
   });
 
   it('treats an expired stored session as unauthenticated', async () => {

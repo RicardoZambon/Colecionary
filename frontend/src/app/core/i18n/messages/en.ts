@@ -1180,4 +1180,12 @@ export const en = {
   'import.exportingVault': 'Preparing the export…',
   'import.exportFailed': 'Could not prepare the export',
   'collection.backToDashboard': 'Back to Dashboard',
+  'collSettings.savePaused': 'Paused — answer the notice above to save or discard.',
+  'collSettings.movedOn.keeping': 'Keeping yours…',
+  'collSettings.movedOn.stillRefused': 'Refused again — somebody saved in the meantime. Press it once more, or take the latest.',
+  'collSettings.movedOn.gone': 'This collection is no longer in the vault, so there is nothing left to write over. Export it before you leave this page.',
+  'confirm.leaveSettings.title': 'Leave with these edits unsaved?',
+  'confirm.leaveSettings.body': 'Saving is paused because the collection was saved somewhere else, so what is on this page is the only copy of it. Leaving now discards it.',
+  'confirm.leaveSettings.discard': 'Discard the edits on this page',
+  'confirm.leaveSettings.stay': 'Stay and answer the notice',
 } as const;

@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { canEditGuard } from './core/auth/write.guard';
+import { unsavedCollectionGuard } from './features/collection/collection-settings-page/unsaved-collection.guard';
 import { unsavedItemGuard } from './features/collection/item-form-page/unsaved-item.guard';
 import { setupCompletedGuard, setupGuard } from './core/setup/setup.guards';
 import { Shell } from './layout/shell/shell';
@@ -45,8 +46,13 @@ export const routes: Routes = [
         // collection document — so someone who cannot write is turned back at
         // the door rather than handed a page of inert forms. Courtesy only: the
         // 403 is what actually protects the collection.
+        // And guarded on the way out as well as in. The page autosaves, so it
+        // normally has nothing to hold — but its conflict banner disarms the
+        // autosave deliberately, and leaving while that is up used to discard
+        // every edit made since it appeared.
         path: 'c/:collectionId/settings',
         canActivate: [canEditGuard],
+        canDeactivate: [unsavedCollectionGuard],
         loadComponent: () =>
           import('./features/collection/collection-settings-page/collection-settings-page').then(
             m => m.CollectionSettingsPage,
