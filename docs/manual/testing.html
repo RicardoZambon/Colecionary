@@ -519,7 +519,61 @@ npm test -- --watch=false</code></pre>
           teste</td>
       <td>Olhar a tela em pt-BR. É por isso que a regra 13 pede isso</td>
     </tr>
-  </tbody>
+      <tr>
+      <td>Um preço digitado à brasileira gravava número errado, em silêncio</td>
+      <td>O <code>parseNumber</code> local da página de item tira tudo que não
+          é dígito ou ponto, então <code>4.200,00</code> vira <strong>4.2</strong>
+          e <code>85,50</code> vira <strong>8550</strong> — erro nos dois
+          sentidos. O <code>parseAmount</code> em <code>money.util.ts</code>
+          resolve isso e o importador de CSV já o usava: o app discordava de si
+          mesmo. Nenhum spec do formulário digitava um separador decimal
+          brasileiro</td>
+      <td>Uma asserção sobre <code>parseAmount</code> como <em>o único</em>
+          leitor de valor digitado, mais um spec do formulário que digita
+          <code>4.200,00</code></td>
+    </tr>
+    <tr>
+      <td>Sair da conta deixava o acervo na tela para o próximo a entrar</td>
+      <td><code>logout()</code> limpa a sessão e navega, mas não zera o
+          <code>VaultStore</code>; o <code>ensureLoaded()</code> começa com
+          <code>if (this.loaded()) return;</code>, então o login seguinte não
+          busca nada. Medido: numa re-entrada sem recarregar a página, só saem
+          <code>POST /api/auth/login</code> e <code>GET /api/images/meta</code> —
+          nenhum <code>GET /api/collections</code>. Todo spec montava um store
+          novo, então nenhum tinha estado de uma sessão anterior</td>
+      <td>Um spec que carrega, faz logout e afirma que o store voltou a
+          <code>loaded === false</code></td>
+    </tr>
+    <tr>
+      <td>Um rótulo de formulário que não rotula nada</td>
+      <td>O <code>ui-field</code> desenhava <code>&lt;label&gt;</code> sem
+          <code>for</code>, e nenhum componente de entrada aceitava
+          <code>id</code> — então <em>nenhum</em> ponto de chamada podia
+          consertar. jsdom não calcula nome acessível, e uma captura de tela não
+          mostra um nome faltando</td>
+      <td><code>verify.mjs</code>: nome acessível em todo controle visível, em
+          todas as rotas</td>
+    </tr>
+    <tr>
+      <td>Texto de trabalho no cinza que é decoração</td>
+      <td>O <code>themes.spec.ts</code> prende a <em>paleta</em>, então não vê
+          um token correto usado no lugar errado. Três auditorias acharam isso
+          de forma independente; a primeira medição encontrou de 7 a 28
+          elementos abaixo de AA em cada tela, nos dois temas</td>
+      <td><code>verify.mjs</code>: contraste <em>pintado</em> contra o fundo
+          real, em <code>devdark</code> e <code>paper</code></td>
+    </tr>
+    <tr>
+      <td>Uma galeria de largura fixa rolando de lado no celular</td>
+      <td><code>.main</code> carrega <code>overflow-y: auto</code>, então o
+          <code>overflow-x</code> computa <code>auto</code> e a região principal
+          absorve o transbordo: o documento continua com a largura exata da
+          viewport. A medição no nível do documento é estruturalmente cega para
+          isso — e nenhuma rota de item era aberta</td>
+      <td><code>verify.mjs</code>: uma caixa que rola de lado <em>sem
+          declarar</em> que rola, com as rotas de item e as abas na lista</td>
+    </tr>
+</tbody>
 </table>
 </div>
 

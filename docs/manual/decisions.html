@@ -776,6 +776,15 @@
   </dl></div>
 </details>
 
+<details class="adr">
+  <summary><span class="id">ADR-74</span> O <code>verify.mjs</code> mede classes de defeito, não instâncias — e um alvo curto legítimo se declara</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Uma auditoria de UI/UX encontrou 121 defeitos que o <code>verify.mjs</code>, as 885 asserções unitárias e as duas passagens de idioma davam todos por verdes. Quatro deles eram invisíveis aqui por motivos estruturais, não por descuido: a checagem de alvo de toque inspecionava <em>um</em> seletor escrito à mão (<code>app-collection-hero .header__actions &gt; a</code>), então só podia pegar o controle para o qual foi escrita; nenhuma rota de item era aberta, nem as abas da página de ajustes; e como <code>.main</code> carrega <code>overflow-y: auto</code>, o <code>overflow-x</code> computa <code>auto</code> também, de modo que a região principal absorve silenciosamente qualquer conteúdo largo demais e a medição no nível do documento fica cega para transbordo interno. Nada calculava nome acessível nem razão de contraste <em>pintada</em> — o <code>themes.spec.ts</code> prende a <em>paleta</em>, e por isso não vê um token correto usado no lugar errado.</dd>
+    <dt>Decisão</dt><dd>As asserções passam a ser sobre a <strong>classe</strong> do defeito. O alvo de toque mede tudo que é interativo, não uma lista; um controle que legitimamente cresce o alvo com pseudo-elemento — o que a regra permite quando a caixa visual não pode crescer — sai da checagem carregando <code>data-tap-ok</code>, uma afirmação greppável em vez de uma isenção silenciosa. As rotas de item e as abas entram na lista. Uma checagem nova pergunta se alguma caixa rola de lado <em>sem declarar</em> que rola, o que é o que a medição do documento não consegue ver. Outras três medem nome acessível em todo controle visível, contraste AA do que está pintado em dois temas, e glifo Unicode fazendo trabalho de ícone.</dd>
+    <dt>Consequência</dt><dd>A primeira execução reprovou 39 checagens, então o número passa a ser a medida do progresso em vez de uma questão de opinião. O custo é tempo: o arquivo abre onze rotas em vários contextos e leva minutos, não segundos. O risco real é gritar lobo — uma checagem ampla demais se torna ruído que alguém desliga. Por isso o conjunto de glifos é enumerado e não um bloco Unicode: <code>×</code> é como se escreve contagem de exemplar (<code>Perfeito ×2</code>, e o CSV imprime assim), <code>—</code> é o "nada aqui", <code>≈</code> marca valor que substitui estimativa, e <code>→</code> apareceu na descrição que um <em>usuário</em> digitou ("NES → GameCube era"). A checagem não distingue texto do app de conteúdo do usuário, e uma varredura genérica de setas acusa as palavras do próprio usuário como defeito.</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>
