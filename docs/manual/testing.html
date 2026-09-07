@@ -380,7 +380,74 @@ npm test -- --watch=false</code></pre>
       <td><code>CurrencyTests</code>, <code>CurrencySettingsTests</code></td>
       <td><code>0.07</code> cobrado como oito centavos; BRL somado com USD</td>
     </tr>
-  </tbody>
+      <tr>
+      <td>Todo rótulo de formulário rotula de fato o seu controle</td>
+      <td><code>field.spec.ts</code> — o id sai do <code>ui-field</code>, o
+          <code>label[for]</code> aponta para ele, a dica e o erro entram no
+          <code>aria-describedby</code>, e um <em>segundo</em> controle no mesmo
+          campo cai no id próprio em vez de duplicar</td>
+      <td>A associação por aninhamento é invisível no template — ninguém vê um
+          <code>for</code> escrito. Sem o teste, um refactor que troque a ordem
+          de injeção volta a 29 controles sem nome e nada acusa</td>
+    </tr>
+    <tr>
+      <td>Um card clicável é uma âncora, não um <code>&lt;div&gt;</code> com
+          <code>routerLink</code></td>
+      <td><code>card.spec.ts</code> — varre os templates e reprova
+          <code>&lt;ui-card&gt;</code> com <code>routerLink</code> ou
+          <code>(click)</code> no host</td>
+      <td>Dois arquivos nunca aparecem no mesmo diff, então revisão não pega.
+          Escrito para impedir regressão futura, <strong>achou um defeito vivo
+          na primeira execução</strong>: todo item da visão de grade</td>
+    </tr>
+    <tr>
+      <td>Ninguém inventa uma camada de empilhamento</td>
+      <td><code>z-index.spec.ts</code> — reprova <code>z-index</code> cru acima
+          de 2 fora de <code>_themes.scss</code>, e também reprova se um arquivo
+          da lista <code>PENDING</code> parar de errar sem sair da lista</td>
+      <td>Cinco dos sete overlays já haviam adivinhado. O aviso de "sua
+          gravação foi recusada" ficava num 60 cru, abaixo de tudo</td>
+    </tr>
+    <tr>
+      <td>Um valor digitado à brasileira é lido por um só leitor</td>
+      <td>Tabelas em <code>item-form-page.spec.ts</code> e
+          <code>bulk-patch.spec.ts</code> passando
+          <code>4.200,00 / 85,50 / 12,5 / 1.000</code> pelo valor do item, pelo
+          preço do exemplar e pela aplicação em massa</td>
+      <td>Havia <em>duas</em> cópias de um parser errado, e o certo
+          (<code>parseAmount</code>) já existia ao lado. Nenhum spec do
+          formulário tinha digitado um separador decimal brasileiro</td>
+    </tr>
+    <tr>
+      <td>Sair da conta esvazia o acervo em memória</td>
+      <td><code>vault.store.spec.ts</code> ("session boundary"), inclusive pelo
+          <code>SessionReset.run()</code> — o caminho que o
+          <code>AuthService</code> chama de verdade</td>
+      <td>Todo spec montava um store novo, então nenhum tinha estado de sessão
+          anterior. Com dois tenants, o defeito é dado de outra conta na tela</td>
+    </tr>
+    <tr>
+      <td>Uma paleta nova reprova antes de embarcar</td>
+      <td><code>themes.spec.ts</code> — a lista <code>READABLE</code> (agora com
+          <code>good-strong</code>/<code>warn-strong</code>) contra
+          <code>bg</code>/<code>panel</code>/<code>panel2</code>, e o bloco
+          <code>ON_FILL</code>, que mede um token de contraste contra o
+          preenchimento em que ele senta</td>
+      <td>O spec prendia a <em>paleta</em>, então não via um token correto usado
+          no lugar errado, nem texto sobre um botão. Dois temas embarcaram com
+          rótulo de botão abaixo de AA no próprio botão</td>
+    </tr>
+    <tr>
+      <td>O que só o navegador vê</td>
+      <td><code>e2e/verify.mjs</code> — 126 checagens: nome acessível em todo
+          controle visível, contraste <em>pintado</em> em dois temas, caixa que
+          rola de lado sem declarar, glifo fazendo papel de ícone, e alvo de
+          toque em <em>tudo</em> que é interativo a 390px</td>
+      <td>Ver a seção "A classe de defeito que nenhuma suíte vê". Antes desta
+          rodada media um seletor escrito à mão, e nenhuma rota de item ou aba
+          de ajustes era aberta</td>
+    </tr>
+</tbody>
 </table>
 </div>
 

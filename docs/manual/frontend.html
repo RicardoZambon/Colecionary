@@ -1571,6 +1571,85 @@
 </table>
 </div>
 
+<h2 id="usabilidade">A rodada de usabilidade: quatro mecanismos que vale conhecer</h2>
+
+<p>
+  Uma auditoria de UI/UX levantou 121 defeitos e a correção deles introduziu
+  quatro mecanismos que não são óbvios ao ler um template. Cada um existe porque
+  a alternativa era pedir que 32 pontos de chamada lembrassem de algo.
+</p>
+
+<h3>O rótulo associa por aninhamento</h3>
+
+<p>
+  O <code>ui-field</code> cria o id, aponta o próprio <code>label[for]</code>
+  para ele e o entrega pelo <em>element injector</em>
+  (<code>UI_FIELD_OWNER</code>). O element injector segue o template onde o
+  controle foi <strong>escrito</strong>, não onde ele é projetado — então a
+  associação existe porque os dois estão aninhados, e nenhum ponto de chamada
+  passa nada. Antes disso o <code>&lt;label&gt;</code> não tinha
+  <code>for</code> e nenhum componente aceitava <code>id</code>: não era um
+  esquecimento, era <em>impossível de consertar de fora</em>. O
+  <code>claimId()</code> entrega o id uma vez só; um segundo controle no mesmo
+  campo cai no id próprio, porque dois elementos com o mesmo id tornam ambíguo
+  também o <em>primeiro</em> rótulo. ADR-78.
+</p>
+
+<h3>Um card clicável é uma âncora esticada</h3>
+
+<p>
+  O <code>ui-card</code> é um <code>&lt;div&gt;</code>, então
+  <code>[routerLink]</code> no host dá um alvo de clique sem foco, sem role, sem
+  nome e sem tecla. O padrão é um <code>&lt;a&gt;</code> real <em>dentro</em> do
+  card, no lugar onde o nome é lido, com um <code>::after</code>
+  <code>inset: 0</code> em <code>z-index: 1</code> cobrindo o card — o card
+  segue clicável de ponta a ponta e o que toma foco é a âncora. Um controle
+  desenhado por cima (o checkbox de seleção) fica em <code>z-index: 2</code>,
+  senão marcar um card navega. O <code>card.spec.ts</code> reprova a volta do
+  padrão antigo. ADR-79.
+</p>
+
+<h3><code>data-tap-ok</code>: a pintura pequena declara o alvo grande</h3>
+
+<p>
+  A regra 17 permite crescer o <em>alvo</em> com pseudo-elemento onde a caixa
+  visual não pode crescer. Um pseudo-elemento é invisível para
+  <code>getBoundingClientRect</code>, então uma medição automática acusa
+  exatamente os controles corretos. Quem faz essa troca carrega
+  <code>data-tap-ok</code> — uma afirmação explícita e grepável ao lado do
+  controle, em vez de uma isenção escondida numa lista de seletores dentro do
+  script. ADR-81.
+</p>
+
+<h3>A fronteira da sessão</h3>
+
+<p>
+  <code>VaultStore.reset()</code> limpa tudo que o store guarda, e o
+  <code>AuthService</code> o chama nos <strong>dois</strong> fins de sessão por
+  um registro sem dependências (<code>SessionReset</code>), para que
+  <code>core/auth</code> não ganhe uma aresta para <code>core/state</code>.
+  Sem isso, entrar é uma <em>navegação</em> e não um carregamento de página, e o
+  <code>ensureLoaded()</code> começa com <code>if (this.loaded()) return;</code>
+  — medido no navegador: uma re-entrada como outro usuário não emitia
+  <code>GET /collections</code> nenhum, e o painel do segundo mostrava as
+  coleções do primeiro. ADR-76.
+</p>
+
+<div class="note">
+  <p>
+    <strong>O que a auditoria ensinou sobre verificação.</strong> Os quatro
+    defeitos mais caros da rodada passaram pelas 885 asserções unitárias, pelas
+    duas passagens de idioma e pelo <code>verify:browser</code> de então, todos
+    verdes — e não por descuido, mas por cegueira estrutural: jsdom não calcula
+    nome acessível nem contraste, o <code>themes.spec.ts</code> prende a paleta e
+    não o uso, e como <code>.main</code> carrega <code>overflow-y: auto</code> o
+    <code>overflow-x</code> computa <code>auto</code> e a região principal
+    absorve qualquer transbordo interno. A lição está na matriz em
+    <a href="testing.html">Testes</a>: prenda a <em>classe</em> do defeito, não
+    a instância.
+  </p>
+</div>
+
 <div class="pagenav"></div>
 </main>
 </div>

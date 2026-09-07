@@ -222,6 +222,21 @@ a core service's state).
   accents fail 4.5:1 as text while passing as fills. Raising `--muted` would
   have fixed the contrast and destroyed the distinction between text that
   informs and text that decorates.
+- **Status is type too.** `--good` and `--warn` have `--good-strong` /
+  `--warn-strong` siblings for exactly the same reason as the accents: a
+  condition badge, a "refused" line and a missing-count are *read*, not merely
+  seen. `themes.spec.ts` pinned the accent and grey tiers but not these, which
+  is how `--good` shipped carrying a 9.5px label at 4.33:1 on Paperwhite. As
+  with the accents, `color:` takes the `-strong` tier and `border:` keeps the
+  raw token, because a border is a fill.
+- **A label on a fill is measured against the fill.** `--accent-contrast` sits
+  inside a primary button and a selected chip; `--danger-contrast` inside a
+  destructive one. Nothing measured those, so two themes shipped a button label
+  below AA *on its own button* while every existing assertion passed — the token
+  is correct on a surface and simply never sits on one. `themes.spec.ts`'s
+  `ON_FILL` block now checks each contrast token against the fills it lands on.
+  A fill still owes only 3:1 against the page; this is about the type on top of
+  it, which owes 4.5:1 like all type. See ADR-80.
 - **`stripes()` no longer exists.** The no-image contract is a flat `--panel2`
   with a dimmed `ui-icon`. A 45° hatch is the silhouette of a skeleton shimmer,
   which is what made the dashboard, the store and the group cards read as
@@ -311,6 +326,17 @@ column with no breakpoint at all. These rules are what stop that recurring.
   `upto($bp)` / `from($bp)`. Never write a pixel value in a media query. A
   media query cannot read a CSS custom property, which is exactly why these are
   SCSS variables and exactly why four files had each copied a different number.
+- **A small paint declares its grown target.** Rule 17 allows growing the
+  *target* with a pseudo-element where the visual box must not grow — a filter
+  chip, the reframe pip, a dense table checkbox, the toggle track, a tracked
+  column header. A pseudo-element is invisible to `getBoundingClientRect`, so an
+  automated sweep flags precisely the controls that are already right. Such a
+  control therefore carries **`data-tap-ok`**: an explicit, greppable claim next
+  to the control, rather than a silent exemption inside a list of selectors in
+  the verification script. Do not write it on a control that has no grown
+  target. `verify:browser` also honours the WCAG 2.5.8 exception for a link
+  `display: inline` inside running prose, whose target is set by the line
+  height. See ADR-81.
 - **Grids state a minimum, never a count.** `repeat(auto-fit, minmax(Xpx, 1fr))`
   where tiles should stretch to fill; `auto-fill` where a card should stay
   card-sized. `repeat(4, 1fr)` is a 48px column at 390px, which renders a stat
@@ -422,6 +448,10 @@ All are exported from `shared/ui/index.ts`.
 | Skeleton | `ui-skeleton` | `variant: 'text' \| 'block' \| 'circle'`, `width`, `height`, `radius`, `lines`. Size bars in **`1lh`** against the real element's own class — one line box of whatever they land in — rather than a guessed pixel height, which is what keeps cumulative layout shift at zero. Note `variant="block"` carries a `min-height: var(--sp-12)` floor that silently overrides a smaller `height`. **The only thing in the app allowed to shimmer**, and only inside `motion-safe`. A no-image state is flat — see `ui-image-slot` — because a diagonal hatch is indistinguishable from a shimmer, which is what made the dashboard, the store and the group cards read as permanently mid-fetch. `aria-hidden` with no name; the surrounding region owns `aria-busy` |
 | Tag input | `ui-tag-input` | `tags` (model, the item's **whole** list), `suggestions`, `disabled`. Chips with a remove button, plus a field that commits on Enter **and on blur** — a typed-but-uncommitted tag that vanishes when you press Save is indistinguishable from a save that dropped it. All the rules live in `core/utils/tags.util.ts`, never here, because the bulk bar applies the identical rules to forty items at once. The derived `wanted` tag is filtered out and cannot be added or removed. `suggestions` is the vocabulary already in use in the collection, offered through a native `<datalist>`: it filters as you type, needs no code to be keyboard-reachable, and does not trap focus in a form whose Enter key already means something. |
 | Date input | `ui-date-input` | `value` (model, ISO `yyyy-MM-dd`; `''` = no date), `min`, `max`, `variant`, `ariaLabel`; output `blurred`. A native `<input type="date">` follows the **browser's** locale, not the document's, so an English-locale Chrome renders `mm/dd/yyyy` inside a pt-BR UI — which does not fail, it records the wrong date. Two defences: `lang` is bound to `I18nService.current()` (Chromium honours it; Firefox and Safari still take the OS locale), and the expected order is printed under the field from `Intl.DateTimeFormat` for `I18nService.locale()`, wired up as `aria-describedby` so it is announced and not merely drawn. Always use this instead of `ui-text-input type="date"` |
+| Language picker | `app-lang-picker` | none — in `layout/`. One control, used by the topbar, the login card and the setup wizard, so the language is switchable *before* there is a session. Below `$bp-lg` the topbar hands it to the nav drawer: theme and language are the two controls a user touches almost never, and they were occupying the top of every screen on a phone |
+| Not found | `app-not-found` | none — in `layout/`, rendered as a **child of the shell** so the URL stays in the bar and `authGuard` still applies. The `**` route used to `redirectTo: 'dashboard'`, so a stale bookmark or a typo silently became the dashboard and the user could not tell that what they asked for was gone |
+| Browse summary | `app-browse-summary` | in `collection-page/`. "8 of 9 items" against the scope total, one removable chip per active narrowing (**including the `?s=` section and the search text**, which were represented nowhere), and `Clear filters` wherever filters are in force — not only inside the zero-result empty state, which is where it used to live. It is the page's `aria-live="polite"` region, and it owns the tri-state select-all, so the card grid finally has one |
+| Move preview | `app-move-preview` | in `collection-settings-page/`. Presentational: what a group move would gain, lose and re-order, shown *before* it is applied. Extracted from the page for the 6 kB per-component style budget |
 | Conflict notice | `app-conflict-notice` | none — global outlet in the shell, driven by `ConflictService`. Lives in `layout/`, not `shared/ui`: it is one app-specific outlet, not a reusable element. Raised when a write is refused because someone else changed the collection first; it never discards what the user typed |
 | Inline edit | `ui-inline-edit` | `value`, `placeholder`, `ariaLabel` (**required** — it has no visible label), `commitOnBlur`; outputs `committed(text)`, `cancelled`. Render it inside the caller's `@if`: it takes the caret on reveal, commits the trimmed draft on Enter, cancels on Escape (stopping the event, so one Escape does not also close the dialog around it), and commits on blur by default. An empty commit is a cancellation, not an empty name. It replaces four hand-rolled copies of the pattern, one of which is where the `+ Sub` composer opened unfocused in the wrong column |
 | Truncate | `ui-truncate` | `text` (required), `lines`. The **only** sanctioned way to cut a string: it renders the text with the ellipsis rules and always carries the full value as `title`, so the two cannot be separated — eleven hand-rolled copies of the ellipsis rule existed and the `[title]` was remembered six times out of eleven, which is why the collection-settings breadcrumb was cut mid-word with no way to read it. `lines > 1` clamps instead. **Known gap:** `title` is a pointer affordance, invisible on touch and unreliable with screen readers; a real `ui-tooltip` with focus and long-press paths does not exist yet, so a string whose full value is *essential* should be given room rather than truncated |
@@ -730,6 +760,29 @@ of a `Grupo` path as a section of the group it reached when no group answers to
 the name, because on screen a divider reads as a level of the tree and a file
 written from the screen says `Cavaleiros / Ouro`), and
 `item-form-page/unsaved-item.guard.ts`.
+
+### The session boundary
+
+`VaultStore.reset()` clears every signal the store owns — collections, listings,
+members, profile, tenant settings, the version map, in-flight writes, the search
+query, `loadError` and `loaded` — dismisses the conflict notice and puts the
+account currency back to null. `AuthService` calls it on **both** endings
+(`logout()` and `sessionExpired()`) through `SessionReset`, a dependency-free
+registry in `core/auth/`, so `core/auth` keeps no import edge into `core/state`.
+
+It is not cosmetic. Every store is `providedIn: 'root'` and signing in is a
+*navigation*, not a page load, so without the reset `ensureLoaded()` — which
+opens with `if (this.loaded()) return;` — fetches nothing. Measured in a browser
+before the fix: a pure in-app sign-out and sign-in as a different user issued
+`POST /auth/login` and `GET /images/meta` and **no `GET /collections` at all**,
+so the second user's dashboard listed the first user's collections and
+`canEdit()` answered from the previous profile. With two tenants that is
+cross-account data on screen. `vault.store.spec.ts` pins it, including through
+`SessionReset.run()` — the path `AuthService` actually calls. See ADR-76.
+
+`VaultStore.syncIcon` names the icon for the current sync state, so "not
+connected" and "save refused" no longer render identically to "all changes
+saved": `[data-sync]` was bound but nothing anywhere selected on it.
 
 ### The store's failure contract
 
