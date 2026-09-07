@@ -1151,6 +1151,20 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     os links continuam funcionando.
   </li>
   <li>
+    <strong>A coleção restaurada é o agregado inteiro</strong> — grupos, seções,
+    itens e membros. Vale dizer explicitamente porque é o que faltou: o
+    <code>ImportService</code> montava a coleção sem <code>Sections</code>, e como
+    <code>PublicIdRepair</code> e o export já as tratavam, o arquivo estava
+    correto e só a leitura descartava. O sintoma tinha duas caras: restaurar como
+    coleção nova trazia todo item apontando para uma divisória que não existia
+    mais (tudo caía no balde sem seção), e <em>sobrescrever</em> era pior — a
+    lista vazia entrava no <code>ReplaceGraph</code> e <strong>apagava as
+    divisórias que a coleção viva tinha</strong>. Qualquer filho novo do agregado
+    passa pelos mesmos quatro lugares: DTO, <code>PublicIdRepair</code>,
+    <code>ReplaceGraph</code> e este restore.
+    <span class="where">backend: Vault.Application/Import/ImportService.cs</span>
+  </li>
+  <li>
     Criar em vez de sobrescrever mantém o id do arquivo quando ele está livre
     (restaurar algo que você apagou traz os links de volta) e renomeia quando o
     nome está ocupado.
@@ -1330,11 +1344,25 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     própria tabela imprime são entrada legal: <code>—</code> para valor ausente,
     <code>Quero</code> para lista de desejos, <code>Perfeito ×2</code> para dois
     exemplares perfeitos. <strong>Qualquer outra coluna é um campo custom</strong>,
-    casado por nome com os campos declarados do grupo.
+    casado por nome com os campos declarados — da coleção e do grupo.
     <span class="where">frontend: features/collection/csv-import/csv-import.ts</span>
   </li>
   <li>
-    <strong>Resolver o grupo, em quatro tentativas nesta ordem.</strong> O
+    <strong>Uma coluna de campo <em>por exemplar</em> é recusada, não adivinhada.</strong>
+    A tabela tem uma linha por item, então ela carrega <em>um</em> valor onde esse
+    campo tem um por exemplar. E o nome é a identidade do campo: escrever o valor
+    em <code>item.custom</code> não seria um erro por pouco — poria dado sob um
+    nome que ninguém lê, justamente na tela que mostra as cópias. A recusa é
+    <strong>uma issue só, na linha do cabeçalho</strong>, porque é ali que está o
+    erro: a coluna está errada para todas as linhas ao mesmo tempo, e uma issue
+    por linha soterraria as outras. E vale para a
+    <strong>coleção inteira</strong>, não por destino: um nome que significa “por
+    exemplar” num grupo não pode passar a significar “por item” no grupo seguinte.
+    As outras colunas do arquivo importam normalmente
+    (<code>csvImport.error.copyScopedColumn</code>).
+  </li>
+  <li>
+    <strong>Resolver o destino, em cinco tentativas nesta ordem.</strong> O
     <strong>nome do próprio grupo aberto</strong> resolve para ele — estar dentro
     de Ouro e colar uma tabela cujas linhas todas dizem Ouro significa que elas
     são de Ouro, e não de um Ouro novo aninhado dentro dele (foi assim que o
@@ -1348,6 +1376,25 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     regra: um descendente homônimo do ancestral não é endereçável por nome
     simples de dentro dele; importe do nível de cima, onde o caminho separa os
     dois.
+  </li>
+  <li>
+    <strong>O último nível do caminho pode ser uma seção.</strong> Antes de criar
+    qualquer grupo, o último segmento é oferecido às seções do grupo a que a
+    caminhada chegou: <code>Cavaleiros / Ouro</code> — e, de dentro de
+    Cavaleiros, só <code>Ouro</code> — chega à <em>divisória</em> Ouro, com
+    <code>sectionId</code> preenchido e nenhum grupo criado. Uma seção não é um
+    nível da árvore (<a href="frontend.html">rule 5</a>), mas na tela lê como um:
+    o item está sob um título chamado Ouro, dentro de Cavaleiros, e é assim que o
+    usuário escreve o arquivo. Só o <strong>último</strong> segmento — um
+    intermediário não pode ser seção, porque seção não contém grupo — e só quando
+    nenhum grupo atende ao nome primeiro, já que a coluna se chama
+    <code>Grupo</code> e a seção continua endereçável pela coluna
+    <code>Seção</code>, que tem a última palavra quando nomeia uma divisória
+    existente. Seção continua sendo <em>casada</em>, nunca criada.
+    <strong>Sem isso</strong>, a importação criava um grupo Ouro ao lado da
+    divisória Ouro e enchia esse grupo com uma segunda cópia de cada item: o
+    duplicado era o estrago visível, e o silencioso era que a prateleira
+    pretendida continuava vazia.
   </li>
   <li>
     <strong>Uma linha ruim não recusa o arquivo.</strong> Ela vira uma
@@ -1370,6 +1417,20 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     ficam onde estavam, e um exemplar existente é <strong>reaproveitado</strong>
     em vez de recriado, senão o preço pago some numa importação que só queria
     corrigir o ano.
+    <strong>Uma célula vazia não destrói o que ela não nomeia.</strong> É onde a
+    linha entre “limpar” e “apagar” cai. Um arquivo que traz as colunas
+    <code>Exemp.</code> e <code>Estado</code> com as células em branco não diz
+    nada sobre exemplares, e o item fica com os que tem — antes isso lia como
+    zero e <em>esvaziava a prateleira</em> em toda linha que o arquivo tocava,
+    levando junto preço pago, data de aquisição e notas, que nenhuma daquelas
+    duas colunas menciona. Zero continua dizível de duas formas: <code>0</code> na
+    contagem, ou uma palavra de lista de desejos em <code>Estado</code>.
+    <code>Ano</code> segue a mesma regra, por não haver como escrever
+    “desconhecido” num inteiro não-anulável. Já onde a célula <em>é</em> o dado
+    inteiro — <code>Valor</code>, <code>Descrição</code>, uma coluna custom — o
+    branco limpa, deliberadamente: <code>0</code> é exatamente o que “não
+    estimado” significa (<a href="frontend.html">rule 3</a>), e a tabela imprime o
+    mesmo traço que isto lê como zero.
   </li>
   <li>
     <strong>Campos custom são declarados, senão a importação some.</strong> O
@@ -1378,8 +1439,12 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     lugar nenhum — a pior das duas falhas, porque nada na tela diria que o dado
     está lá. Com um grupo aberto a declaração vai <strong>nele</strong>, já que
     <code>fieldsFor</code> desce pela ancestralidade e uma declaração cobre a
-    subárvore inteira; na raiz, vai em cada destino. O tipo é inferido dos
-    próprios valores e <code>text</code> ganha qualquer desacordo.
+    subárvore inteira; na raiz, vai em cada destino. Um campo que a
+    <strong>coleção</strong> declara conta como declarado em todo lugar, então uma
+    coluna que casa com um deles importa e nada é acrescentado. O tipo é inferido
+    dos próprios valores e <code>text</code> ganha qualquer desacordo; o escopo é
+    <code>item</code>, explicitamente, e isso não é palpite — uma coluna por
+    exemplar nunca chega aqui, foi recusada no cabeçalho.
   </li>
   <li>
     <strong>Aplicar é um PUT só.</strong> <code>applyCsvImport</code> recebe o
@@ -1403,6 +1468,12 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
 <div class="callout">
   <span class="label">A consequência que vale escrever</span>
   <p>
+    A célula “Cai em” imprime o grupo <em>e</em> a divisória
+    (<code>PlannedRow.sectionName</code>), porque o destino pode ter sido
+    alcançado pelo nome de uma seção e uma célula que mostrasse só o grupo estaria
+    descrevendo uma escrita diferente da que o botão emite.
+  </p>
+  <p>
     O que a tela mostra <em>é</em> o objeto aplicado — não uma descrição dele. Se
     a pré-visualização fosse calculada por um código e a escrita por outro, a
     pré-visualização poderia mentir, e é ela que o usuário usa para decidir sobre
@@ -1417,7 +1488,11 @@ images/{imageId}.{ext}    <span class="c"># todas as imagens que o tenant possui
     <strong>99 exemplares</strong> por linha (um erro de digitação vira objetos
     físicos que a coleção afirma ter). Seções são <em>casadas</em>, nunca criadas:
     a identidade de uma seção é a posição dela no array, e um arquivo não tem como
-    dizer onde uma nova entraria.
+    dizer onde uma nova entraria. E <strong>campos por exemplar não passam por
+    esta tabela em nenhuma direção</strong> — nem na importação, nem na exportação
+    dela: uma linha por item não tem como carregar os valores de N cópias. Quem
+    precisa deles inteiros usa o
+    <a href="#arquivo">arquivo de backup</a>, que carrega o documento completo.
   </p>
 </div>
 

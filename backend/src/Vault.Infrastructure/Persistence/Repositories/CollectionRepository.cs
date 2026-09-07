@@ -45,6 +45,10 @@ public sealed class CollectionRepository(VaultDbContext db) : ICollectionReposit
         // is how a collection goes back to following the account currency, and
         // a coalesce would pin it to the first code ever chosen.
         tracked.Currency = replacement.Currency;
+        // Plain assignment for the same reason: a collection-wide field that was
+        // removed has to disappear, and a coalesce would make the first set of
+        // declarations permanent.
+        tracked.Fields = replacement.Fields;
 
         MergeByKey(
             tracked.Groups,

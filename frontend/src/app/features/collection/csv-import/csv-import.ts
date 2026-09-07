@@ -15,7 +15,7 @@ import { detectDelimiter, parseCsv } from '../../../core/utils/csv.util';
 import { newCopy, syncWantedTag } from '../../../core/utils/copies.util';
 import { childrenOf, fieldsFor, groupById, pathOf, subtreeIds } from '../../../core/utils/groups.util';
 import { parseAmount } from '../../../core/utils/money.util';
-import { sectionsOf } from '../../../core/utils/sections.util';
+import { sectionById, sectionsOf } from '../../../core/utils/sections.util';
 import { withTagAdded } from '../../../core/utils/tags.util';
 
 /**
@@ -45,6 +45,15 @@ import { withTagAdded } from '../../../core/utils/tags.util';
  * group's declared fields by name (rule 4) and declared where it is missing, so
  * a column of catalogue numbers arrives as a column of catalogue numbers rather
  * than being dropped in silence.
+ *
+ * ## The `Grupo` column addresses what the screen shows
+ *
+ * On screen a section reads as a level of the tree even though it is not one
+ * (rule 5), so a file written from what the user is looking at says
+ * `Cavaleiros / Ouro` for an item under the Ouro divider. The last segment of
+ * that path is therefore allowed to name a section — see
+ * {@link resolveDestination}. Without it the import built a group beside the
+ * divider and filled it with a second copy of every item.
  *
  * ## Nothing is written that was not counted
  *
@@ -102,6 +111,12 @@ export interface PlannedRow {
   item: Item;
   /** Where it lands, spelled the way the breadcrumb spells it. */
   groupPath: string;
+  /**
+   * The divider it lands under, by name, or `''`. Shown beside the path so a
+   * destination the `Grupo` column reached *through* a section name does not
+   * read as the group alone — the preview has to spell the whole destination.
+   */
+  sectionName: string;
   /** True when the destination group does not exist yet. */
   newGroup: boolean;
 }
@@ -304,18 +319,21 @@ function readTags(raw: string): string[] {
     .filter(Boolean);
 }
 
-// --- group resolution ------------------------------------------------------
+// --- destination resolution ------------------------------------------------
 
 interface GroupResolution {
   id: string;
+  /** The divider inside {@link id} the cell named, or `''` for none. */
+  sectionId: string;
   created: boolean;
   error?: CsvImportIssue['key'];
 }
 
 /**
- * A destination group for one `Grupo` cell, creating what is missing.
+ * A destination — group, and possibly a divider inside it — for one `Grupo`
+ * cell, creating the groups that are missing.
  *
- * Three spellings resolve, in this order, and the order is the point:
+ * Four spellings resolve, in this order, and the order is the point:
  *
  * 1. **The open group's own name**, which resolves to the open group. Standing
  *    in Ouro and pasting a table whose every row says Ouro means those rows
@@ -327,7 +345,28 @@ interface GroupResolution {
  *    scope's subtree. This is what makes the common file work: a user who has
  *    already built their tree writes `Cavaleiros de Ouro` and it lands in the
  *    group of that name, wherever they filed it.
- * 4. **Anything else** — created as a direct child of the scope.
+ * 4. **A divider of the group the walk reached**, matched on the *last* segment
+ *    only — see below.
+ * 5. **Anything else** — created as a direct child of the scope.
+ *
+ * ## Why the last segment may be a section
+ *
+ * A section is not a level of the tree (rule 5), but on screen it reads exactly
+ * like one: the item sits under a heading called Ouro, inside Cavaleiros. So a
+ * file written from what the user is looking at spells that destination
+ * `Cavaleiros / Ouro`, or simply `Ouro` from inside Cavaleiros — and taking
+ * that literally created a *group* named Ouro next to the divider of the same
+ * name, with a second copy of every item in it. The duplicate is the visible
+ * damage; the silent one is that the shelf the user meant stayed empty.
+ *
+ * So the last segment is offered to the sections of the group the walk reached
+ * before anything is created. Only the last: an intermediate segment cannot be
+ * a section, because a section contains no groups. And only when no group
+ * answers to the name first — the column is `Grupo`, a group is a destination
+ * in its own right and a section merely a position inside one, so where both
+ * exist the group wins and the section stays reachable through the `Seção`
+ * column. A section is still never *created* here (see {@link matchSection}):
+ * its identity is its position, and a file cannot say where a new one goes.
  *
  * The one thing rule 1 costs: a descendant that shares its ancestor's name is
  * not addressable by a bare name from inside that ancestor. Import it from the
@@ -337,14 +376,15 @@ interface GroupResolution {
  * answer, so it is an issue rather than a guess: filing forty items into the
  * wrong "Series 1" is not something the user would find out about.
  */
-function resolveGroup(
+function resolveDestination(
   groups: GroupNode[],
+  sections: readonly Section[],
   scopeId: string,
   raw: string,
   create: (name: string, parentId: string | null) => GroupNode,
 ): GroupResolution {
   const parts = raw.trim().split(PATH_SEPARATOR).filter(Boolean);
-  if (!parts.length) return { id: scopeId, created: false };
+  if (!parts.length) return { id: scopeId, sectionId: '', created: false };
 
   if (parts.length === 1) {
     const key = nameKey(parts[0]);
@@ -366,31 +406,40 @@ function resolveGroup(
     // by a bare name; run that import from the level above, where the path
     // spelling separates them.
     const scope = groupById(groups, scopeId);
-    if (scope && nameKey(scope.name) === key) return { id: scope.id, created: false };
+    if (scope && nameKey(scope.name) === key) return { id: scope.id, sectionId: '', created: false };
 
     const inScope = new Set(scopeId ? subtreeIds(groups, scopeId).slice(1) : groups.map(g => g.id));
     const matches = groups.filter(g => inScope.has(g.id) && nameKey(g.name) === key);
-    if (matches.length === 1) return { id: matches[0].id, created: false };
+    if (matches.length === 1) return { id: matches[0].id, sectionId: '', created: false };
     if (matches.length > 1) {
-      return { id: scopeId, created: false, error: 'csvImport.error.ambiguousGroup' };
+      return { id: scopeId, sectionId: '', created: false, error: 'csvImport.error.ambiguousGroup' };
     }
   }
 
   let parentId: string | null = scopeId || null;
   let created = false;
-  for (const part of parts) {
+  for (const [index, part] of parts.entries()) {
     const key = nameKey(part);
     const existing = childrenOf(groups, parentId).find(g => nameKey(g.name) === key);
     if (existing) {
       parentId = existing.id;
       continue;
     }
+    // Nothing under this name is a group. Before inventing one, the last
+    // segment gets to be a divider of the group we have walked to — that is
+    // how `Cavaleiros / Ouro` reaches the Ouro *section* rather than growing a
+    // twin group beside it. A newly created parent has no sections, so this
+    // simply misses and the walk carries on creating.
+    if (index === parts.length - 1) {
+      const divider = matchSection(sections, parentId ?? '', part);
+      if (divider) return { id: parentId ?? '', sectionId: divider, created };
+    }
     const node = create(part, parentId);
     groups.push(node);
     parentId = node.id;
     created = true;
   }
-  return { id: parentId ?? '', created };
+  return { id: parentId ?? '', sectionId: '', created };
 }
 
 // --- planning --------------------------------------------------------------
@@ -548,7 +597,21 @@ export function planCsvImport(
   const sectionColumn = by('section');
   const tagsColumn = by('tags');
   const descriptionColumn = by('description');
-  const fieldColumns = columns.filter(column => column.role === 'field');
+  // A column naming a field somebody declared *per copy* is refused rather than
+  // imported. The item table has one row per item, so it carries one value where
+  // that field has one per exemplar — and the name is the field's identity, so
+  // writing the value to `item.custom` instead would not be a near miss: it
+  // would put data under a name nothing reads, on the screen that shows the
+  // copies. Refused collection-wide, not per destination, because a name that
+  // means "per copy" in one group cannot quietly mean "per item" in the next.
+  const copyScopedNames = new Set(
+    [collection.fields, ...collection.groups.map(group => group.fields)]
+      .flat()
+      .filter(field => field.scope === 'copy')
+      .map(field => field.name),
+  );
+  const declaredColumns = columns.filter(column => column.role === 'field');
+  const fieldColumns = declaredColumns.filter(column => !copyScopedNames.has(column.field!));
 
   // Name → the item that answers to it, per group, so a duplicate is one lookup
   // rather than a scan per row. Rows planned in this run join it, so a file
@@ -559,7 +622,19 @@ export function planCsvImport(
     byName.set(`${item.groupId} ${nameKey(item.name)}`, item);
   }
 
+  /** A divider's own name, for the preview. Empty for none and for a dangling id. */
+  const sectionLabel = (id: string) => sectionById([...collection.sections], id)?.name ?? '';
+
   const issues: CsvImportIssue[] = [];
+  // On the header line, because that is where the mistake is: the column is
+  // wrong for every row at once, and one issue per row would bury the rest.
+  for (const column of declaredColumns.filter(c => copyScopedNames.has(c.field!))) {
+    issues.push({
+      line: header.line,
+      key: 'csvImport.error.copyScopedColumn',
+      params: { name: column.field! },
+    });
+  }
   const rows: PlannedRow[] = [];
   const fieldValues = new Map<string, string[]>();
   const thisYear = new Date().getFullYear();
@@ -577,14 +652,20 @@ export function planCsvImport(
     }
 
     const groupCell = cell(groupColumn);
-    const resolved = resolveGroup(groups, options.scopeId, groupCell, (label, parentId) => ({
-      id: newGroupId(),
-      name: label,
-      parentId,
-      fields: [],
-      sort: null,
-      target: null,
-    }));
+    const resolved = resolveDestination(
+      groups,
+      collection.sections,
+      options.scopeId,
+      groupCell,
+      (label, parentId) => ({
+        id: newGroupId(),
+        name: label,
+        parentId,
+        fields: [],
+        sort: null,
+        target: null,
+      }),
+    );
     if (resolved.error) {
       issues.push({ line: record.line, key: resolved.error, params: { name: groupCell.trim() } });
       continue;
@@ -619,6 +700,7 @@ export function planCsvImport(
         outcome: 'skip',
         item: existing,
         groupPath: pathLabel(groups, groupId, rootLabel),
+        sectionName: sectionLabel(existing.sectionId),
         newGroup: resolved.created,
       });
       continue;
@@ -660,10 +742,18 @@ export function planCsvImport(
     }
 
     // A stated count wins over the count the badge prints, and the badge's own
-    // count wins over the absence of a column. With neither, a stated condition
+    // count wins over the absence of a column; a stated condition on its own
     // means one copy and a wantlist word means none.
-    const count = declared ?? condition.count ?? (condition.condition ? 1 : 0);
-    if (count > MAX_COPIES_PER_ROW) {
+    //
+    // Null is the fourth answer and it is **not** zero: the columns are there
+    // but this row's cells are empty, so the file says nothing about copies and
+    // the item keeps the ones it has. It used to read as zero, which on an
+    // update emptied the shelf — and a copy carries the price paid, the
+    // condition, the acquisition date and the notes, none of which the file
+    // that erased them ever mentioned. Zero is still sayable, twice over:
+    // `0` in the count, or a wantlist word in the condition. Silence is not.
+    const stated = declared ?? condition.count ?? (condition.condition ? 1 : null);
+    if (stated !== null && stated > MAX_COPIES_PER_ROW) {
       issues.push({
         line: record.line,
         key: 'csvImport.error.tooManyCopies',
@@ -671,12 +761,22 @@ export function planCsvImport(
       });
       continue;
     }
-    if (copiesColumn || conditionColumn) {
-      item.copies = reconcileCopies(base.copies, count, condition.condition);
+    if (stated !== null) {
+      item.copies = reconcileCopies(base.copies, stated, condition.condition);
     }
 
-    if (sectionColumn) {
-      item.sectionId = matchSection(collection.sections, groupId, cell(sectionColumn));
+    // The `Seção` column is the explicit spelling and wins wherever it names a
+    // divider that exists. Otherwise the one the `Grupo` path ended on applies:
+    // it is the same destination said a different way, and the preview drew it.
+    const named = sectionColumn ? matchSection(collection.sections, groupId, cell(sectionColumn)) : '';
+    if (named) {
+      item.sectionId = named;
+    } else if (resolved.sectionId) {
+      item.sectionId = resolved.sectionId;
+    } else if (sectionColumn) {
+      // A column that named nothing this group knows clears it, exactly as a
+      // dangling id reads as unsectioned (rule 5).
+      item.sectionId = '';
     } else if (existing && existing.groupId !== groupId) {
       // Moving an item leaves its old divider pointing at another group's run —
       // legal on the wire, invisible on screen, and a dangling id once saved.
@@ -710,6 +810,7 @@ export function planCsvImport(
       outcome: existing ? 'update' : 'create',
       item: planned,
       groupPath: pathLabel(groups, groupId, rootLabel),
+      sectionName: sectionLabel(planned.sectionId),
       newGroup: resolved.created,
     });
   }
@@ -730,7 +831,7 @@ export function planCsvImport(
     rows,
     issues,
     newGroups,
-    newFields: planFields(groups, rows, fieldColumns, fieldValues, options.scopeId),
+    newFields: planFields(collection.fields, groups, rows, fieldColumns, fieldValues, options.scopeId),
     created: rows.filter(row => row.outcome === 'create').length,
     updated: rows.filter(row => row.outcome === 'update').length,
     skipped: rows.filter(row => row.outcome === 'skip').length,
@@ -739,6 +840,10 @@ export function planCsvImport(
 
 /**
  * An existing divider of this group, by name. Never creates one.
+ *
+ * Both spellings of a section come through here — the `Seção` column and the
+ * last segment of a `Grupo` path — so the two can never disagree about what
+ * counts as a match.
  *
  * A section's identity is its **position** (rule 5) — the array order of
  * `collection.sections` is what makes Bronze then Prata then Ouro a
@@ -760,6 +865,9 @@ function matchSection(sections: readonly Section[], groupId: string, raw: string
  * so an undeclared column would import perfectly and appear nowhere — the worse
  * of the two failures, because nothing on screen would say the data is there.
  *
+ * A field the collection declares for the whole of itself counts as declared
+ * everywhere, so a column matching one is imported and nothing is added.
+ *
  * The declaration goes on the **scope group** when the import is scoped to one:
  * `fieldsFor` merges down the ancestor path, so one declaration covers every
  * destination inside it and forty sibling groups do not each grow a copy of the
@@ -769,6 +877,7 @@ function matchSection(sections: readonly Section[], groupId: string, raw: string
  * there to hold one.
  */
 function planFields(
+  collectionFields: readonly GroupField[],
   groups: readonly GroupNode[],
   rows: readonly PlannedRow[],
   fieldColumns: readonly ResolvedColumn[],
@@ -786,12 +895,20 @@ function planFields(
   const tree = [...groups];
   const out: { groupId: string; field: GroupField }[] = [];
   for (const groupId of targets) {
-    const declared = new Set(fieldsFor(tree, groupId).map(field => field.name));
+    const declared = new Set(
+      fieldsFor({ fields: [...collectionFields], groups: tree }, groupId).map(f => f.name),
+    );
     for (const column of fieldColumns) {
       const name = column.field!;
       if (declared.has(name)) continue;
       declared.add(name);
-      out.push({ groupId, field: { name, type: inferFieldType(values.get(name) ?? []) } });
+      // Item scope: the file is the item table, and a column of it describes
+      // the item. A copy-scoped column never reaches here — it was refused at
+      // the header — so this is not a guess, it is the only thing it can be.
+      out.push({
+        groupId,
+        field: { name, type: inferFieldType(values.get(name) ?? []), scope: 'item' },
+      });
     }
   }
   return out;

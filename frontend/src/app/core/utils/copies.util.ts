@@ -90,6 +90,7 @@ export function newCopy(): ItemCopy {
     acquiredOn: null,
     status: 'Keep',
     notes: '',
+    custom: [],
   };
 }
 

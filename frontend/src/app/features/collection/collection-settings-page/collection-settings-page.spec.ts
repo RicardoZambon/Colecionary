@@ -112,6 +112,7 @@ function collection(patch: Partial<Collection> = {}): Collection {
     id: 'c1',
     name: 'Vinyl',
     description: '',
+    fields: [],
     groups: [group('zeta'), group('beta')],
     sections: [],
     items: [],
@@ -306,6 +307,53 @@ describe('CollectionSettingsPage', () => {
     expect(added).toMatchObject({ parentId: null, fields: [], sort: null, target: null });
   });
 
+  // --- fields declared by the collection (rule 22) ---
+
+  it('declares a field for the whole collection, not for a group', async () => {
+    const page = await mount({ tab: 'groups' });
+    const card = page.el.querySelector('.collection-fields')!;
+
+    page.click(card.querySelector('ui-button button')!);
+    page.fixture.detectChanges();
+    const input = card.querySelector('.field-input') as HTMLInputElement;
+    page.type(input, 'Prateleira');
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    page.fixture.detectChanges();
+    await page.done();
+
+    expect(page.lastPut().fields).toEqual([
+      { name: 'Prateleira', type: 'text', scope: 'item' },
+    ]);
+    // And no group grew a copy of it — that is the whole difference.
+    expect(page.lastPut().groups.every(g => g.fields.length === 0)).toBe(true);
+  });
+
+  it('drops an ordering that pointed at a field being moved to copy scope', async () => {
+    // Same reasoning as removing the field: `keyOf` reads only `item.custom`,
+    // so the sort would not fail, it would rank every item as valueless and
+    // re-sort the group alphabetically with nothing on screen to say why.
+    const page = await mount({
+      collection: collection({
+        groups: [
+          group('zeta', {
+            fields: [{ name: 'Issue', type: 'number', scope: 'item' }],
+            sort: { by: 'field:Issue', direction: 'asc' },
+          }),
+        ],
+      }),
+      tab: 'groups',
+      g: 'zeta',
+    });
+
+    page.pick(page.byLabel('What field Issue describes'), 'copy');
+    await page.done();
+
+    expect(page.lastPut().groups[0].fields).toEqual([
+      { name: 'Issue', type: 'number', scope: 'copy' },
+    ]);
+    expect(page.lastPut().groups[0].sort).toBeNull();
+  });
+
   // --- ordering (rule 4) ---
 
   it('spells "inherit the ordering" as null', async () => {
@@ -329,7 +377,7 @@ describe('CollectionSettingsPage', () => {
       collection: collection({
         groups: [
           group('zeta', {
-            fields: [{ name: 'Issue', type: 'number' }],
+            fields: [{ name: 'Issue', type: 'number', scope: 'item' }],
             sort: { by: 'field:Issue', direction: 'asc' },
           }),
         ],
@@ -375,7 +423,7 @@ describe('CollectionSettingsPage', () => {
   const shelf = () =>
     collection({
       groups: [
-        group('revistas', { fields: [{ name: 'Editora', type: 'text' }] }),
+        group('revistas', { fields: [{ name: 'Editora', type: 'text', scope: 'item' }] }),
         group('marvel', { parentId: 'revistas' }),
         group('ultimate', { parentId: 'marvel' }),
         group('bonecos'),
@@ -647,7 +695,10 @@ describe('CollectionSettingsPage', () => {
         groups: [
           group('espanha'),
           group('bronze', { parentId: 'espanha' }),
-          group('prata', { parentId: 'espanha', fields: [{ name: 'Casta', type: 'text' }] }),
+          group('prata', {
+            parentId: 'espanha',
+            fields: [{ name: 'Casta', type: 'text', scope: 'item' }],
+          }),
         ],
         sections: [],
       }),
@@ -817,7 +868,7 @@ describe('CollectionSettingsPage — nothing is destroyed without a question', (
   it('keeps the field when the question is declined', async () => {
     const page = await mount({
       collection: collection({
-        groups: [group('zeta', { fields: [{ name: 'Issue', type: 'number' }] })],
+        groups: [group('zeta', { fields: [{ name: 'Issue', type: 'number', scope: 'item' }] })],
       }),
       tab: 'groups',
       g: 'zeta',
@@ -827,7 +878,9 @@ describe('CollectionSettingsPage — nothing is destroyed without a question', (
     await page.answerConfirm(false);
     await page.done();
 
-    expect(page.lastPut().groups[0].fields).toEqual([{ name: 'Issue', type: 'number' }]);
+    expect(page.lastPut().groups[0].fields).toEqual([
+      { name: 'Issue', type: 'number', scope: 'item' },
+    ]);
   });
 
   it('will not delete the collection until the question is answered yes', async () => {

@@ -227,6 +227,98 @@ public class DtoMapperTests
         Assert.Throws<DomainRuleException>(() => DtoMapper.ParseCopyStatus("Gifted"));
         Assert.Throws<DomainRuleException>(() => DtoMapper.ParsePlan("enterprise"));
         Assert.Throws<DomainRuleException>(() => DtoMapper.ParseGroupFieldType("currency"));
+        Assert.Equal(FieldScope.Copy, DtoMapper.ParseFieldScope("COPY"));
+        Assert.Throws<DomainRuleException>(() => DtoMapper.ParseFieldScope("exemplar"));
+    }
+
+    [Fact]
+    public void AFieldWithNoScopeOnTheWire_ReadsAsItemScoped()
+    {
+        // The archive format is this DTO, so an export taken before scopes
+        // existed arrives with the property absent. Absent has to mean "item" —
+        // which is what those fields have always been — and never null, or
+        // every restored collection would fail validation on a field nobody
+        // ever chose a scope for.
+        var dto = new GroupFieldDto("Serial no.", "text");
+
+        Assert.Equal("item", dto.Scope);
+        Assert.Equal(FieldScope.Item, dto.ToEntity().Scope);
+    }
+
+    [Fact]
+    public void ScopeRoundTripsThroughBothDirections()
+    {
+        var field = new GroupField
+        {
+            Name = "Box condition",
+            Type = GroupFieldType.Text,
+            Scope = FieldScope.Copy,
+        };
+
+        var dto = field.ToDto();
+
+        // Lower-cased on the wire, like every other enum-ish value, so the
+        // Angular union type stays 'item' | 'copy' and never has to normalise.
+        Assert.Equal("copy", dto.Scope);
+        Assert.Equal(FieldScope.Copy, dto.ToEntity().Scope);
+    }
+
+    [Fact]
+    public void ACollectionsOwnFieldsTravelBesideItsGroups()
+    {
+        var collection = new Collection
+        {
+            Id = "c1",
+            Name = "Test",
+            Fields = [new GroupField { Name = "Shelf", Scope = FieldScope.Item }],
+            Groups = [new Group { Id = "g", Name = "G" }],
+        };
+
+        var dto = collection.ToDto();
+
+        Assert.Equal(["Shelf"], dto.Fields.Select(f => f.Name));
+        // And a document that never mentioned them restores as a collection
+        // with none, rather than failing — same bargain as Sections.
+        Assert.Empty(new CollectionDto("c2", "T", "", [], [], [], true).Fields);
+    }
+
+    [Fact]
+    public void ACopysOwnValuesRoundTrip()
+    {
+        var copy = new ItemCopy
+        {
+            Id = "c1",
+            Custom = [new CustomFieldValue { Key = "Box condition", Value = "No box" }],
+        };
+
+        var dto = copy.ToDto();
+
+        Assert.Equal("No box", Assert.Single(dto.Custom).Value);
+        Assert.Equal("No box", Assert.Single(dto.ToEntity().Custom).Value);
+        // Absent on the wire is an empty list, never null: a copy written before
+        // per-copy fields existed has no values, which is not the same as an
+        // unreadable one.
+        Assert.Empty(new ItemCopyDto("c2", "Mint", 0).Custom);
+    }
+
+    /// <summary>
+    /// The wire has the empty list covered; storage does not. EF assigns an
+    /// owned nested collection, so a stored copy whose document carries no
+    /// <c>Custom</c> array arrives with the navigation null, past the property
+    /// initialiser. Mapping it threw, and because the whole vault is mapped in
+    /// one request, one such copy answered 500 for every collection the account
+    /// had.
+    /// </summary>
+    [Fact]
+    public void ACopyMaterialisedWithoutItsCustomArray_ReadsAsEmptyRatherThanThrowing()
+    {
+        var copy = new ItemCopy { Id = "c3", Custom = null! };
+
+        Assert.Empty(copy.Custom);
+        Assert.Empty(copy.ToDto().Custom);
+
+        var item = new Item { Id = "i1", Name = "Legacy", Copies = [copy] };
+        Assert.Empty(Assert.Single(item.ToDto().Copies).Custom);
     }
 
     [Fact]

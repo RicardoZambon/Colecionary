@@ -33,16 +33,17 @@ const item = (id: string, groupId: string, custom: [string, string][] = []): Ite
  * and declares no order. "Marvel" sits under Revistas with a sub-group of its
  * own, and its items hold Editora values.
  */
-function vault(): Pick<Collection, 'groups' | 'items'> {
+function vault(): Pick<Collection, 'fields' | 'groups' | 'items'> {
   return {
+    fields: [],
     groups: [
       group('revistas', null, {
-        fields: [{ name: 'Editora', type: 'text' }],
+        fields: [{ name: 'Editora', type: 'text', scope: 'item' }],
         sort: { by: 'name', direction: 'asc' },
       }),
       group('marvel', 'revistas'),
       group('ultimate', 'marvel'),
-      group('bonecos', null, { fields: [{ name: 'Escala', type: 'text' }] }),
+      group('bonecos', null, { fields: [{ name: 'Escala', type: 'text', scope: 'item' }] }),
     ],
     items: [
       item('spidey', 'marvel', [['Editora', 'Panini']]),
@@ -71,6 +72,54 @@ describe('groupMoveImpact', () => {
     expect(impact.lost.map(f => f.name)).toEqual(['Editora']);
   });
 
+  it('never reports a collection-wide field as gained or lost', () => {
+    // Declaring one there is precisely a promise that moving a group cannot
+    // take it away, so it is in the set before and after every move.
+    const base = vault();
+    const withShelf = {
+      ...base,
+      fields: [{ name: 'Prateleira', type: 'text' as const, scope: 'item' as const }],
+    };
+    const impact = groupMoveImpact(withShelf, 'marvel', 'bonecos');
+    expect(impact.gained).not.toContain('Prateleira');
+    expect(impact.lost.map(f => f.name)).not.toContain('Prateleira');
+  });
+
+  it('counts a copy-scoped field\'s holders on the copies, where its values are', () => {
+    // Counting only `item.custom` would report "no values affected" for a field
+    // every copy carries — the one sentence this preview must never get wrong.
+    const base = vault();
+    const withCopyField = {
+      ...base,
+      groups: base.groups.map(g =>
+        g.id === 'revistas'
+          ? { ...g, fields: [{ name: 'Lacre', type: 'text' as const, scope: 'copy' as const }] }
+          : g,
+      ),
+      items: [
+        {
+          ...base.items[0],
+          custom: [],
+          copies: [
+            {
+              id: 'c1',
+              condition: 'Good' as const,
+              price: 0,
+              value: null,
+              acquiredOn: null,
+              status: 'Keep' as const,
+              notes: '',
+              custom: [{ key: 'Lacre', value: '82736411' }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const impact = groupMoveImpact(withCopyField, 'marvel', 'bonecos');
+    expect(impact.lost).toEqual([{ name: 'Lacre', holders: 1 }]);
+  });
+
   it('counts the items in the whole subtree that hold a value for a lost field', () => {
     // spidey (marvel) and xmen (in the sub-group that travels with it) — never
     // the one whose value is blank, which has nothing to go dormant.
@@ -83,7 +132,9 @@ describe('groupMoveImpact', () => {
     // are not affected by the move at all.
     const before = vault();
     const groups = before.groups.map(g =>
-      g.id === 'ultimate' ? { ...g, fields: [{ name: 'Editora', type: 'text' as const }] } : g,
+      g.id === 'ultimate'
+        ? { ...g, fields: [{ name: 'Editora', type: 'text' as const, scope: 'item' as const }] }
+        : g,
     );
     const impact = groupMoveImpact({ ...before, groups }, 'marvel', null);
     expect(impact.lost).toEqual([{ name: 'Editora', holders: 1 }]);

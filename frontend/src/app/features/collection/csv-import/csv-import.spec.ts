@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Collection, GroupNode, Item, Section } from '../../../core/models';
+import { newCopy } from '../../../core/utils/copies.util';
 import {
   CsvImportOptions,
   MAX_COPIES_PER_ROW,
@@ -39,6 +40,7 @@ function collection(over: Partial<Collection> = {}): Collection {
     id: 'c1',
     name: ROOT,
     description: '',
+    fields: [],
     groups: [],
     sections: [],
     items: [],
@@ -230,6 +232,44 @@ describe('planCsvImport — copies and condition', () => {
     expect(row.item.copies).toEqual([]);
     expect(row.item.year).toBe(2010);
   });
+
+  // Silence is not zero. A partial file carrying the columns but not the values
+  // used to empty the shelf on every row it touched, and a copy is where the
+  // price paid, the acquisition date and the notes live — none of which the
+  // file that erased them ever mentioned.
+  it('leaves copies untouched when the columns are there but the cells are empty', () => {
+    const owned = [
+      { ...newCopy(), id: 'k1', condition: 'Mint' as const, price: 520, notes: 'lacrado' },
+    ];
+    const before = collection({ items: [item('i1', 'Seiya', '', { copies: owned })] });
+    const [row] = plan('Nome;Exemp.;Estado;Ano\nSeiya;;;2010', before, {
+      duplicates: 'update',
+    }).rows;
+    expect(row.item.copies).toEqual(owned);
+    expect(row.item.year).toBe(2010);
+  });
+
+  it('still empties the shelf when the file says zero', () => {
+    const before = collection({
+      items: [item('i1', 'Seiya', '', { copies: [{ ...newCopy(), id: 'k1', price: 520 }] })],
+    });
+    const [row] = plan('Nome;Exemp.\nSeiya;0', before, { duplicates: 'update' }).rows;
+    expect(row.item.copies).toEqual([]);
+  });
+
+  it('still empties the shelf when the file says the item is wanted', () => {
+    const before = collection({
+      items: [item('i1', 'Seiya', '', { copies: [{ ...newCopy(), id: 'k1', price: 520 }] })],
+    });
+    const [row] = plan('Nome;Estado\nSeiya;Quero', before, { duplicates: 'update' }).rows;
+    expect(row.item.copies).toEqual([]);
+  });
+
+  it('creates a wantlist item from empty cells, as it always did', () => {
+    const [row] = plan('Nome;Exemp.;Estado\nSeiya;;').rows;
+    expect(row.outcome).toBe('create');
+    expect(row.item.copies).toEqual([]);
+  });
 });
 
 describe('planCsvImport — groups', () => {
@@ -344,7 +384,16 @@ describe('planCsvImport — duplicates', () => {
       items: [
         item('i1', 'Mu Aries', 'g1', {
           copies: [
-            { id: 'cp1', condition: 'Good', price: 45, value: null, acquiredOn: '2019-04-01', status: 'Keep', notes: 'da feira' },
+            {
+              id: 'cp1',
+              condition: 'Good',
+              price: 45,
+              value: null,
+              acquiredOn: '2019-04-01',
+              status: 'Keep',
+              notes: 'da feira',
+              custom: [],
+            },
           ],
         }),
       ],
@@ -377,7 +426,40 @@ describe('planCsvImport — custom fields', () => {
     const result = plan('Nome;Grupo;Nº\nSeiya;Bronze;01');
     expect(result.rows[0].item.custom).toEqual([{ key: 'Nº', value: '01' }]);
     expect(result.newFields).toHaveLength(1);
-    expect(result.newFields[0].field).toEqual({ name: 'Nº', type: 'number' });
+    expect(result.newFields[0].field).toEqual({ name: 'Nº', type: 'number', scope: 'item' });
+  });
+
+  it('treats a field the collection declares as already declared everywhere', () => {
+    // Declared for the whole collection, so there is nothing to add and no
+    // group grows a copy of it — including groups the file never mentions.
+    const coll = collection({
+      groups: [group('g1', 'Bronze')],
+      fields: [{ name: 'Nº', type: 'text', scope: 'item' }],
+    });
+    const result = plan('Nome;Grupo;Nº\nSeiya;Bronze;01', coll);
+    expect(result.newFields).toEqual([]);
+    expect(result.rows[0].item.custom).toEqual([{ key: 'Nº', value: '01' }]);
+  });
+
+  it('refuses a column naming a field somebody declared per copy', () => {
+    // The table has one row per item, so it carries one value where that field
+    // has one per exemplar. Writing it to `item.custom` would not be a near
+    // miss: it would file data under a name only the copies editor reads.
+    const coll = collection({
+      groups: [group('g1', 'Bronze')],
+      fields: [{ name: 'Lacre', type: 'text', scope: 'copy' }],
+    });
+    const result = plan('Nome;Grupo;Lacre\nSeiya;Bronze;82736411', coll);
+
+    expect(result.rows[0].item.custom).toEqual([]);
+    expect(result.newFields).toEqual([]);
+    // One issue, on the header line: the column is wrong for every row at once.
+    expect(result.issues).toEqual([
+      { line: 1, key: 'csvImport.error.copyScopedColumn', params: { name: 'Lacre' } },
+    ]);
+    // And the rest of the file still imports, as every other issue does.
+    expect(result.rows).toHaveLength(1);
+    expect(result.created).toBe(1);
   });
 
   it('declares once on the open group rather than on every destination', () => {
@@ -385,12 +467,14 @@ describe('planCsvImport — custom fields', () => {
     const result = plan('Nome;Grupo;Nº\nA;V1;01\nB;V2;02', collection({ groups }), {
       scopeId: 'g1',
     });
-    expect(result.newFields).toEqual([{ groupId: 'g1', field: { name: 'Nº', type: 'number' } }]);
+    expect(result.newFields).toEqual([
+      { groupId: 'g1', field: { name: 'Nº', type: 'number', scope: 'item' } },
+    ]);
   });
 
   it('does not redeclare a field the group already inherits', () => {
     const parent = group('g1', 'Bronze');
-    parent.fields = [{ name: 'Nº', type: 'text' }];
+    parent.fields = [{ name: 'Nº', type: 'text', scope: 'item' }];
     const result = plan('Nome;Grupo;Nº\nA;V1;01', collection({ groups: [parent, group('g2', 'V1', 'g1')] }));
     expect(result.newFields).toEqual([]);
   });
@@ -442,6 +526,90 @@ describe('planCsvImport — sections', () => {
   });
 });
 
+describe('planCsvImport — a section named in the Grupo column', () => {
+  const sections: Section[] = [
+    { id: 's1', groupId: 'g1', name: 'Bronze', target: null },
+    { id: 's2', groupId: 'g1', name: 'Ouro', target: null },
+  ];
+  const groups = [group('g1', 'Cavaleiros')];
+  const coll = collection({ groups, sections });
+
+  it('resolves the last level of a path to a divider rather than a new group', () => {
+    const result = plan('Nome;Grupo\nMu;Cavaleiros / Bronze', coll);
+    expect(result.newGroups).toEqual([]);
+    expect(result.rows[0].item).toMatchObject({ groupId: 'g1', sectionId: 's1' });
+  });
+
+  it('resolves a bare divider name from inside the group that owns it', () => {
+    const result = plan('Nome;Grupo\nMu;Bronze', coll, { scopeId: 'g1' });
+    expect(result.newGroups).toEqual([]);
+    expect(result.rows[0].item).toMatchObject({ groupId: 'g1', sectionId: 's1' });
+  });
+
+  // The reported defect, end to end: the file names the shelf the item is
+  // already on, so it is the same item — not a second copy in a twin group.
+  it('updates the item already on that shelf instead of duplicating it', () => {
+    const stocked = collection({
+      groups,
+      sections,
+      items: [item('i1', 'Mu', 'g1', { sectionId: 's1', year: 2006 })],
+    });
+    const result = plan(
+      'Nome;Grupo;Ano\nMu;Cavaleiros / Bronze;2019',
+      stocked,
+      { duplicates: 'update' },
+    );
+    expect(result.newGroups).toEqual([]);
+    expect(result.rows[0]).toMatchObject({ outcome: 'update', newGroup: false });
+    expect(result.rows[0].item).toMatchObject({ id: 'i1', groupId: 'g1', sectionId: 's1' });
+    const after = applyCsvImport(stocked, result);
+    expect(after.items).toHaveLength(1);
+    expect(after.items[0].year).toBe(2019);
+  });
+
+  it('lets a group of that name win, since the column is Grupo', () => {
+    const both = collection({
+      groups: [...groups, group('g2', 'Bronze', 'g1')],
+      sections,
+    });
+    const [row] = plan('Nome;Grupo\nMu;Cavaleiros / Bronze', both).rows;
+    expect(row.item).toMatchObject({ groupId: 'g2', sectionId: '' });
+  });
+
+  it('never reads an intermediate level as a divider — a section holds no groups', () => {
+    const result = plan('Nome;Grupo\nMu;Cavaleiros / Bronze / Aço', coll);
+    expect(result.newGroups.map(node => node.name)).toEqual(['Bronze', 'Aço']);
+    expect(result.rows[0].item.sectionId).toBe('');
+  });
+
+  it('still creates a group when the name is nobody’s divider', () => {
+    const result = plan('Nome;Grupo\nMu;Cavaleiros / Prata', coll);
+    expect(result.newGroups.map(node => node.name)).toEqual(['Prata']);
+    expect(result.rows[0]).toMatchObject({ newGroup: true });
+  });
+
+  it('gives the explicit Seção column the last word', () => {
+    const [row] = plan('Nome;Grupo;Seção\nMu;Cavaleiros / Bronze;Ouro', coll).rows;
+    expect(row.item).toMatchObject({ groupId: 'g1', sectionId: 's2' });
+  });
+
+  it('spells the whole destination in the preview, divider included', () => {
+    const [row] = plan('Nome;Grupo\nMu;Cavaleiros / Bronze', coll).rows;
+    expect(row.groupPath).toBe('Cavaleiros');
+    expect(row.sectionName).toBe('Bronze');
+  });
+
+  it('leaves a divider alone when the cell names the group itself', () => {
+    const stocked = collection({
+      groups,
+      sections,
+      items: [item('i1', 'Mu', 'g1', { sectionId: 's1' })],
+    });
+    const [row] = plan('Nome;Grupo\nMu;Cavaleiros', stocked, { duplicates: 'update' }).rows;
+    expect(row.item.sectionId).toBe('s1');
+  });
+});
+
 describe('planCsvImport — limits and edges', () => {
   it('refuses a file past the row ceiling, in one message', () => {
     const rows = Array.from({ length: MAX_IMPORT_ROWS + 1 }, (_, i) => `Item ${i}`);
@@ -488,7 +656,9 @@ describe('applyCsvImport', () => {
   it('declares the planned fields on the group that is to hold them', () => {
     const before = collection({ groups: [group('g1', 'Ouro')] });
     const after = applyCsvImport(before, plan('Nome;Grupo;Nº\nMu;Ouro;07', before));
-    expect(after.groups.find(g => g.id === 'g1')!.fields).toEqual([{ name: 'Nº', type: 'number' }]);
+    expect(after.groups.find(g => g.id === 'g1')!.fields).toEqual([
+      { name: 'Nº', type: 'number', scope: 'item' },
+    ]);
     expect(before.groups[0].fields).toEqual([]);
   });
 

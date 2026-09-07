@@ -23,6 +23,7 @@ function copy(id: string, status: ItemCopy['status'] = 'Keep'): ItemCopy {
     acquiredOn: null,
     status,
     notes: '',
+    custom: [],
   };
 }
 

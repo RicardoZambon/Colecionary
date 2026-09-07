@@ -115,6 +115,7 @@ function collection(patch: Partial<Collection> = {}): Collection {
     id: 'c1',
     name: 'Saint Seiya',
     description: '',
+    fields: [],
     groups: [group('espanha')],
     sections: SECTIONS,
     items: [

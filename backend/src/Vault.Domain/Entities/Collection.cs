@@ -1,4 +1,5 @@
 using Vault.Domain.Abstractions;
+using Vault.Domain.ValueObjects;
 
 namespace Vault.Domain.Entities;
 
@@ -64,6 +65,20 @@ public class Collection : ITenantOwned
     /// </para>
     /// </remarks>
     public int Version { get; set; } = 1;
+
+    /// <summary>
+    /// Fields declared for the whole collection: every item has them, whatever
+    /// group it sits in, and a group that declares nothing still has these.
+    /// </summary>
+    /// <remarks>
+    /// Groups are a taxonomy, and a field that describes the whole collection —
+    /// where a thing is stored, who it came from — has no taxonomic home. It
+    /// used to have to be redeclared in every root group, and a group added
+    /// later silently lacked it. These merge first and a group redeclaring the
+    /// same name overrides them, which is the same rule that already governs a
+    /// group overriding its ancestor.
+    /// </remarks>
+    public List<GroupField> Fields { get; set; } = [];
 
     public List<Group> Groups { get; set; } = [];
 

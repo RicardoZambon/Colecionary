@@ -19,6 +19,7 @@ function copy(condition: Condition = 'Good'): ItemCopy {
     acquiredOn: null,
     status: 'Keep',
     notes: '',
+    custom: [],
   };
 }
 
@@ -41,6 +42,10 @@ function item(id: string, groupId: string, copies: ItemCopy[] = [], sectionId = 
 
 // cards ▸ rare, and a games group beside it.
 const GROUPS = [group('cards'), group('rare', 'cards'), group('games')];
+
+// What declares fields, for the helpers that merge them: no collection-wide
+// field, just the tree above.
+const DECLS = { fields: [], groups: GROUPS };
 
 const ITEMS = [
   item('charizard', 'rare', [copy('Mint')]),
@@ -79,25 +84,25 @@ describe('browse.util', () => {
 
   describe('visibleItems', () => {
     it('narrows by condition on any copy', () => {
-      const list = visibleItems(ITEMS, GROUPS, { ...ALL, condition: 'Fair' });
+      const list = visibleItems(ITEMS, DECLS, { ...ALL, condition: 'Fair' });
       expect(ids(list)).toEqual(['blastoise']);
     });
 
     it('splits owned from wanted by whether there is a copy at all', () => {
-      expect(ids(visibleItems(ITEMS, GROUPS, { ...ALL, groupId: 'rare', own: 'owned' }))).toEqual([
+      expect(ids(visibleItems(ITEMS, DECLS, { ...ALL, groupId: 'rare', own: 'owned' }))).toEqual([
         'charizard',
       ]);
-      expect(ids(visibleItems(ITEMS, GROUPS, { ...ALL, groupId: 'rare', own: 'wanted' }))).toEqual([
+      expect(ids(visibleItems(ITEMS, DECLS, { ...ALL, groupId: 'rare', own: 'wanted' }))).toEqual([
         'alakazam',
       ]);
     });
 
     it('matches the search anywhere in the name, case-insensitively', () => {
-      expect(ids(visibleItems(ITEMS, GROUPS, { ...ALL, query: '  ZAM ' }))).toEqual(['alakazam']);
+      expect(ids(visibleItems(ITEMS, DECLS, { ...ALL, query: '  ZAM ' }))).toEqual(['alakazam']);
     });
 
     it('applies an explicit sort over the group default', () => {
-      const list = visibleItems(ITEMS, GROUPS, {
+      const list = visibleItems(ITEMS, DECLS, {
         ...ALL,
         groupId: 'cards',
         sort: { by: 'name', direction: 'asc' },
@@ -110,7 +115,7 @@ describe('browse.util', () => {
         { ...group('cards'), sort: { by: 'name', direction: 'desc' as const } },
         group('rare', 'cards'),
       ];
-      const list = visibleItems(ITEMS, sorted, { ...ALL, groupId: 'rare' });
+      const list = visibleItems(ITEMS, { fields: [], groups: sorted }, { ...ALL, groupId: 'rare' });
       expect(ids(list)).toEqual(['charizard', 'alakazam']);
     });
 
@@ -121,12 +126,29 @@ describe('browse.util', () => {
         { ...item('charizard', 'rare'), custom: [{ key: 'Número', value: '004-A' }] },
         item('alakazam', 'rare'),
       ];
-      expect(ids(visibleItems(numbered, GROUPS, { ...ALL, query: '004' }))).toEqual(['charizard']);
+      expect(ids(visibleItems(numbered, DECLS, { ...ALL, query: '004' }))).toEqual(['charizard']);
+    });
+
+    it('finds an item by a value only one of its copies carries', () => {
+      // The reason copy-scoped fields exist: a slab number belongs to one
+      // physical copy, and the item is still what comes back — there is no
+      // screen that lists copies, so a narrower answer would be unshowable.
+      const slabbed = {
+        ...item('charizard', 'rare'),
+        copies: [
+          { ...copy('Mint'), id: 'c1', custom: [{ key: 'Slab no.', value: '82736411' }] },
+          { ...copy('Good'), id: 'c2', custom: [{ key: 'Slab no.', value: '91002244' }] },
+        ],
+      };
+      expect(matchesQuery(slabbed, '9100')).toBe(true);
+      expect(matchesQuery(slabbed, '55555')).toBe(false);
+      expect(ids(visibleItems([slabbed, item('alakazam', 'rare')], DECLS, { ...ALL, query: '8273' })))
+        .toEqual(['charizard']);
     });
 
     it('leaves the array it was given untouched', () => {
       const original = ids(ITEMS);
-      visibleItems(ITEMS, GROUPS, { ...ALL, sort: { by: 'name', direction: 'asc' } });
+      visibleItems(ITEMS, DECLS, { ...ALL, sort: { by: 'name', direction: 'asc' } });
       expect(ids(ITEMS)).toEqual(original);
     });
   });
@@ -165,7 +187,7 @@ describe('browse.util', () => {
 
     it('keeps only the items carrying it, however either side spelled it', () => {
       // Order is the default sort's business, not the filter's — hence .sort().
-      expect(ids(visibleItems(TAGGED, GROUPS, { ...ALL, tag: 'cib' })).sort()).toEqual([
+      expect(ids(visibleItems(TAGGED, DECLS, { ...ALL, tag: 'cib' })).sort()).toEqual([
         'alakazam',
         'charizard',
       ]);
@@ -177,7 +199,7 @@ describe('browse.util', () => {
       // neither — and the search still has to match.
       expect(
         ids(
-          visibleItems(TAGGED, GROUPS, {
+          visibleItems(TAGGED, DECLS, {
             ...ALL,
             tag: 'cib',
             condition: 'Mint',
@@ -189,22 +211,22 @@ describe('browse.util', () => {
 
       // Drop the tag and the same filters keep two more items.
       expect(
-        ids(visibleItems(TAGGED, GROUPS, { ...ALL, condition: 'Mint', own: 'owned' })).sort(),
+        ids(visibleItems(TAGGED, DECLS, { ...ALL, condition: 'Mint', own: 'owned' })).sort(),
       ).toEqual(['blastoise', 'charizard', 'tetris']);
 
       // Contradict it and nothing survives, rather than the tag quietly winning.
-      expect(visibleItems(TAGGED, GROUPS, { ...ALL, tag: 'loose', own: 'wanted' })).toEqual([]);
+      expect(visibleItems(TAGGED, DECLS, { ...ALL, tag: 'loose', own: 'wanted' })).toEqual([]);
     });
 
     it('narrows within the group scope rather than escaping it', () => {
       expect(
-        ids(visibleItems(TAGGED, GROUPS, { ...ALL, groupId: 'games', tag: 'cib' })),
+        ids(visibleItems(TAGGED, DECLS, { ...ALL, groupId: 'games', tag: 'cib' })),
       ).toEqual([]);
     });
 
     it('does not narrow at all when no tag is asked for', () => {
-      expect(ids(visibleItems(TAGGED, GROUPS, { ...ALL, tag: null }))).toEqual(
-        ids(visibleItems(TAGGED, GROUPS, ALL)),
+      expect(ids(visibleItems(TAGGED, DECLS, { ...ALL, tag: null }))).toEqual(
+        ids(visibleItems(TAGGED, DECLS, ALL)),
       );
     });
   });
@@ -267,13 +289,13 @@ describe('browse.util', () => {
 
     it('orders by the arranged runs, leftovers last', () => {
       expect(
-        visibleItems(ITEMS, GROUPS, criteria(), SECTIONS).map(i => i.id),
+        visibleItems(ITEMS, DECLS, criteria(), SECTIONS).map(i => i.id),
       ).toEqual(['b1', 'p1', 'loose', 'stray']);
     });
 
     it('narrows to one run without changing the scope', () => {
       expect(
-        visibleItems(ITEMS, GROUPS, criteria({ sectionId: 'bronze' }), SECTIONS).map(i => i.id),
+        visibleItems(ITEMS, DECLS, criteria({ sectionId: 'bronze' }), SECTIONS).map(i => i.id),
       ).toEqual(['b1']);
     });
 
@@ -281,7 +303,7 @@ describe('browse.util', () => {
       // Including the item pointing at another group's section: on this screen
       // it is unsectioned, so it has to answer as such rather than by its id.
       expect(
-        visibleItems(ITEMS, GROUPS, criteria({ sectionId: UNSECTIONED_ID }), SECTIONS).map(
+        visibleItems(ITEMS, DECLS, criteria({ sectionId: UNSECTIONED_ID }), SECTIONS).map(
           i => i.id,
         ),
       ).toEqual(['loose', 'stray']);
@@ -291,14 +313,14 @@ describe('browse.util', () => {
       // A section divides one group's list; at the root there is no group, so
       // the order has to be exactly what it was before sections existed.
       const root = { groupId: null, ...NO_FILTERS };
-      expect(visibleItems(ITEMS, GROUPS, root, SECTIONS).map(i => i.id)).toEqual(
-        visibleItems(ITEMS, GROUPS, root).map(i => i.id),
+      expect(visibleItems(ITEMS, DECLS, root, SECTIONS).map(i => i.id)).toEqual(
+        visibleItems(ITEMS, DECLS, root).map(i => i.id),
       );
     });
 
     it('leaves the list identical to before when a collection has none', () => {
-      expect(visibleItems(ITEMS, GROUPS, criteria(), []).map(i => i.id)).toEqual(
-        visibleItems(ITEMS, GROUPS, criteria()).map(i => i.id),
+      expect(visibleItems(ITEMS, DECLS, criteria(), []).map(i => i.id)).toEqual(
+        visibleItems(ITEMS, DECLS, criteria()).map(i => i.id),
       );
     });
   });

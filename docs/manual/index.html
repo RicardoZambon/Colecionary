@@ -231,7 +231,8 @@ npm run build            <span class="c"># precisa passar antes de qualquer merg
     <tr>
       <td class="nowrap"><strong>Coleção</strong></td>
       <td>Raiz de agregado. Grupos, itens e membros só mudam através dela — não
-          existem endpoints de grupo.</td>
+          existem endpoints de grupo. Também declara <code>fields</code>
+          próprios, que valem para todo item da coleção.</td>
       <td class="nowrap"><code>Catalog.Collections</code></td>
     </tr>
     <tr>
@@ -250,8 +251,17 @@ npm run build            <span class="c"># precisa passar antes de qualquer merg
     <tr>
       <td class="nowrap"><strong>Cópia</strong></td>
       <td>Um exemplar físico, com condição, preço pago, estimativa própria
-          opcional, data de aquisição, status e notas.</td>
+          opcional, data de aquisição, status, notas e os valores dos campos
+          declarados por exemplar.</td>
       <td class="nowrap">coluna JSON <code>Items.Copies</code></td>
+    </tr>
+    <tr>
+      <td class="nowrap"><strong>Campo custom</strong></td>
+      <td>Declaração <code>{ name, type, scope }</code>. <strong>Quem declara</strong>
+          é a coleção ou um grupo; <strong>o que ele descreve</strong> é o item
+          (<code>scope: item</code>) ou cada exemplar (<code>scope: copy</code>).
+          Os dois eixos são independentes, e o nome é a identidade do campo.</td>
+      <td class="nowrap"><code>Collections.Fields</code>, <code>Groups.Fields</code></td>
     </tr>
     <tr>
       <td class="nowrap"><strong>Version</strong></td>
@@ -349,6 +359,14 @@ npm run build            <span class="c"># precisa passar antes de qualquer merg
       <td class="nowrap"><a href="domain-model.html#nulls">Nulls</a></td>
     </tr>
     <tr>
+      <td>O nome é a identidade de um campo custom, e o escopo decide quem guarda
+          o valor.</td>
+      <td>Mudar o escopo não move valor nenhum: ele fica dormente no registro que
+          já o carregava. Adivinhar a qual cópia pertencia um valor de item
+          inventaria dado.</td>
+      <td class="nowrap"><a href="domain-model.html#campos">Campos</a></td>
+    </tr>
+    <tr>
       <td>Nenhuma string visível ao usuário nasce em componente; nenhum valor
           visual nasce fora de <code>_themes.scss</code>.</td>
       <td>Uma string literal quebra a troca de idioma em runtime; um hex literal
@@ -418,7 +436,11 @@ npm run build            <span class="c"># precisa passar antes de qualquer merg
     Um grupo com itens <strong>pode</strong> ser apagado — o diálogo pergunta o
     destino do conteúdo, em vez de recusar. Um grupo <strong>pode</strong> ser
     movido para outro pai. A lista <strong>mostra</strong> os campos
-    customizados do grupo, e a busca alcança tags, descrição e valores de campo.
+    customizados do grupo, e a busca alcança tags, descrição e valores de campo
+    — inclusive os que só uma cópia carrega. Uma coleção <strong>declara</strong>
+    campos próprios, que valem para todo item em qualquer grupo, e um campo pode
+    descrever <strong>cada exemplar</strong> em vez do item, então o número de
+    lacre da segunda cópia deixou de sobrescrever o da primeira.
     Vários itens <strong>podem</strong> ser editados de uma vez. O app
     <strong>funciona</strong> em tela de celular. Um <code>Viewer</code>
     <strong>não</strong> escreve mais. Uma falha de rede <strong>aparece</strong>.
@@ -525,6 +547,16 @@ npm run build            <span class="c"># precisa passar antes de qualquer merg
           com 412 e precisa recarregar</td>
       <td>Não há onde guardar um token por item — recusar demais custa um reload,
           recusar de menos custa o trabalho</td>
+    </tr>
+    <tr>
+      <td>Campo por exemplar não passa pela tabela de itens</td>
+      <td>Ele não pode ser importado nem exportado por CSV (uma linha por item
+          não carrega os valores de N cópias), não ordena uma lista e não vira
+          coluna da tabela. Ele é editado e lido na cópia, na página e no
+          formulário do item, e a busca o alcança. O PUT de documento inteiro e o
+          arquivo de backup <em>carregam</em> tudo</td>
+      <td>Uma segunda tabela CSV, por exemplar, com o item como chave — e uma
+          tela que liste cópias, que hoje não existe</td>
     </tr>
     <tr>
       <td>Seções dividem só os itens do <em>próprio</em> grupo</td>

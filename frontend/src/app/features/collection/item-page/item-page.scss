@@ -307,6 +307,32 @@ h1 {
     color: var(--muted);
     font-size: 11.5px;
   }
+
+  // Its own row under the copy's figures, never inline with them: the number of
+  // declared fields is unbounded, and wrapping them into the same flex line
+  // pushes the price and the estimate out of the column they are read down.
+  &__fields {
+    display: flex;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 0;
+  }
+}
+
+.copy-field {
+  display: flex;
+  gap: 6px;
+  font-size: 11.5px;
+
+  dt {
+    color: var(--muted);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--text2);
+  }
 }
 
 .copies__total {

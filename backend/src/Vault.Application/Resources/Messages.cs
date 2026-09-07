@@ -34,7 +34,8 @@ public static class Messages
         nameof(ProblemValidationFailed), nameof(ProblemUnexpected),
         nameof(ProblemPreconditionRequired), nameof(ProblemPreconditionFailed),
         nameof(IfMatchRequired), nameof(CollectionChangedElsewhere),
-        nameof(FieldNamesMustBeUnique), nameof(FieldTypeInvalid), nameof(TargetOutOfRange),
+        nameof(FieldNamesMustBeUnique), nameof(FieldTypeInvalid), nameof(FieldScopeInvalid),
+        nameof(TargetOutOfRange),
         nameof(SortDirectionInvalid), nameof(SortKeyInvalid),
         nameof(GroupParentMustExist), nameof(GroupParentCycle), nameof(TooManyPhotos),
         nameof(TooManyCopies), nameof(CopyIdsMustBeUnique), nameof(SectionIdsMustBeUnique),
@@ -49,7 +50,8 @@ public static class Messages
         nameof(TenantNeedsAnOwner), nameof(OwnerCannotBeRemoved), nameof(CannotRemoveYourself),
         nameof(CurrentUserNotFound), nameof(TenantNotFound), nameof(EmailCannotBeChanged),
         nameof(InvalidCredentials), nameof(TooManyLoginAttempts),
-        nameof(UnknownGroupFieldType), nameof(UnknownCondition), nameof(UnknownCopyStatus),
+        nameof(UnknownGroupFieldType), nameof(UnknownFieldScope),
+        nameof(UnknownCondition), nameof(UnknownCopyStatus),
         nameof(UnknownRole), nameof(UnknownPlan),
         nameof(SetupFieldsRequired), nameof(SetupPasswordTooShort), nameof(SetupDatabaseNotUsable),
     ];
@@ -85,6 +87,7 @@ public static class Messages
     // --- validation ---
     public static string FieldNamesMustBeUnique => Get(nameof(FieldNamesMustBeUnique));
     public static string FieldTypeInvalid => Get(nameof(FieldTypeInvalid));
+    public static string FieldScopeInvalid => Get(nameof(FieldScopeInvalid));
     public static string TargetOutOfRange => Get(nameof(TargetOutOfRange));
     public static string SortDirectionInvalid => Get(nameof(SortDirectionInvalid));
     public static string SortKeyInvalid => Get(nameof(SortKeyInvalid));
@@ -163,12 +166,15 @@ public static class Messages
 
     // --- mapping ---
     public static string UnknownGroupFieldType => Get(nameof(UnknownGroupFieldType));
+    public static string UnknownFieldScope => Get(nameof(UnknownFieldScope));
     public static string UnknownCondition => Get(nameof(UnknownCondition));
     public static string UnknownCopyStatus => Get(nameof(UnknownCopyStatus));
     public static string UnknownRole => Get(nameof(UnknownRole));
     public static string UnknownPlan => Get(nameof(UnknownPlan));
     /// <param name="value">The value that was received.</param>
     public static string UnknownGroupFieldTypeFor(string value) => Format(nameof(UnknownGroupFieldType), value);
+    /// <param name="value">The value that was received.</param>
+    public static string UnknownFieldScopeFor(string value) => Format(nameof(UnknownFieldScope), value);
     /// <param name="value">The value that was received.</param>
     public static string UnknownConditionFor(string value) => Format(nameof(UnknownCondition), value);
     /// <param name="value">The value that was received.</param>

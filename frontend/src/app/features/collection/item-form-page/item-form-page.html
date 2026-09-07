@@ -94,7 +94,9 @@
 
       <ui-card class="copies">
         <div class="copies__heading">{{ 'itemForm.copiesHeading' | t: { n: copies().length } }}</div>
-        @for (copy of copies(); track copy.id) {
+        <!-- copyIndex is aliased because the nested field loop below has a
+             $index of its own, and every handler here means the copy's. -->
+        @for (copy of copies(); track copy.id; let copyIndex = $index) {
           <div class="copies__row">
             <div class="copies__row-head">
               <span class="tag">{{ 'itemForm.copyTag' | t: { n: $index + 1 } }}</span>
@@ -155,6 +157,24 @@
                 (valueChange)="patchCopy($index, { notes: $event })"
               />
             </ui-field>
+            <!-- Drawn only where the collection or the group declared one:
+                 an empty heading reads as a setting that went missing. -->
+            @if (copyFieldDefs().length) {
+              <div class="copies__custom">
+                @for (field of copyFieldDefs(); track field.name) {
+                  <ui-field [label]="field.name">
+                    <ui-text-input
+                      variant="subtle"
+                      placeholder="—"
+                      [ariaLabel]="'itemForm.copyFieldAria' | t: { n: copyIndex + 1, name: field.name }"
+                      [type]="inputType(field)"
+                      [value]="copyFieldValue(copyIndex, field.name)"
+                      (valueChange)="setCopyFieldValue(copyIndex, field.name, $event)"
+                    />
+                  </ui-field>
+                }
+              </div>
+            }
           </div>
         } @empty {
           <div class="copies__empty">{{ 'itemForm.noCopies' | t }}</div>

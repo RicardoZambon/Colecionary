@@ -35,6 +35,16 @@ public static class SeedData
                 Id = "retro",
                 Name = "Retro Consoles",
                 Description = "Boxed + loose hardware, NES → GameCube era",
+                // One field of each new kind, both declared for the whole
+                // collection rather than for a group. "Shelf" is not taxonomy —
+                // where a console is kept has nothing to do with who made it —
+                // and "Box condition" describes a physical unit, so the boxed
+                // SNES and its yellowed spare answer it differently.
+                Fields =
+                [
+                    Field("Shelf"),
+                    Field("Box condition", scope: FieldScope.Copy),
+                ],
                 Groups = FlatGroups("retro",
                     ("Nintendo", new[] { "Serial no.", "Region", "Completeness", "Edition" }),
                     ("Sega", new[] { "Accessories" }),
@@ -47,8 +57,8 @@ public static class SeedData
                 ],
                 Items =
                 [
-                    Item("retro", "nes", "NES Console (boxed)", 1985, Condition.Mint, 340, 260, "Nintendo", ["boxed", "cib"], "nes_console.jpg", "Complete-in-box NES-001 with original styrofoam, manuals, two controllers and Zapper. Shell has almost no yellowing; tested and working.", Custom(("Serial no.", "N8054321"), ("Region", "NTSC-U"), ("Completeness", "CIB — console, box, manuals"))),
-                    Item("retro", "snes", "SNES (PAL)", 1992, Condition.Good, 120, 70, "Nintendo", ["loose"], "snes_pal.jpg", "Loose PAL SNES, one controller. Light yellowing on the top shell, ports clean.", Custom(("Region", "PAL")), extraCopies: [Copy("snes_c2", Condition.Fair, 45, CopyStatus.ForSale, value: 80, acquiredOn: new DateOnly(2023, 11, 2), notes: "Yellowed spare with a scuffed shell — parts donor or a cheap sale.")]),
+                    Item("retro", "nes", "NES Console (boxed)", 1985, Condition.Mint, 340, 260, "Nintendo", ["boxed", "cib"], "nes_console.jpg", "Complete-in-box NES-001 with original styrofoam, manuals, two controllers and Zapper. Shell has almost no yellowing; tested and working.", Custom(("Serial no.", "N8054321"), ("Region", "NTSC-U"), ("Completeness", "CIB — console, box, manuals"), ("Shelf", "A1 — living room"))),
+                    Item("retro", "snes", "SNES (PAL)", 1992, Condition.Good, 120, 70, "Nintendo", ["loose"], "snes_pal.jpg", "Loose PAL SNES, one controller. Light yellowing on the top shell, ports clean.", Custom(("Region", "PAL"), ("Shelf", "A2 — living room")), extraCopies: [Copy("snes_c2", Condition.Fair, 45, CopyStatus.ForSale, value: 80, acquiredOn: new DateOnly(2023, 11, 2), notes: "Yellowed spare with a scuffed shell — parts donor or a cheap sale.", custom: Custom(("Box condition", "No box")))]),
                     Item("retro", "gameboy", "Game Boy DMG-01", 1989, Condition.Fair, 85, 40, "Handhelds", ["loose"], "gameboy_dmg.jpg", "Original DMG with a few dead pixel lines. Candidate for an IPS screen mod.", Custom(("Screen", "2 dead lines"), ("Mods", "None (IPS planned)"))),
                     Item("retro", "n64", "N64 Gold Edition", 1998, Condition.Mint, 610, 420, "Nintendo", ["cib", "rare"], "n64_gold.jpg", "Toys \"R\" Us exclusive gold console, complete in box with matching gold controller. The crown of the Nintendo shelf.", Custom(("Edition", "Gold — TRU exclusive"), ("Serial no.", "NS1189223"))),
                     Item("retro", "famicom", "Famicom (JP)", 1983, Condition.Good, 210, 140, "Nintendo", ["boxed", "import"], "famicom.jpg", "Japanese import Famicom with hardwired controllers, boxed. Box has shelf wear.", Custom(("Region", "NTSC-J"))),
@@ -311,8 +321,11 @@ public static class SeedData
     private static List<Group> FlatGroups(string collectionId, params (string Name, string[] Fields)[] defs) =>
         [.. defs.Select((d, i) => Group(collectionId, d.Name, d.Name, null, [.. d.Fields.Select(f => Field(f))], i))];
 
-    private static GroupField Field(string name, GroupFieldType type = GroupFieldType.Text) =>
-        new() { Name = name, Type = type };
+    private static GroupField Field(
+        string name,
+        GroupFieldType type = GroupFieldType.Text,
+        FieldScope scope = FieldScope.Item) =>
+        new() { Name = name, Type = type, Scope = scope };
 
     private static Group Group(
         string collectionId,
@@ -420,7 +433,8 @@ public static class SeedData
         CopyStatus status = CopyStatus.Keep,
         decimal? value = null,
         DateOnly? acquiredOn = null,
-        string notes = "") => new()
+        string notes = "",
+        List<CustomFieldValue>? custom = null) => new()
         {
             Id = id,
             Condition = condition,
@@ -429,6 +443,7 @@ public static class SeedData
             Value = value,
             AcquiredOn = acquiredOn,
             Notes = notes,
+            Custom = custom ?? [],
         };
 
     private static List<CustomFieldValue> Custom(params (string Key, string Value)[] pairs) =>
