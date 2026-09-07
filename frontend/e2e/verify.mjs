@@ -6,7 +6,7 @@
  *
  * Not a substitute for the unit suite, and not a full end-to-end suite either.
  * This exists because a specific class of defect on this project passed every
- * one of the 693 unit tests, in both languages, green:
+ * one of the unit tests, in both languages, green:
  *
  *   - The document overflowed a 390px viewport on every screen. jsdom does no
  *     layout, so nothing in the suite had a viewport at all.
@@ -20,6 +20,32 @@
  * So the assertions here are deliberately about the assembled system: a real
  * layout, a real language, a real idle period. Add to it when you find another
  * defect the unit suite could not have caught.
+ *
+ * A later UI/UX audit found 121 defects that this file, the unit suite and both
+ * language passes all rendered green, and four of them were invisible here for
+ * structural reasons worth knowing about:
+ *
+ *   - The tap-target check measured a single hand-written selector
+ *     (`app-collection-hero .header__actions > a`), so it could only ever catch
+ *     the one control it was written for. It now measures everything
+ *     interactive, and a control that legitimately grows its target with a
+ *     pseudo-element opts out by carrying `data-tap-ok`.
+ *   - No item route was ever opened, and neither were the settings page's tabs
+ *     — which is how a fixed-width gallery that scrolls sideways on a phone,
+ *     and a tab strip that runs off the side in Portuguese, both passed.
+ *   - `.main` carries `overflow-y: auto`, so `overflow-x` computes to `auto`
+ *     too and the main region silently absorbs anything too wide inside it.
+ *     The document-level width check therefore cannot see in-page overflow at
+ *     all; there is now a separate check for a box that scrolls sideways
+ *     without declaring that it does.
+ *   - Nothing computed an accessible name or a painted contrast ratio.
+ *     `themes.spec.ts` pins the *palette*, so it cannot see a correct token
+ *     used in the wrong place — and on first run the contrast check found 7 to
+ *     28 elements below AA on every screen, in both themes. The name check
+ *     found unnamed controls on all eleven routes. Note that a control can have
+ *     an `aria-label` and still have no `<label for>`, so it is announced but
+ *     its label is not clickable; the check here measures the announced name,
+ *     which is the stricter half.
  */
 import { chromium } from 'playwright';
 
@@ -96,6 +122,30 @@ const collection = await page
   .getAttribute('href');
 check('the sidebar lists at least one collection', !!collection, String(collection));
 
+// An item's href, so the item routes can be measured like every other screen.
+// They were absent from this list for as long as it existed, which is the whole
+// reason the item page could scroll sideways on a phone unnoticed: the document
+// check never opened one.
+const item = collection
+  ? await page
+      .goto(`${BASE}${collection}?v=list`, { waitUntil: 'networkidle' })
+      .then(() => page.waitForTimeout(900))
+      .then(() =>
+        page
+          .locator('a[href*="/items/"]')
+          .evaluateAll(els =>
+            els.map(e => e.getAttribute('href')).filter(h => h && !h.includes('/items/new')),
+          ),
+      )
+      .then(hrefs => hrefs[0] ?? null)
+      .catch(() => null)
+  : null;
+check('the list view links to an item', !collection || !!item, String(item));
+
+// Every tab of the settings page is its own screen and none of them was ever
+// opened here. `?tab=groups` is the app's densest layout — a two-column split
+// that has to become one column — and `?tab=sharing` is the only surface with a
+// table of people in it.
 const routes = [
   ['dashboard', '/dashboard'],
   ['store', '/store'],
@@ -105,8 +155,12 @@ const routes = [
         ['collection', collection],
         ['collection (list)', `${collection}?v=list`],
         ['collection settings', `${collection}/settings`],
+        ['collection settings (groups)', `${collection}/settings?tab=groups`],
+        ['collection settings (sharing)', `${collection}/settings?tab=sharing`],
+        ['item form (new)', `${collection}/items/new`],
       ]
     : []),
+  ...(item ? [['item', item], ['item form (edit)', `${item}/edit`]] : []),
 ];
 
 // The measurement, not a look. Every one of these overflowed before the
@@ -350,9 +404,34 @@ for (const [name, url] of routes) {
   const found = await tp.evaluate(() => {
     const tap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tap'));
     const short = [];
-    for (const el of document.querySelectorAll('app-collection-hero .header__actions > a')) {
+    // Every interactive control, not one hand-picked selector.
+    //
+    // This measured only `app-collection-hero .header__actions > a` for as long
+    // as it existed, so it could only ever catch the one defect it was written
+    // for. The rule in CLAUDE.md is about *everything* interactive below
+    // $bp-lg, and a check that inspects one row of one component cannot see a
+    // 33px tab, a 28px tree row or a short select anywhere else in the app.
+    //
+    // A control may be short only if it grows its own target with a
+    // pseudo-element, which the rule explicitly allows for cases where the
+    // visual box must not grow. That is invisible to getBoundingClientRect, so
+    // such a control opts out by carrying `data-tap-ok` — a deliberate,
+    // greppable claim rather than a silent exemption.
+    const interactive =
+      'a[href], button, input, select, textarea, summary, [role="button"], [role="tab"], [role="checkbox"], [role="switch"], [tabindex]:not([tabindex="-1"])';
+    for (const el of document.querySelectorAll(interactive)) {
+      if (el.closest('[data-tap-ok]') || el.hasAttribute('data-tap-ok')) continue;
+      if (el.type === 'hidden' || el.disabled) continue;
       const r = el.getBoundingClientRect();
-      if (r.height > 0 && r.height < tap) short.push(`${Math.round(r.width)}x${Math.round(r.height)}`);
+      // Zero-sized means not rendered (a closed drawer, a collapsed branch);
+      // only a control the user can actually see is a target.
+      if (r.width === 0 || r.height === 0) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+      if (r.height + 0.5 < tap) {
+        const id = `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).trim().split(/\s+/)[0] : ''}`;
+        short.push(`${id} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      }
     }
     const hatched = [];
     for (const el of document.querySelectorAll('*')) {
@@ -363,10 +442,239 @@ for (const [name, url] of routes) {
     }
     return { short, hatched: [...new Set(hatched)] };
   });
-  check(`hero actions meet --tap at 390px: ${name}`, found.short.length === 0, found.short.join(', '));
+  check(
+    `every control meets --tap at 390px: ${name}`,
+    found.short.length === 0,
+    `${found.short.length} short: ${found.short.slice(0, 6).join(', ')}`,
+  );
   check(`no hatched placeholder: ${name}`, found.hatched.length === 0, found.hatched.join(', '));
 }
 await touch.close();
+
+// ---------------------------------------------------------------------------
+// The invariants below were added after a UI/UX audit found 121 defects that
+// this file, the 885-test unit suite, and both language passes all rendered
+// green. Each one is here because it is the *class* of the defect, not the
+// instance: a check that reproduces one bug catches one bug.
+// ---------------------------------------------------------------------------
+
+// 1. Every form control has an accessible name.
+//
+// 29 of 32 controls in the app announced as unnamed, because `ui-field` drew a
+// bare label with no `for` and no input component accepted an id — so no call
+// site *could* fix it. The login page's password field announced as its own
+// bullet placeholder. Nothing in jsdom computes an accessible name, and nothing
+// in a screenshot shows one missing, so this class of defect was structurally
+// invisible to every check that existed.
+{
+  const a11y = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    storageState: await context.storageState(),
+  });
+  const ap = await a11y.newPage();
+  for (const [name, url] of routes) {
+    await ap.goto(BASE + url, { waitUntil: 'networkidle' });
+    await ap.waitForTimeout(900);
+    const unnamed = await ap.evaluate(() => {
+      const out = [];
+      const named = el => {
+        if (el.getAttribute('aria-label')?.trim()) return true;
+        const by = el.getAttribute('aria-labelledby');
+        if (by && by.split(/\s+/).some(id => document.getElementById(id)?.textContent?.trim())) return true;
+        if (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)) return true;
+        if (el.closest('label')) return true;
+        if (el.getAttribute('title')?.trim()) return true;
+        // A button whose own text is its name.
+        if (/^(BUTTON|A|SUMMARY)$/.test(el.tagName) && el.textContent?.trim()) return true;
+        return false;
+      };
+      for (const el of document.querySelectorAll('input, select, textarea, button, a[href]')) {
+        if (el.type === 'hidden') continue;
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        if (named(el)) continue;
+        out.push(`${el.tagName.toLowerCase()}${el.type ? `[${el.type}]` : ''}${el.className ? '.' + String(el.className).trim().split(/\s+/)[0] : ''}`);
+      }
+      return [...new Set(out)];
+    });
+    check(
+      `every visible control is named: ${name}`,
+      unnamed.length === 0,
+      `${unnamed.length} unnamed: ${unnamed.slice(0, 6).join(', ')}`,
+    );
+  }
+  await a11y.close();
+}
+
+// 2. Nothing scrolls sideways inside its own box unless it asked to.
+//
+// The document-level check three sections up cannot see this: `.main` carries
+// `overflow-y: auto`, which makes `overflow-x` compute to `auto` as well, so
+// the main region silently absorbs any overflow inside it and the document
+// stays exactly as wide as the viewport. That is how a fixed-width item
+// gallery and a tab strip that runs off the side both passed at 390px. Wide
+// content is allowed to scroll — in a box that *declares* it does.
+{
+  const inner = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    storageState: await context.storageState(),
+  });
+  const ip = await inner.newPage();
+  for (const [name, url] of routes) {
+    await ip.goto(BASE + url, { waitUntil: 'networkidle' });
+    await ip.waitForTimeout(900);
+    const bleeding = await ip.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('body *')) {
+        const over = el.scrollWidth - el.clientWidth;
+        if (over <= 1 || el.clientWidth === 0) continue;
+        const cs = getComputedStyle(el);
+        // Declared its own scroller: legitimate, and the point of the rule.
+        if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') continue;
+        // A deliberate scroller further up already owns this content.
+        let owned = false;
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          const pcs = getComputedStyle(p);
+          if (pcs.overflowX === 'auto' || pcs.overflowX === 'scroll') { owned = true; break; }
+        }
+        if (owned) continue;
+        out.push(`${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).trim().split(/\s+/)[0] : ''} +${over}px`);
+      }
+      return [...new Set(out)];
+    });
+    check(
+      `no undeclared sideways scroll inside the page at 390px: ${name}`,
+      bleeding.length === 0,
+      `${bleeding.length}: ${bleeding.slice(0, 5).join(', ')}`,
+    );
+  }
+  await inner.close();
+}
+
+// 3. Body text clears AA against what is actually painted behind it.
+//
+// `--muted` is documented as decoration and is deliberately excluded from the
+// contrast spec; `--muted-strong` is the secondary type layer. Three separate
+// audits independently found the decorative token carrying load-bearing type —
+// form labels, money figures, table headers, the whole secondary layer of the
+// app frame — between 2.7:1 and 4.1:1. `themes.spec.ts` pins the *palette*, so
+// it cannot see a correct token used in the wrong place; only the assembled,
+// painted page can.
+{
+  // One context per theme. Stacking `addInitScript` on a single page would
+  // leave both scripts running, and only the last-registered theme would ever
+  // be measured.
+  for (const theme of ['devdark', 'paper']) {
+    const contrast = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      storageState: await context.storageState(),
+    });
+    await contrast.addInitScript(t => {
+      try { localStorage.setItem('vault.theme', t); } catch { /* private window */ }
+    }, theme);
+    const cp = await contrast.newPage();
+    for (const [name, url] of routes.slice(0, 6)) {
+      await cp.goto(BASE + url, { waitUntil: 'networkidle' });
+      await cp.waitForTimeout(900);
+      const bad = await cp.evaluate(() => {
+        const lum = ([r, g, b]) => {
+          const f = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+          return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+        };
+        const parse = s => (s.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+        const alpha = s => { const p = (s.match(/[\d.]+/g) ?? []); return p.length > 3 ? Number(p[3]) : 1; };
+        const behind = el => {
+          for (let p = el; p; p = p.parentElement) {
+            const bg = getComputedStyle(p).backgroundColor;
+            if (bg && alpha(bg) > 0.9 && !bg.includes('rgba(0, 0, 0, 0)')) return parse(bg);
+          }
+          return [0, 0, 0];
+        };
+        const ratio = (a, b) => {
+          const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+          return (hi + 0.05) / (lo + 0.05);
+        };
+        const out = [];
+        for (const el of document.querySelectorAll('body *')) {
+          // Only elements with their own visible text.
+          const own = [...el.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim()).map(n => n.textContent.trim()).join(' ');
+          if (!own) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          const cs = getComputedStyle(el);
+          if (cs.visibility === 'hidden' || Number(cs.opacity) < 0.9) continue;
+          // Skeletons and decorative marks carry no message.
+          if (el.closest('ui-skeleton, [aria-hidden="true"], .sr-only')) continue;
+          const size = parseFloat(cs.fontSize);
+          const bold = Number(cs.fontWeight) >= 700;
+          // AA: 3:1 for large text (>=24px, or >=18.66px bold), else 4.5:1.
+          const floor = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
+          const got = ratio(parse(cs.color), behind(el));
+          if (got + 0.05 < floor) {
+            out.push(`${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).trim().split(/\s+/)[0] : ''} ${got.toFixed(2)}:1 (needs ${floor}) "${own.slice(0, 22)}"`);
+          }
+        }
+        return [...new Set(out)];
+      });
+      check(
+        `text clears AA in ${theme}: ${name}`,
+        bad.length === 0,
+        `${bad.length} below: ${bad.slice(0, 4).join(' | ')}`,
+      );
+    }
+    await contrast.close();
+  }
+}
+
+// 4. No raw Unicode glyph is doing an icon's job in rendered text.
+//
+// 40 of these were baked into the two message dictionaries — a check mark on 14
+// success toasts, arrows in the sort and trend labels, small triangles in two
+// link labels. They render in the text font on the text baseline, and a screen
+// reader says "black up-pointing triangle". `ui-icon` and `ICON_NAMES` exist so
+// that an icon is an icon; this is what stops one being typed back in.
+{
+  // Exactly the marks that were found standing in for icons: check marks,
+  // trend and direction triangles, the caret a dropdown draws, and the status
+  // dot. Not a whole Unicode block, because a block sweeps up legitimate text.
+  //
+  // Deliberately excluded, each for a reason:
+  //   ×  is how a copy count is spelled ("Perfeito ×2") and the CSV format
+  //      prints it, so it is data.
+  //   —  is what "nothing here" looks like, and `≈` marks a value standing in
+  //      for an estimate nobody entered. Both are the app's vocabulary.
+  //   → and ← are punctuation in prose a *user typed* — a seeded collection is
+  //      described as "NES → GameCube era" — and this check cannot tell app
+  //      copy from user content, so a general arrow sweep reports the user's
+  //      own words as a defect.
+  const glyphs = /[✓✔✗✘▲▼▴▾▸◂●○⌄⌃↑↓]/;
+  const gp = await (await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    storageState: await context.storageState(),
+  })).newPage();
+  for (const [name, url] of routes) {
+    await gp.goto(BASE + url, { waitUntil: 'networkidle' });
+    await gp.waitForTimeout(700);
+    const hits = await gp.evaluate(src => {
+      const re = new RegExp(src, 'u');
+      const out = [];
+      const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        const t = n.textContent;
+        if (!t || !re.test(t)) continue;
+        // An `<svg>` is an icon already; so is anything hidden from readers.
+        if (n.parentElement?.closest('svg, ui-icon, [aria-hidden="true"]')) continue;
+        out.push(`${n.parentElement?.tagName.toLowerCase() ?? '?'}: "${t.trim().slice(0, 32)}"`);
+      }
+      return [...new Set(out)];
+    }, glyphs.source);
+    check(
+      `no glyph standing in for an icon: ${name}`,
+      hits.length === 0,
+      `${hits.length}: ${hits.slice(0, 4).join(' | ')}`,
+    );
+  }
+}
 
 check('no uncaught errors on any page', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
 
