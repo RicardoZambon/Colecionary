@@ -217,78 +217,87 @@
                   />
                 </ui-field>
 
-                <!-- Where the group sits. A picker rather than a drag: groups
-                     list alphabetically and nothing persists a position for
-                     one, so a drop *between* rows would mean nothing, and only
-                     a drop *onto* a row would count — an invisible affordance
-                     that would then also owe a keyboard path. A select is
-                     keyboard-native and can omit the targets it cannot
-                     accept. -->
-                <ui-field
-                  class="detail__parent"
-                  [class.detail__parent--pending]="sel.parentPending"
-                  [label]="'collSettings.groups.parent' | t"
-                  [hint]="'collSettings.groups.parentHint' | t"
-                >
-                  <ui-select
-                    class="compact parent"
-                    [ariaLabel]="'collSettings.groups.parentAria' | t: { name: sel.node.name }"
-                    [options]="sel.parentOptions"
-                    [value]="sel.parentValue"
-                    (valueChange)="onParentPicked(sel.node.id, $event)"
-                  />
-                  @if (sel.parentPending) {
-                    <span class="detail__unapplied"
-                      >{{ 'collSettings.groups.moveUnapplied' | t }}</span>
-                  }
-                </ui-field>
-
-                <ui-field
-                  class="detail__order"
-                  [label]="'collSettings.groups.orderBy' | t"
-                  [hint]="'collSettings.groups.orderByHint' | t"
-                >
-                  <span class="detail__pair">
+                <!-- The three settings that qualify the name share one line. In a
+                     single auto-fit track they were columns, so whichever one
+                     did not fit was left over on a line of its own reading as a
+                     field come adrift — which is what `Meta` did. A flex row
+                     shrinks all three together instead of dropping one, so the
+                     set stays a set at every width down to the breakpoint where
+                     stacking is right anyway. -->
+                <div class="detail__row">
+                    <!-- Where the group sits. A picker rather than a drag: groups
+                       list alphabetically and nothing persists a position for
+                       one, so a drop *between* rows would mean nothing, and only
+                       a drop *onto* a row would count — an invisible affordance
+                       that would then also owe a keyboard path. A select is
+                       keyboard-native and can omit the targets it cannot
+                       accept. -->
+                  <ui-field
+                    class="detail__parent"
+                    [class.detail__parent--pending]="sel.parentPending"
+                    [label]="'collSettings.groups.parent' | t"
+                    [hint]="'collSettings.groups.parentHint' | t"
+                  >
                     <ui-select
-                      class="compact order-by"
-                      [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: sel.node.name }"
-                      [options]="sel.sortByOptions"
-                      [value]="sel.sortBy"
-                      (valueChange)="setGroupSortBy(sel.node.id, $event)"
+                      class="compact parent"
+                      [ariaLabel]="'collSettings.groups.parentAria' | t: { name: sel.node.name }"
+                      [options]="sel.parentOptions"
+                      [value]="sel.parentValue"
+                      (valueChange)="onParentPicked(sel.node.id, $event)"
                     />
-                    @if (sel.showDirection) {
-                      <ui-select
-                        class="compact direction"
-                        [ariaLabel]="
-                          'collSettings.groups.orderDirectionAria' | t: { name: sel.node.name }
-                        "
-                        [options]="directionOptions()"
-                        [value]="sel.sortDirection"
-                        (valueChange)="setGroupSortDirection(sel.node.id, $event)"
-                      />
+                    @if (sel.parentPending) {
+                      <span class="detail__unapplied"
+                        >{{ 'collSettings.groups.moveUnapplied' | t }}</span>
                     }
-                  </span>
-                </ui-field>
+                  </ui-field>
 
-                <!-- The box was rendering an em dash as its *content*, so
-                     "not declared" was indistinguishable from a value the user
-                     had to clear before typing. A placeholder says it without
-                     being it, and an emptied box still persists as null. -->
-                <ui-field
-                  class="detail__target"
-                  [label]="'collSettings.groups.target' | t"
-                  [hint]="'collSettings.groups.targetHint' | t"
-                >
-                  <ui-text-input
-                    class="target"
-                    type="number"
-                    variant="subtle"
-                    [placeholder]="'collSettings.groups.targetPlaceholder' | t"
-                    [ariaLabel]="'collSettings.groups.targetAria' | t: { name: sel.node.name }"
-                    [value]="sel.target"
-                    (valueChange)="setGroupTarget(sel.node.id, $event)"
-                  />
-                </ui-field>
+                  <ui-field
+                    class="detail__order"
+                    [label]="'collSettings.groups.orderBy' | t"
+                    [hint]="'collSettings.groups.orderByHint' | t"
+                  >
+                    <span class="detail__pair">
+                      <ui-select
+                        class="compact order-by"
+                        [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: sel.node.name }"
+                        [options]="sel.sortByOptions"
+                        [value]="sel.sortBy"
+                        (valueChange)="setGroupSortBy(sel.node.id, $event)"
+                      />
+                      @if (sel.showDirection) {
+                        <ui-select
+                          class="compact direction"
+                          [ariaLabel]="
+                            'collSettings.groups.orderDirectionAria' | t: { name: sel.node.name }
+                          "
+                          [options]="directionOptions()"
+                          [value]="sel.sortDirection"
+                          (valueChange)="setGroupSortDirection(sel.node.id, $event)"
+                        />
+                      }
+                    </span>
+                  </ui-field>
+
+                  <!-- The box was rendering an em dash as its *content*, so
+                       "not declared" was indistinguishable from a value the user
+                       had to clear before typing. A placeholder says it without
+                       being it, and an emptied box still persists as null. -->
+                  <ui-field
+                    class="detail__target"
+                    [label]="'collSettings.groups.target' | t"
+                    [hint]="'collSettings.groups.targetHint' | t"
+                  >
+                    <ui-text-input
+                      class="target"
+                      type="number"
+                      variant="subtle"
+                      [placeholder]="'collSettings.groups.targetPlaceholder' | t"
+                      [ariaLabel]="'collSettings.groups.targetAria' | t: { name: sel.node.name }"
+                      [value]="sel.target"
+                      (valueChange)="setGroupTarget(sel.node.id, $event)"
+                    />
+                    </ui-field>
+                </div>
               </div>
 
               @if (moveImpact(); as move) {

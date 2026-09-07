@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   effect,
   inject,
@@ -253,6 +254,18 @@ export class CollectionPage {
   private columnsFor: string | null = null;
 
   constructor() {
+    /*
+     * The search text is emptied when this page goes.
+     *
+     * It is the one piece of view state that escapes the URL (rule 11), so
+     * nothing else would ever clear it — and `VaultStore` outlives the page, so
+     * a query left behind was still filtering the *next* collection opened. The
+     * box used to be in the topbar and this used to be the topbar's job; it
+     * moved here with the box, which is also the only place that can see the
+     * page being left.
+     */
+    inject(DestroyRef).onDestroy(() => this.store.query.set(''));
+
     const media = matchMedia(WIDE_ENOUGH);
     this.wide.set(media.matches);
     // Crossing down into a narrow window folds the panel, and deliberately does

@@ -34,25 +34,6 @@
 
 <span class="spacer"></span>
 
-<!--
-  Only where there are results to show. It was rendered on every authenticated
-  route and read by exactly two — the collection page and the item page — so on
-  the dashboard, the store and settings a user typed what they were looking for
-  into the most inviting control on the screen and nothing whatever happened.
-  The text also survived the navigation, so it was still filtering a list the
-  next time they opened a collection.
--->
-@if (inCollection()) {
-  <ui-text-input
-    class="search"
-    variant="subtle"
-    name="q"
-    [ariaLabel]="'topbar.search' | t"
-    [placeholder]="'topbar.search' | t"
-    [value]="store.query()"
-    (valueChange)="store.query.set($event)"
-  />
-}
 
 <app-lang-picker class="lang" />
 

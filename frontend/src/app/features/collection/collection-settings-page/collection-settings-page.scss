@@ -12,6 +12,23 @@
   max-width: 1080px;
 }
 
+// Five controls in this file are "take the leftover width, and be allowed to
+// shrink". A placeholder rather than a mixin: `@extend` emits *one* rule with
+// the five selectors on it, where a mixin would inline the pair five times —
+// and this component is up against its 6 kB style budget.
+// "This row does not exist yet, or is not committed yet." Three places say it —
+// a composer input, the not-yet-created row in both lists, and a parent select
+// holding a move the user has not confirmed. Extended, not mixed in, for the
+// same budget reason as %flex-fill.
+%dashed-accent {
+  @extend %dashed-accent;
+}
+
+%flex-fill {
+  flex: 1;
+  min-width: 0;
+}
+
 .back {
   display: inline-flex;
   align-items: center;
@@ -127,8 +144,7 @@ h1 {
   // as the rename box rather than declaring its own.
   .rename,
   .composer {
-    flex: 1;
-    min-width: 0;
+    @extend %flex-fill;
 
     ::ng-deep input {
       padding: 7px 10px;
@@ -153,15 +169,45 @@ h1 {
   }
 }
 
-// One control per cell, each with the sentence that explains it underneath —
-// `ui-field` owns the label and the hint, so the four rows that used to be
-// inline label-plus-control pairs are now fields in a grid. A `minmax` minimum
-// and no column count: at 280px the grid is one column, which is a phone.
+// The name on its own line, then the three settings that qualify it on the next.
+//
+// This was an auto-fit grid of all four fields, and an auto-fit track drops
+// whichever item does not fit onto a line of its own: the name sat beside two
+// of them and `Meta` was left over, reading as a field come adrift rather than
+// one of a set. Sizing the track to hold three columns does not fix it either —
+// at 1440px it did, and at 1100px and 768px the orphan just moved.
+//
+// So the fields stack, and the three that belong together are one flex row
+// (below). Every child here spans the full width now, which is what makes this
+// a column rather than a grid pretending to be one.
 .detail__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: var(--sp-4);
   padding: var(--sp-3) 0 0;
+}
+
+// Flex, not columns: it shrinks all three together instead of dropping one, so
+// the set stays a set at every width — and it stops being a row only below
+// `$bp-sm`, where a single column is the right answer anyway. The name is the
+// widest thing in the card (free text, against two selects and a number), which
+// is why it keeps a line to itself above.
+.detail__row {
+  display: flex;
+  gap: var(--sp-4);
+
+  > * {
+    @extend %flex-fill;
+    // Without this a flex item refuses to shrink below its content's
+    // min-content width, and a <select> holding a long group path reports a
+    // wide one — which would push the row out of the card instead of sharing
+    // the space.
+    min-width: 0;
+  }
+
+  @include upto($bp-sm) {
+    flex-direction: column;
+  }
 }
 
 // Two selects answering one question — what to order by, and which way — so
@@ -171,8 +217,7 @@ h1 {
   gap: 6px;
 
   .order-by {
-    flex: 1;
-    min-width: 0;
+    @extend %flex-fill;
   }
 
   .direction {
@@ -233,8 +278,7 @@ h1 {
 // instead of pretending it was not operated the box says it is uncommitted —
 // the same dashed accent a composer row uses, plus a label.
 .detail__parent--pending .parent ::ng-deep select {
-  border-style: dashed;
-  border-color: var(--accent);
+  @extend %dashed-accent;
 }
 
 .detail__unapplied {
@@ -268,14 +312,12 @@ h1 {
   color: var(--text2);
 
   .name {
-    flex: 1;
-    min-width: 0;
+    @extend %flex-fill;
   }
 
   /* Dashed accent for the row that does not exist yet, in both lists. */
   &--new {
-    border-style: dashed;
-    border-color: var(--accent);
+    @extend %dashed-accent;
   }
 }
 
@@ -326,8 +368,7 @@ h1 {
 
 // Its share of the line; `ui-inline-edit` brings the box.
 .composer {
-  flex: 1;
-  min-width: 0;
+  @extend %flex-fill;
 }
 
 .new-group {
@@ -352,8 +393,7 @@ h1 {
 
   // Dashed accent, like every other row that does not exist yet.
   .composer ::ng-deep input {
-    border-style: dashed;
-    border-color: var(--accent);
+    @extend %dashed-accent;
   }
 }
 

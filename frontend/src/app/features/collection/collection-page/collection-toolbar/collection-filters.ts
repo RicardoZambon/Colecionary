@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, model } from '@angular/core';
 import { CONDITIONS, Condition } from '../../../../core/models';
 import { OwnFilter } from '../../../../core/utils/browse.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiChip } from '../../../../shared/ui';
+import { UiChip, UiTextInput } from '../../../../shared/ui';
 import { conditionLabelKey } from '../../../../shared/ui/badge/badge';
 
 /**
@@ -28,8 +28,27 @@ import { conditionLabelKey } from '../../../../shared/ui/badge/badge';
 @Component({
   selector: 'app-collection-filters',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiChip],
+  imports: [TPipe, UiChip, UiTextInput],
   template: `
+    <!--
+      The search opens the row it belongs to. It filters *which items*, which is
+      what every other control here does; the bar above decides how the list is
+      drawn. It used to live in the topbar, where it read as a search of the
+      whole vault, did nothing at all on four of the six routes, and kept its
+      text across the navigation away — so it was still filtering the next
+      collection opened, from a box that had been out of sight in between.
+    -->
+    <ui-text-input
+      class="search"
+      variant="subtle"
+      type="search"
+      name="q"
+      [ariaLabel]="'toolbar.searchAria' | t"
+      [placeholder]="'toolbar.searchScoped' | t"
+      [value]="query()"
+      (valueChange)="query.set($event)"
+    />
+
     <span class="row-label">{{ 'filters.condition' | t }}</span>
     <!--
       A condition belongs to a copy, and a wantlist entry has none — so "Mint"
@@ -71,6 +90,17 @@ import { conditionLabelKey } from '../../../../shared/ui/badge/badge';
       flex-wrap: wrap;
     }
 
+    /* Wide enough for its own placeholder — "Buscar nesta coleção…" is 21
+       characters and clipped its own ellipsis at the 180px the field defaults
+       to. It does not grow: a search box that eats the row reads as the row's
+       subject rather than as one filter among several. It gives up the width
+       first when the row wraps, since the chips beside it cannot shrink. */
+    .search {
+      flex: 0 1 224px;
+      min-width: 0;
+      margin-right: var(--sp-1);
+    }
+
     .row-label {
       @include mono-label(10px, 0.1em);
       text-transform: uppercase;
@@ -97,6 +127,15 @@ import { conditionLabelKey } from '../../../../shared/ui/badge/badge';
 export class CollectionFilters {
   readonly condition = model<Condition | null>(null);
   readonly own = model<OwnFilter>(null);
+
+  /**
+   * The text narrowing the list.
+   *
+   * A `model`, not a read of `VaultStore.query`: this is a presentational leaf,
+   * and injecting the store here would drag `VaultApi` into the TestBed of every
+   * component that renders a filter row. The page owns the state.
+   */
+  readonly query = model('');
   /** The tag the list is narrowed to, as the URL spells it. Null is no filter. */
   readonly tag = model<string | null>(null);
 

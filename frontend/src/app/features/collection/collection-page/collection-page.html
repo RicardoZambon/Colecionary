@@ -49,6 +49,8 @@
          the hero's predicate, computed once by the page. -->
     @if (view() !== 'dashboard' && !blank()) {
       <app-collection-filters
+        [query]="store.query()"
+        (queryChange)="store.query.set($event)"
         [condition]="condition()"
         (conditionChange)="setCondition($event)"
         [own]="ownFilter()"
