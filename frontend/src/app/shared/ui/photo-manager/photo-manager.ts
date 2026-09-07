@@ -1,4 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterNextRender,
+  computed,
+  inject,
+  input,
+  Injector,
+  output,
+} from '@angular/core';
 
 import { ImagesApi } from '../../../core/api/images-api';
 import { I18nService } from '../../../core/i18n';
@@ -72,7 +83,7 @@ import { UiReorder } from '../reorder/reorder';
     @if (photoIds().length) {
       <ul class="grid">
         @for (id of photoIds(); track id) {
-          <li class="photo" [class.photo--cover]="$index === 0">
+          <li class="photo" [class.photo--cover]="$index === 0" [attr.data-photo-id]="id">
             <span
               class="photo__image"
               role="img"
@@ -85,6 +96,8 @@ import { UiReorder } from '../reorder/reorder';
               [label]="i18n.t('photos.photoAt', { n: $index + 1 })"
               [first]="$index === 0"
               [last]="$index === photoIds().length - 1"
+              [index]="$index"
+              [count]="photoIds().length"
               (moved)="move($index, $event)"
             />
 
@@ -111,6 +124,13 @@ import { UiReorder } from '../reorder/reorder';
                 [attr.aria-label]="'photos.remove' | t"
                 (click)="remove($index)"
               ><ui-icon name="close" [size]="11" /></button>
+              <!--
+                Below the tablet breakpoint the whole row is visible rather than
+                hover-revealed (see the styles) — touch has neither hover nor
+                Tab, and the only focusable things inside the tile were the very
+                buttons being hidden. So on a phone "make cover", "adjust
+                framing" and "remove photo" simply did not exist.
+              -->
             </span>
           </li>
         }
@@ -120,6 +140,8 @@ import { UiReorder } from '../reorder/reorder';
     }
   `,
   styles: `
+    @use '../../../../styles/mixins' as *;
+
     :host {
       display: flex;
       flex-direction: column;
@@ -288,6 +310,45 @@ import { UiReorder } from '../reorder/reorder';
     .photo:focus-within .photo__actions {
       opacity: 1;
     }
+
+    /*
+     * On a phone and a tablet there is no hover and no Tab, so the resting
+     * state is the only state — and the targets have to be real. The pills stay
+     * the size they look: the target is grown with an absolutely positioned
+     * ::after, the same trade styles.scss makes for a filter chip and the
+     * reframe pip, because a 44px-tall pill on a 104px tile would cover the
+     * photograph it is meant to be editing.
+     */
+    @include upto($bp-lg) {
+      .photo__actions {
+        opacity: 1;
+
+        button {
+          position: relative;
+
+          &::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            min-width: var(--tap);
+            width: 100%;
+            height: var(--tap);
+            transform: translate(-50%, -50%);
+          }
+        }
+      }
+
+      /*
+       * The reorder arrows are ui-buttons, so they inherit the 44px min-height
+       * from styles.scss — but not the width, which is scoped to .btn--icon and
+       * these are ghosts. A 44x26 target on a 104px tile is the half of this
+       * fix nobody would notice was missing.
+       */
+      ui-reorder ::ng-deep .btn.btn {
+        min-width: var(--tap);
+      }
+    }
   `,
 })
 export class UiPhotoManager {
@@ -295,6 +356,19 @@ export class UiPhotoManager {
   protected readonly uploads = inject(PhotoUploadService);
   protected readonly i18n = inject(I18nService);
   private readonly images = inject(ImagesApi);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly injector = inject(Injector);
+
+  constructor() {
+    // The queue is `providedIn: 'root'` and shared, which is what
+    // `PhotoUploadService.clear()` was written for — "called when a page that
+    // owns the queue goes away" — and nothing called it. A failed 12 MB upload
+    // for one item therefore followed the user to the *next* item's form, red
+    // row and all, naming a file with nothing to do with what they were
+    // looking at, for the rest of the session. Only one manager is ever on
+    // screen, so there is nothing here to steal.
+    inject(DestroyRef).onDestroy(() => this.uploads.clear());
+  }
 
   readonly photoIds = input.required<readonly string[]>();
   readonly max = input(8);
@@ -362,7 +436,33 @@ export class UiPhotoManager {
     this.changed.emit([picked, ...next]);
   }
 
+  /**
+   * Removes one photo and moves focus deliberately.
+   *
+   * The button that was pressed is about to be detached and the browser drops
+   * focus to `<body>`, so tidying up three photos by keyboard meant three full
+   * traversals of the page. Focus goes to the tile that takes this one's
+   * place — found by the surviving photo's own id, never by index, so a
+   * re-render cannot land it on the wrong tile — or to the dropzone when the
+   * grid empties.
+   */
   protected remove(index: number): void {
-    this.changed.emit(this.photoIds().filter((_, i) => i !== index));
+    const next = this.photoIds().filter((_, i) => i !== index);
+    this.changed.emit(next);
+    const neighbour = next[Math.min(index, next.length - 1)];
+    this.focusIn(
+      neighbour ? `[data-photo-id="${neighbour}"] .photo__actions button` : '.dropzone',
+    );
+  }
+
+  /** @see remove — a miss is silent; a moved control is not worth an error. */
+  private focusIn(selector: string): void {
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement as HTMLElement;
+        host.querySelector<HTMLElement>(selector)?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 }

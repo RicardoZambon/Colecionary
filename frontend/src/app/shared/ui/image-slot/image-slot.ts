@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 
 import { I18nService } from '../../../core/i18n';
 import { TPipe } from '../../pipes/t.pipe';
@@ -22,23 +23,57 @@ import { IconName, UiIcon } from '../icon/icon';
 @Component({
   selector: 'ui-image-slot',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiIcon],
+  imports: [NgTemplateOutlet, TPipe, UiIcon],
   host: {
-    '(click)': 'browse()',
-    '(dragover)': 'onDragOver($event)',
-    '(drop)': 'onDrop($event)',
-    // Bound, not literal: a host attribute is written once at creation, so the
-    // title has to be an expression to follow a language change.
-    '[title]': "fillable() ? i18n.t('ui.imageSlot.hint') : null",
     '[class.readonly]': '!fillable()',
   },
   template: `
-    @if (src(); as url) {
-      <div
-        class="image"
-        [style.background-image]="'url(' + url + ')'"
-        [style.background-position]="focal()"
-      ></div>
+    <!--
+      A real <button> when the slot can be filled, and a plain <div> when it
+      cannot.
+
+      The click, the drop and the title used to live on the <ui-image-slot> host
+      — a custom element with display: block, no tabindex, no role, no
+      accessible name and no key handler. So Tab never reached a collection's
+      banner or its icon, there was no way to open the picker without a mouse,
+      and the only cue that either was editable was a title tooltip that needed
+      hovering. This is the "<div> doing a button's job" case the standards
+      forbid outright.
+    -->
+    @if (fillable()) {
+      <button
+        type="button"
+        class="surface"
+        [title]="i18n.t('ui.imageSlot.hint')"
+        [attr.aria-label]="actionLabel()"
+        (click)="browse()"
+        (dragover)="onDragOver($event)"
+        (drop)="onDrop($event)"
+      >
+        <ng-container [ngTemplateOutlet]="body" />
+      </button>
+    } @else {
+      <div class="surface"><ng-container [ngTemplateOutlet]="body" /></div>
+    }
+
+    <ng-template #body>
+      @if (src(); as url) {
+        <div
+          class="image"
+          [style.background-image]="'url(' + url + ')'"
+          [style.background-position]="focal()"
+        ></div>
+      } @else {
+        <div class="placeholder">
+          <ui-icon class="placeholder__mark" [name]="icon()" [size]="34" [strokeWidth]="1.5" />
+          @if (placeholder()) {
+            <span>{{ placeholder() }}</span>
+          }
+        </div>
+      }
+    </ng-template>
+
+    @if (src()) {
       @if (reframable()) {
         <button
           type="button"
@@ -50,13 +85,6 @@ import { IconName, UiIcon } from '../icon/icon';
           <ui-icon name="crosshair" [size]="13" />
         </button>
       }
-    } @else {
-      <div class="placeholder">
-        <ui-icon class="placeholder__mark" [name]="icon()" [size]="34" [strokeWidth]="1.5" />
-        @if (placeholder()) {
-          <span>{{ placeholder() }}</span>
-        }
-      </div>
     }
   `,
   styles: `
@@ -72,6 +100,21 @@ import { IconName, UiIcon } from '../icon/icon';
     /* Nothing to click, so nothing that looks clickable. */
     :host(.readonly) {
       cursor: default;
+    }
+
+    /* The interactive surface fills the slot; a <button> brings chrome of its
+       own that has to be undone, and a font that has to be inherited. */
+    .surface {
+      display: block;
+      width: 100%;
+      height: 100%;
+      padding: 0;
+      border: 0;
+      background: none;
+      font: inherit;
+      color: inherit;
+      text-align: inherit;
+      cursor: inherit;
     }
 
     .reframe {
@@ -162,6 +205,16 @@ export class UiImageSlot {
   readonly icon = input<IconName>('image');
   readonly fileSelected = output<File>();
   readonly reframeRequested = output<void>();
+
+  /**
+   * What pressing the slot does, in words — "Replace the image" over one that
+   * already holds a picture, "Add an image" over an empty one. An icon-only or
+   * image-only control has to say this: the placeholder's own label names the
+   * *slot* ("Banner"), not the action.
+   */
+  protected readonly actionLabel = computed(() =>
+    this.i18n.t(this.src() ? 'ui.imageSlot.replace' : 'ui.imageSlot.add'),
+  );
 
   protected requestReframe(event: MouseEvent): void {
     // The host opens the file picker on click; framing must not also replace

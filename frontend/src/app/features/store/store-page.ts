@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { I18nService } from '../../core/i18n';
@@ -7,12 +7,15 @@ import { VaultStore } from '../../core/state/vault.store';
 import { StoreListing } from '../../core/models';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { TPipe } from '../../shared/pipes/t.pipe';
-import { UiButton, UiCard, UiSkeleton } from '../../shared/ui';
+import { UiButton } from '../../shared/ui/button/button';
+import { UiCard } from '../../shared/ui/card/card';
+import { UiEmpty } from '../../shared/ui/empty/empty';
+import { UiSkeleton } from '../../shared/ui/skeleton/skeleton';
 
 @Component({
   selector: 'app-store-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MoneyPipe, TPipe, UiButton, UiCard, UiSkeleton],
+  imports: [MoneyPipe, TPipe, UiButton, UiCard, UiEmpty, UiSkeleton],
   templateUrl: './store-page.html',
   styleUrl: './store-page.scss',
 })
@@ -29,6 +32,18 @@ export class StorePage {
    * prediction — it is a reserved row.
    */
   protected readonly loading = computed(() => !this.store.loaded());
+
+  /**
+   * Whether to offer the write affordance at all.
+   *
+   * A courtesy, not a control — see the doc comment on `VaultStore.canEdit`.
+   * `importStoreListing` is a write and a Viewer's is refused with a 403, so a
+   * reader gets the catalogue as a catalogue.
+   */
+  protected readonly canEdit = computed(() => this.store.canEdit());
+
+  /** Which listing is being added right now, so its button stops offering itself. */
+  protected readonly adding = signal<string | null>(null);
 
   /**
    * "by Panini · 300 items · 12 groups" — two independent counts, each rendered
@@ -51,10 +66,30 @@ export class StorePage {
     return listing.items.reduce((acc, i) => acc + i.value, 0);
   }
 
+  /**
+   * Adds a catalogue listing to the vault and opens it.
+   *
+   * The `catch` is not decoration. `importStoreListing` reports and returns
+   * `null` today, so this was the one call site in the area with no handler —
+   * and the day it rethrows instead, an unhandled rejection from a click is
+   * exactly the silence `DashboardPage.newCollection` documents having fixed.
+   */
   protected async add(listing: StoreListing): Promise<void> {
-    const created = await this.store.importStoreListing(listing.id);
+    if (this.adding()) return;
+    this.adding.set(listing.id);
+    let created;
+    try {
+      created = await this.store.importStoreListing(listing.id);
+    } catch {
+      // The store already reported the failure in its own voice; nothing is
+      // navigated to, because the collection it would open does not exist.
+      this.toast.error(this.i18n.t('toast.collection.addFailed'));
+      return;
+    } finally {
+      this.adding.set(null);
+    }
     if (!created) return;
-    this.toast.flash(this.i18n.t('toast.collection.added'));
+    this.toast.success(this.i18n.t('toast.collection.added'));
     void this.router.navigate(['/c', created.id]);
   }
 }

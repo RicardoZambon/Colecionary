@@ -6,7 +6,23 @@
 
 @if (showSort()) {
   <ui-dropdown #sortMenu [width]="230">
-    <button ddTrigger type="button" class="sort-trigger">{{ 'toolbar.sort' | t: { label: sortLabel() } }}</button>
+    <!-- aria-haspopup/-expanded/-controls come off the dropdown itself, which
+         exposes `open` and `panelId` for exactly this: without them a screen
+         reader is never told the button opens anything. The chevron is a mark
+         now — it used to be a literal ▾ inside the translated string, which a
+         reader announces as "black down-pointing small triangle". -->
+    <button
+      ddTrigger
+      type="button"
+      class="sort-trigger"
+      aria-haspopup="true"
+      [attr.aria-expanded]="sortMenu.open()"
+      [attr.aria-controls]="sortMenu.open() ? sortMenu.panelId : null"
+    >{{ 'toolbar.sort' | t: { label: sortLabel() } }}<ui-icon
+      name="chevron-down"
+      [size]="11"
+      [strokeWidth]="2.2"
+    /></button>
     <ng-container ddPanel>
       @for (option of sortOptions(); track option.id) {
         <button
@@ -29,8 +45,19 @@
 }
 
 @if (showColumns()) {
-  <ui-dropdown [width]="220">
-    <button ddTrigger type="button" class="sort-trigger">{{ 'columns.trigger' | t }}</button>
+  <ui-dropdown #columnMenu [width]="220">
+    <button
+      ddTrigger
+      type="button"
+      class="sort-trigger"
+      aria-haspopup="true"
+      [attr.aria-expanded]="columnMenu.open()"
+      [attr.aria-controls]="columnMenu.open() ? columnMenu.panelId : null"
+    >{{ 'columns.trigger' | t }}<ui-icon
+      name="chevron-down"
+      [size]="11"
+      [strokeWidth]="2.2"
+    /></button>
     <ng-container ddPanel>
       <span class="col-head">{{ 'columns.aria' | t }}</span>
       <!-- Stays open across several toggles: hiding three of eight columns is

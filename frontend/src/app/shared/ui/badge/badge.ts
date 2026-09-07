@@ -25,8 +25,8 @@ export type BadgeTone = 'good' | 'warn' | 'accent' | 'neutral';
       text-transform: uppercase;
     }
 
-    :host(.tone-good) { color: var(--good); }
-    :host(.tone-warn) { color: var(--warn); }
+    :host(.tone-good) { color: var(--good-strong); }
+    :host(.tone-warn) { color: var(--warn-strong); }
     :host(.tone-accent) { color: var(--accent-strong); }
     :host(.tone-neutral) { color: var(--text2); }
   `,

@@ -37,7 +37,15 @@ import { UiIcon } from '../icon/icon';
     <div class="tags">
       @for (tag of shown(); track tag) {
         <span class="tag">
-          {{ tag }}
+          <!--
+            The label is wrapped rather than left as a bare text node, and it
+            has to be: a text node inside a flex container becomes an *anonymous*
+            flex item, and an anonymous item cannot be selected, so it can never
+            be given min-width: 0. Without that it refuses to shrink below its
+            min-content width, which is why the chip's own overflow-wrap did
+            nothing and a long tag pushed 7px of itself out of the chip.
+          -->
+          <span class="tag__label">{{ tag }}</span>
           @if (!disabled()) {
             <button
               type="button"
@@ -116,10 +124,25 @@ import { UiIcon } from '../icon/icon';
       color: var(--text);
       /* A tag is user data and may be anything; it must not stretch the form. */
       max-width: 100%;
+    }
+
+    /* Carries the wrapping the chip used to declare on itself. See the template
+       comment: the rule was on the flex *container*, where it had nothing to
+       act on, because the text was an anonymous item. */
+    .tag__label {
+      min-width: 0;
       overflow-wrap: anywhere;
     }
 
     .tag__remove {
+      /* The remove mark sizes to a 10px icon, so without this it is a 10px-tall
+         target. The paint stays small — a chip row is dense — and styles.scss
+         grows the *target* to --tap below $bp-lg with a pseudo-element, beside
+         the other rules that make the same trade. This floor is what keeps it
+         from being a hairline at every width. */
+      min-width: 16px;
+      min-height: 16px;
+      flex: none;
       display: inline-flex;
       align-items: center;
       justify-content: center;

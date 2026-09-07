@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, firstValueFrom } from 'rxjs';
 
 import { ArchiveApi, ReplaceDecision } from '../api/archive-api';
+import { SessionReset } from '../auth/session-reset';
 import { VaultApi, VaultBusyError, VaultConflictError, VersionedCollection } from '../api/vault-api';
 import { ConflictService } from './conflict.service';
 import { CurrencyService } from './currency.service';
@@ -27,6 +28,12 @@ export class VaultStore {
   private readonly currencies = inject(CurrencyService);
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
+
+  constructor() {
+    // Nothing in here survives a sign-out. See `reset` for what happened when
+    // it did.
+    inject(SessionReset).register(() => this.reset());
+  }
 
   private readonly collectionsState = signal<Collection[]>([]);
   /**
@@ -145,6 +152,31 @@ export class VaultStore {
     () => `nav.sync.${this.syncState()}` as MessageKey,
   );
 
+  /**
+   * The mark beside that label.
+   *
+   * Here rather than in the sidebar's template because the topbar renders the
+   * same signal on a phone, where the sidebar is a closed drawer — and two
+   * surfaces choosing their own icon for the same state is how they come to
+   * disagree. Tone is never colour alone (rule 12), and this is the half that
+   * survives greyscale.
+   */
+  readonly syncIcon = computed<'check' | 'upload' | 'alert'>(() => {
+    switch (this.syncState()) {
+      case 'synced':
+        return 'check';
+      case 'saving':
+        return 'upload';
+      default:
+        return 'alert';
+    }
+  });
+
+  /** True for the two states the user has to be told about away from the drawer. */
+  readonly syncNeedsAttention = computed(
+    () => this.syncState() === 'offline' || this.syncState() === 'conflict',
+  );
+
   /** Global item search text (bound to the top-bar input). */
   readonly query = signal('');
 
@@ -190,6 +222,52 @@ export class VaultStore {
   readonly totalGroups = computed(() =>
     this.collections().reduce((acc, c) => acc + c.groups.length, 0),
   );
+
+  /**
+   * Forgets everything this session knew.
+   *
+   * Called from `AuthService` through {@link SessionReset} when a session ends,
+   * however it ended. Before this existed, signing out cleared the token and
+   * left the store untouched — and because signing in is a router navigation
+   * rather than a page load, `Shell` was rebuilt, called {@link ensureLoaded},
+   * and that returned on its first line because `loaded` was still true. The
+   * whole vault was never re-fetched: the next person to sign in on the same
+   * tab read the previous account's collections, totals and member list, and
+   * {@link canEdit}/{@link canAdminister} answered from the previous role. With
+   * two tenants in one browser that is cross-account data on screen.
+   *
+   * `versions` matters as much as the documents: a token left over from another
+   * account describes a document in another tenant, and quoting it on a write
+   * asks the server to overwrite something this session never read.
+   *
+   * `loadInFlight` is dropped rather than awaited. A load started by the old
+   * session would set `loaded` and publish the old account's data when it
+   * landed; it cannot be cancelled, so what has to change is that nothing is
+   * waiting for it — the new session starts its own.
+   */
+  reset(): void {
+    this.collectionsState.set([]);
+    this.storeListingsState.set([]);
+    this.tenantMembersState.set([]);
+    this.profileState.set(null);
+    this.tenantSettingsState.set(null);
+    this.versions.clear();
+    this.writing.set(new Set());
+    this.pendingWrites.set(0);
+    this.query.set('');
+    this.loadError.set(null);
+    this.retrying.set(false);
+    this.loadInFlight = null;
+    this.loaded.set(false);
+    // A refused save belongs to a document nobody is holding any more, and the
+    // account it belonged to is gone. Leaving the notice up would ask the next
+    // user to reload a collection they cannot see.
+    this.conflicts.dismiss();
+    // Back to the formatter's floor rather than the old tenant's currency, so
+    // an amount rendered before the new vault lands is not denominated in
+    // somebody else's money.
+    this.currencies.apply(null);
+  }
 
   /**
    * Fills the store from the API. Records the failure and rethrows.
@@ -354,7 +432,10 @@ export class VaultStore {
     } catch (err) {
       // A server-side message arrives already translated (Accept-Language);
       // only the generic fallback is ours to localize.
-      this.toast.flash(
+      // An error, not a flash: `flash` is the info tone, which carries no
+      // "failed" marker, no dismiss and a 2.6s timer — so the one sentence
+      // saying the collection was *not* added disappeared on its own.
+      this.toast.error(
         err instanceof Error ? err.message : this.i18n.t('toast.collection.addFailed'),
       );
       return null;

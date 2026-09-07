@@ -444,6 +444,13 @@ npm run build            <span class="c"># precisa passar antes de qualquer merg
     Vários itens <strong>podem</strong> ser editados de uma vez. O app
     <strong>funciona</strong> em tela de celular. Um <code>Viewer</code>
     <strong>não</strong> escreve mais. Uma falha de rede <strong>aparece</strong>.
+    Sair da conta <strong>esvazia</strong> o app: entrar como outra pessoa no
+    mesmo tab não mostra mais o acervo da conta anterior
+    (<a href="security.html#auth">como era</a>). Uma sessão que expira
+    <strong>diz</strong> que expirou e devolve a pessoa à tela em que estava.
+    Um endereço que não existe <strong>é uma página</strong>, com a URL ainda na
+    barra, em vez de um redirecionamento silencioso para o painel. E o painel
+    <strong>não</strong> divide mais uma moeda por outra.
   </p>
 </div>
 
@@ -547,6 +554,18 @@ npm run build            <span class="c"># precisa passar antes de qualquer merg
           com 412 e precisa recarregar</td>
       <td>Não há onde guardar um token por item — recusar demais custa um reload,
           recusar de menos custa o trabalho</td>
+    </tr>
+    <tr>
+      <td>A busca do topo é da coleção, não do acervo</td>
+      <td>A caixa “Buscar itens…” é renderizada <em>só</em> dentro de
+          <code>/c/:collectionId</code>, porque é a única rota (com a de item) que
+          a lê. Antes ela aparecia em toda tela autenticada e não fazia nada em
+          três delas, e o texto sobrevivia à navegação sem nenhum
+          <code>✕</code> — voltando a filtrar em silêncio a próxima coleção
+          aberta. Não há busca global</td>
+      <td>Uma busca global com painel de resultados — que hoje seria o mesmo teto
+          que a lista não virtualizada, já que <code>GET /api/collections</code>
+          devolve o acervo inteiro (<a href="decisions.html">ADR-77</a>)</td>
     </tr>
     <tr>
       <td>Campo por exemplar não passa pela tabela de itens</td>

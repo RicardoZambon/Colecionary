@@ -12,7 +12,7 @@ import { fieldSortKey, fieldValue } from '../../../../core/utils/sort.util';
 import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { IconName, UiCard, UiCheckbox, UiIcon, UiReorder } from '../../../../shared/ui';
+import { IconName, UiCard, UiCheckbox, UiIcon, UiReorder, UiTruncate } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
 import { SectionHeader } from '../section-header/section-header';
@@ -39,6 +39,7 @@ export interface RowPick {
     UiCheckbox,
     UiIcon,
     UiReorder,
+    UiTruncate,
   ],
   templateUrl: './item-list.html',
   styleUrl: './item-list.scss',
@@ -83,10 +84,8 @@ export class ItemList {
   /** The order the list is actually in, for `aria-sort` on the headers. */
   readonly sort = input.required<GroupSort>();
 
-  /** Which visible rows are selected, and the header's tri-state. */
+  /** Which visible rows are selected. The tri-state select-all is the page's. */
   readonly selectedIds = input<ReadonlySet<string>>(new Set());
-  readonly allSelected = input(false);
-  readonly someSelected = input(false);
 
   /**
    * Amounts here belong to this collection, so they follow its currency rather
@@ -100,7 +99,6 @@ export class ItemList {
   readonly moved = output<{ from: number; to: number }>();
   readonly sectionToggled = output<string>();
   readonly picked = output<RowPick>();
-  readonly allPicked = output<boolean>();
   /** A column header was clicked; the page turns the key into `?sort=`/`?dir=`. */
   readonly sortByPicked = output<string>();
 
@@ -113,11 +111,26 @@ export class ItemList {
     this.i18n.plural(this.totals().count, 'itemList.rows.one', 'itemList.rows.other'),
   );
 
+  /**
+   * "8 of 9 owned · 9 copies".
+   *
+   * It used to read "8 owned · 9 in hand" — three numbers, two of them 9,
+   * meaning different things, with nothing saying the second was a count of
+   * *copies* rather than of items. So the pair read as a contradiction. Both
+   * halves now name what they count, and the sentence agrees with the copy
+   * count through `plural` so the singular reads correctly.
+   */
   protected readonly heldLabel = computed(() =>
-    this.i18n.t('itemList.footHeld', {
-      owned: this.totals().owned,
-      copies: this.totals().copies,
-    }),
+    this.i18n.plural(
+      this.totals().copies,
+      'itemList.footHeld.one',
+      'itemList.footHeld.other',
+      {
+        owned: this.totals().owned,
+        rows: this.totals().count,
+        copies: this.totals().copies,
+      },
+    ),
   );
 
   protected isSelected(item: Item): boolean {

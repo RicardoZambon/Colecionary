@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
@@ -7,6 +16,7 @@ import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { isReportedWriteFailure } from '../../../core/api/vault-api';
 import { ConfirmService } from '../../../core/state/confirm.service';
 import { ToastService } from '../../../core/state/toast.service';
+import { PhotoUploadService } from '../../../core/state/photo-upload.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CopyStatus, CustomFieldValue, GroupField, Item } from '../../../core/models';
 import { NO_FILTERS, Neighbours, neighbours, visibleItems } from '../../../core/utils/browse.util';
@@ -25,7 +35,7 @@ import { formatDate } from '../../../core/utils/date.util';
 import { formatFieldValue } from '../../../core/utils/field-format.util';
 import { editableTags } from '../../../core/utils/tags.util';
 import { copyFields, fieldsFor, groupById, itemFields, pathOf } from '../../../core/utils/groups.util';
-import { readCriteria } from '../browse-params';
+import { groupLinkParams, readCriteria } from '../browse-params';
 import { formatMoney } from '../../../core/utils/money.util';
 import { conditionLabelKey, conditionTone, itemBadgeLabel, itemTone } from '../../../shared/ui/badge/badge';
 import { ItemValuePipe } from '../../../shared/pipes/item-value.pipe';
@@ -39,9 +49,13 @@ import {
   UiIcon,
   UiChip,
   UiLightbox,
+  UiProgress,
   UiSectionLabel,
   UiSkeleton,
 } from '../../../shared/ui';
+
+/** Mirrors the item form's own ceiling; the server validates the same number. */
+const MAX_PHOTOS = 8;
 
 /** Null for the default, so only a notable status shows up on a copy row. */
 const STATUS_KEYS: Record<CopyStatus, MessageKey | null> = {
@@ -81,6 +95,7 @@ function fieldRow(values: CustomFieldValue[], field: GroupField, locale: string)
     UiChip,
     UiIcon,
     UiLightbox,
+    UiProgress,
     UiSectionLabel,
     UiSkeleton,
   ],
@@ -104,8 +119,14 @@ export class ItemPage {
   protected readonly focus = inject(ImageFocusService);
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
-  private readonly confirm = inject(ConfirmService);
+  protected readonly confirm = inject(ConfirmService);
   private readonly router = inject(Router);
+  /**
+   * The same queue the item form's dropzone feeds. Going through it is what
+   * gives this page the local size/type checks, the progress rows and the
+   * per-file failure reporting that `images.upload` on its own has none of.
+   */
+  protected readonly uploads = inject(PhotoUploadService);
 
   readonly collectionId = input.required<string>();
   readonly itemId = input.required<string>();
@@ -166,6 +187,12 @@ export class ItemPage {
       this.itemId();
       this.selectedPhoto.set(0);
     });
+
+    // The queue is shared and root-provided, so a failure row left behind here
+    // would render above the *next* item's dropzone, naming a file with nothing
+    // to do with it. `UiPhotoManager` does the same on its own destroy; the
+    // rule is that whichever surface is showing the queue owns it.
+    inject(DestroyRef).onDestroy(() => this.uploads.clear());
   }
 
   // --- browsing the group ---
@@ -230,20 +257,44 @@ export class ItemPage {
   }
 
   /**
+   * Whether something is covering the page.
+   *
+   * The photo viewer, the framing editor and a confirmation are all rendered
+   * from outside this component — two of them from the shell — so nothing about
+   * their markup can be recognised by a `closest()` test. Each of them owns a
+   * signal that says it is up, and this is the sum of the three.
+   */
+  protected readonly overlayOpen = computed(
+    () => this.viewerOpen() || !!this.focus.pending() || !!this.confirm.pending(),
+  );
+
+  /**
    * ← and → walk the group. They belong to the items, except while the focus is
    * inside the thumbnail strip, where the user has already said they mean
    * photos — and they never fire in a field that uses them to move a caret.
+   *
+   * **And never through an overlay.** This is a document listener, so it used
+   * to fire while the framing editor was open (every arrow nudge also stepped
+   * the page behind to the next item), while the viewer was open (→ advanced
+   * the photo *and* the item), and while the delete confirmation was open (←
+   * navigated away, and confirming then deleted an item nobody could see).
+   * Registration order cannot fix it: `ui-lightbox` is a child of this
+   * template, so its own listener is added second and this one wins.
    */
   protected onKeydown(event: KeyboardEvent): void {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (this.overlayOpen()) return;
 
+    // `closest` and not an instanceof test, but the event can be dispatched on
+    // the document itself, which has neither — so ask before calling.
     const target = event.target as HTMLElement | null;
-    if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (typeof target?.closest !== 'function') return;
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
 
     const back = event.key === 'ArrowLeft';
 
-    if (target?.closest('.gallery__thumbs')) {
+    if (target.closest('.gallery__thumbs')) {
       const total = this.photos().length;
       if (!total) return;
       const next = Math.min(Math.max(this.selectedPhoto() + (back ? -1 : 1), 0), total - 1);
@@ -323,6 +374,39 @@ export class ItemPage {
     }));
   });
 
+  /**
+   * A one-copy item is the common case, and the hero already carries the
+   * condition badge, the estimate and the price paid. Repeating all three in a
+   * "Copies · 1" card and then again in a summary line underneath made the page
+   * read as though something had gone wrong with it, and pushed the description
+   * and the declared fields below the fold.
+   *
+   * So for a single copy the card renders only what the hero cannot — the
+   * acquisition date, a notable status, the notes and the copy-scoped fields —
+   * and not at all when it has none of them.
+   */
+  protected readonly singleCopy = computed(() => (this.item()?.copies.length ?? 0) === 1);
+
+  protected readonly showCopies = computed(() => {
+    const rows = this.copyRows();
+    if (!rows.length) return false;
+    if (rows.length > 1) return true;
+    const only = rows[0];
+    return !!(only.acquiredOnLabel || only.statusKey || only.notes || only.fields.length);
+  });
+
+  /** The summary line restates a lone row word for word, so it waits for two. */
+  protected readonly showCopiesTotal = computed(() => this.copyRows().length > 1);
+
+  /**
+   * "Est. value / copy" in the details card is the hero figure divided by one,
+   * which for a single copy it always equals. Printing it a third time says
+   * nothing the reader did not already read twice.
+   */
+  protected readonly showUnitValue = computed(
+    () => !this.singleCopy() || this.unitValue() !== this.headlineValue(),
+  );
+
   protected readonly copiesTotal = computed(() => {
     const item = this.item();
     if (!item) return '';
@@ -392,6 +476,18 @@ export class ItemPage {
     }));
   });
 
+  /**
+   * Where "GRUPO Nintendo" goes: the collection, filtered to that group.
+   *
+   * The two most natural questions from an item — what else is in this group,
+   * what else carries this tag — were both dead text. `groupLinkParams` keeps
+   * the filters already in the URL and drops the ad-hoc order, since every
+   * group declares its own.
+   */
+  protected readonly groupLink = computed(() =>
+    groupLinkParams(this.item()?.groupId || null),
+  );
+
   protected readonly groupName = computed(() => {
     const collection = this.collection();
     const item = this.item();
@@ -399,41 +495,101 @@ export class ItemPage {
     return groupById(collection.groups, item.groupId)?.name ?? item.groupId;
   });
 
+  /**
+   * Whether this collection already has a write in flight.
+   *
+   * Read here and passed *down* as an input, never injected into a leaf. It is
+   * what stops the `+` and "I own one" offering themselves during their own
+   * write: the second one quotes the version the first is about to move and
+   * comes back as a `VaultBusyError` that `isReportedWriteFailure` swallows
+   * without a toast — which is right for a double-clicked Save and wrong here,
+   * because the second click carried a *different* photo (rule 20).
+   */
+  protected readonly saving = computed(() => this.store.saving(this.collectionId()));
+
+  /** Neither adding nor picking is offered while either is already happening. */
+  protected readonly photoBusy = computed(() => this.saving() || this.uploads.busy());
+
+  /**
+   * Adds photos from the detail page, through the same queue the form uses.
+   *
+   * It used to call `images.upload` directly, which meant: no progress row (so
+   * several seconds of a page that did not change, which invites a second
+   * click), no local size or type check (so a 20 MB PDF was uploaded in full
+   * before the server refused it, where the form rejects it instantly), and
+   * `multiple` unset, so it took one file where the form takes a batch.
+   */
   protected addPhoto(): void {
     const item = this.item();
     if (!item) return;
-    if (item.photoIds.length >= 8) {
+    const remaining = MAX_PHOTOS - item.photoIds.length;
+    if (remaining <= 0) {
       this.toast.flash(this.i18n.t('toast.photo.limit'));
       return;
     }
     const picker = document.createElement('input');
     picker.type = 'file';
     picker.accept = 'image/*';
+    picker.multiple = true;
     picker.onchange = async () => {
-      const file = picker.files?.[0];
-      if (!file) return;
-      try {
-        // No editor in the way: the photo lands centred and the gallery's
-        // "adjust framing" is there whenever the user wants it.
-        const imageId = await this.images.upload(file);
-        await this.store.upsertItem(this.collectionId(), {
-          ...item,
-          photoIds: [...item.photoIds, imageId],
-        });
-        this.selectedPhoto.set(item.photoIds.length);
-        this.toast.flash(this.i18n.t('toast.photo.added'));
-      } catch (err) {
-        // A conflict already has the shell's notice; a second, vanishing
-        // message on top of it would only muddle what happened. The photo's
-        // bytes are safely uploaded either way — it is the item that did not
-        // save, and re-adding it after a reload costs no second upload.
-        if (isReportedWriteFailure(err)) return;
+      const files = [...(picker.files ?? [])];
+      if (!files.length) return;
+      const ids = await this.uploads.add(files, remaining);
+      if (!ids.length) return;
+      // Read back from the store, not from the `item` captured above: an upload
+      // takes seconds and the collection can have moved on underneath it.
+      const current = this.item();
+      if (!current) return;
+      const before = current.photoIds.length;
+      if (!(await this.write({ ...current, photoIds: [...current.photoIds, ...ids] }))) return;
+      this.selectedPhoto.set(before);
+      this.toast.flash(this.i18n.t('toast.photo.added'));
+    };
+    picker.click();
+  }
+
+  /**
+   * Takes a photo back off the item — the other half of adding one here.
+   *
+   * Without this, a wrong file picked from the detail page could only be undone
+   * by a round trip through the edit form, which is the surface that owns
+   * ordering and the cover. The bytes survive their grace period, but nothing
+   * in the app offers them back, so this asks first.
+   */
+  protected async removePhoto(imageId: string): Promise<void> {
+    const item = this.item();
+    if (!item) return;
+    const confirmed = await this.confirm.ask({
+      titleKey: 'confirm.removePhoto.title',
+      bodyKey: 'confirm.removePhoto.body',
+      confirmKey: 'confirm.removePhoto.confirm',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+    const next = item.photoIds.filter(id => id !== imageId);
+    if (!(await this.write({ ...item, photoIds: next }))) return;
+    this.selectedPhoto.update(i => Math.max(0, Math.min(i, next.length - 1)));
+  }
+
+  /**
+   * One write path for the page's own photo edits, so the failure story is
+   * told once. Resolves false when nothing was persisted.
+   */
+  private async write(item: Item): Promise<boolean> {
+    try {
+      await this.store.upsertItem(this.collectionId(), item);
+      return true;
+    } catch (err) {
+      // A conflict and a refused-because-busy both already explain themselves
+      // through the shell. The photo's bytes are safe either way — it is the
+      // item that did not save.
+      if (!isReportedWriteFailure(err)) {
         this.toast.flash(
           err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),
         );
       }
-    };
-    picker.click();
+      return false;
+    }
   }
 
   /** Reopens the editor for an existing photo — framing is never final. */

@@ -1,12 +1,19 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injector, computed, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
 import { ImageFocusService } from '../../core/state/image-focus.service';
 import { LayoutService } from '../../core/state/layout.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { TPipe } from '../../shared/pipes/t.pipe';
-import { UiButton, UiConfirm, UiImageFocus, UiToast } from '../../shared/ui';
+// Deep imports, not the `shared/ui` barrel. The barrel re-exports the lightbox,
+// the photo manager, the mosaic and the framing editor; the shell is the initial
+// chunk, so naming the barrel here put all four in the first bytes the browser
+// downloads even on the login screen.
+import { UiButton } from '../../shared/ui/button/button';
+import { UiConfirm } from '../../shared/ui/confirm/confirm';
+import { UiImageFocus } from '../../shared/ui/image-focus/image-focus';
+import { UiToast } from '../../shared/ui/toast/toast';
 import { ConflictNotice } from '../conflict-notice/conflict-notice';
 import { NAV_DRAWER_ID, focusNavToggle } from '../nav-focus';
 import { Sidebar } from '../sidebar/sidebar';
@@ -39,16 +46,23 @@ import { Topbar } from '../topbar/topbar';
     -->
     <a class="skip" href="#main-content" (click)="layout.closeNav()">{{ 'shell.skipToContent' | t }}</a>
 
-    <app-topbar />
+    <!--
+      The drawer is presented modally — scrim, page dimmed, Escape closes it —
+      but it is not a ui-dialog, so it inherits none of that component's focus
+      trapping. Marking the rest of the document inert is the containment: the
+      drawer and the page are siblings, so without it Tab walked out of the nav,
+      over the scrim and into a form the user could no longer see.
+    -->
+    <app-topbar [inert]="navModal()" [attr.aria-hidden]="navModal() ? 'true' : null" />
     <div class="body">
-      <app-sidebar />
-
       <!--
         A real <button>, not a <div>: dismissing the drawer is an action, so it
         needs a name, a role and a keyboard path. Rendered only while the drawer
-        is actually open, so it can never swallow a click on the page beneath.
+        is actually open, so it can never swallow a click on the page beneath —
+        and *before* the drawer in DOM order, so it is a barrier at the edge of
+        the document rather than a tab stop sitting between the nav and the page.
       -->
-      @if (layout.compact() && layout.navOpen()) {
+      @if (navModal()) {
         <button
           type="button"
           class="scrim"
@@ -58,7 +72,15 @@ import { Topbar } from '../topbar/topbar';
         ></button>
       }
 
-      <main class="main" id="main-content" tabindex="-1">
+      <app-sidebar />
+
+      <main
+        class="main"
+        id="main-content"
+        tabindex="-1"
+        [inert]="navModal()"
+        [attr.aria-hidden]="navModal() ? 'true' : null"
+      >
         @if (store.loadError(); as error) {
           <!--
             The state this used to have no way to render. load() was called
@@ -68,11 +90,15 @@ import { Topbar } from '../topbar/topbar';
             screen for ever, with nothing in the console.
           -->
           <div class="load-error" role="alert">
-            <p class="load-error__title">{{ 'shell.loadFailed.title' | t }}</p>
+            <!-- A real heading. It was a bold 18px paragraph, on the one screen
+                 whose entire job is to be read. -->
+            <h2 class="load-error__title">{{ 'shell.loadFailed.title' | t }}</h2>
             <p class="load-error__body">{{ error }}</p>
             <p class="load-error__hint">{{ 'shell.loadFailed.body' | t }}</p>
-            <ui-button [disabled]="store.retrying()" (click)="store.retryLoad()">
-              {{ (store.retrying() ? 'shell.loadFailed.retrying' : 'shell.loadFailed.retry') | t }}
+            <!-- [pending] carries the disable, the aria-busy and the spinner, so
+                 the label stays put and the second "Reloading…" key is dead. -->
+            <ui-button [pending]="store.retrying()" (click)="store.retryLoad()">
+              {{ 'shell.loadFailed.retry' | t }}
             </ui-button>
           </div>
         } @else {
@@ -201,7 +227,10 @@ import { Topbar } from '../topbar/topbar';
       /* Derived from a token rather than a literal black: the scrim has to
          dim towards the theme's own ground, or it reads as a hole in a dark
          theme and as soot in a light one. */
-      background: color-mix(in srgb, var(--bg) 78%, transparent);
+      /* The one scrim token, shared with every other overlay that dims the
+         page — it has to dim towards the theme's own ground, or it reads as a
+         hole in a dark theme and as soot in a light one. */
+      background: var(--scrim);
       cursor: pointer;
 
       @media (prefers-reduced-motion: no-preference) {
@@ -221,8 +250,16 @@ export class Shell {
   protected readonly layout = inject(LayoutService);
   private readonly focus = inject(ImageFocusService);
   private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
 
   protected readonly drawerId = NAV_DRAWER_ID;
+
+  /**
+   * True while the drawer is open over the page — the predicate the scrim, the
+   * inert page and `sidebar.ts`'s own `hidden()` all describe from their own
+   * side.
+   */
+  protected readonly navModal = computed(() => this.layout.compact() && this.layout.navOpen());
 
   constructor() {
     // An expired token is the auth interceptor's business — it logs out and
@@ -241,7 +278,7 @@ export class Shell {
 
   protected dismissNav(): void {
     this.layout.closeNav();
-    focusNavToggle(this.document);
+    focusNavToggle(this.document, this.injector);
   }
 
   protected onEscape(): void {

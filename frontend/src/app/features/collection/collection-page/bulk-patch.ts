@@ -1,5 +1,6 @@
 import { CopyStatus, CustomFieldValue, GroupNode, Item, Section } from '../../../core/models';
 import { resolveGroupId } from '../../../core/utils/groups.util';
+import { parseAmount } from '../../../core/utils/money.util';
 import { withTagAdded, withTagRemoved } from '../../../core/utils/tags.util';
 import { resolveSectionId } from '../../../core/utils/sections.util';
 
@@ -58,12 +59,6 @@ export interface BulkPatch {
 export interface BulkContext {
   groups: GroupNode[];
   sections: Section[];
-}
-
-/** Tolerant of a decimal comma, like every other number the app parses. */
-function parseNumber(raw: string): number {
-  const parsed = parseFloat(raw.trim().replace(',', '.'));
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 /**
@@ -145,11 +140,18 @@ export function applyBulkPatch(
       next.sectionId = resolveSectionId(ctx.sections, groupId, item.sectionId);
     }
 
+    // `parseAmount`, not a local parser. The one this used to carry did
+    // `parseFloat(raw.replace(',', '.'))`, which for a Brazilian keyboard is
+    // wrong in both directions and silent about it: `4.200,00` came out as
+    // **4.2** (parseFloat stops at the second separator), `85,50` as **8550**
+    // once the app's own formatting was pasted back in, `12,5` as **125** and
+    // `1.000` as **1**. Here it lands on up to forty items at once. `year` goes
+    // through the same reader because a pasted `1.998` has to be 1998 too.
     if (patch.year !== undefined && patch.year.trim()) {
-      next.year = parseNumber(patch.year);
+      next.year = parseAmount(patch.year);
     }
     if (patch.value !== undefined) {
-      next.value = patch.value.trim() ? parseNumber(patch.value) : 0;
+      next.value = patch.value.trim() ? parseAmount(patch.value) : 0;
     }
     if (patch.fields) {
       next.custom = mergeFields(item.custom, patch.fields);

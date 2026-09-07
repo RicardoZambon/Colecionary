@@ -21,12 +21,12 @@
         [collectionName]="coll.name"
         [path]="crumbPath()"
         [children]="childChips()"
-        [collapsed]="treeCollapsed()"
+        [collapsed]="!treeVisible()"
         [pending]="!!pendingGroupParent()"
         (expandTree)="toggleTree()"
         (newGroup)="startNewGroup()"
-        (nameKeydown)="newGroupKeydown($event)"
         (nameCommit)="commitNewGroup($event)"
+        (nameCancelled)="cancelNewGroup()"
       />
 
       <app-collection-toolbar
@@ -56,12 +56,29 @@
         [tag]="tagFilter()"
         (tagChange)="setTag($event)"
       />
+
+      <!-- What the list is showing, what is narrowing it, and the way out —
+           wherever the filters are in force, not only where they emptied the
+           list. Also the page's one live region, and the only select-all the
+           card grid has ever had. -->
+      <app-browse-summary
+        [countLabel]="countLabel()"
+        [filters]="activeFilters()"
+        [filtering]="filtering()"
+        [canEdit]="canEdit()"
+        [allSelected]="headerAllSelected()"
+        [someSelected]="headerSomeSelected()"
+        (removed)="removeFilter($event)"
+        (cleared)="clearFilters()"
+        (allPicked)="pickAll($event)"
+      />
     }
   </div>
 
-  <div class="layout" [class.layout--wide]="!treeCollapsed()">
-    @if (!treeCollapsed()) {
+  <div class="layout" [class.layout--wide]="treeVisible()">
+    @if (treeVisible()) {
       <app-group-tree
+        id="group-panel"
         class="layout__tree"
         [collectionId]="coll.id"
         [groups]="groups()"
@@ -69,7 +86,6 @@
         [selectedId]="g() ?? null"
         [expanded]="treeExpanded()"
         (expandedChange)="setTreeExpanded($event)"
-        (collapse)="toggleTree()"
       />
     }
 
@@ -108,12 +124,9 @@
             [fields]="visibleColumns()"
             [sort]="effectiveSort()"
             [selectedIds]="selectedIds()"
-            [allSelected]="headerAllSelected()"
-            [someSelected]="headerSomeSelected()"
             (moved)="moveItem($event.from, $event.to)"
             (sectionToggled)="toggleSection($event)"
             (picked)="pickRow($event)"
-            (allPicked)="pickAll($event)"
             (sortByPicked)="sortByColumn($event)"
           />
         }
@@ -129,6 +142,7 @@
             [sortFieldName]="sortFieldName()"
             [groupNames]="groupNames()"
             [selectedIds]="selectedIds()"
+            [filtering]="filtering()"
             (moved)="moveItem($event.from, $event.to)"
             (sectionToggled)="toggleSection($event)"
             (picked)="pickRow($event)"
@@ -184,6 +198,12 @@
            gone for a reader, so the count cannot rise — but the bar is the one
            surface here that only ever writes, and it should not depend on
            another component having hidden its controls. -->
+      <!-- Present from first paint and empty: a live region only announces what
+           changes inside one already being observed. ui-reorder announces its
+           own keyboard moves; this is the only thing that says a *drag*
+           happened. -->
+      <p class="sr-only" role="status">{{ moveAnnouncement() }}</p>
+
       @if (canEdit() && selectionCount() > 0) {
         <app-bulk-bar
           [items]="selectedItems()"
@@ -266,8 +286,16 @@
     </div>
   </div>
 } @else {
-  <div class="missing">
-    {{ 'common.collectionNotFound' | t }}
-    <a routerLink="/dashboard">{{ 'common.backToDashboard' | t }}</a>.
-  </div>
+  <!-- Was one line of decorative grey at the top-left of a blank page, which
+       read as a rendering fault rather than as an answer. Every other "nothing
+       here" on this page goes through ui-empty. -->
+  <ui-empty
+    icon="search"
+    [title]="'collection.notFoundTitle' | t"
+    [body]="'collection.notFoundBody' | t"
+  >
+    <ui-button size="sm" emptyActions routerLink="/dashboard">
+      {{ 'collection.backToDashboard' | t }}
+    </ui-button>
+  </ui-empty>
 }

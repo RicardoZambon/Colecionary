@@ -1,8 +1,18 @@
 <!-- One editor, two owners. The collection's declarations and a group's are
      the same list edited the same way, so they are the same markup driven by
-     `owner`; two copies would drift the first time one grew a control, which
-     is exactly what the scope selector is. -->
-<ng-template #fieldEditor let-owner="owner" let-fields="fields" let-label="label">
+     `owner`; two copies would drift the first time one grew a control.
+     What the two do NOT share is the wording: two identical "+ Field" links
+     250px apart, one declaring on the whole collection and one on the open
+     group, is a choice nobody can make correctly — so the label, the add
+     button and the hint all arrive through the context. -->
+<ng-template
+  #fieldEditor
+  let-owner="owner"
+  let-fields="fields"
+  let-label="label"
+  let-addLabel="addLabel"
+  let-hint="hint"
+>
   <div class="detail__fields">
     <span class="fields-label">{{ label }}</span>
     @for (field of fields; track field.name) {
@@ -15,11 +25,14 @@
           [value]="field.type"
           (valueChange)="setFieldType(owner, field.name, $event)"
         />
+        <!-- The value comes from `fieldScopeValue`, not straight from the
+             field: a declined question has to put the control back, and a
+             binding that never changed is a binding Angular never rewrites. -->
         <ui-select
           class="compact scope"
           [ariaLabel]="'collSettings.groups.fieldScopeAria' | t: { name: field.name }"
           [options]="fieldScopeOptions()"
-          [value]="field.scope"
+          [value]="fieldScopeValue(owner, field)"
           (valueChange)="setFieldScope(owner, field.name, $event)"
         />
         <ui-button
@@ -32,32 +45,39 @@
     }
     @if (pendingFieldGroupId() === owner) {
       <span class="field-chip field-chip--new">
-        <input
-          class="field-input"
+        <!-- One question, because one question is all a composer beside two
+             native selects could ever take an answer to — see
+             `commitNewField`. Type and scope are set on the chip below. -->
+        <ui-inline-edit
+          class="composer"
           [placeholder]="'collSettings.groups.fieldPlaceholder' | t"
-          [attr.aria-label]="'collSettings.groups.fieldAria' | t"
-          autofocus
-          (keydown)="newFieldKeydown($event, owner)"
-          (blur)="commitNewField(owner, $any($event.target).value)"
-        />
-        <ui-select
-          class="compact type"
-          [ariaLabel]="'collSettings.groups.newFieldTypeAria' | t"
-          [options]="fieldTypeOptions()"
-          [value]="pendingFieldType()"
-          (valueChange)="pendingFieldType.set($any($event))"
-        />
-        <ui-select
-          class="compact scope"
-          [ariaLabel]="'collSettings.groups.newFieldScopeAria' | t"
-          [options]="fieldScopeOptions()"
-          [value]="pendingFieldScope()"
-          (valueChange)="pendingFieldScope.set($any($event))"
+          [ariaLabel]="'collSettings.groups.fieldAria' | t"
+          (committed)="commitNewField(owner, $event)"
+          (cancelled)="pendingFieldGroupId.set(null)"
         />
       </span>
     }
     <ui-button variant="link" size="sm" (click)="pendingFieldGroupId.set(owner)"
-      >{{ 'collSettings.groups.addField' | t }}</ui-button>
+      >{{ addLabel }}</ui-button>
+    <p class="detail__hint">{{ hint }}</p>
+  </div>
+</ng-template>
+
+<!-- The composer for a new group, instantiated in whichever card the button
+     that opened it lives in. It used to be rendered once, at the bottom of the
+     tree card, while `+ Sub` sat in the detail card — a different column on a
+     desktop and, below $bp-lg where the two stack, several hundred pixels off
+     the top of a phone screen. The button appeared to do nothing at all. -->
+<ng-template #groupComposer>
+  <div class="new-group">
+    <span class="context">{{ newGroupContext() }}</span>
+    <ui-inline-edit
+      class="composer"
+      [placeholder]="'collSettings.groups.newPlaceholder' | t"
+      [ariaLabel]="'collSettings.groups.newGroupAria' | t"
+      (committed)="commitNewGroup($event)"
+      (cancelled)="pendingGroupParent.set(null)"
+    />
   </div>
 </ng-template>
 
@@ -67,379 +87,447 @@
   >
   <h1>{{ 'collSettings.title' | t }}</h1>
 
-  <ui-tabs [tabs]="tabs()" [active]="activeTab()" (activeChange)="onTabChange($event)" />
+  <!--
+    The document moved under this page while it held a draft, so autosave is
+    off. In the page and not a toast, for the same reason the conflict notice
+    is not one: what has to be said is that the work on screen is the only copy
+    of itself, and a message that expires after four seconds turns that into
+    silent data loss. Two real choices, both stating what they cost.
+  -->
+  @if (stale()) {
+    <div class="moved-on" role="alert">
+      <p class="moved-on__title">{{ 'collSettings.movedOn.title' | t }}</p>
+      <p class="moved-on__body">{{ 'collSettings.movedOn.body' | t }}</p>
+      <div class="moved-on__actions">
+        <ui-button variant="ghost" (click)="takeLatest()"
+          >{{ 'collSettings.movedOn.take' | t }}</ui-button>
+        <ui-button (click)="keepMine()">{{ 'collSettings.movedOn.keep' | t }}</ui-button>
+      </div>
+    </div>
+  }
 
-  @switch (activeTab()) {
-    @case ('groups') {
-      <!-- Master–detail. A collection five levels deep with dividers at the
-           bottom is unreadable as one column of editors, and the branch you
-           came to fix is somewhere in the middle of it. -->
-      <!-- Above the tree, because it is above it in the model: these are the
-           fields every group inherits, and a group may override one. -->
-      <!-- `groups-card` is the box every card in this tab shares, and this one
-           already borrowed its head; saying so is what keeps the two from
-           drifting. `ui-card` paints a border and no padding, so a card that
-           names neither sits flush against its own edge. -->
-      <ui-card class="groups-card collection-fields">
-        <div class="groups-card__head">
-          <span class="heading">{{ 'collSettings.fields.heading' | t }}</span>
-        </div>
-        <p class="collection-fields__hint">{{ 'collSettings.fields.hint' | t }}</p>
-        <ng-container
-          [ngTemplateOutlet]="fieldEditor"
-          [ngTemplateOutletContext]="{
-            owner: collectionOwner,
-            fields: d.fields,
-            label: 'collSettings.fields.label' | t
-          }"
-        />
-      </ui-card>
+  <ui-tabs
+    #tabStrip
+    [tabs]="tabs()"
+    [active]="activeTab()"
+    [panels]="true"
+    (activeChange)="onTabChange($event)"
+  />
 
-      <div class="groups-split">
-        <ui-card class="groups-card groups-split__tree">
+  <!-- One panel for all three tabs: the id follows the selection, which is
+       what `aria-controls` on the strip points at. -->
+  <div
+    class="tab-panel"
+    role="tabpanel"
+    tabindex="0"
+    [id]="tabStrip.panelDomId(activeTab())"
+    [attr.aria-labelledby]="tabStrip.tabDomId(activeTab())"
+  >
+    @switch (activeTab()) {
+      @case ('groups') {
+        <!-- Master–detail. A collection five levels deep with dividers at the
+             bottom is unreadable as one column of editors, and the branch you
+             came to fix is somewhere in the middle of it. -->
+        <!-- Above the tree, because it is above it in the model: these are the
+             fields every group inherits, and a group may override one. -->
+        <!-- `groups-card` is the box every card in this tab shares, and this one
+             already borrowed its head; saying so is what keeps the two from
+             drifting. `ui-card` paints a border and no padding, so a card that
+             names neither sits flush against its own edge. -->
+        <ui-card class="groups-card collection-fields">
           <div class="groups-card__head">
-            <span class="heading">{{ 'collSettings.groups.heading' | t }}</span>
-            <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: null })"
-              >{{ 'collSettings.groups.add' | t }}</ui-button>
+            <span class="heading">{{ 'collSettings.fields.heading' | t }}</span>
           </div>
-
-          <app-group-picker
-            [groups]="d.groups"
-            [counts]="subtreeCounts()"
-            [selectedId]="g() ?? null"
-            [(expanded)]="pickerExpanded"
+          <p class="collection-fields__hint">{{ 'collSettings.fields.hint' | t }}</p>
+          <ng-container
+            [ngTemplateOutlet]="fieldEditor"
+            [ngTemplateOutletContext]="{
+              owner: collectionOwner,
+              fields: d.fields,
+              label: 'collSettings.fields.labelScoped' | t,
+              addLabel: 'collSettings.fields.addCollection' | t,
+              hint: ''
+            }"
           />
-
-          @if (pendingGroupParent()) {
-            <div class="new-group">
-              <span class="context">{{ newGroupContext() }}</span>
-              <input
-                class="new-group__input"
-                [placeholder]="'collSettings.groups.newPlaceholder' | t"
-                [attr.aria-label]="'collSettings.groups.newGroupAria' | t"
-                autofocus
-                (keydown)="newGroupKeydown($event)"
-                (blur)="commitNewGroup($any($event.target).value)"
-              />
-            </div>
-          }
         </ui-card>
 
-        <ui-card class="groups-card groups-split__detail">
-          @if (detail(); as sel) {
-            <div class="detail__head">
-              <span class="detail__path">
-                @for (crumb of selectedPath(); track crumb.id; let last = $last) {
-                  <span [class.detail__here]="last">{{ crumb.name }}</span>
-                  @if (!last) { <ui-icon class="detail__sep" name="chevron-right" [size]="11" /> }
-                }
-              </span>
-              <span class="count">{{ itemCount(sel.count) }}</span>
-              <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: sel.node.id })"
-                >{{ 'collSettings.groups.addSub' | t }}</ui-button>
-              <ui-button
-                variant="icon"
-                [ariaLabel]="'collSettings.groups.remove' | t: { name: sel.node.name }"
-                (click)="removeGroup(sel.node.id)"
-              ><ui-icon name="close" [size]="13" /></ui-button>
+        <div class="groups-split">
+          <ui-card class="groups-card groups-split__tree">
+            <div class="groups-card__head">
+              <span class="heading">{{ 'collSettings.groups.heading' | t }}</span>
+              <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: null })"
+                >{{ 'collSettings.groups.add' | t }}</ui-button>
             </div>
 
-            <div class="detail__name">
-              <span class="fields-label">{{ 'collSettings.groups.nameLabel' | t }}</span>
-              <ui-text-input
-                class="rename"
-                variant="subtle"
-                [ariaLabel]="'collSettings.groups.renameAria' | t: { name: sel.node.name }"
-                [value]="sel.node.name"
-                (valueChange)="renameGroup(sel.node.id, $event)"
-              />
-            </div>
-
-            <!-- Where the group sits. A picker rather than a drag: groups list
-                 alphabetically and nothing persists a position for one, so a
-                 drop *between* rows would mean nothing, and only a drop *onto*
-                 a row would count — an invisible affordance that would then
-                 also owe a keyboard path. A select is keyboard-native and can
-                 omit the targets it cannot accept. -->
-            <div class="detail__parent">
-              <span class="fields-label">{{ 'collSettings.groups.parent' | t }}</span>
-              <ui-select
-                class="compact parent"
-                [ariaLabel]="'collSettings.groups.parentAria' | t: { name: sel.node.name }"
-                [options]="sel.parentOptions"
-                [value]="sel.parentValue"
-                (valueChange)="onParentPicked(sel.node.id, $event)"
-              />
-            </div>
-
-            @if (moveImpact(); as move) {
-              <div class="move-preview" role="status">
-                <span class="fields-label">{{ 'collSettings.groups.moveHeading' | t }}</span>
-                <p class="move-preview__head">{{ move.heading }}</p>
-                <ul class="move-preview__list">
-                  @if (move.gained) {
-                    <li>{{ move.gained }}</li>
-                  }
-                  @for (line of move.lost; track line) {
-                    <li class="move-preview__lost">{{ line }}</li>
-                  }
-                  @if (move.order) {
-                    <li>{{ move.order }}</li>
-                  }
-                  @if (move.nothing) {
-                    <li>{{ move.nothing }}</li>
-                  }
-                </ul>
-                @if (move.dormant) {
-                  <p class="move-preview__note">{{ move.dormant }}</p>
-                }
-                @if (move.clash) {
-                  <p class="move-preview__clash">{{ move.clash }}</p>
-                }
-                <div class="move-preview__actions">
-                  <ui-button size="sm" variant="ghost" (click)="cancelParentMove()"
-                    >{{ 'collSettings.groups.moveCancel' | t }}</ui-button>
-                  <ui-button size="sm" (click)="commitParentMove()"
-                    >{{ 'collSettings.groups.moveConfirm' | t }}</ui-button>
-                </div>
-              </div>
-            }
-
-            <div class="detail__order">
-              <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
-              <ui-select
-                class="compact order-by"
-                [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: sel.node.name }"
-                [options]="sel.sortByOptions"
-                [value]="sel.sortBy"
-                (valueChange)="setGroupSortBy(sel.node.id, $event)"
-              />
-              @if (sel.showDirection) {
-                <ui-select
-                  class="compact direction"
-                  [ariaLabel]="'collSettings.groups.orderDirectionAria' | t: { name: sel.node.name }"
-                  [options]="directionOptions()"
-                  [value]="sel.sortDirection"
-                  (valueChange)="setGroupSortDirection(sel.node.id, $event)"
-                />
-              }
-
-              <span class="fields-label spaced">{{ 'collSettings.groups.target' | t }}</span>
-              <ui-text-input
-                class="target"
-                type="number"
-                variant="subtle"
-                placeholder="—"
-                [ariaLabel]="'collSettings.groups.targetAria' | t: { name: sel.node.name }"
-                [value]="sel.target"
-                (valueChange)="setGroupTarget(sel.node.id, $event)"
-              />
-            </div>
-
-            <ng-container
-              [ngTemplateOutlet]="fieldEditor"
-              [ngTemplateOutletContext]="{
-                owner: sel.node.id,
-                fields: sel.node.fields,
-                label: 'collSettings.groups.fields' | t
-              }"
+            <app-group-picker
+              [groups]="d.groups"
+              [counts]="subtreeCounts()"
+              [selectedId]="g() ?? null"
+              [(expanded)]="pickerExpanded"
             />
 
-            <div class="detail__sections">
-              <span class="fields-label">{{ 'collSettings.sections.label' | t }}</span>
-              @for (row of sel.sections; track row.section.id; let i = $index) {
-                <span class="section-chip">
+            @if (composingUnder(null)) {
+              <ng-container [ngTemplateOutlet]="groupComposer" />
+            }
+          </ui-card>
+
+          <ui-card class="groups-card groups-split__detail">
+            @if (detail(); as sel) {
+              <div class="detail__head">
+                <span class="detail__path">
+                  @for (crumb of selectedPath(); track crumb.id; let last = $last) {
+                    <!-- A title on user-typed data needs no message key, and a
+                         280px column four levels deep truncates the one thing
+                         on screen that says which group is being edited. -->
+                    <span [class.detail__here]="last" [title]="crumb.name">{{ crumb.name }}</span>
+                    @if (!last) { <ui-icon class="detail__sep" name="chevron-right" [size]="11" /> }
+                  }
+                </span>
+                <span class="count">{{ itemCount(sel.count) }}</span>
+                <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: sel.node.id })"
+                  >{{ 'collSettings.groups.addSub' | t }}</ui-button>
+                <!-- Held away from "+ Sub": an add and a delete-this-whole-group
+                     sharing a 10px gap is a mis-click with no undo. -->
+                <ui-button
+                  class="detail__remove"
+                  variant="icon"
+                  [ariaLabel]="'collSettings.groups.remove' | t: { name: sel.node.name }"
+                  (click)="removeGroup(sel.node.id)"
+                ><ui-icon name="close" [size]="13" /></ui-button>
+              </div>
+
+              @if (composingUnder(sel.node.id)) {
+                <ng-container [ngTemplateOutlet]="groupComposer" />
+              }
+
+              <!-- Each control carries the sentence that explains it. The
+                   explanation used to be one eight-line paragraph of the
+                   faintest type on the page, appended below everything it
+                   described, and nobody read it. -->
+              <div class="detail__grid">
+                <ui-field
+                  class="detail__name"
+                  [label]="'collSettings.groups.nameLabel' | t"
+                  [hint]="'collSettings.groups.nameHint' | t"
+                >
                   <ui-text-input
                     class="rename"
                     variant="subtle"
-                    [ariaLabel]="'collSettings.sections.renameAria' | t: { name: row.section.name }"
-                    [value]="row.section.name"
-                    (valueChange)="renameSection(row.section.id, $event)"
+                    [ariaLabel]="'collSettings.groups.renameAria' | t: { name: sel.node.name }"
+                    [value]="sel.node.name"
+                    (valueChange)="renameGroup(sel.node.id, $event)"
                   />
-                  <span class="count">{{ itemCount(row.count) }}</span>
+                </ui-field>
+
+                <!-- Where the group sits. A picker rather than a drag: groups
+                     list alphabetically and nothing persists a position for
+                     one, so a drop *between* rows would mean nothing, and only
+                     a drop *onto* a row would count — an invisible affordance
+                     that would then also owe a keyboard path. A select is
+                     keyboard-native and can omit the targets it cannot
+                     accept. -->
+                <ui-field
+                  class="detail__parent"
+                  [class.detail__parent--pending]="sel.parentPending"
+                  [label]="'collSettings.groups.parent' | t"
+                  [hint]="'collSettings.groups.parentHint' | t"
+                >
+                  <ui-select
+                    class="compact parent"
+                    [ariaLabel]="'collSettings.groups.parentAria' | t: { name: sel.node.name }"
+                    [options]="sel.parentOptions"
+                    [value]="sel.parentValue"
+                    (valueChange)="onParentPicked(sel.node.id, $event)"
+                  />
+                  @if (sel.parentPending) {
+                    <span class="detail__unapplied"
+                      >{{ 'collSettings.groups.moveUnapplied' | t }}</span>
+                  }
+                </ui-field>
+
+                <ui-field
+                  class="detail__order"
+                  [label]="'collSettings.groups.orderBy' | t"
+                  [hint]="'collSettings.groups.orderByHint' | t"
+                >
+                  <span class="detail__pair">
+                    <ui-select
+                      class="compact order-by"
+                      [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: sel.node.name }"
+                      [options]="sel.sortByOptions"
+                      [value]="sel.sortBy"
+                      (valueChange)="setGroupSortBy(sel.node.id, $event)"
+                    />
+                    @if (sel.showDirection) {
+                      <ui-select
+                        class="compact direction"
+                        [ariaLabel]="
+                          'collSettings.groups.orderDirectionAria' | t: { name: sel.node.name }
+                        "
+                        [options]="directionOptions()"
+                        [value]="sel.sortDirection"
+                        (valueChange)="setGroupSortDirection(sel.node.id, $event)"
+                      />
+                    }
+                  </span>
+                </ui-field>
+
+                <!-- The box was rendering an em dash as its *content*, so
+                     "not declared" was indistinguishable from a value the user
+                     had to clear before typing. A placeholder says it without
+                     being it, and an emptied box still persists as null. -->
+                <ui-field
+                  class="detail__target"
+                  [label]="'collSettings.groups.target' | t"
+                  [hint]="'collSettings.groups.targetHint' | t"
+                >
                   <ui-text-input
                     class="target"
                     type="number"
                     variant="subtle"
-                    placeholder="—"
-                    [ariaLabel]="'collSettings.sections.targetAria' | t: { name: row.section.name }"
-                    [value]="row.target"
-                    (valueChange)="setSectionTarget(row.section.id, $event)"
+                    [placeholder]="'collSettings.groups.targetPlaceholder' | t"
+                    [ariaLabel]="'collSettings.groups.targetAria' | t: { name: sel.node.name }"
+                    [value]="sel.target"
+                    (valueChange)="setGroupTarget(sel.node.id, $event)"
                   />
-                  <!-- Sections are the one thing here with a hand-arranged
-                       order, so they need move controls. Plain buttons rather
-                       than `ui-reorder`: that one is absolutely positioned to
-                       overlay a draggable card, and this is an inline row. -->
-                  <ui-button
-                    variant="icon"
-                    size="sm"
-                    [disabled]="i === 0"
-                    [ariaLabel]="'ui.reorder.earlier' | t: { name: row.section.name }"
-                    (click)="moveSection(sel.node.id, i, i - 1)"
-                  ><ui-icon name="chevron-up" [size]="12" /></ui-button>
-                  <ui-button
-                    variant="icon"
-                    size="sm"
-                    [disabled]="i === sel.sections.length - 1"
-                    [ariaLabel]="'ui.reorder.later' | t: { name: row.section.name }"
-                    (click)="moveSection(sel.node.id, i, i + 1)"
-                  ><ui-icon name="chevron-down" [size]="12" /></ui-button>
-                  <ui-button
-                    variant="icon"
-                    size="sm"
-                    [ariaLabel]="'collSettings.sections.remove' | t: { name: row.section.name }"
-                    (click)="removeSection(row.section.id)"
-                  ><ui-icon name="close" [size]="13" /></ui-button>
-                </span>
-              }
-              @if (pendingSectionGroupId() === sel.node.id) {
-                <span class="section-chip section-chip--new">
-                  <input
-                    class="field-input"
-                    [placeholder]="'collSettings.sections.placeholder' | t"
-                    [attr.aria-label]="'collSettings.sections.newAria' | t"
-                    autofocus
-                    (keydown)="newSectionKeydown($event, sel.node.id)"
-                    (blur)="commitNewSection(sel.node.id, $any($event.target).value)"
-                  />
-                </span>
-              }
-              <ui-button variant="link" size="sm" (click)="pendingSectionGroupId.set(sel.node.id)"
-                >{{ 'collSettings.sections.add' | t }}</ui-button>
-              @if (sel.convertible) {
-                <ui-button
-                  variant="link"
-                  size="sm"
-                  (click)="convertChildrenToSections(sel.node.id)"
-                >{{ 'collSettings.sections.convert' | t }}</ui-button>
-              }
-            </div>
+                </ui-field>
+              </div>
 
-            <div class="fine-print">
-              {{ 'collSettings.groups.finePrint1' | t }}
-              <strong>{{ 'collSettings.groups.finePrintOrderBy' | t }}</strong>
-              {{ 'collSettings.groups.finePrint2' | t }}
-              <strong>{{ 'collSettings.groups.finePrintTarget' | t }}</strong>
-              {{ 'collSettings.groups.finePrint3' | t }}
-              <br />
-              {{ 'collSettings.sections.finePrint' | t }}
-            </div>
-          } @else {
-            <div class="detail__empty">{{ 'collSettings.groups.pickOne' | t }}</div>
-          }
-        </ui-card>
-      </div>
-    }
+              @if (moveImpact(); as move) {
+                <app-move-preview
+                  #movePreview
+                  [impact]="move"
+                  (confirmed)="commitParentMove()"
+                  (cancelled)="cancelParentMove()"
+                />
+              }
 
-    @case ('sharing') {
-      <div class="sharing">
-        <div class="invite-row">
-          <ui-text-input
-            class="invite-email"
-            variant="subtle"
-            [placeholder]="'collSettings.sharing.emailPlaceholder' | t"
-            [value]="inviteEmail()"
-            (valueChange)="inviteEmail.set($event)"
-          />
-          <ui-select
-            [ariaLabel]="'collSettings.sharing.inviteRoleAria' | t"
-            [options]="inviteRoleOptions()"
-            [value]="inviteRole()"
-            (valueChange)="inviteRole.set($event)"
-          />
-          <ui-button size="sm" (click)="invite()">{{ 'collSettings.sharing.invite' | t }}</ui-button>
-        </div>
-
-        <ui-card class="members">
-          @for (row of memberRows(); track row.member.email) {
-            <div class="member-row">
-              <ui-avatar [initials]="row.member.initials" />
-              <span class="who">
-                <span class="name">{{ row.member.name }}</span>
-                <span class="email">{{ row.member.email }}</span>
-              </span>
-              <ui-select
-                class="compact"
-                [ariaLabel]="'collSettings.sharing.memberRoleAria' | t: { name: row.member.name }"
-                [options]="roleOptions()"
-                [value]="row.member.role"
-                [disabled]="row.fixed"
-                (valueChange)="setMemberRole(row.member.email, $event)"
+              <ng-container
+                [ngTemplateOutlet]="fieldEditor"
+                [ngTemplateOutletContext]="{
+                  owner: sel.node.id,
+                  fields: sel.node.fields,
+                  label: 'collSettings.groups.fieldsIn' | t: { name: sel.node.name },
+                  addLabel: 'collSettings.groups.addFieldIn' | t: { name: sel.node.name },
+                  hint: 'collSettings.groups.fieldsHint' | t
+                }"
               />
-              <ui-button
-                variant="icon"
-                [muted]="row.fixed"
-                [ariaLabel]="'collSettings.sharing.removeMember' | t: { name: row.member.name }"
-                (click)="removeMember(row.member.email, row.fixed)"
-              ><ui-icon name="close" [size]="13" /></ui-button>
-            </div>
-          }
-        </ui-card>
 
-        <!--
-          The toggle here used to say "anyone with the link can view this
-          collection" and persist a boolean. There is no anonymous route, no
-          public endpoint and no link to copy: nothing anywhere reads the flag.
-          A switch that persists a promise nobody keeps is the same defect as
-          the tenant policy switches that were removed, so this one states the
-          truth and stays out of the way until the page it describes exists.
-          The field is untouched on the wire, so building it later changes only
-          this card.
-        -->
-        <ui-card class="link-share">
-          <span class="who">
-            <span class="name">{{ 'collSettings.sharing.linkShare' | t }}</span>
-            <span class="email">{{ 'collSettings.sharing.linkShareSoon' | t }}</span>
-          </span>
-          <ui-toggle
-            [ariaLabel]="'collSettings.sharing.linkShare' | t"
-            [on]="false"
-            [disabled]="true"
-          />
-        </ui-card>
+              <div class="detail__sections">
+                <span class="fields-label">{{ 'collSettings.sections.label' | t }}</span>
+                @for (row of sel.sections; track row.section.id; let i = $index) {
+                  <span class="section-chip">
+                    <ui-text-input
+                      class="rename"
+                      variant="subtle"
+                      [ariaLabel]="'collSettings.sections.renameAria' | t: { name: row.section.name }"
+                      [value]="row.section.name"
+                      (valueChange)="renameSection(row.section.id, $event)"
+                    />
+                    <span class="count">{{ itemCount(row.count) }}</span>
+                    <ui-text-input
+                      class="target"
+                      type="number"
+                      variant="subtle"
+                      [placeholder]="'collSettings.groups.targetPlaceholder' | t"
+                      [ariaLabel]="'collSettings.sections.targetAria' | t: { name: row.section.name }"
+                      [value]="row.target"
+                      (valueChange)="setSectionTarget(row.section.id, $event)"
+                    />
+                    <!-- Sections are the one thing here with a hand-arranged
+                         order, so they need move controls. `ui-reorder` rather
+                         than a hand-rolled pair: it names the position in its
+                         own labels, announces the new one, and hands focus to
+                         the sibling before the button under the cursor becomes
+                         disabled — which is what used to drop focus on the body
+                         exactly when a section reached the end of the list. -->
+                    <ui-reorder
+                      class="section-chip__reorder"
+                      [label]="row.section.name"
+                      [index]="i"
+                      [count]="sel.sections.length"
+                      [first]="i === 0"
+                      [last]="i === sel.sections.length - 1"
+                      (moved)="moveSection(sel.node.id, i, i + $event)"
+                    />
+                    <ui-button
+                      variant="icon"
+                      size="sm"
+                      [ariaLabel]="'collSettings.sections.remove' | t: { name: row.section.name }"
+                      (click)="removeSection(row.section.id)"
+                    ><ui-icon name="close" [size]="13" /></ui-button>
+                  </span>
+                }
+                @if (pendingSectionGroupId() === sel.node.id) {
+                  <span class="section-chip section-chip--new">
+                    <ui-inline-edit
+                      class="composer"
+                      [placeholder]="'collSettings.sections.placeholder' | t"
+                      [ariaLabel]="'collSettings.sections.newAria' | t"
+                      (committed)="commitNewSection(sel.node.id, $event)"
+                      (cancelled)="pendingSectionGroupId.set(null)"
+                    />
+                  </span>
+                }
+                <ui-button variant="link" size="sm" (click)="pendingSectionGroupId.set(sel.node.id)"
+                  >{{ 'collSettings.sections.add' | t }}</ui-button>
+                <p class="detail__hint">{{ 'collSettings.sections.hint' | t }}</p>
+              </div>
 
-        <div class="fine-print">
-          {{ 'collSettings.sharing.finePrint' | t }}
-          <a routerLink="/settings" [queryParams]="{ tab: 'access' }">{{ 'collSettings.sharing.finePrintLink' | t }}</a>.
+              <!-- Its own block, below the list, and not a link styled as a
+                   peer of "+ Section": it deletes every sub-group of this one
+                   and refiles their items, and reading as an add button is how
+                   somebody clicks it to find out what it does. -->
+              @if (sel.convertible) {
+                <div class="detail__migrate">
+                  <span class="fields-label"
+                    >{{ 'collSettings.sections.migrateHeading' | t }}</span>
+                  <ui-button variant="ghost" size="sm" (click)="convertChildrenToSections(sel.node.id)"
+                    >{{ 'collSettings.sections.convert' | t }}</ui-button>
+                </div>
+              }
+            } @else {
+              <div class="detail__empty">{{ 'collSettings.groups.pickOne' | t }}</div>
+            }
+          </ui-card>
         </div>
-      </div>
-    }
-    @default {
-      <div class="general">
-        <ui-field [label]="'collSettings.general.name' | t">
-          <ui-text-input [value]="d.name" (valueChange)="setName($event)" />
-        </ui-field>
-        <ui-field [label]="'collSettings.general.description' | t">
-          <ui-textarea [rows]="2" [value]="d.description" (valueChange)="setDescription($event)" />
-        </ui-field>
-        <ui-field
-          [label]="'collSettings.general.currency' | t"
-          [hint]="'collSettings.general.currencyHint' | t: { currency: store.defaultCurrency() }"
-        >
-          <ui-select
-            [options]="currencyOverrideOptions()"
-            [value]="d.currency ?? ''"
-            (valueChange)="setCurrency($event)"
-          />
-        </ui-field>
-        <div class="backup">
-          <div class="heading">{{ 'collSettings.general.backup' | t }}</div>
-          <p class="sub">{{ 'collSettings.general.backupHint' | t }}</p>
-          <ui-button variant="ghost" [disabled]="exporting()" (click)="exportCollection()">
-            {{ (exporting() ? 'collSettings.general.exporting' : 'collSettings.general.export') | t }}
-          </ui-button>
-        </div>
+      }
 
-        <ui-button variant="danger" (click)="deleteCollection()">{{ 'collSettings.general.delete' | t }}</ui-button>
-      </div>
+      @case ('sharing') {
+        <div class="sharing">
+          <div class="invite-row">
+            <!-- Refused on the field, with a name of its own. It was the only
+                 control in the tab with no accessible name at all — a
+                 placeholder, which disappears the moment somebody types. -->
+            <ui-field
+              class="invite-email"
+              [label]="'collSettings.sharing.emailLabel' | t"
+              [error]="inviteError()"
+            >
+              <ui-text-input
+                variant="subtle"
+                [ariaLabel]="'collSettings.sharing.emailLabel' | t"
+                [placeholder]="'collSettings.sharing.emailPlaceholder' | t"
+                [value]="inviteEmail()"
+                (valueChange)="onInviteEmail($event)"
+              />
+            </ui-field>
+            <ui-select
+              class="invite-role"
+              [ariaLabel]="'collSettings.sharing.inviteRoleAria' | t"
+              [options]="inviteRoleOptions()"
+              [value]="inviteRole()"
+              (valueChange)="inviteRole.set($event)"
+            />
+            <!-- Named after the outcome. "Invite" promised an email nothing
+                 sends and an access level nothing grants. -->
+            <ui-button size="sm" (click)="invite()">{{ 'collSettings.sharing.add' | t }}</ui-button>
+          </div>
+
+          <ui-card class="members">
+            @for (row of memberRows(); track row.member.email) {
+              <div class="member-row">
+                <ui-avatar [initials]="row.member.initials" />
+                <span class="who">
+                  <span class="name">{{ row.member.name }}</span>
+                  <span class="email">{{ row.member.email }}</span>
+                </span>
+                <ui-select
+                  class="compact"
+                  [ariaLabel]="'collSettings.sharing.memberRoleAria' | t: { name: row.member.name }"
+                  [options]="roleOptions()"
+                  [value]="row.member.role"
+                  [disabled]="row.fixed"
+                  (valueChange)="setMemberRole(row.member.email, $event)"
+                />
+                <ui-button
+                  variant="icon"
+                  [muted]="row.fixed"
+                  [ariaLabel]="'collSettings.sharing.removeMember' | t: { name: row.member.name }"
+                  (click)="removeMember(row.member.email, row.fixed)"
+                ><ui-icon name="close" [size]="13" /></ui-button>
+              </div>
+            }
+          </ui-card>
+
+          <!-- What the card above actually does, stated once under it. Roles
+               are enforced tenant-wide and a person added here cannot sign in
+               until an invite flow exists; the same register as the disabled
+               link-sharing row below. -->
+          <p class="sharing__note">{{ 'collSettings.sharing.accessNote' | t }}</p>
+
+          <!--
+            The toggle here used to say "anyone with the link can view this
+            collection" and persist a boolean. There is no anonymous route, no
+            public endpoint and no link to copy: nothing anywhere reads the flag.
+            A switch that persists a promise nobody keeps is the same defect as
+            the tenant policy switches that were removed, so this one states the
+            truth and stays out of the way until the page it describes exists.
+            The field is untouched on the wire, so building it later changes only
+            this card.
+          -->
+          <ui-card class="link-share">
+            <span class="who">
+              <span class="name">{{ 'collSettings.sharing.linkShare' | t }}</span>
+              <span class="email">{{ 'collSettings.sharing.linkShareSoon' | t }}</span>
+            </span>
+            <ui-toggle
+              [ariaLabel]="'collSettings.sharing.linkShare' | t"
+              [on]="false"
+              [disabled]="true"
+            />
+          </ui-card>
+
+          <div class="fine-print">
+            {{ 'collSettings.sharing.finePrint' | t }}
+            <a routerLink="/settings" [queryParams]="{ tab: 'access' }">{{ 'collSettings.sharing.finePrintLink' | t }}</a>.
+          </div>
+        </div>
+      }
+      @default {
+        <div class="general">
+          <ui-field [label]="'collSettings.general.name' | t">
+            <ui-text-input [value]="d.name" (valueChange)="setName($event)" />
+          </ui-field>
+          <ui-field [label]="'collSettings.general.description' | t">
+            <ui-textarea [rows]="2" [value]="d.description" (valueChange)="setDescription($event)" />
+          </ui-field>
+          <ui-field
+            [label]="'collSettings.general.currency' | t"
+            [hint]="'collSettings.general.currencyHint' | t: { currency: store.defaultCurrency() }"
+          >
+            <ui-select
+              [options]="currencyOverrideOptions()"
+              [value]="d.currency ?? ''"
+              (valueChange)="setCurrency($event)"
+            />
+          </ui-field>
+          <div class="backup">
+            <div class="heading">{{ 'collSettings.general.backup' | t }}</div>
+            <p class="sub">{{ 'collSettings.general.backupHint' | t }}</p>
+            <ui-button variant="ghost" [pending]="exporting()" (click)="exportCollection()">
+              {{ (exporting() ? 'collSettings.general.exporting' : 'collSettings.general.export') | t }}
+            </ui-button>
+          </div>
+
+          <ui-button variant="danger" (click)="deleteCollection()">{{ 'collSettings.general.delete' | t }}</ui-button>
+        </div>
+      }
     }
-  }
+  </div>
 
   <!-- Anchored, and named after what it does. The page saves on a debounce, so
-       "Done" was describing navigation while looking like a save button. -->
+       "Done" was describing navigation while looking like a save button — and
+       the row said nothing at all about whether the debounce had landed. -->
   <div class="done-row">
-    <span class="done-row__note">{{ 'collSettings.autosave' | t }}</span>
-    <ui-button (click)="done()">{{ 'collSettings.done' | t }}</ui-button>
+    <span class="done-row__note">
+      {{ 'collSettings.autosave' | t }}
+      <!-- Present from the start and empty when there is nothing to say: a live
+           region only announces what changes inside one already observed. -->
+      <span class="done-row__state" role="status">{{ saveState() }}</span>
+    </span>
+    <ui-button [pending]="store.saving(collectionId())" (click)="done()"
+      >{{ 'collSettings.done' | t }}</ui-button>
   </div>
 
   @if (deletingGroupId(); as deleting) {

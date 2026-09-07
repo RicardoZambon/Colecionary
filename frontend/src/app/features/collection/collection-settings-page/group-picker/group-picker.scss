@@ -1,3 +1,5 @@
+@use '../../../../../styles/mixins' as *;
+
 ul {
   list-style: none;
   margin: 0;
@@ -70,4 +72,34 @@ ul {
   padding: 8px;
   font-size: 12px;
   color: var(--muted);
+}
+
+/*
+ * Below the tablet breakpoint every one of these is a touch target, and none of
+ * them may grow: a 280px column holding five levels of indent has no room for
+ * 44px rows, and a tree whose rows are 44px tall shows four groups on a phone.
+ * So the *target* grows and the box does not — the documented ::after trick.
+ */
+@include upto($bp-lg) {
+  .pick__link,
+  .pick__twisty {
+    position: relative;
+  }
+
+  /* Vertical only, and deliberately: widening the twisty to 44px would put its
+     target over the name beside it in a 280px column, so tapping a group would
+     fold it instead. It also has to stay inside its own box — an overflowing
+     pseudo-element makes the element report as horizontally scrollable, which
+     is exactly what the browser check looks for. */
+  .pick__link::after,
+  .pick__twisty::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: var(--tap);
+    transform: translateY(-50%);
+  }
+
 }

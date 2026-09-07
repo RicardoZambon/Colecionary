@@ -18,13 +18,12 @@
         class="item-card"
         [class.item-card--wanted]="!isOwned(entry.item)"
         [class.dragging]="drag.index() === entry.index"
+        [class.drop-target]="drag.overIndex() === entry.index"
         [attr.draggable]="manual() && canEdit() ? true : null"
         (dragstart)="drag.start($event, entry.index)"
-        (dragover)="drag.over($event)"
+        (dragover)="drag.over($event, entry.index)"
         (drop)="onDrop($event, entry.index)"
         (dragend)="drag.end()"
-        [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
-        queryParamsHandling="preserve"
         [class.item-card--picked]="isSelected(entry.item)"
       >
         <!-- Over the corner, and swallowing its own click: the card is the
@@ -67,7 +66,24 @@
           }
         </div>
         <div class="item-card__body">
-          <div class="item-card__name">{{ entry.item.name }}</div>
+          <!--
+            The link is the name, stretched over the card by its own ::after.
+
+            The whole card used to be the link, with [routerLink] on the
+            <ui-card> host — but that host is a <div>: not focusable, no role,
+            no accessible name, no key handler. So the main browsing surface of
+            the app could be opened only with a pointer. A real <a> here gives
+            all four back and keeps the card clickable edge to edge; the pick
+            checkbox and the reorder arrows sit above it on z-index 2, which is
+            what keeps them clickable in their own right.
+          -->
+          <div class="item-card__name">
+            <a
+              class="item-card__link"
+              [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
+              queryParamsHandling="preserve"
+            ><ui-truncate [text]="entry.item.name" /></a>
+          </div>
           <div class="item-card__meta">
             {{ entry.item.year }} · {{ groupName(entry.item) }}
             @if (entry.item.copies.length > 1) {
@@ -89,19 +105,28 @@
             [label]="entry.item.name"
             [first]="entry.index === 0"
             [last]="entry.index === items().length - 1"
+            [index]="entry.index"
+            [count]="items().length"
             (moved)="moved.emit({ from: entry.index, to: entry.index + $event })"
           />
         }
       </ui-card>
     }
 
-    @if (lastChunk && canEdit()) {
-      <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">{{ 'itemGrid.addItem' | t }}</a>
-    }
-  </div>
-} @empty {
-  <div class="items-grid">
-    @if (canEdit()) {
+    <!--
+      "Add another", at the end of a list that has something in it. Not while
+      the list is a filtered subset: "add an item" is not the answer to a
+      filtering mistake, and the page's own empty state — which says whether
+      this is an empty group or a filter that matched nothing — is the one
+      empty state on this surface.
+
+      There is no @empty branch below for the same reason. It always drew this
+      tile, so a brand-new group in grid view showed a dashed "+ Add item" tile
+      and, directly under it, a bordered panel headed "Nothing catalogued here
+      yet" with its own Add item and Import CSV buttons: the same instruction
+      three times in two boxes.
+    -->
+    @if (lastChunk && canEdit() && !filtering() && items().length) {
       <a class="add-tile" [routerLink]="['/c', collectionId(), 'items', 'new']" queryParamsHandling="preserve">{{ 'itemGrid.addItem' | t }}</a>
     }
   </div>

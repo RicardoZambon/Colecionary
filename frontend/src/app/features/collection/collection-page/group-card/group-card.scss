@@ -59,12 +59,12 @@
     gap: 8px;
   }
 
+  /* ui-truncate inside owns the cut and the tooltip that has to come with it —
+     they were separable here, and the name got the cut without the title. */
   &__name {
     font-size: 13.5px;
     font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 0;
   }
 
   /* A caption, not a chip: a chip would suggest it is separately clickable.
@@ -141,12 +141,15 @@
     align-items: baseline;
     gap: 0 4px;
 
+    /* Same reading as the hero's `.missing`: an incomplete set is a fact, not
+       a warning, so the remaining count is type and the bar carries the colour. */
     .warn {
-      color: var(--warn);
+      color: var(--muted-strong);
+      font-weight: 700;
     }
 
     .good {
-      color: var(--good);
+      color: var(--good-strong);
     }
 
     .soft {

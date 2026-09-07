@@ -1,5 +1,17 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  afterNextRender,
+  computed,
+  effect,
+  Injector,
+  inject,
+  input,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
@@ -11,9 +23,11 @@ import { ToastService } from '../../../core/state/toast.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { CONDITIONS, Condition, CopyStatus, GroupField, Item, ItemCopy } from '../../../core/models';
 import { CurrencyService } from '../../../core/state/currency.service';
+import { PhotoUploadService } from '../../../core/state/photo-upload.service';
 import { isOwned, newCopy, ownedValue, paidTotal, syncWantedTag } from '../../../core/utils/copies.util';
 import { tagsInUse } from '../../../core/utils/tags.util';
 import { currencyOf } from '../../../core/utils/currency.util';
+import { formatMoney, parseAmount } from '../../../core/utils/money.util';
 import {
   copyFields,
   fieldsFor,
@@ -34,6 +48,7 @@ import {
   UiField,
   UiIcon,
   UiPhotoManager,
+  UiSectionLabel,
   UiSelect,
   UiSkeleton,
   UiTagInput,
@@ -89,8 +104,8 @@ function copyDraftHasContent(copy: CopyDraft): boolean {
   // estimate; the cost is that a copy whose only fact is "paid nothing" is
   // removed without asking.
   return Boolean(
-    parseNumber(copy.value) ||
-      parseNumber(copy.price) ||
+    parseAmount(copy.value) ||
+      parseAmount(copy.price) ||
       copy.acquiredOn.trim() ||
       copy.notes.trim() ||
       // A copy whose only fact is its serial number still holds something a
@@ -123,8 +138,8 @@ function fromDraft(draft: CopyDraft, fields: readonly GroupField[]): ItemCopy {
   return {
     id: draft.id,
     condition: draft.condition,
-    price: parseNumber(draft.price),
-    value: draft.value.trim() ? parseNumber(draft.value) : null,
+    price: parseAmount(draft.price),
+    value: draft.value.trim() ? parseAmount(draft.value) : null,
     acquiredOn: draft.acquiredOn.trim() || null,
     status: draft.status,
     notes: draft.notes.trim(),
@@ -147,6 +162,7 @@ function fromDraft(draft: CopyDraft, fields: readonly GroupField[]): ItemCopy {
     UiField,
     UiIcon,
     UiPhotoManager,
+    UiSectionLabel,
     UiSelect,
     UiSkeleton,
     UiTagInput,
@@ -169,6 +185,15 @@ export class ItemFormPage {
   private readonly router = inject(Router);
   private readonly currencies = inject(CurrencyService);
   private readonly document = inject(DOCUMENT);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly injector = inject(Injector);
+  /**
+   * The shared upload queue, read for one fact: whether bytes are still in
+   * flight. `UiPhotoManager` appends the ids it gets *after* awaiting the
+   * queue, so a save that lands first sends `photoIds` as it was and the
+   * remaining uploads finish into a destroyed component.
+   */
+  private readonly uploads = inject(PhotoUploadService);
 
   readonly collectionId = input.required<string>();
   /** Present when editing, absent on the "new item" route. */
@@ -205,6 +230,14 @@ export class ItemFormPage {
    * move and is refused — as a conflict with nobody.
    */
   protected readonly saving = computed(() => this.store.saving(this.collectionId()));
+
+  /**
+   * Photos are still going up, so Save must not commit a `photoIds` that is
+   * about to grow. `PhotoUploadService.busy` was documented as the thing pages
+   * disable Save on and had no caller anywhere: dropping six photos and
+   * pressing Save saved the item with one of them, or none.
+   */
+  protected readonly uploadsBusy = computed(() => this.uploads.busy());
   protected readonly editing = computed(() =>
     this.collection()?.items.find(i => i.id === this.itemId()),
   );
@@ -250,10 +283,24 @@ export class ItemFormPage {
       copies: this.copies().map(copy => fromDraft(copy, this.copyFieldDefs())),
       custom: this.custom(),
       photoIds: this.photoIds(),
+      // Every draft signal belongs here, and this list is what `dirty()` means
+      // by "changed". `tags` was missing, so three tags typed into the field
+      // left `dirty()` false, the sticky bar silent and the leave guard
+      // agreeing that there was nothing to lose. The spec walks the signals one
+      // at a time for exactly that reason.
+      tags: [...this.tags()],
     }),
   );
 
   protected readonly dirty = computed(() => this.snapshot() !== this.baseline());
+
+  /**
+   * Anything a navigation would destroy — typed edits *or* uploads whose ids
+   * this form has not received yet. With only uploads pending the snapshot is
+   * still identical to the baseline, so without this the guard would not even
+   * ask.
+   */
+  protected readonly unsaved = computed(() => this.dirty() || this.uploadsBusy());
 
   private initializedFor: string | null = null;
 
@@ -285,6 +332,21 @@ export class ItemFormPage {
       // `untracked` is unnecessary here: the effect already depends on all of
       // them by having just written them.
       this.baseline.set(this.snapshot());
+    });
+
+    // The in-app guard cannot see Cmd-R, a closed tab or a link out of the SPA,
+    // and those are exactly the gestures people make when a page looks stuck.
+    // Only the platform's own prompt can stop them — it cannot be styled or
+    // worded, which is why the in-app dialog exists as well rather than
+    // instead. Attached only while something would actually be lost: a
+    // permanent listener makes every reload of a clean form ask.
+    effect(onCleanup => {
+      if (!this.unsaved()) return;
+      const view = this.document.defaultView;
+      if (!view) return;
+      const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+      view.addEventListener('beforeunload', warn);
+      onCleanup(() => view.removeEventListener('beforeunload', warn));
     });
   }
 
@@ -348,7 +410,14 @@ export class ItemFormPage {
       this.toast.flash(this.i18n.t('toast.copy.limit', { n: MAX_COPIES }));
       return;
     }
-    this.copies.update(copies => [...copies, toDraft(newCopy())]);
+    const draft = toDraft(newCopy());
+    this.copies.update(copies => [...copies, draft]);
+    // Five inputs appear ~220px down the page and push the button that revealed
+    // them out from under the pointer. Focusing the new row's first field says
+    // where the reveal went, and stops the next click landing on shifted
+    // content. Keyed by the draft's own id, never by index: a re-render between
+    // the update and the render would otherwise focus somebody else's row.
+    this.focusIn(`[data-copy-id="${draft.id}"] .copies__fields input`);
   }
 
   /**
@@ -371,15 +440,53 @@ export class ItemFormPage {
     if (copyDraftHasContent(copy)) {
       const last = this.copies().length === 1;
       const confirmed = await this.confirm.ask({
-        titleKey: 'confirm.removeCopy.title',
-        bodyKey: last ? 'confirm.removeCopy.bodyLast' : 'confirm.removeCopy.body',
+        // The ordinal, the condition and the price paid, because the list the
+        // user would check against is behind the dialog and six copies of one
+        // card are six identical blocks. `params` substitutes into the title
+        // and the body alike.
+        titleKey: 'confirm.removeCopy.titleAt',
+        bodyKey: last ? 'confirm.removeCopy.bodyLastAt' : 'confirm.removeCopy.bodyAt',
+        params: {
+          n: index + 1,
+          condition: this.i18n.t(conditionLabelKey(copy.condition)),
+          paid: formatMoney(parseAmount(copy.price), this.i18n.locale(), this.currency()),
+        },
         confirmKey: 'confirm.removeCopy.confirm',
         tone: 'danger',
       });
       if (!confirmed) return;
     }
 
-    this.copies.update(copies => copies.filter((_, i) => i !== index));
+    const survivors = this.copies().filter((_, i) => i !== index);
+    this.copies.set(survivors);
+    // The focused button has just been detached, and the browser falls back to
+    // <body> — so cleaning up three copies by keyboard means three full
+    // traversals of the page. Focus the neighbour that took its place, or the
+    // "add copy" button when the list empties.
+    const neighbour = survivors[Math.min(index, survivors.length - 1)];
+    this.focusIn(
+      neighbour
+        ? `[data-copy-id="${neighbour.id}"] .copies__row-head button`
+        : '.copies__actions button',
+    );
+  }
+
+  /**
+   * Moves focus to one element once the DOM has caught up with the signal.
+   *
+   * `afterNextRender` rather than a microtask: the element being focused does
+   * not exist until Angular has re-rendered the list. A miss is silent on
+   * purpose — a control that moved is not worth an exception on a form whose
+   * whole job is not to lose data.
+   */
+  private focusIn(selector: string): void {
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement as HTMLElement;
+        host.querySelector<HTMLElement>(selector)?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
 
@@ -441,18 +548,54 @@ export class ItemFormPage {
    */
   protected readonly copyFieldDefs = computed(() => copyFields(this.declaredFields()));
 
-  /** A declared field type maps straight onto the native input type. */
-  protected inputType(field: GroupField): string {
-    return field.type === 'text' ? 'text' : field.type;
+  /**
+   * A `date` field takes `ui-date-input`, never a native date box.
+   *
+   * The reason is the one spelled out over the copy's own "Acquired" field: a
+   * bare type="date" follows the *browser's* locale and shows mm/dd/yyyy inside
+   * a Portuguese UI, which does not fail — it records the wrong date, and the
+   * item page then prints it back in the document locale, so the form and the
+   * detail page disagree about the same field.
+   */
+  protected isDate(field: GroupField): boolean {
+    return field.type === 'date';
   }
 
-  /** Names the group-fields section — "no group" is a name too, not a blank. */
-  protected readonly groupLabel = computed(() => {
+  /** The remaining two types, which a text box can carry honestly. */
+  protected inputType(field: GroupField): string {
+    return field.type === 'number' ? 'number' : 'text';
+  }
+
+  /**
+   * Names the fields card by **provenance**, not by position.
+   *
+   * The collection is the outermost ancestor in `fieldsFor` (rule 22), so a
+   * field declared on the collection is in force in every group — and calling
+   * the card "Group fields · NO GROUP" told the reader their declaration had
+   * landed somewhere it had not. The group's name is used only when a group on
+   * this item's path actually declares one of the fields shown.
+   */
+  protected readonly declaredFieldsLabel = computed(() => {
     const collection = this.collection();
     if (!collection) return '';
-    const name = groupById(collection.groups, this.groupId())?.name;
-    return (name ?? this.i18n.t('group.none')).toUpperCase();
+    const fromGroup = fieldsFor({ fields: [], groups: collection.groups }, this.groupId() || null);
+    if (fromGroup.length) {
+      const name = groupById(collection.groups, this.groupId())?.name;
+      return (name ?? this.i18n.t('group.none')).toUpperCase();
+    }
+    return this.i18n.t('itemForm.collectionFieldsName').toUpperCase();
   });
+
+  /**
+   * The card has no item-scoped inputs but something *does* declare fields —
+   * they are simply edited on each copy. Without this the card said "this group
+   * has no custom fields yet" while the field was on screen twelve lines above,
+   * inside every copy, which sends the user back to settings to check a
+   * declaration that saved perfectly.
+   */
+  protected readonly onlyCopyFields = computed(
+    () => !this.groupFields().length && this.copyFieldDefs().length > 0,
+  );
 
   /**
    * Changing the group clears a section the new group does not have. Left
@@ -461,10 +604,18 @@ export class ItemFormPage {
    * and the difference would only surface later as an item nobody can find.
    */
   protected setGroupId(groupId: string): void {
+    const had = this.sectionId();
+    const hadOptions = this.sectionOptions().length > 0;
     this.groupId.set(groupId);
-    this.sectionId.set(
-      resolveSectionId(this.collection()?.sections ?? [], groupId, this.sectionId()),
-    );
+    const kept = resolveSectionId(this.collection()?.sections ?? [], groupId, had);
+    this.sectionId.set(kept);
+    // Losing a choice silently is the half the resolution rule cannot fix: the
+    // form would stop showing the divider and simply save without it.
+    if (had && !kept) this.toast.flash(this.i18n.t('toast.item.sectionCleared'));
+    // A group that declares dividers reveals a fourth control mid-row.
+    // Focusing it is what announces the reveal — nothing else on the page says
+    // a new choice became available.
+    if (!hadOptions && this.sectionOptions().length) this.focusIn('.pair .section select');
   }
 
   protected customValue(field: string): string {
@@ -493,8 +644,8 @@ export class ItemFormPage {
       description: this.description().trim(),
       groupId: this.groupId(),
       sectionId: this.sectionId(),
-      year: parseNumber(this.year()) || new Date().getFullYear(),
-      value: parseNumber(this.value()),
+      year: Math.round(parseAmount(this.year())) || new Date().getFullYear(),
+      value: parseAmount(this.value()),
       copies: this.copies().map(copy => fromDraft(copy, this.copyFieldDefs())),
       tags: [...this.tags()],
       img: existing?.img ?? slugify(this.name().trim()) + '.jpg',
@@ -532,12 +683,52 @@ export class ItemFormPage {
     return section ? `${group} \u25B8 ${section}` : group;
   });
 
+  // --- validation -----------------------------------------------------------
+  //
+  // The only validated field on this form, and until now the refusal was a
+  // toast that named no field, marked nothing and moved no focus — on a page
+  // where Name can be 900px above the Save button.
+
+  private readonly nameControl = viewChild<UiTextInput>('nameControl');
+
+  /** The message under the Name field, as a key so the language can change. */
+  protected readonly nameError = signal<MessageKey | null>(null);
+  protected readonly nameErrorText = computed(() => {
+    const key = this.nameError();
+    return key ? this.i18n.t(key) : '';
+  });
+
+  /**
+   * Validates on blur as well as on submit, so the requirement is learned
+   * before the attempt rather than after it. Typing clears it immediately —
+   * an error that outlives the fix is one people stop reading.
+   */
+  protected checkName(): void {
+    this.nameError.set(this.name().trim() ? null : 'itemForm.error.nameRequired');
+  }
+
+  protected setName(value: string): void {
+    this.name.set(value);
+    if (this.nameError() && value.trim()) this.nameError.set(null);
+  }
+
   protected async save(): Promise<void> {
     const collection = this.collection();
     if (!collection) return;
     const name = this.name().trim();
     if (!name) {
+      this.nameError.set('itemForm.error.nameRequired');
+      // The toast stays: it is what a screen-reader user hears at once. The
+      // inline state is what a sighted user can still read a minute later.
       this.toast.flash(this.i18n.t('toast.item.needsName'));
+      this.nameControl()?.focus();
+      return;
+    }
+    this.nameError.set(null);
+    // Bytes still going up would be saved out of: the manager appends their ids
+    // after the queue drains, onto a component this navigation has destroyed.
+    if (this.uploadsBusy()) {
+      this.toast.flash(this.i18n.t('itemForm.uploadsPending'));
       return;
     }
 
@@ -586,17 +777,27 @@ export class ItemFormPage {
    * The leave guard's answer. Public because the route calls it, not the
    * template.
    *
-   * A native `confirm` rather than `ui-dialog`: a `CanDeactivate` has to answer
-   * synchronously or hand back an Observable, and the dialog route means holding
-   * a half-finished navigation in component state while a modal is open — a
-   * state machine guarding a page whose whole job is to not lose data. The
-   * browser's own dialog cannot be dismissed by a rogue re-render and needs no
-   * state at all.
+   * This used to be `window.confirm`, justified on the grounds that a
+   * `CanDeactivate` must answer synchronously or hand back an Observable. That
+   * is simply not true: `CanDeactivateFn` returns `MaybeAsync<GuardResult>` and
+   * takes a `Promise<boolean>` — which is exactly what `ConfirmService.ask()`
+   * is. Nothing half-finished is held in component state; the guard awaits the
+   * promise the dialog already resolves.
+   *
+   * The real cost of the native box is the one rule 15 names: its buttons are
+   * the browser's own "OK" and "Cancel", in the browser's language, so the
+   * reader has to work out which one keeps their work. These say it —
+   * "Discard the changes" against "Keep editing".
    */
-  canLeave(): boolean {
-    if (!this.dirty()) return true;
-    const confirmed = this.document.defaultView?.confirm(this.i18n.t('itemForm.leaveConfirm'));
-    return confirmed !== false;
+  confirmLeave(): boolean | Promise<boolean> {
+    if (!this.unsaved()) return true;
+    return this.confirm.ask({
+      titleKey: 'itemForm.leave.title',
+      bodyKey: 'itemForm.leave.body',
+      confirmKey: 'itemForm.leave.discard',
+      cancelKey: 'itemForm.leave.keep',
+      tone: 'danger',
+    });
   }
 
   protected cancel(): void {
@@ -608,11 +809,6 @@ export class ItemFormPage {
       { queryParamsHandling: 'preserve' },
     );
   }
-}
-
-function parseNumber(raw: string): number {
-  const parsed = parseFloat(raw.replace(/[^0-9.\-]/g, ''));
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function slugify(name: string): string {

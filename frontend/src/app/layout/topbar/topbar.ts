@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, map } from 'rxjs/operators';
@@ -9,8 +9,17 @@ import { LayoutService } from '../../core/state/layout.service';
 import { ThemeService } from '../../core/state/theme.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { pathOf } from '../../core/utils/groups.util';
-import { UiAvatar, UiButton, UiDropdown, UiFlag, UiIcon, UiTextInput } from '../../shared/ui';
+// Deep imports, not the `shared/ui` barrel: the barrel re-exports the lightbox,
+// the photo manager, the mosaic and the framing editor, and the top bar is in
+// the initial chunk — so naming the barrel here dragged all four into the first
+// bytes the browser downloads.
+import { UiAvatar } from '../../shared/ui/avatar/avatar';
+import { UiButton } from '../../shared/ui/button/button';
+import { UiDropdown } from '../../shared/ui/dropdown/dropdown';
+import { UiIcon } from '../../shared/ui/icon/icon';
+import { UiTextInput } from '../../shared/ui/text-input/text-input';
 import { TPipe } from '../../shared/pipes/t.pipe';
+import { LangPicker } from '../lang-picker/lang-picker';
 import { NAV_DRAWER_ID, NAV_TOGGLE_ID } from '../nav-focus';
 
 /**
@@ -36,7 +45,7 @@ function slug(name: string): string {
 @Component({
   selector: 'app-topbar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, UiAvatar, UiButton, UiDropdown, UiFlag, UiIcon, UiTextInput],
+  imports: [LangPicker, RouterLink, TPipe, UiAvatar, UiButton, UiDropdown, UiIcon, UiTextInput],
   templateUrl: './topbar.html',
   styleUrl: './topbar.scss',
 })
@@ -51,6 +60,16 @@ export class Topbar {
   protected readonly toggleId = NAV_TOGGLE_ID;
   protected readonly drawerId = NAV_DRAWER_ID;
 
+  constructor() {
+    effect(() => {
+      // Leaving a collection empties the box. It is the one piece of view state
+      // that escapes the URL (rule 11), so nothing else would ever clear it —
+      // and a query left behind silently filtered the next collection the user
+      // opened, with the box out of sight on the route in between.
+      if (!this.inCollection()) this.store.query.set('');
+    });
+  }
+
   private readonly url = toSignal(
     this.router.events.pipe(
       filter((e): e is NavigationEnd => e instanceof NavigationEnd),
@@ -58,6 +77,18 @@ export class Topbar {
     ),
     { initialValue: this.router.url },
   );
+
+  /**
+   * Whether the open route has an item list for the search box to filter.
+   *
+   * `VaultStore.query` is read by the collection page and the item page and by
+   * nothing else, so the box belongs on those routes and nowhere else.
+   */
+  protected readonly inCollection = computed(() => {
+    const tree = this.router.parseUrl(this.url());
+    const segments = tree.root.children['primary']?.segments.map(s => s.path) ?? [];
+    return segments[0] === 'c' && !!segments[1] && segments[2] !== 'settings';
+  });
 
   protected readonly crumb = computed(() => {
     const tree = this.router.parseUrl(this.url());

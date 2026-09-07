@@ -58,14 +58,29 @@
           <div class="fill"></div>
           <div class="foot">
             <span class="value">{{ 'store.estimate' | t: { value: totalValue(listing) | money } }}</span>
+            <!--
+              "In your vault" is information and everybody gets it. The add
+              button is a write that earns a 403, so a reader is not offered it
+              at all — this page never read `canEdit()`, so a Viewer met "+ Add
+              to vault" on every card and a grey message on every click.
+            -->
             @if (inVault(listing)) {
               <ui-button variant="ghost" size="sm" [disabled]="true">{{ 'store.inVault' | t }}</ui-button>
-            } @else {
-              <ui-button size="sm" (click)="add(listing)">{{ 'store.add' | t }}</ui-button>
+            } @else if (canEdit()) {
+              <ui-button size="sm" [pending]="adding() === listing.id" (click)="add(listing)">{{ 'store.add' | t }}</ui-button>
             }
           </div>
         </div>
       </ui-card>
+    } @empty {
+      <!-- A heading, a line of description and blank space said nothing about
+           whether that was an outage or an empty shelf. -->
+      <ui-empty
+        class="empty"
+        icon="grid"
+        [title]="'store.empty.title' | t"
+        [body]="'store.empty.body' | t"
+      />
     }
   }
 </div>

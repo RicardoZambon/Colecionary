@@ -245,6 +245,99 @@ describe('CollectionSettingsPage', () => {
     TestBed.resetTestingModule();
   });
 
+  // --- the document moving under the draft (the blocker) ---
+
+  it('stops writing when the collection moved under an unsaved draft', async () => {
+    // The page used to clone the collection once per id and never again, so a
+    // reload — which is exactly what the conflict notice's "Reload the latest
+    // version" does — left this page holding the pre-conflict document. The
+    // next keystroke PUT it wholesale, and the fresh version token made the
+    // server accept it: every edit the other person made was gone.
+    const page = await mount();
+    const name = page.el.querySelector('.general ui-text-input input') as HTMLInputElement;
+    page.type(name, 'Mine');
+    // Debounced, so nothing has been sent yet — this is the dangerous window.
+    expect(page.api.puts).toHaveLength(0);
+
+    page.api.collections = [collection({ name: 'Theirs' })];
+    await TestBed.inject(VaultStore).load();
+    page.fixture.detectChanges();
+
+    // Said in the page, with the two real choices, and autosave disarmed.
+    expect(page.el.querySelector('.moved-on')).not.toBeNull();
+
+    page.type(name, 'Mine again');
+    await page.done();
+    expect(page.api.puts).toHaveLength(0);
+    // And it did not claim to have saved on the way out.
+    expect(page.navigate).not.toHaveBeenCalledWith(['/c', 'c1'], expect.anything());
+
+    // Taking the latest reloads first, so the draft quotes a version the server
+    // will still accept.
+    page.click(page.el.querySelector('.moved-on ui-button button')!);
+    await tick();
+    page.fixture.detectChanges();
+    expect(page.el.querySelector('.moved-on')).toBeNull();
+    expect((page.el.querySelector('.general ui-text-input input') as HTMLInputElement).value).toBe(
+      'Theirs',
+    );
+  });
+
+  it('takes its own save back without asking anybody anything', async () => {
+    // The echo of our own write is a new object in the store too, so the
+    // banner has to tell "somebody else saved" from "we just saved".
+    const page = await mount();
+    const name = page.el.querySelector('.general ui-text-input input') as HTMLInputElement;
+    page.type(name, 'Mine');
+    await page.done();
+
+    expect(page.lastPut().name).toBe('Mine');
+    expect(page.el.querySelector('.moved-on')).toBeNull();
+  });
+
+  // --- sharing: what the card can actually promise ---
+
+  it('refuses a half-typed address on the field instead of in a toast 400ms later', async () => {
+    // `includes('@')` passed `ana@`, appended it to the document, and the
+    // server's whole-document EmailAddress() rule then refused the entire PUT —
+    // so the user's unrelated edits on this page did not save either, and the
+    // red toast that arrived pointed at nothing.
+    const page = await mount({ tab: 'sharing' });
+    const email = page.el.querySelector('.invite-email input') as HTMLInputElement;
+    page.type(email, 'ana@');
+    page.click(page.el.querySelector('.invite-row ui-button button')!);
+
+    expect(page.el.querySelector('.invite-email .error')).not.toBeNull();
+    expect(page.el.querySelectorAll('.member-row')).toHaveLength(0);
+
+    // Typing is the retry, so the refusal clears with it.
+    page.type(email, 'ana@example.com');
+    expect(page.el.querySelector('.invite-email .error')).toBeNull();
+    page.click(page.el.querySelector('.invite-row ui-button button')!);
+    expect(page.el.querySelectorAll('.member-row')).toHaveLength(1);
+
+    // And the same address a second time is refused rather than duplicated:
+    // the list is tracked by email, so a duplicate broke the tab's own render
+    // and wrote the same person into the document twice.
+    page.type(email, 'ANA@example.com');
+    page.click(page.el.querySelector('.invite-row ui-button button')!);
+    expect(page.el.querySelector('.invite-email .error')).not.toBeNull();
+    expect(page.el.querySelectorAll('.member-row')).toHaveLength(1);
+
+    await page.done();
+    expect(page.lastPut().members.map(m => m.email)).toEqual(['ana@example.com']);
+  });
+
+  // --- ?tab= is untrusted input like every other query param ---
+
+  it('falls back to General for a tab nobody declared, with that tab selected', async () => {
+    const page = await mount({ tab: 'fields' });
+    // The strip agrees with the body: it used to highlight nothing at all while
+    // the switch fell through to General.
+    expect(page.el.querySelector('.tab.active')?.textContent?.trim()).toBe('General');
+    expect(page.el.querySelector('.general')).not.toBeNull();
+  });
+
   // --- currency override (rule 8) ---
 
   it('spells "follow the account" as null, and can get back to it', async () => {
@@ -296,9 +389,9 @@ describe('CollectionSettingsPage', () => {
   it('starts a new group with the nullable fields present and null', async () => {
     const page = await mount({ tab: 'groups' });
     page.click(page.el.querySelector('.groups-card__head ui-button button')!);
-    page.type(page.el.querySelector('.new-group__input') as HTMLInputElement, 'Alpha');
+    page.type(page.el.querySelector('.new-group .composer input') as HTMLInputElement, 'Alpha');
     page.el
-      .querySelector('.new-group__input')!
+      .querySelector('.new-group .composer input')!
       .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     page.fixture.detectChanges();
     await page.done();
@@ -315,7 +408,7 @@ describe('CollectionSettingsPage', () => {
 
     page.click(card.querySelector('ui-button button')!);
     page.fixture.detectChanges();
-    const input = card.querySelector('.field-input') as HTMLInputElement;
+    const input = card.querySelector('.field-chip--new .composer input') as HTMLInputElement;
     page.type(input, 'Prateleira');
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     page.fixture.detectChanges();
@@ -326,6 +419,92 @@ describe('CollectionSettingsPage', () => {
     ]);
     // And no group grew a copy of it — that is the whole difference.
     expect(page.lastPut().groups.every(g => g.fields.length === 0)).toBe(true);
+  });
+
+  it('sets a new field to text-per-item, and lets the committed row change it', async () => {
+    // The composer used to offer a type select and a scope select, and neither
+    // could be operated at all: pressing one blurred the name box, the blur
+    // committed the field, and the @if tore the selects out of the DOM before
+    // the click could land. Every attempt produced text/per-item and a vanished
+    // row. So the composer asks for the name and the chip takes the rest.
+    const page = await mount({ tab: 'groups', g: 'zeta' });
+    const card = page.detail();
+    const add = [...card.querySelectorAll('button')].find(b =>
+      b.textContent?.includes('+ Field in zeta'),
+    )!;
+    page.click(add);
+
+    const input = card.querySelector('.field-chip--new .composer input') as HTMLInputElement;
+    page.type(input, 'Ano de compra');
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    page.fixture.detectChanges();
+
+    page.pick(page.byLabel('Type of field Ano de compra'), 'date');
+    await page.done();
+
+    expect(page.lastPut().groups.find(g => g.id === 'zeta')!.fields).toEqual([
+      { name: 'Ano de compra', type: 'date', scope: 'item' },
+    ]);
+  });
+
+  it('opens the sub-group composer inside the pane the button lives in', async () => {
+    // The one defect the project owner reported. "+ Sub" is in the detail card
+    // and the box it opened rendered in the tree card — a different column on a
+    // desktop, and below $bp-lg, where the two stack, several hundred pixels
+    // off the top of a phone screen. The button appeared to do nothing.
+    const page = await mount({ tab: 'groups', g: 'zeta' });
+    // Nothing is being composed until somebody asks. Angular's safe navigation
+    // yields null, so `pendingGroupParent()?.parentId === null` was true with
+    // nothing pending and the tree card opened with a composer already in it.
+    expect(page.el.querySelector('.new-group')).toBeNull();
+
+    const sub = [...page.detail().querySelectorAll('button')].find(b =>
+      b.textContent?.includes('+ Sub'),
+    )!;
+    page.click(sub);
+
+    expect(page.detail().querySelector('.new-group .composer input')).not.toBeNull();
+    expect(
+      page.el.querySelector('.groups-split__tree .new-group .composer input'),
+    ).toBeNull();
+  });
+
+  it('asks before hiding values on N items behind a scope change, and puts the select back', async () => {
+    // The neighbouring ✕ asks with the count for the identical consequence:
+    // the field stops being shown, N items hold a value, nothing is deleted.
+    // This dropdown did it silently — and additionally wiped the group ordering
+    // that pointed at the field.
+    const page = await mount({
+      collection: collection({
+        groups: [
+          group('zeta', {
+            fields: [{ name: 'Issue', type: 'number', scope: 'item' }],
+            sort: { by: 'field:Issue', direction: 'asc' },
+          }),
+        ],
+        items: [{ ...item('seiya', 'zeta'), custom: [{ key: 'Issue', value: '12' }] }],
+      }),
+      tab: 'groups',
+      g: 'zeta',
+    });
+
+    const scope = page.byLabel('What field Issue describes');
+    page.pick(scope, 'copy');
+    await page.answerConfirm(false);
+    await page.done();
+
+    // Declined: the declaration and the ordering are both untouched, and the
+    // control is showing the truth again rather than the abandoned answer.
+    expect(page.lastPut().groups[0].fields[0].scope).toBe('item');
+    expect(page.lastPut().groups[0].sort).not.toBeNull();
+    expect(page.byLabel('What field Issue describes').value).toBe('item');
+
+    page.pick(page.byLabel('What field Issue describes'), 'copy');
+    await page.answerConfirm();
+    await page.done();
+
+    expect(page.lastPut().groups[0].fields[0].scope).toBe('copy');
+    expect(page.lastPut().groups[0].sort).toBeNull();
   });
 
   it('drops an ordering that pointed at a field being moved to copy scope', async () => {
@@ -668,10 +847,10 @@ describe('CollectionSettingsPage', () => {
       g: 'espanha',
     });
 
-    const convert = [...page.el.querySelectorAll('.detail__sections button')].find(b =>
-      b.textContent?.includes('Turn sub-groups into sections'),
-    )!;
+    const convert = page.el.querySelector('.detail__migrate button')!;
     page.click(convert);
+    // It deletes every sub-group and refiles their items, so it asks.
+    await page.answerConfirm();
     await page.done();
 
     const saved = page.lastPut();
@@ -706,7 +885,8 @@ describe('CollectionSettingsPage', () => {
       g: 'espanha',
     });
 
-    expect(page.detail().querySelectorAll('.detail__sections ui-button')).toHaveLength(1);
+    // The migration is not offered at all, so there is no block to draw it in.
+    expect(page.detail().querySelector('.detail__migrate')).toBeNull();
   });
 
   it('removing a section unfiles its items instead of refusing', async () => {
@@ -744,7 +924,8 @@ describe('CollectionSettingsPage', () => {
       g: 'espanha',
     });
 
-    page.click(page.el.querySelector('[aria-label="Move Prata earlier"]')!);
+    // `ui-reorder` names the position in the label, so the match is a prefix.
+    page.click(page.el.querySelector('[aria-label^="Move Prata earlier"]')!);
     await page.done();
 
     const saved = page.lastPut();
@@ -808,7 +989,7 @@ describe('CollectionSettingsPage', () => {
     // somewhere alphabetical is no answer to "where did it go?".
     const page = await mount({ tab: 'groups' });
     page.click(page.el.querySelector('.groups-card__head ui-button button')!);
-    const input = page.el.querySelector('.new-group__input') as HTMLInputElement;
+    const input = page.el.querySelector('.new-group .composer input') as HTMLInputElement;
     page.type(input, 'Alpha');
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     page.fixture.detectChanges();

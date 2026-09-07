@@ -1,9 +1,24 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  afterRenderEffect,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 
 import { I18nService, MessageKey } from '../../../core/i18n';
-import { VaultBusyError, isReportedWriteFailure } from '../../../core/api/vault-api';
+import {
+  VaultBusyError,
+  VaultConflictError,
+  isReportedWriteFailure,
+} from '../../../core/api/vault-api';
 import { ConfirmService } from '../../../core/state/confirm.service';
 import { ToastService } from '../../../core/state/toast.service';
 import { ArchiveApi } from '../../../core/api/archive-api';
@@ -28,6 +43,7 @@ import {
   fieldsFor,
   flattenTree,
   groupById,
+  groupOptionLabel,
   pathOf,
   sortFor,
   subtreeIds,
@@ -45,6 +61,7 @@ import { fieldSortKey, sortByOptions, sortLabel } from '../../../core/utils/sort
 import { TPipe } from '../../../shared/pipes/t.pipe';
 import { GroupDeleteDialog } from './group-delete-dialog/group-delete-dialog';
 import { GroupPicker } from './group-picker/group-picker';
+import { MovePreview } from './move-preview/move-preview';
 import {
   SelectOption,
   TabDef,
@@ -53,6 +70,8 @@ import {
   UiCard,
   UiField,
   UiIcon,
+  UiInlineEdit,
+  UiReorder,
   UiSelect,
   UiSkeleton,
   UiTabs,
@@ -116,6 +135,16 @@ const ROOT_PARENT = '';
 const PERSIST_DEBOUNCE_MS = 400;
 
 /**
+ * The shape the server enforces, so the client refuses what the server would.
+ *
+ * Deliberately the *server's* rule and not a stricter guess: a client that
+ * refuses an address the API would have accepted is a bug the user cannot work
+ * around. `EmailAddress()` in `CollectionValidators` is what this mirrors, and
+ * the two move together.
+ */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
  * Edits a working copy of the collection; every mutation schedules a
  * debounced save through the store, and Done flushes immediately.
  */
@@ -133,11 +162,14 @@ const PERSIST_DEBOUNCE_MS = 400;
     TPipe,
     GroupDeleteDialog,
     GroupPicker,
+    MovePreview,
     UiAvatar,
     UiButton,
     UiCard,
     UiField,
     UiIcon,
+    UiInlineEdit,
+    UiReorder,
     UiSelect,
     UiSkeleton,
     UiTabs,
@@ -230,13 +262,56 @@ export class CollectionSettingsPage {
   );
   /** The group whose deletion is being confirmed, if any. */
   protected readonly deletingGroupId = signal<string | null>(null);
-  protected readonly pendingFieldType = signal<GroupFieldType>('text');
-  protected readonly pendingFieldScope = signal<FieldScope>('item');
+
+  /**
+   * A scope change whose question is on screen.
+   *
+   * The select has to keep showing what the user picked while they answer, and
+   * has to snap back if they decline — and `[value]` bound straight to
+   * `field.scope` would do neither: the binding never changes, so Angular never
+   * rewrites the control, and a declined change left the dropdown reading
+   * "per copy" over a field that is still per item.
+   */
+  protected readonly rescoping = signal<{ owner: string; name: string; scope: FieldScope } | null>(
+    null,
+  );
+
+  /**
+   * The document in the vault moved while this page held a draft, so autosave
+   * is off and the banner above the tabs is the only way out.
+   *
+   * Two situations, one state: a save was refused (the version this page quotes
+   * is dead, so every further save would be refused too), or the store reloaded
+   * under an unsent edit (the next save would be a wholesale overwrite of work
+   * this page never saw). Both end with "your work is on screen and nothing is
+   * being written", which is exactly one decision to offer.
+   */
+  protected readonly stale = signal(false);
+
+  /** The last save this page asked for landed, and nothing has changed since. */
+  private readonly lastSaveOk = signal(false);
+
+  /**
+   * What the row above the Done button says about the save.
+   *
+   * The note beside it reads "every change here is saved as you make it", which
+   * was the only thing on the page about saving at all — no indicator that a
+   * write was running, had landed, or had been refused. Announced through
+   * `role="status"` rather than drawn only, because "it did not save" is the
+   * half a sighted user notices by the absence of a tick.
+   */
+  protected readonly saveState = computed(() => {
+    if (this.store.saving(this.collectionId())) return this.i18n.t('collSettings.saving');
+    if (this.stale()) return this.i18n.t('collSettings.notSaved');
+    return this.lastSaveOk() ? this.i18n.t('collSettings.saved') : '';
+  });
 
   /** Exposed so the shared field editor can be pointed at the collection. */
   protected readonly collectionOwner = COLLECTION_FIELDS;
   protected readonly inviteEmail = signal('');
   protected readonly inviteRole = signal<string>('Viewer');
+  /** Why the last attempt was refused, shown on the field itself. */
+  protected readonly inviteError = signal('');
   /**
    * Which branches of the picker are open. Seeded with the path to whatever
    * `?g=` names, so arriving on a group five levels down opens showing it.
@@ -246,17 +321,78 @@ export class CollectionSettingsPage {
 
   private persistTimer: ReturnType<typeof setTimeout> | undefined;
   private draftFor: string | null = null;
+  /**
+   * The exact store object this draft was cloned from, compared by reference.
+   *
+   * `collectionsState` is rebuilt wholesale by `load()` and per collection by a
+   * successful write, so a new object *is* the signal that the document moved.
+   * Without this the page cloned once per id and never again: after a reload
+   * the draft was a pre-conflict document that the next keystroke happily PUT
+   * over everybody else's work, with the fresh version token making the server
+   * accept it.
+   */
+  private draftSource: Collection | null = null;
+  /**
+   * A write of ours is in flight, so the next document to arrive is our own
+   * echo rather than somebody else's save.
+   *
+   * Causal rather than a content comparison: the draft may already hold
+   * keystrokes made while the PUT was travelling, so "the incoming document
+   * differs from mine" cannot tell the two apart.
+   */
+  private awaitingEcho = false;
   private autoSelectedFor: string | null = null;
+  /** The preview panel, scrolled into view when a move is first weighed up. */
+  private readonly movePreview = viewChild<ElementRef<HTMLElement>>('movePreview');
 
   constructor() {
     effect(() => {
       const collection = this.store.collection(this.collectionId());
-      if (collection && this.draftFor !== collection.id) {
-        this.draftFor = collection.id;
-        this.draft.set(structuredClone(collection));
+      if (!collection) return;
+
+      if (this.draftFor !== collection.id) {
+        this.adopt(collection);
+        return;
       }
+      if (collection === this.draftSource) return;
+
+      // Our own save came back. The draft is kept — it may hold keystrokes made
+      // while the PUT was travelling — and only the document it is measured
+      // against moves forward.
+      if (this.awaitingEcho) {
+        this.awaitingEcho = false;
+        this.draftSource = collection;
+        return;
+      }
+
+      // Somebody else's document. With nothing unsent and no question already
+      // on screen there is nothing of the user's to lose, so the page simply
+      // follows; otherwise the draft is the only copy of unsaved work and the
+      // choice is theirs to make.
+      if (this.persistTimer === undefined && !this.stale()) {
+        this.adopt(collection);
+        return;
+      }
+      clearTimeout(this.persistTimer);
+      this.persistTimer = undefined;
+      this.draftSource = collection;
+      this.stale.set(true);
     });
-    effect(() => this.activeTab.set(this.tab() || 'general'));
+
+    // Narrowed against the whitelist, like every other query param in the app:
+    // any non-empty value used to survive and left the strip highlighting
+    // nothing while the switch fell through to General.
+    effect(() => {
+      const wanted = this.tab();
+      this.activeTab.set(TAB_KEYS.some(t => t.id === wanted) ? wanted : 'general');
+    });
+
+    // A five-level branch renders the preview below the fold, where a panel
+    // that appeared because of a dropdown two lines up is indistinguishable
+    // from nothing having happened.
+    afterRenderEffect(() => {
+      this.movePreview()?.nativeElement.scrollIntoView({ block: 'nearest' });
+    });
 
     // Opening on a group five levels down has to show it. Seeded once per
     // selection rather than continuously, so a branch the user folds by hand
@@ -293,8 +429,56 @@ export class CollectionSettingsPage {
     effect(() => {
       const id = this.g() ?? null;
       const pending = this.pendingParent();
-      if (pending && pending.groupId !== id) this.pendingParent.set(null);
+      if (!pending || pending.groupId === id) return;
+      this.pendingParent.set(null);
+      // Said out loud, because the select was showing the new parent: walking
+      // away from a preview used to look exactly like having completed it.
+      const name = this.draft()?.groups.find(g => g.id === pending.groupId)?.name ?? '';
+      this.toast.flash(this.i18n.t('toast.group.moveDiscarded', { name }));
     });
+  }
+
+  /** Clones a fresh document and forgets everything the old draft was mid-way through. */
+  private adopt(collection: Collection): void {
+    this.draftFor = collection.id;
+    this.draftSource = collection;
+    this.awaitingEcho = false;
+    this.stale.set(false);
+    clearTimeout(this.persistTimer);
+    this.persistTimer = undefined;
+    this.draft.set(structuredClone(collection));
+  }
+
+  /**
+   * Takes the version in the vault, losing whatever this page still held.
+   *
+   * The reload is the load-bearing half: a draft re-cloned from the cached
+   * document would quote a version token the server has already moved past, so
+   * the very next keystroke would be refused all over again.
+   */
+  protected async takeLatest(): Promise<void> {
+    try {
+      await this.store.load();
+    } catch {
+      this.toast.error(this.i18n.t('conflict.reloadFailed'));
+      return;
+    }
+    const fresh = this.store.collection(this.collectionId());
+    if (fresh) this.adopt(fresh);
+  }
+
+  /**
+   * Keeps the draft and re-arms the save, which overwrites what was stored.
+   *
+   * Informed, and that is the whole difference from what this page used to do
+   * on its own. `draftSource` moves to the document being written over so the
+   * same banner does not fire again on the echo.
+   */
+  protected keepMine(): void {
+    const current = this.store.collection(this.collectionId());
+    if (current) this.draftSource = current;
+    this.stale.set(false);
+    this.schedulePersist();
   }
 
   /** The group the tree has selected, or null when nothing is. */
@@ -363,16 +547,27 @@ export class CollectionSettingsPage {
           .filter(row => canReparent(draft.groups, node.id, row.node.id))
           .map(row => ({
             value: row.node.id,
-            // The same indent the item form's group picker uses, so one
-            // hierarchy reads the same way wherever it is offered.
-            label: (row.depth ? '   '.repeat(row.depth) + '↳ ' : '') + row.node.name,
+            // The same indent the item form's group picker uses, from the one
+            // helper, so one hierarchy reads the same way wherever it is
+            // offered.
+            label: groupOptionLabel(row.node.name, row.depth),
           })),
       ] satisfies SelectOption[],
-      /** The pending choice while one is being weighed up; otherwise the truth. */
+      /**
+       * The pending choice while one is being weighed up; otherwise the truth.
+       *
+       * It stays the pending one on purpose — a native select cannot be snapped
+       * back to a value the binding never left, so pretending the control had
+       * not been operated would only desynchronise it from what is on screen.
+       * What it owes instead is a mark: `parentPending` draws the dashed border
+       * and the "chosen, not moved yet" label, so the one control that shows an
+       * unsaved value also says that it does.
+       */
       parentValue:
         pending && pending.groupId === node.id
           ? (pending.parentId ?? ROOT_PARENT)
           : (node.parentId ?? ROOT_PARENT),
+      parentPending: !!pending && pending.groupId === node.id,
       sections: sectionsOf(draft.sections, node.id).map(section => ({
         section,
         count: own.filter(i => i.sectionId === section.id).length,
@@ -478,6 +673,21 @@ export class CollectionSettingsPage {
     return rows.map((member, index) => ({ member, fixed: index === 0 && !!owner }));
   });
 
+  /**
+   * Whether the composer belongs in this card — the tree, with `null`, or one
+   * group's detail pane.
+   *
+   * A method rather than the template expression it replaces, and the reason is
+   * a trap: Angular's safe navigation yields **null**, so
+   * `pendingGroupParent()?.parentId === null` is true when nothing is pending
+   * at all, and the tree card rendered a composer on arrival — unfocused, and
+   * already mounted, so pressing "+ Add group" then did nothing visible.
+   */
+  protected composingUnder(parentId: string | null): boolean {
+    const pending = this.pendingGroupParent();
+    return !!pending && pending.parentId === parentId;
+  }
+
   protected readonly newGroupContext = computed(() => {
     const pending = this.pendingGroupParent();
     const draft = this.draft();
@@ -501,26 +711,56 @@ export class CollectionSettingsPage {
     if (!draft) return;
     const next = fn(draft);
     this.draft.set(next);
+    // Autosave is disarmed while the banner is up, and that is the point of the
+    // banner: the document under this page has moved, so a save from here is a
+    // wholesale overwrite of somebody else's work. The edit is kept — nothing
+    // typed is ever thrown away — and goes out when the user answers.
+    this.lastSaveOk.set(false);
+    if (this.stale()) return;
+    this.schedulePersist();
+  }
+
+  private schedulePersist(): void {
     clearTimeout(this.persistTimer);
-    this.persistTimer = setTimeout(() => void this.persist(), PERSIST_DEBOUNCE_MS);
+    this.persistTimer = setTimeout(() => {
+      // Cleared here rather than inside `persist`, so "is an edit still
+      // waiting?" has a truthful answer for the whole of the debounce and none
+      // of the write.
+      this.persistTimer = undefined;
+      void this.persist();
+    }, PERSIST_DEBOUNCE_MS);
   }
 
   /**
-   * Flushes the debounced save.
+   * Flushes the debounced save and says how it went.
    *
    * Never rethrows, and never clears the draft. This page is a long-lived
    * working copy of the collection, so a refused save has to leave it exactly
    * as it is — the shell's conflict notice explains what happened and the user
    * decides whether to reload. Before this, a rejection here was unhandled: the
    * user kept typing into a draft that had silently stopped being saved.
+   *
+   * The **return value** is why this is not `void` any more. `done()` used to
+   * await it and then flash "Collection updated" unconditionally, so a refused
+   * save was announced as a success while the user was being navigated away
+   * from the only copy of their work.
    */
-  private async persist(): Promise<void> {
+  private async persist(): Promise<'saved' | 'refused' | 'busy' | 'paused'> {
     clearTimeout(this.persistTimer);
+    this.persistTimer = undefined;
     const draft = this.draft();
-    if (!draft) return;
+    if (!draft) return 'saved';
+    // Nothing goes out while the banner is up. Silently writing here is the
+    // exact failure the banner exists to stop.
+    if (this.stale()) return 'paused';
     try {
+      this.awaitingEcho = true;
       await this.store.updateCollection(draft);
+      this.lastSaveOk.set(true);
+      return 'saved';
     } catch (err) {
+      this.awaitingEcho = false;
+      this.lastSaveOk.set(false);
       // Refused here rather than sent, because another write of this collection
       // was still in flight. Nothing is lost and nothing is said: this page's
       // draft is the live working copy, so re-arming the debounce re-sends
@@ -529,13 +769,22 @@ export class CollectionSettingsPage {
       // that had quietly stopped saving, which is the failure this method's own
       // docblock exists because of.
       if (err instanceof VaultBusyError) {
-        this.persistTimer = setTimeout(() => void this.persist(), PERSIST_DEBOUNCE_MS);
-        return;
+        this.schedulePersist();
+        return 'busy';
       }
-      if (isReportedWriteFailure(err)) return;
-      this.toast.flash(
+      // The version this page quotes is dead, so re-arming the debounce would
+      // schedule a guaranteed 412 for every keystroke from now on — twenty
+      // minutes of typing into a page that never saves again, with only a
+      // corner notice to say so. The banner takes over instead.
+      if (err instanceof VaultConflictError) {
+        this.stale.set(true);
+        return 'refused';
+      }
+      if (isReportedWriteFailure(err)) return 'refused';
+      this.toast.error(
         err instanceof Error ? err.message : this.i18n.t('toast.collection.saveFailed'),
       );
+      return 'refused';
     }
   }
 
@@ -730,15 +979,14 @@ export class CollectionSettingsPage {
         );
   }
 
-  protected newGroupKeydown(event: KeyboardEvent): void {
-    const input = event.target as HTMLInputElement;
-    if (event.key === 'Enter') this.commitNewGroup(input.value);
-    else if (event.key === 'Escape') {
-      input.value = '';
-      this.pendingGroupParent.set(null);
-    }
-  }
-
+  /**
+   * Adds the group the composer names.
+   *
+   * The composer is `ui-inline-edit`, which focuses itself on reveal and owns
+   * Enter, Escape and blur — the three behaviours this page hand-rolled three
+   * times over, once per composer, and got wrong in the one that mattered most
+   * (`+ Sub` opened a box in the other column with no caret in it).
+   */
   protected commitNewGroup(name: string): void {
     const pending = this.pendingGroupParent();
     this.pendingGroupParent.set(null);
@@ -806,12 +1054,29 @@ export class CollectionSettingsPage {
    * explained. Applied across every group, because a group may order by a field
    * the collection declared.
    */
-  private clearSortsFor(name: string): void {
+  private clearSortsFor(name: string): string[] {
     const key = fieldSortKey(name);
+    const cleared = (this.draft()?.groups ?? []).filter(g => g.sort?.by === key).map(g => g.name);
     this.mutate(d => ({
       ...d,
       groups: d.groups.map(g => (g.sort?.by === key ? { ...g, sort: null } : g)),
     }));
+    return cleared;
+  }
+
+  /**
+   * Says which groups just lost their declared order, when any did.
+   *
+   * The docblock on {@link clearSortsFor} says the ordering "is dropped where
+   * it can still be explained" — and then nothing explained it to anybody. A
+   * group silently re-sorted alphabetically is not traceable back to the
+   * dropdown two panes away that did it.
+   */
+  private reportClearedSorts(name: string, cleared: readonly string[]): void {
+    if (!cleared.length) return;
+    this.toast.flash(
+      this.i18n.t('toast.field.orderCleared', { name, groups: cleared.join(', ') }),
+    );
   }
 
   /**
@@ -840,8 +1105,9 @@ export class CollectionSettingsPage {
     if (!confirmed) return;
 
     this.mutateFields(owner, fields => fields.filter(f => f.name !== name));
-    this.clearSortsFor(name);
+    const cleared = this.clearSortsFor(name);
     this.toast.flash(this.i18n.t('toast.field.removed'));
+    this.reportClearedSorts(name, cleared);
   }
 
   /**
@@ -869,10 +1135,32 @@ export class CollectionSettingsPage {
     ).length;
   }
 
+  /**
+   * Retypes a field, and says so.
+   *
+   * Nothing visible changes on this screen when it happens — the values stay as
+   * they are, keyed by name — so an unannounced retype is a change to how every
+   * item in the branch sorts, made by a dropdown that gave no sign of having
+   * done anything.
+   */
   protected setFieldType(owner: string, name: string, type: string): void {
     this.mutateFields(owner, fields =>
       fields.map(f => (f.name === name ? { ...f, type: type as GroupFieldType } : f)),
     );
+    this.toast.flash(
+      this.i18n.t('toast.field.retyped', {
+        name,
+        type: this.i18n.t(FIELD_TYPE_KEYS[type as GroupFieldType]),
+      }),
+    );
+  }
+
+  /** The scope a chip's select shows: the answer being weighed up, or the truth. */
+  protected fieldScopeValue(owner: string, field: GroupField): string {
+    const pending = this.rescoping();
+    return pending && pending.owner === owner && pending.name === field.name
+      ? pending.scope
+      : field.scope;
   }
 
   /**
@@ -885,29 +1173,58 @@ export class CollectionSettingsPage {
    * a guess the app is entitled to make, and spreading it to all of them would
    * invent data.
    */
-  protected setFieldScope(owner: string, name: string, scope: string): void {
-    this.mutateFields(owner, fields =>
-      fields.map(f => (f.name === name ? { ...f, scope: scope as FieldScope } : f)),
-    );
-    if (scope === 'copy') this.clearSortsFor(name);
-  }
+  protected async setFieldScope(owner: string, name: string, scope: string): Promise<void> {
+    const next = scope as FieldScope;
+    this.rescoping.set({ owner, name, scope: next });
 
-  protected newFieldKeydown(event: KeyboardEvent, owner: string): void {
-    const input = event.target as HTMLInputElement;
-    if (event.key === 'Enter') this.commitNewField(owner, input.value);
-    else if (event.key === 'Escape') {
-      input.value = '';
-      this.pendingFieldGroupId.set(null);
+    // The same question the ✕ beside it has always asked, because the
+    // consequence is the same one: N items hold a value, it stops being shown,
+    // nothing is deleted. No `danger` tone — nothing is destroyed — and the
+    // count is the fact that changes somebody's mind.
+    const holders = next === 'copy' ? this.fieldHolderCount(owner, name) : 0;
+    if (holders > 0) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'confirm.rescopeField.title',
+        bodyKey: holders === 1 ? 'confirm.rescopeField.body.one' : 'confirm.rescopeField.body.other',
+        params: { name, n: holders },
+        confirmKey: 'confirm.rescopeField.confirm',
+      });
+      if (!confirmed) {
+        // Clearing this is what puts the select back: the binding returns to the
+        // stored scope, which is a *change* to it, so the control is rewritten.
+        this.rescoping.set(null);
+        return;
+      }
     }
+
+    this.rescoping.set(null);
+    this.mutateFields(owner, fields =>
+      fields.map(f => (f.name === name ? { ...f, scope: next } : f)),
+    );
+    const cleared = next === 'copy' ? this.clearSortsFor(name) : [];
+    this.toast.flash(
+      this.i18n.t('toast.field.rescoped', { name, scope: this.i18n.t(FIELD_SCOPE_KEYS[next]) }),
+    );
+    this.reportClearedSorts(name, cleared);
   }
 
+  /**
+   * Declares a field, as text describing the item.
+   *
+   * The composer offers a name and nothing else, deliberately. It used to carry
+   * a type select and a scope select, and **neither could be operated at all**:
+   * `ui-select` is a native control, so pressing one blurred the name box, the
+   * blur committed the field, and the `@if` tore the selects out of the DOM
+   * before the click could land — every attempt produced a text/per-item field
+   * and a vanished row. Both answers are set on the committed chip, where they
+   * work, so the composer asks the one question it can actually take an answer
+   * to.
+   */
   protected commitNewField(owner: string, name: string): void {
     if (this.pendingFieldGroupId() !== owner) return;
-    const type = this.pendingFieldType();
-    const scope = this.pendingFieldScope();
+    const type: GroupFieldType = 'text';
+    const scope: FieldScope = 'item';
     this.pendingFieldGroupId.set(null);
-    this.pendingFieldType.set('text');
-    this.pendingFieldScope.set('item');
     const trimmed = name.trim();
     if (!trimmed) return;
     if (this.fieldsOf(owner).some(f => f.name === trimmed)) {
@@ -953,15 +1270,6 @@ export class CollectionSettingsPage {
    * group there is no tree to drop one into, and the only thing that needs
    * arranging — their order — is a property of the group they belong to.
    */
-  protected newSectionKeydown(event: KeyboardEvent, groupId: string): void {
-    const input = event.target as HTMLInputElement;
-    if (event.key === 'Enter') this.commitNewSection(groupId, input.value);
-    else if (event.key === 'Escape') {
-      input.value = '';
-      this.pendingSectionGroupId.set(null);
-    }
-  }
-
   protected commitNewSection(groupId: string, name: string): void {
     if (this.pendingSectionGroupId() !== groupId) return;
     this.pendingSectionGroupId.set(null);
@@ -1061,11 +1369,33 @@ export class CollectionSettingsPage {
    * alphabetical — the order those children were already displayed in — and is
    * then the user's to arrange, which is the whole point.
    */
-  protected convertChildrenToSections(groupId: string): void {
+  protected async convertChildrenToSections(groupId: string): Promise<void> {
     const draft = this.draft();
     if (!draft) return;
     const children = childrenOf(draft.groups, groupId);
     if (!children.length) return;
+
+    // It deletes more groups than the delete button does, and it used to be the
+    // only group-destroying path on this page that asked nothing — styled as a
+    // peer of "+ Section", one click from a user finding out what it does.
+    const confirmed = await this.confirm.ask({
+      titleKey:
+        children.length === 1
+          ? 'confirm.convertSections.title.one'
+          : 'confirm.convertSections.title.other',
+      bodyKey: 'confirm.convertSections.body',
+      params: {
+        n: children.length,
+        names: this.nameList(children.map(child => child.name)),
+        parent: groupById(draft.groups, groupId)?.name ?? '',
+      },
+      confirmKey:
+        children.length === 1
+          ? 'confirm.convertSections.confirm.one'
+          : 'confirm.convertSections.confirm.other',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
 
     const sections: Section[] = children.map((child, index) => ({
       id: `s${Date.now()}${index}`,
@@ -1093,14 +1423,49 @@ export class CollectionSettingsPage {
     );
   }
 
+  /**
+   * "Bronze, Prata, Ouro and 2 more" — named the way the delete dialog names
+   * them, because four names and a count is the length somebody reads.
+   */
+  private nameList(names: readonly string[]): string {
+    const shown = names.slice(0, 4);
+    if (names.length <= 4) return shown.join(', ');
+    return this.i18n.t('collSettings.groups.delete.subGroupsMore', {
+      names: shown.join(', '),
+      n: names.length - shown.length,
+    });
+  }
+
   // --- sharing ---
 
+  /**
+   * Records somebody on the collection.
+   *
+   * Refused on the field rather than in a toast, and for a concrete reason:
+   * an invalid address used to be accepted by `includes('@')`, appended to the
+   * document, and then refused *by the server's whole-document validator* 400 ms
+   * later — so the user's unrelated edits on this page did not save either, and
+   * the red toast that arrived pointed at nothing.
+   */
   protected invite(): void {
     const email = this.inviteEmail().trim();
-    if (!email || !email.includes('@')) {
-      this.toast.flash(this.i18n.t('toast.invite.invalidEmail'));
+    if (!EMAIL_PATTERN.test(email)) {
+      this.inviteError.set(this.i18n.t('collSettings.sharing.inviteInvalid'));
       return;
     }
+    // The list is tracked by email, so a duplicate broke the tab's own render
+    // and wrote the same person into the document twice. Case-insensitive, and
+    // against the owner row too, which `memberRows` prepends.
+    const already = this.memberRows().find(
+      row => row.member.email.toLowerCase() === email.toLowerCase(),
+    );
+    if (already) {
+      this.inviteError.set(
+        this.i18n.t('collSettings.sharing.inviteDuplicate', { name: already.member.name }),
+      );
+      return;
+    }
+    this.inviteError.set('');
     const name = email
       .split('@')[0]
       .replace(/[._-]/g, ' ')
@@ -1116,7 +1481,13 @@ export class CollectionSettingsPage {
       members: [...d.members, { name, email, initials, role: this.inviteRole() as MemberRole }],
     }));
     this.inviteEmail.set('');
-    this.toast.flash(this.i18n.t('toast.invite.sent'));
+    this.toast.success(this.i18n.t('toast.invite.sent'));
+  }
+
+  /** Typing is the retry, so the refusal clears with it. */
+  protected onInviteEmail(email: string): void {
+    this.inviteEmail.set(email);
+    this.inviteError.set('');
   }
 
   protected setMemberRole(email: string, role: string): void {
@@ -1158,8 +1529,31 @@ export class CollectionSettingsPage {
   // --- done ---
 
   protected async done(): Promise<void> {
-    await this.persist();
-    this.toast.flash(this.i18n.t('toast.collection.updated'));
+    // A chosen-but-unconfirmed move is the one edit on this page that leaving
+    // discards, and the select was showing it as though it had happened.
+    const pending = this.pendingParent();
+    if (pending) {
+      const name = groupById(this.draft()?.groups ?? [], pending.groupId)?.name ?? '';
+      const leave = await this.confirm.ask({
+        titleKey: 'confirm.pendingMove.title',
+        bodyKey: 'confirm.pendingMove.body',
+        params: { name },
+        confirmKey: 'confirm.pendingMove.confirm',
+      });
+      if (!leave) return;
+      this.pendingParent.set(null);
+    }
+
+    const outcome = await this.persist();
+    if (outcome !== 'saved') {
+      // Stay put. The work on screen is the only copy of itself, and telling
+      // someone it saved while walking them off the page is how it gets lost.
+      // A conflict already has the notice; the other two have nothing else.
+      if (outcome !== 'refused') this.toast.error(this.i18n.t('collSettings.notSaved'));
+      return;
+    }
+
+    this.toast.success(this.i18n.t('toast.collection.updated'));
     // Back to the group you came from, not to the collection root — arriving
     // here scoped and leaving unscoped loses your place.
     void this.router.navigate(['/c', this.collectionId()], {

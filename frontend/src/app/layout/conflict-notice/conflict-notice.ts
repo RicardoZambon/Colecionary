@@ -1,11 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { I18nService } from '../../core/i18n';
 import { ConflictService } from '../../core/state/conflict.service';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { TPipe } from '../../shared/pipes/t.pipe';
-import { UiButton } from '../../shared/ui';
+import { UiButton } from '../../shared/ui/button/button';
 
 /**
  * Tells the user that a save was refused because somebody else got there first,
@@ -35,6 +35,15 @@ import { UiButton } from '../../shared/ui';
       <div class="notice" role="alert" aria-live="assertive">
         <div class="notice__text">
           <p class="notice__title">{{ 'conflict.title' | t }}</p>
+          <!-- Which collection. The id has always been on the conflict, with a
+               docblock saying it is there "so the notice can name it", and the
+               template never read it: somebody with two collections open in
+               two tabs, or who has since navigated to the dashboard, had no
+               way to tell what had been refused. Nothing when the id no longer
+               resolves — a name is better than none, and a wrong one is not. -->
+          @if (inCollection(); as where) {
+            <p class="notice__where">{{ where }}</p>
+          }
           <!-- The server's own words, already in the user's language: it is the
                only place that knows what actually happened. -->
           <p class="notice__body">{{ conflict.message }}</p>
@@ -54,13 +63,23 @@ import { UiButton } from '../../shared/ui';
   styles: `
     .notice {
       position: fixed;
-      right: 22px;
-      bottom: 74px;
-      z-index: 60;
+      /*
+       * The token, not a guess. --z-notice exists for this element and this
+       * element sat at a raw 60 — under every dialog, every dropdown, every
+       * toast and the drawer — so the app's only statement that a save did NOT
+       * happen rendered dimmed and unclickable under a modal scrim, which is
+       * the exact moment a bulk delete or an import refuses one.
+       */
+      right: var(--sp-5);
+      /* Clear of the toast outlet, which docks at var(--sp-5) and is about
+         var(--sp-12) tall: a notice overlapping the toast that reports the same
+         failure hides half of each. */
+      bottom: calc(var(--sp-12) + var(--sp-6));
+      z-index: var(--z-notice);
       display: flex;
       flex-direction: column;
       gap: 14px;
-      max-width: min(420px, calc(100vw - 44px));
+      max-width: min(420px, calc(100vw - var(--sp-10)));
       padding: 16px 18px;
       border: 1px solid var(--border);
       border-left: 3px solid var(--accent);
@@ -89,6 +108,13 @@ import { UiButton } from '../../shared/ui';
       line-height: 1.5;
     }
 
+    .notice__where {
+      margin: 0;
+      color: var(--muted-strong);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
     .notice__hint {
       margin: 0;
       color: var(--muted);
@@ -107,10 +133,18 @@ import { UiButton } from '../../shared/ui';
 export class ConflictNotice {
   protected readonly conflicts = inject(ConflictService);
   private readonly store = inject(VaultStore);
+
   private readonly toast = inject(ToastService);
   private readonly i18n = inject(I18nService);
 
   protected readonly reloading = signal(false);
+
+  /** "In Cavaleiros do Zodíaco", or nothing when the id no longer resolves. */
+  protected readonly inCollection = computed(() => {
+    const id = this.conflicts.pending()?.collectionId;
+    const name = this.store.collection(id)?.name;
+    return name ? this.i18n.t('conflict.inCollection', { name }) : '';
+  });
 
   protected async reload(): Promise<void> {
     if (this.reloading()) return;
@@ -121,7 +155,10 @@ export class ConflictNotice {
     } catch {
       // The notice stays: dismissing it after a failed reload would leave the
       // user believing they are back in sync when nothing has changed.
-      this.toast.flash(this.i18n.t('conflict.reloadFailed'));
+      // `error`, not `flash`: a failure reported in the neutral tone is
+      // unmarked, unannounced and gone in four seconds — and the notice it
+      // belongs to is the one that must not be mistaken for handled.
+      this.toast.error(this.i18n.t('conflict.reloadFailed'));
     } finally {
       this.reloading.set(false);
     }

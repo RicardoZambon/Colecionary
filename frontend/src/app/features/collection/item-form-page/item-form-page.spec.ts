@@ -22,7 +22,9 @@ import {
   TenantSettings,
   UserProfile,
 } from '../../../core/models';
+import { I18nService } from '../../../core/i18n';
 import { ConfirmService } from '../../../core/state/confirm.service';
+import { PhotoUploadService } from '../../../core/state/photo-upload.service';
 import { ConflictService } from '../../../core/state/conflict.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { UNGROUPED_ID } from '../../../core/utils/group-stats.util';
@@ -163,7 +165,14 @@ function collection(items: Item[], fields: GroupField[] = []): Collection {
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
 async function mount(
-  opts: { g?: string; itemId?: string; items?: Item[]; fields?: GroupField[] } = {},
+  opts: {
+    g?: string;
+    itemId?: string;
+    items?: Item[];
+    fields?: GroupField[];
+    /** Extra overrides, for the tests that need to stand in for a service. */
+    providers?: unknown[];
+  } = {},
 ) {
   const api = new FakeVaultApi();
   api.collections = [collection(opts.items ?? [], opts.fields ?? [])];
@@ -174,6 +183,7 @@ async function mount(
       provideHttpClientTesting(),
       provideRouter([]),
       { provide: VaultApi, useValue: api },
+      ...((opts.providers ?? []) as never[]),
     ],
   });
 
@@ -206,6 +216,15 @@ async function mount(
   };
 
   const groupSelect = () => el.querySelector('.pair select') as HTMLSelectElement;
+  const descriptionInput = () => el.querySelector('.form textarea') as HTMLTextAreaElement;
+  const yearInput = () => el.querySelectorAll('.pair input')[0] as HTMLInputElement;
+  const submitButton = () => el.querySelector('.actions ui-button[type=\'submit\'] button, .actions button[type=\'submit\']') as HTMLButtonElement;
+  /**
+   * The "Unsaved changes" line in the sticky bar — the visible face of
+   * `dirty()`. The leading dot is `aria-hidden` decoration, so it is stripped.
+   */
+  const dirtyLine = () =>
+    (el.querySelector('.actions__state')!.textContent ?? '').replace(/[\u25cf\s]+/g, ' ').trim();
   const nameInput = () => el.querySelector('.form ui-text-input input') as HTMLInputElement;
   const valueInput = () => el.querySelectorAll('.pair input')[1] as HTMLInputElement;
   const copyRows = () => [...el.querySelectorAll('.copies__row')] as HTMLElement[];
@@ -271,7 +290,11 @@ async function mount(
     click,
     groupSelect,
     nameInput,
+    descriptionInput,
+    yearInput,
     valueInput,
+    submitButton,
+    dirtyLine,
     copyRows,
     fieldNames,
     fieldInput,
@@ -611,5 +634,285 @@ describe('ItemFormPage — nothing is destroyed without a question', () => {
 
     expect(TestBed.inject(ConfirmService).pending()).toBeNull();
     expect(page.copyRows()).toHaveLength(1);
+  });
+});
+
+describe('ItemFormPage — money the way people type it', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  /**
+   * No spec in this file had ever typed a Brazilian decimal separator, which is
+   * how the form shipped for a year parsing money with a page-local
+   * `parseNumber` that *deleted* commas rather than reading them: `4.200,00`
+   * saved as 4.2, `85,50` as 8550, `1.000` as 1. Errors in both directions,
+   * silently, on every price and value field — while the CSV importer, reading
+   * the same figures through `parseAmount`, got them all right.
+   *
+   * The pairs are the ones `parseAmount` documents: whichever separator comes
+   * last is the decimal point when one or two digits follow it.
+   */
+  const AMOUNTS: [typed: string, saved: number][] = [
+    ['4.200,00', 4200],
+    ['4,200.00', 4200],
+    ['4200,00', 4200],
+    ['85,50', 85.5],
+    ['12,5', 12.5],
+    ['1.000', 1000],
+    ['R$ 1.234,56', 1234.56],
+  ];
+
+  it('reads a typed amount the same way the CSV importer does', async () => {
+    for (const [typed, saved] of AMOUNTS) {
+      TestBed.resetTestingModule();
+      const page = await mount({ itemId: 'i1', items: [item({ copies: [copy()] })] });
+      page.type(page.nameInput(), 'Cavaleiro de Ouro');
+      page.type(page.valueInput(), typed);
+
+      const priceInput = page.copyRows()[0].querySelectorAll('.copies__fields input')[0];
+      page.type(priceInput as HTMLInputElement, typed);
+      const copyValueInput = page.copyRows()[0].querySelectorAll('.copies__fields input')[1];
+      page.type(copyValueInput as HTMLInputElement, typed);
+
+      await page.save();
+
+      expect(page.lastSaved().value, `item value from "${typed}"`).toBe(saved);
+      expect(page.lastSaved().copies[0].price, `price paid from "${typed}"`).toBe(saved);
+      expect(page.lastSaved().copies[0].value, `copy value from "${typed}"`).toBe(saved);
+    }
+  });
+
+  it('keeps the year an integer whichever way it is punctuated', async () => {
+    const page = await mount();
+    page.type(page.nameInput(), 'Cavaleiro de Ouro');
+    page.type(page.yearInput(), '1.965');
+    await page.save();
+    expect(page.lastSaved().year).toBe(1965);
+  });
+});
+
+describe('ItemFormPage — the leave guard sees every field', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  /**
+   * A per-field walk rather than one composite case, and that is the whole
+   * point: `snapshot()` is a hand-written list of the draft signals, and `tags`
+   * was simply missing from it — so three tags typed into the field left
+   * `dirty()` false, the sticky bar silent and the guard agreeing there was
+   * nothing to lose. One test per field is what makes the eleventh field's
+   * omission fail rather than hide behind the other ten.
+   */
+  const EDITS: Record<string, (page: Awaited<ReturnType<typeof mount>>) => void> = {
+    name: page => page.type(page.nameInput(), 'Renamed'),
+    description: page => {
+      const box = page.descriptionInput();
+      box.value = 'A note';
+      box.dispatchEvent(new Event('input'));
+      page.fixture.detectChanges();
+    },
+    tags: page => page.addTag('rare'),
+    groupId: page => page.pick(page.groupSelect(), 'marvel'),
+    year: page => page.type(page.yearInput(), '1971'),
+    value: page => page.type(page.valueInput(), '90'),
+    copies: page => page.click(page.el.querySelector('.copies__actions button')!),
+    custom: page => page.type(page.fieldInput('Series'), 'Original trilogy'),
+  };
+
+  for (const [field, edit] of Object.entries(EDITS)) {
+    it(`treats an edit to ${field} as unsaved work`, async () => {
+      const page = await mount({
+        itemId: 'i1',
+        items: [item({ groupId: 'starwars', copies: [copy()] })],
+      });
+      expect(page.dirtyLine()).toBe('');
+
+      edit(page);
+
+      expect(page.dirtyLine()).toBe(TestBed.inject(I18nService).t('itemForm.unsaved'));
+    });
+  }
+
+  it('asks through the app’s own dialog, whose buttons say what they do', async () => {
+    // The old answer was `window.confirm`, justified on the grounds that a
+    // CanDeactivate must answer synchronously — which is not true, and left the
+    // reader working out whether "OK" kept their work or threw it away.
+    const page = await mount({ itemId: 'i1', items: [item()] });
+    expect(page.fixture.componentInstance.confirmLeave()).toBe(true);
+
+    page.type(page.nameInput(), 'Renamed');
+    const answer = page.fixture.componentInstance.confirmLeave();
+    expect(answer).not.toBe(true);
+
+    expect(TestBed.inject(ConfirmService).pending()).toMatchObject({
+      titleKey: 'itemForm.leave.title',
+      confirmKey: 'itemForm.leave.discard',
+      cancelKey: 'itemForm.leave.keep',
+    });
+
+    TestBed.inject(ConfirmService).answer(false);
+    await expect(answer).resolves.toBe(false);
+  });
+});
+
+describe('ItemFormPage — a save never outruns the photos', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  /** Stands in for the shared queue; only `busy` is under test. */
+  class BusyUploads {
+    busy = () => true;
+    queue = () => [];
+    failures = () => [];
+    add = async () => [];
+    dismiss = () => undefined;
+    clear = () => undefined;
+  }
+
+  it('refuses to save, and says why, while bytes are still going up', async () => {
+    // `PhotoUploadService.busy` was documented as the thing pages disable Save
+    // on and had no caller anywhere: drop six phone photos, fill in the name,
+    // press Salvar item, and you got the item with one photo or none — the rest
+    // finished into a component the navigation had destroyed.
+    const page = await mount({
+      providers: [{ provide: PhotoUploadService, useValue: new BusyUploads() }],
+    });
+    page.type(page.nameInput(), 'Cavaleiro de Ouro');
+
+    const submit = page.submitButton();
+    expect(submit.disabled).toBe(true);
+    expect(submit.getAttribute('aria-busy')).toBe('true');
+    expect(submit.textContent!.trim()).toBe(
+      TestBed.inject(I18nService).t('itemForm.savingPhotos'),
+    );
+
+    await page.save();
+    expect(page.api.saved).toHaveLength(0);
+  });
+
+  it('treats pending uploads as unsaved work, so leaving asks', async () => {
+    const page = await mount({
+      providers: [{ provide: PhotoUploadService, useValue: new BusyUploads() }],
+    });
+    // Nothing typed, so the snapshot still matches the baseline — without the
+    // uploads in the sum, the guard would not even ask.
+    expect(page.fixture.componentInstance.confirmLeave()).not.toBe(true);
+    TestBed.inject(ConfirmService).answer(false);
+  });
+});
+
+describe('ItemFormPage — what refused the save, and where', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('marks the Name field, explains itself there, and puts the caret in it', async () => {
+    // The refusal used to be a toast that named no field and moved no focus, on
+    // a page where Name can be 900px above the button that refused.
+    const page = await mount();
+    await page.save();
+
+    const field = page.el.querySelector('.form ui-field')!;
+    expect((field.querySelector('.error')!.textContent ?? '').trim()).toBe(
+      TestBed.inject(I18nService).t('itemForm.error.nameRequired'),
+    );
+    expect(page.nameInput().getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(page.nameInput());
+
+    // And it clears as soon as the reason is gone, rather than outliving the fix.
+    page.type(page.nameInput(), 'Cavaleiro de Ouro');
+    expect(page.el.querySelector('.form ui-field .error')).toBeNull();
+  });
+
+  it('names the copy it is about to remove, and what is in it', async () => {
+    // Six copies of one card are six identical blocks, and the list you would
+    // check against is behind the dialog.
+    const page = await mount({
+      itemId: 'i1',
+      items: [item({ copies: [copy(), copy({ id: 'cp2', price: 40 })] })],
+    });
+    page.click(page.copyRows()[1].querySelector('.copies__row-head ui-button button')!);
+    await tick();
+
+    expect(TestBed.inject(ConfirmService).pending()).toMatchObject({
+      titleKey: 'confirm.removeCopy.titleAt',
+      bodyKey: 'confirm.removeCopy.bodyAt',
+      params: { n: 2 },
+    });
+  });
+});
+
+describe('ItemFormPage — a declared field is edited by its declared type', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('gives a date field ui-date-input on the item and inside every copy', async () => {
+    // A bare type="date" follows the *browser's* locale and shows mm/dd/yyyy
+    // inside a Portuguese UI, which does not fail — it records the wrong date,
+    // and the item page then prints it back in the document locale, so the two
+    // screens disagree about the same field.
+    const page = await mount({
+      fields: [
+        { name: 'Data do slab', type: 'date', scope: 'item' },
+        { name: 'Nota', type: 'text', scope: 'item' },
+        { name: 'Data da compra', type: 'date', scope: 'copy' },
+      ],
+    });
+
+    const row = (name: string) =>
+      [...page.el.querySelectorAll('.group-fields__row')].find(
+        r => (r.querySelector('.key')!.textContent ?? '').trim() === name,
+      )!;
+
+    expect(row('Data do slab').querySelector('ui-date-input')).not.toBeNull();
+    expect(row('Data do slab').querySelector('ui-text-input')).toBeNull();
+    // The other types still take a text box, which is the honest control for
+    // them — this is a branch on the declaration, not a blanket change.
+    expect(row('Nota').querySelector('ui-text-input')).not.toBeNull();
+    expect(page.copyRows()[0].querySelector('.copies__custom ui-date-input')).not.toBeNull();
+  });
+
+  it('says the fields are per copy rather than that there are none', async () => {
+    // The card headed "Group fields" used to answer "this group has no custom
+    // fields yet" while the field was on screen twelve lines above, inside every
+    // copy — which sends the user back to settings to check a declaration that
+    // saved perfectly.
+    const page = await mount({
+      fields: [{ name: 'Nº de série', type: 'text', scope: 'copy' }],
+    });
+    const i18n = TestBed.inject(I18nService);
+
+    expect((page.el.querySelector('.group-fields__empty')!.textContent ?? '').trim()).toBe(
+      i18n.t('itemForm.onlyCopyFields'),
+    );
+    // And the copy's own fields are headed, so a per-copy value is identifiable
+    // without inferring it from position.
+    expect(page.copyRows()[0].querySelector('.copies__custom-heading')).not.toBeNull();
+  });
+
+  it('names the fields card after the collection when no group declares one', async () => {
+    // The collection is the outermost ancestor in `fieldsFor`, so calling the
+    // card "Group fields · NO GROUP" told the reader their declaration had
+    // landed somewhere it had not.
+    const collectionOnly = await mount({
+      fields: [{ name: 'Aquisição', type: 'text', scope: 'item' }],
+    });
+    const i18n = TestBed.inject(I18nService);
+    expect(collectionOnly.el.querySelector('.group-fields__heading')!.textContent).toContain(
+      i18n.t('itemForm.collectionFieldsName').toUpperCase(),
+    );
+
+    TestBed.resetTestingModule();
+    const grouped = await mount({ g: 'starwars' });
+    expect(grouped.el.querySelector('.group-fields__heading')!.textContent).toContain('starwars'.toUpperCase());
   });
 });

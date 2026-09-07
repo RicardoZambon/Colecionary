@@ -32,7 +32,9 @@
   font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: var(--accent);
+  /* The count is type, so the type tier of the accent. The bar's own border
+     stays the raw --accent, which is a fill. */
+  color: var(--accent-strong);
 }
 
 .bar__spacer {
@@ -79,7 +81,7 @@
   &__hint {
     flex: 0 0 auto;
     font-size: var(--fs-xs);
-    color: var(--muted);
+    color: var(--muted-strong);
 
     /* Why a control is off, not what is in it. It replaces the whole row's
        worth of hint, so it may wrap. */
@@ -100,5 +102,5 @@
 
 .fields__note {
   font-size: var(--fs-xs);
-  color: var(--muted);
+  color: var(--muted-strong);
 }

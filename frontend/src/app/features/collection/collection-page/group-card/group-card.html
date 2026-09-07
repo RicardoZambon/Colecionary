@@ -15,7 +15,7 @@
 
     <div class="card__body">
       <div class="card__head">
-        <span class="card__name">{{ name() }}</span>
+        <span class="card__name"><ui-truncate [text]="name()" /></span>
         @if (badge(); as b) {
           <ui-badge [tone]="b.tone">{{ b.label }}</ui-badge>
         }

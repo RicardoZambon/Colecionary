@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 
 import { I18nService, MessageKey } from '../../../core/i18n';
@@ -37,6 +45,7 @@ import {
 } from '../../../core/utils/sort.util';
 import {
   conditionParams,
+  groupLinkParams,
   nextSortFor,
   ownParams,
   readCondition,
@@ -48,6 +57,7 @@ import {
   sortParams,
   tagParams,
 } from '../browse-params';
+import { BrowseFilterChip, BrowseFilterKind, BrowseSummary } from './browse-summary/browse-summary';
 import { CollectionHero } from './collection-hero/collection-hero';
 import { CollectionFilters } from './collection-toolbar/collection-filters';
 import { CollectionToolbar } from './collection-toolbar/collection-toolbar';
@@ -73,6 +83,7 @@ import {
 import { readHidden, toggleHidden, visibleFields, writeHidden } from './column-prefs';
 import { TPipe } from '../../../shared/pipes/t.pipe';
 import { UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSkeleton } from '../../../shared/ui';
+import { conditionLabelKey } from '../../../shared/ui/badge/badge';
 import { ViewMode, resolveView, viewParam } from './view-mode';
 import {
   initialExpanded,
@@ -85,13 +96,24 @@ import {
 /** Reordering writes the whole collection back, so coalesce rapid drags. */
 const ORDER_DEBOUNCE_MS = 400;
 
-/** Below this the shell's own 226px sidebar leaves no room for a second column. */
+/**
+ * Below this the shell's own 226px sidebar leaves no room for a second column,
+ * so the tree panel is an accelerator that never displaces the item list.
+ *
+ * Keep it equal to `$bp-xl` in `styles/_mixins.scss`, which
+ * `collection-page.scss` reads through `from($bp-xl)`. It is duplicated here for
+ * the same reason `LayoutService.compact` duplicates `$bp-lg`: a media query
+ * cannot be read from script, and this decides whether an element is rendered at
+ * all rather than merely how it looks. The right home for it is
+ * `LayoutService`, beside `compact` — that file belongs to the shell, so this
+ * stays local for now.
+ */
 const WIDE_ENOUGH = '(min-width: 1200px)';
 
 @Component({
   selector: 'app-collection-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BulkBar, CollectionFilters, CollectionHero, CollectionToolbar, CsvImportDialog, GroupBreadcrumb, GroupDashboard, GroupTree, ItemGrid, ItemList, RouterLink, TPipe, UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSkeleton],
+  imports: [BrowseSummary, BulkBar, CollectionFilters, CollectionHero, CollectionToolbar, CsvImportDialog, GroupBreadcrumb, GroupDashboard, GroupTree, ItemGrid, ItemList, RouterLink, TPipe, UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSkeleton],
   templateUrl: './collection-page.html',
   styleUrl: './collection-page.scss',
 })
@@ -147,6 +169,28 @@ export class CollectionPage {
   /** Null means "use the selected group's configured order". */
   protected readonly sortOverride = computed(() => readSort(this.sort(), this.dir()));
   protected readonly pendingGroupParent = signal<{ parentId: string | null } | null>(null);
+
+  /**
+   * Whether the window is wide enough for a second permanent column.
+   *
+   * A live signal, not a one-shot read. It used to be asked exactly once, in the
+   * run-once-per-collection effect, and only as the fallback when nothing was
+   * stored — so a stored "open" won at every width and someone who browsed on a
+   * laptop with the panel open opened the same collection on a phone to find the
+   * group tree as a full-width block pushing the whole item list below the fold.
+   * Resizing did not fix it; only collapsing the panel by hand did, and that
+   * choice then followed them back to the laptop.
+   */
+  private readonly wide = signal(true);
+
+  /**
+   * The last reorder, for assistive technology.
+   *
+   * `ui-reorder` announces its own keyboard moves, but a *drag* has nothing to
+   * announce it, and the only feedback was a toast 400ms later saying the order
+   * was saved. One polite region on the page covers both paths.
+   */
+  protected readonly moveAnnouncement = signal('');
 
   /**
    * The vault is still in flight, so `collection()` being undefined does not
@@ -209,6 +253,17 @@ export class CollectionPage {
   private columnsFor: string | null = null;
 
   constructor() {
+    const media = matchMedia(WIDE_ENOUGH);
+    this.wide.set(media.matches);
+    // Crossing down into a narrow window folds the panel, and deliberately does
+    // **not** persist that: the preference belongs to the wide layout, so
+    // returning to it restores what the user chose. Mirrors what
+    // LayoutService does with `navOpen` when the sidebar stops being a drawer.
+    media.addEventListener?.('change', event => {
+      this.wide.set(event.matches);
+      if (!event.matches) this.treeCollapsed.set(true);
+    });
+
     // A selection describes rows of one collection. Carrying it across would
     // point a destructive bar at ids that mean nothing here.
     effect(() => {
@@ -238,7 +293,10 @@ export class CollectionPage {
       const known = new Set(collection.groups.map(group => group.id));
       const path = pathOf(collection.groups, this.g() ?? null).map(node => node.id);
       this.treeExpanded.set(initialExpanded(readExpanded(collection.id), path, known));
-      this.treeCollapsed.set(readCollapsed() ?? !matchMedia(WIDE_ENOUGH).matches);
+      // A stored preference applies only where there is room for the column. It
+      // used to win at every width, which is how a laptop's "panel open"
+      // reached a phone as a full-width tree above the whole item list.
+      this.treeCollapsed.set(this.wide() ? readCollapsed() ?? false : true);
     });
 
     // Opening a group unfolds it in the tree. With the panel on screen the
@@ -259,6 +317,14 @@ export class CollectionPage {
       this.setTreeExpanded(next);
     });
   }
+
+  /**
+   * Whether the panel is on screen. Below `$bp-xl` it is not a column but a
+   * block above the list, so it stays folded unless the user opens it there on
+   * purpose — the toggle keeps working at every width, it just no longer arrives
+   * pre-opened from another device's preference.
+   */
+  protected readonly treeVisible = computed(() => !this.treeCollapsed());
 
   protected readonly collection = computed(() => this.store.collection(this.collectionId()));
   protected readonly groups = computed(() => this.collection()?.groups ?? []);
@@ -592,7 +658,9 @@ export class CollectionPage {
       // mounted, so nothing the user typed is lost, and the shell's notice says
       // more about a 412 than a toast could. Everything else gets a toast.
       if (!isReportedWriteFailure(err)) {
-        this.toast.flash(err instanceof Error ? err.message : this.i18n.t(failed));
+        // A refused write of forty items is an error, not news. `flash` is the
+        // neutral tone and, unlike `error`, it also takes itself away.
+        this.toast.error(err instanceof Error ? err.message : this.i18n.t(failed));
       }
       return;
     }
@@ -649,6 +717,92 @@ export class CollectionPage {
       this.searching(),
   );
 
+  /**
+   * How many rows are on screen, against the scope's own total.
+   *
+   * Deliberately *not* the hero's ratio: that measures the group against its
+   * declared set and is computed before any filter, so with filters on it
+   * contradicted what the screen showed. `scope().catalogued` is the honest
+   * denominator here — how many the group holds, filtered or not.
+   */
+  protected readonly countLabel = computed(() =>
+    this.i18n.plural(this.items().length, 'browse.showing.one', 'browse.showing.other', {
+      total: this.scope().catalogued,
+    }),
+  );
+
+  /**
+   * One chip per narrowing in force, worded here so the summary component stays
+   * presentational.
+   *
+   * The section is in the list, which is the point: `?s=` had no representation
+   * anywhere except one heading turning a slightly different colour — status by
+   * colour alone — and the empty state's "clear filters" was the only thing that
+   * ever mentioned it. The search text is in the list too, because the box lives
+   * in the top bar, far from the list it is emptying.
+   */
+  protected readonly activeFilters = computed<BrowseFilterChip[]>(() => {
+    const chips: BrowseFilterChip[] = [];
+    const condition = this.condition();
+    if (condition) {
+      chips.push({
+        kind: 'condition',
+        label: this.i18n.t('browse.filter.condition', {
+          name: this.i18n.t(conditionLabelKey(condition)),
+        }),
+      });
+    }
+    const own = this.ownFilter();
+    if (own) {
+      chips.push({
+        kind: 'own',
+        label: this.i18n.t('browse.filter.own', {
+          name: this.i18n.t(own === 'owned' ? 'filters.owned' : 'filters.wanted'),
+        }),
+      });
+    }
+    const section = this.sectionFilter();
+    if (section) {
+      chips.push({
+        kind: 'section',
+        label: this.i18n.t('browse.filter.section', { name: this.sectionFilterName() }),
+      });
+    }
+    const tag = this.tagFilter();
+    if (tag) chips.push({ kind: 'tag', label: this.i18n.t('browse.filter.tag', { tag }) });
+    const query = this.store.query().trim();
+    if (query) {
+      chips.push({ kind: 'search', label: this.i18n.t('browse.filter.search', { q: query }) });
+    }
+    return chips;
+  });
+
+  /** The narrowed run's own name, or the leftovers bucket's label. */
+  private readonly sectionFilterName = computed(() => {
+    const id = this.sectionFilter();
+    if (!id || id === UNSECTIONED_ID) return this.i18n.t('section.none');
+    return this.sections().find(section => section.id === id)?.name ?? '';
+  });
+
+  /** Drops exactly one narrowing, leaving the rest of them in force. */
+  protected removeFilter(kind: BrowseFilterKind): void {
+    switch (kind) {
+      case 'condition':
+        return this.narrow(conditionParams(null));
+      case 'own':
+        return this.narrow(ownParams(null));
+      case 'section':
+        return this.narrow(sectionParams(null));
+      case 'tag':
+        return this.narrow(tagParams(null));
+      case 'search':
+        // The search box is in the top bar and is not a query param, so it is
+        // cleared through the store — exactly as `clearFilters` has to.
+        this.store.query.set('');
+        return;
+    }
+  }
+
   // --- ordering ---
 
   /** Moves a visible item, leaving anything the filters hid where it is. */
@@ -669,6 +823,13 @@ export class CollectionPage {
       visible[to],
     );
     this.pendingOrder.set({ id: collection.id, items: next });
+    this.moveAnnouncement.set(
+      this.i18n.t('browse.moved', {
+        name: visible[from].name,
+        position: to + 1,
+        total: visible.length,
+      }),
+    );
     clearTimeout(this.orderTimer);
     this.orderTimer = setTimeout(() => void this.persistOrder(), ORDER_DEBOUNCE_MS);
   }
@@ -745,8 +906,20 @@ export class CollectionPage {
     this.narrow(conditionParams(next));
   }
 
+  /**
+   * Status, and the condition it invalidates.
+   *
+   * A condition matches when *some copy* is in it; `own: 'wanted'` matches when
+   * the item has *no copies*. The intersection is empty by construction, so
+   * "Mint" then "Wanted" — a perfectly sensible question — emptied the list and
+   * the empty state blamed the filters without saying which two contradicted.
+   * Picking "Wanted" drops the condition, in one navigation so the URL never
+   * holds the pair, the same way `groupLinkParams` drops `?s=` on a group change.
+   */
   protected setOwn(next: OwnFilter): void {
-    this.narrow(ownParams(next));
+    this.narrow(
+      next === 'wanted' ? { ...ownParams(next), ...conditionParams(null) } : ownParams(next),
+    );
   }
 
   protected setTag(next: string | null): void {
@@ -820,13 +993,9 @@ export class CollectionPage {
     writeCollapsed(collapsed);
   }
 
-  protected newGroupKeydown(event: KeyboardEvent): void {
-    const input = event.target as HTMLInputElement;
-    if (event.key === 'Enter') this.commitNewGroup(input.value);
-    else if (event.key === 'Escape') {
-      input.value = '';
-      this.pendingGroupParent.set(null);
-    }
+  /** Escape, or a commit with nothing typed. `ui-inline-edit` owns both keys. */
+  protected cancelNewGroup(): void {
+    this.pendingGroupParent.set(null);
   }
 
   protected startNewGroup(): void {
@@ -852,7 +1021,16 @@ export class CollectionPage {
     };
     void this.store
       .updateCollection({ ...collection, groups: [...collection.groups, node] })
-      .then(() => this.toast.flash(this.i18n.t('toast.group.added', { name: trimmed })))
+      .then(() => {
+        this.toast.flash(this.i18n.t('toast.group.added', { name: trimmed }));
+        // The group files itself alphabetically somewhere in the tree, so
+        // without this the toast was the only evidence it existed at all.
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: groupLinkParams(node.id),
+          queryParamsHandling: 'merge',
+        });
+      })
       // A refused save used to be an unhandled rejection here — nothing on
       // screen, nothing in the log, and a group the user believes they added.
       // The conflict notice explains a 412; this covers everything else.

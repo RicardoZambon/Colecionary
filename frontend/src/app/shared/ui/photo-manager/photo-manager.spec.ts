@@ -4,6 +4,10 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import {
+  MAX_UPLOAD_BYTES,
+  PhotoUploadService,
+} from '../../../core/state/photo-upload.service';
 import { UiPhotoManager } from './photo-manager';
 
 @Component({
@@ -128,5 +132,38 @@ describe('UiPhotoManager', () => {
 
     // A ~104px tile pulling the original is the whole reported problem.
     expect(tile.style.backgroundImage).toContain('size=thumb');
+  });
+});
+
+describe('UiPhotoManager — the queue belongs to the surface showing it', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('does not carry a failure row over to the next item it mounts on', () => {
+    // `PhotoUploadService` is providedIn: 'root' with one shared queue, and
+    // `clear()` — whose own comment says it is "called when a page that owns the
+    // queue goes away" — had no caller anywhere. So a red "Larger than 5 MB" row
+    // for one item's 12 MB photo sat above a *different* item's dropzone,
+    // naming a file with nothing to do with it, for the rest of the session.
+    const { fixture } = mount();
+    const uploads = TestBed.inject(PhotoUploadService);
+
+    // A rejection needs no server: the size check is local, which is the whole
+    // reason the item page was routed through this service too.
+    const tooBig = new File([new Uint8Array(MAX_UPLOAD_BYTES + 1)], 'huge.jpg', {
+      type: 'image/jpeg',
+    });
+    void uploads.add([tooBig], 3);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.upload--failed')).toHaveLength(1);
+
+    fixture.destroy();
+    expect(uploads.queue()).toHaveLength(0);
+
+    const next = TestBed.createComponent(HostComponent);
+    next.detectChanges();
+    expect(next.nativeElement.querySelectorAll('.upload--failed')).toHaveLength(0);
   });
 });

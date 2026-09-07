@@ -42,6 +42,7 @@
     <tr><td class="nowrap"><code>/c/:cid/items/new</code></td><td><code>ItemFormPage</code></td><td>Novo item; <code>?g=</code> e <code>?s=</code> decidem em que grupo e sob que separador ele nasce</td></tr>
     <tr><td class="nowrap"><code>/c/:cid/items/:itemId</code></td><td><code>ItemPage</code></td><td>Detalhe, galeria, cópias, navegação ←/→ entre vizinhos</td></tr>
     <tr><td class="nowrap"><code>/c/:cid/items/:itemId/edit</code></td><td><code>ItemFormPage</code></td><td>Mesmo componente, modo edição</td></tr>
+    <tr><td class="nowrap"><code>**</code></td><td><code>NotFound</code></td><td>Endereço que o app não soube abrir. É <strong>filho do <code>Shell</code></strong>, e uma página em vez de um <code>redirectTo: 'dashboard'</code>: o redirecionamento reescrevia a barra de endereços, então a navegação parecia ter funcionado e a URL original não sobrava nem para tentar de novo. Sendo filho do <code>Shell</code>, herda o <code>authGuard</code> — uma URL desconhecida alcançada sem sessão vai para o login em vez de anunciar quais caminhos não existem (ADR-77)</td></tr>
   </tbody>
 </table>
 </div>
@@ -144,14 +145,32 @@
       <td><code>nav-focus.ts</code></td>
       <td><code>layout/</code></td>
       <td>Dois ids (<code>NAV_TOGGLE_ID</code>, <code>NAV_DRAWER_ID</code>) e
-          <code>focusNavToggle(doc)</code> — o contrato mínimo entre três
-          componentes que não podem trocar <code>ElementRef</code></td>
+          <code>focusNavToggle(doc, injector)</code> — o contrato mínimo entre
+          três componentes que não podem trocar <code>ElementRef</code>. O
+          <code>injector</code> existe porque a função foca por
+          <code>afterNextRender</code>: <code>.focus()</code> dentro de uma
+          subárvore <code>inert</code> é ignorado em silêncio, e enquanto a
+          gaveta está aberta o topbar — onde vive esse botão — <em>é</em>
+          inert. Um handler que fecha e foca no mesmo turno roda antes do
+          binding que levanta o <code>inert</code>, e o foco cai em
+          <code>&lt;body&gt;</code> — de onde o Escape do <code>Shell</code>
+          também deixa de ser ouvido</td>
     </tr>
     <tr>
       <td>Scrim</td>
       <td><code>Shell</code></td>
       <td>Um <code>&lt;button&gt;</code> real, renderizado só com a gaveta
-          aberta, com <code>aria-label</code> e <code>aria-controls</code></td>
+          aberta, com <code>aria-label</code> e <code>aria-controls</code>. Vem
+          <strong>antes</strong> da gaveta na ordem do DOM, para ser uma
+          barreira na borda do documento e não uma parada de Tab <em>entre</em>
+          a nav e a página. E a contenção de verdade é o
+          <code>[inert]</code> + <code>aria-hidden</code> que o
+          <code>Shell</code> põe em <code>&lt;app-topbar&gt;</code> e
+          <code>&lt;main&gt;</code> enquanto <code>navModal()</code>: a gaveta
+          é apresentada modalmente mas não é um <code>ui-dialog</code>, então
+          não herda trap de foco nenhum, e sem isso o Tab saía da nav, passava
+          pelo scrim e entrava num formulário atrás dele que o usuário já não
+          conseguia ver</td>
     </tr>
   </tbody>
 </table>
@@ -296,15 +315,58 @@
           local a partir da resposta. Também
           <code>loadError</code>/<code>retrying</code>/<code>retryLoad()</code>
           (ver <a href="#carga">os três estados da casca</a>) e
-          <code>syncState</code>/<code>syncStatusKey</code> derivados. Guarda
+          <code>syncState</code>/<code>syncStatusKey</code>/<code>syncIcon</code>/<code>syncNeedsAttention</code>
+          derivados — o ícone vive aqui e não no template da sidebar porque o
+          topbar pinta o mesmo sinal no telefone, onde a sidebar é uma gaveta
+          fechada, e duas superfícies escolhendo cada uma o seu ícone para o
+          mesmo estado é como elas passam a discordar. Guarda
           ainda <strong>quais coleções têm escrita em voo</strong>: no máximo
           uma por coleção (<code>exclusive</code>), lida pela UI através de
-          <code>saving(id)</code></td>
+          <code>saving(id)</code>. E tem <code>reset()</code>, registrado em
+          <code>SessionReset</code> no construtor: sem ele, entrar como outra
+          pessoa no mesmo tab mostrava o acervo da conta anterior, porque
+          <code>ensureLoaded()</code> retorna na primeira linha enquanto
+          <code>loaded</code> é <code>true</code> (ADR-76)</td>
     </tr>
     <tr>
       <td><code>AuthService</code></td>
       <td>Sessão JWT em <code>localStorage['vault.auth']</code></td>
-      <td>Interceptor anexa o bearer e desloga em 401 no meio da sessão</td>
+      <td>Interceptor anexa o bearer e desloga em 401 no meio da sessão. Os dois
+          fins de sessão são distintos de propósito: <code>logout()</code> é
+          escolha e não diz nada; <code>sessionExpired()</code> leva
+          <code>returnUrl</code> (para o login voltar ao item ou à coleção em
+          que a pessoa estava, e não ao painel) e <code>expired=1</code>, que é
+          a única coisa que permite ao cartão de login <em>dizer</em> o que
+          aconteceu — o <code>errorInterceptor</code> exclui 401 na premissa de
+          que “401 é do authInterceptor”, e enquanto este não falava, um timeout
+          de sessão era a única falha HTTP do app sem repórter. Ambos chamam
+          <code>SessionReset.run()</code> antes de navegar</td>
+    </tr>
+    <tr>
+      <td><code>SessionReset</code></td>
+      <td>A lista do que se joga fora quando a sessão termina</td>
+      <td>Em <code>core/auth/</code> e <strong>sem dependência nenhuma</strong>.
+          Cada store se registra no próprio construtor e
+          <code>AuthService</code> injeta só este — assim <code>core/auth</code>
+          não passa a depender de <code>core/state</code>, e injetá-lo não custa
+          nada aos testes, onde injetar <code>VaultStore</code> arrastaria
+          <code>VaultApi</code> e <code>HttpClient</code> para o TestBed de tudo
+          que toca sign-out. <code>run()</code> é síncrono (o chamador navega em
+          seguida) e um handler que estoura não interrompe os outros: meio app
+          limpo é o defeito que isto existe para evitar. Ver ADR-76</td>
+    </tr>
+    <tr>
+      <td><code>NewCollectionAction</code></td>
+      <td>“Criar coleção”, como um comportamento e não como um botão</td>
+      <td>Em <code>layout/</code>, porque são três as superfícies que oferecem o
+          gesto — a ação do cabeçalho do painel, o estado vazio dele e o
+          cabeçalho de COLEÇÕES na sidebar — depois que a única que existia era
+          um tile tracejado no <em>fim</em> da grade. Três cópias de uma
+          <em>escrita</em>, cada uma com o seu catch e o seu toast, seriam três
+          chances de errar o tratamento da falha. <code>pending</code> é o que
+          faz disto um serviço e não uma função: duas dessas superfícies podem
+          estar na tela juntas, e sem um flag compartilhado um clique em cada
+          cria duas coleções que ninguém pediu</td>
     </tr>
     <tr>
       <td><code>ThemeService</code></td>
@@ -536,6 +598,8 @@
     <tr><td>Skeleton</td><td class="nowrap"><code>ui-skeleton</code></td><td>A única coisa no app autorizada a cintilar, e só dentro de <code>motion-safe</code>. Essa restrição <em>é</em> o componente: três das superfícies mais importantes (cards do painel, do store, de grupo) desenhavam hachura diagonal onde faltava foto, e uma hachura é indistinguível de um shimmer — então uma coleção pronta sem capa parecia permanentemente no meio de um fetch. O app agora diz exatamente uma de duas coisas: <em>isto ainda está chegando</em> (skeleton) ou <em>não tem nada aqui</em> (<code>ui-empty</code>, o placeholder plano do <code>ui-image-slot</code>). É <code>aria-hidden</code> e sem nome: quem carrega é a <em>região</em>, que possui o <code>aria-busy</code> e o anúncio</td></tr>
     <tr><td>Date input</td><td class="nowrap"><code>ui-date-input</code></td><td>Um <code>&lt;input type="date"&gt;</code> nu segue a locale do <strong>navegador</strong>, não a do documento: um Chrome em locale inglês mostrava <code>mm/dd/yyyy</code> dentro de uma UI em português, o que <strong>não falha — grava a data errada</strong>, e data de aquisição é justamente o campo que ninguém relê. Duas defesas, porque uma não basta: <code>lang</code> bindado a <code>I18nService.current()</code> (o Chromium honra; Firefox e Safari pegam a locale do SO) e <strong>a ordem esperada impressa sob o campo</strong>, derivada de <code>Intl.DateTimeFormat</code> e ligada por <code>aria-describedby</code>, que é a parte que vale em qualquer navegador. O model é sempre ISO <code>yyyy-MM-dd</code>; <code>''</code> é “sem data”, então um campo limpo faz round-trip como o <code>null</code> da API sem este componente conhecer <code>null</code></td></tr>
     <tr><td>Conflict notice</td><td class="nowrap"><code>app-conflict-notice</code></td><td>Vive em <code>layout/</code>, não em <code>shared/ui</code>: é um outlet específico do app, não um elemento reutilizável</td></tr>
+    <tr><td>Language picker</td><td class="nowrap"><code>app-lang-picker</code></td><td>Também em <code>layout/</code>, pelo mesmo motivo. Estava escrito inline no <code>topbar.html</code>, o que o punha <em>dentro</em> do <code>Shell</code> — e <code>/login</code> e <code>/setup</code> são renderizados fora dele. As duas primeiras telas que um usuário encontra, uma delas um wizard de onze campos, eram justamente as duas sem como trocar de idioma: um navegador reportando <code>en-US</code> ganhava inglês e não podia corrigir até depois de entrar. Agora é renderizado nas três</td></tr>
+    <tr><td>Not found</td><td class="nowrap"><code>app-not-found</code></td><td>A rota <code>**</code>, desenhada com <code>ui-empty</code>: título, ícone, a URL que falhou nomeada no corpo e dois botões reais</td></tr>
   </tbody>
 </table>
 </div>

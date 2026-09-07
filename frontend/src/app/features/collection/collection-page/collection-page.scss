@@ -19,7 +19,7 @@
      the panel opens in normal flow above the content instead — the breadcrumb
      and the group row are the navigation that is always there, the tree is an
      accelerator. */
-  @media (min-width: 1200px) {
+  @include from($bp-xl) {
     &--wide {
       grid-template-columns: 240px 1fr;
     }
@@ -57,14 +57,6 @@
   }
 }
 
-.empty {
-  border: var(--bw) dashed var(--border);
-  border-radius: var(--radius);
-  padding: 40px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 13px;
-}
 
 /*
  * The page's own shape, held open while the vault arrives: a 150px banner, the
@@ -114,8 +106,3 @@
   }
 }
 
-.missing {
-  padding: 16px 0;
-  color: var(--muted);
-  font-size: 13px;
-}

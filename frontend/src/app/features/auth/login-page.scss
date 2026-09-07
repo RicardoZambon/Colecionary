@@ -3,6 +3,18 @@
   display: grid;
   place-items: center;
   padding: 24px;
+  /* The chrome row sits above the card and the card stays centred, so the
+     language picker never pushes the form off the vertical middle. */
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: var(--sp-4);
+}
+
+.chrome {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 360px;
 }
 
 /* A fixed 360px is 20px wider than a 390px screen once the 24px of page
@@ -41,7 +53,7 @@
 
 .tagline {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--muted-strong);
   margin: 0;
 }
 
@@ -61,10 +73,27 @@ form {
 
 .demo-hint {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-strong);
   text-align: center;
 
   .mono {
     font-family: var(--font-mono);
   }
+}
+
+/* Information, not a failure: the same box as .error in the neutral secondary
+   type layer, so the two are never confused for each other. */
+.notice {
+  font-size: 12.5px;
+  color: var(--text2);
+  border: var(--bw) dashed var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.forgot {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted-strong);
 }

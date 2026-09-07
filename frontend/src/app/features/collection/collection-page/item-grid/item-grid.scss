@@ -20,6 +20,59 @@
     border-color: var(--accent);
   }
 
+  /**
+   * What is being carried. Bound in the template since the gesture existed and
+   * defined in no stylesheet until now, which is why a drag showed nothing at
+   * all: the card stayed put, no slot opened, and the only feedback was the
+   * list jumping into a new order after the drop.
+   */
+  &.dragging {
+    opacity: 0.45;
+  }
+
+  /**
+   * Where it would land. An outline rather than a shifted layout: the grid is
+   * two-dimensional, so opening a gap would reflow every card after it and the
+   * pointer would chase a moving target.
+   */
+  &.drop-target {
+    outline: var(--focus-width) solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /**
+   * The stretched link. The anchor is the item's name, and its `::after`
+   * covers the card, so the whole tile opens the item while the thing that
+   * takes focus and carries the accessible name is a real `<a>` sitting in the
+   * reading order where the name is.
+   *
+   * `z-index: 1` puts the cover above the artwork and the badges but below
+   * `&__pick` at 2 — a control drawn on top of a link has to be *reachable* on
+   * top of it too, or ticking a card would navigate instead of selecting.
+   * `ui-reorder` is also at 1 and clears the cover on DOM order alone, being
+   * the later sibling; that is why it must stay after the body in the template.
+   */
+  &__link {
+    color: inherit;
+    text-decoration: none;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    /* The ring belongs on the name, not on the invisible cover: an outline on
+       an inset-0 pseudo-element traces the card's edge, which reads as the
+       card being selected rather than the link being focused. */
+    &:focus-visible {
+      outline: var(--focus-width) solid var(--accent);
+      outline-offset: var(--focus-offset);
+      border-radius: 3px;
+    }
+  }
+
   /** Over the top-right corner, opposite the field chip. */
   &__pick {
     position: absolute;
@@ -101,11 +154,16 @@
 
   &__meta {
     font-size: 11.5px;
-    color: var(--muted);
+    /* The year and the group are data, not decoration. --muted is deliberately
+       below AA (see _themes.scss); the secondary *type* layer is
+       --muted-strong. */
+    color: var(--muted-strong);
   }
 
+  /* Type, so the type tier: the raw --accent2 is a fill at 3:1 and measures
+     3.83:1 as small text on Paperwhite's ground. */
   &__copies {
-    color: var(--accent2);
+    color: var(--accent2-strong);
     font-weight: 600;
   }
 
@@ -119,7 +177,7 @@
   &__value {
     font-size: 13px;
     font-weight: 700;
-    color: var(--accent2);
+    color: var(--accent2-strong);
   }
 }
 
@@ -129,11 +187,11 @@
   display: grid;
   place-items: center;
   font-size: 12.5px;
-  color: var(--muted);
+  color: var(--muted-strong);
   min-height: 180px;
 
   &:hover {
-    color: var(--accent);
+    color: var(--accent-strong);
     border-color: var(--accent);
     text-decoration: none;
   }

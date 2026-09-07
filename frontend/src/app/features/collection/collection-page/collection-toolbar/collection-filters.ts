@@ -9,6 +9,11 @@ import { conditionLabelKey } from '../../../../shared/ui/badge/badge';
 /**
  * Condition, status and the active tag, on their own line below the bar.
  *
+ * The two rows are coupled in one direction: choosing "Wanted" withdraws the
+ * condition chips, and `CollectionPage.setOwn` drops any condition already set
+ * in the same navigation, so the URL never holds a pair that can only return
+ * nothing.
+ *
  * Kept apart from the sort and view controls on purpose: those decide what the
  * pane *is*, these narrow what is in it, and crowding all of them onto one
  * line with the breadcrumb left nothing legible.
@@ -26,10 +31,20 @@ import { conditionLabelKey } from '../../../../shared/ui/badge/badge';
   imports: [TPipe, UiChip],
   template: `
     <span class="row-label">{{ 'filters.condition' | t }}</span>
-    @for (value of conditions; track value) {
-      <ui-chip [small]="true" [selected]="condition() === value" (click)="toggleCondition(value)">
-        {{ conditionKey(value) | t }}
-      </ui-chip>
+    <!--
+      A condition belongs to a copy, and a wantlist entry has none — so "Mint"
+      AND "Wanted" is empty by construction, however sensible the question
+      sounds. Five chips that can only empty the list are worse than a sentence
+      saying why they are not on offer.
+    -->
+    @if (own() === 'wanted') {
+      <span class="note">{{ 'filters.conditionOwnedOnly' | t }}</span>
+    } @else {
+      @for (value of conditions; track value) {
+        <ui-chip [small]="true" [selected]="condition() === value" (click)="toggleCondition(value)">
+          {{ conditionKey(value) | t }}
+        </ui-chip>
+      }
     }
 
     <span class="row-label spaced">{{ 'filters.status' | t }}</span>
@@ -63,6 +78,12 @@ import { conditionLabelKey } from '../../../../shared/ui/badge/badge';
       &.spaced {
         margin-left: 10px;
       }
+    }
+
+    /* Why the chips are not there. Type, so the secondary type layer. */
+    .note {
+      font-size: var(--fs-xs);
+      color: var(--muted-strong);
     }
 
     /* Decoration only — the tooltip is what says what the click does, and the

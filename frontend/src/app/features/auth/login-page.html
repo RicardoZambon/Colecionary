@@ -1,36 +1,74 @@
+<!-- The picker is chrome, not part of the form: /login renders outside the app
+     shell, so this is the only place a Portuguese speaker can change the
+     language before signing in. -->
+<div class="chrome">
+  <app-lang-picker />
+</div>
+
 <ui-card class="panel">
   <div class="brand">
     <span class="brand__mark"><ui-icon name="diamond" [size]="15" /></span>
     <span class="brand__name">Vault</span>
   </div>
+  <!-- The screen's real heading, and the only one it has. It was a <span>, so
+       heading navigation found nothing on the page at all. Visually hidden
+       because the wordmark above already reads as the title; a reader needs the
+       structure, not a second line of text. -->
+  <h1 class="sr-only">{{ 'login.heading' | t }}</h1>
   <p class="tagline">{{ 'login.tagline' | t }}</p>
 
   <form (submit)="$event.preventDefault(); submit()">
     <ui-field [label]="'login.email' | t">
       <ui-text-input
+        #emailInput
         type="email"
+        name="email"
+        autocomplete="username"
         [placeholder]="'login.emailPlaceholder' | t"
         [value]="email()"
         (valueChange)="email.set($event)"
       />
     </ui-field>
     <ui-field [label]="'login.password' | t">
+      <!--
+        No placeholder. It was the literal string of bullets, and since nothing
+        labelled the field the accessible name *was* that string: the control
+        announced as "edit, ••••••••". `autocomplete` is what lets a password
+        manager offer to fill and to save the credentials.
+      -->
       <ui-text-input
         type="password"
-        placeholder="••••••••"
+        name="password"
+        autocomplete="current-password"
         [value]="password()"
         (valueChange)="password.set($event)"
       />
     </ui-field>
 
+    <!--
+      An expired session is stated on the form rather than in a toast: the form
+      is where the user has to act, and a 401 is the one HTTP failure
+      `errorInterceptor` deliberately does not report. Without this the screen
+      simply became the sign-in card, which reads as the app logging them out at
+      random.
+    -->
+    @if (expired()) {
+      <div class="notice" role="status">{{ 'login.expired' | t }}</div>
+    }
+
     @if (error(); as message) {
       <div class="error" role="alert">{{ message }}</div>
     }
 
-    <ui-button type="submit" [block]="true" [disabled]="busy()">
+    <ui-button type="submit" [block]="true" [pending]="busy()">
       {{ (busy() ? 'login.submitting' : 'login.submit') | t }}
     </ui-button>
   </form>
+
+  <!-- A true sentence, and it ends a dead end: there is no reset flow (a
+       documented v1 tradeoff), so saying nothing left the user with nowhere to
+       go at all. -->
+  <p class="forgot">{{ 'login.forgotPassword' | t }}</p>
 
   <div class="demo-hint">
     {{ 'login.demoHint' | t }} <span class="mono">marcus@example.com</span> · <span class="mono">vault-demo</span>

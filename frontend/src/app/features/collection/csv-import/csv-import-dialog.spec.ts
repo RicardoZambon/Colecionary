@@ -117,9 +117,27 @@ describe('CsvImportDialog', () => {
     // Mu Aries is already in Ouro, so it is left alone; Prata does not exist.
     expect(counts).toContain('2 items added');
     expect(counts).toContain('1 already here, left alone');
-    expect(counts).toContain('1 group created');
     expect(page.confirm().disabled).toBe(false);
     expect(page.confirm().textContent!.trim()).toBe('Import 2 items');
+  });
+
+  it('names the group it would create rather than only counting it', () => {
+    // "1 group created" is exactly what somebody importing a file expects to
+    // read, so a 400-row file with one name mistyped imported cleanly and left
+    // a typo in the tree holding one item. The names were already on the plan.
+    const page = mount();
+    page.paste(CSV);
+    expect(page.all('.summary__created')).toContain('New group: Cavaleiros de Prata');
+  });
+
+  it('rolls the destinations up above the row table', () => {
+    // Where a wrong column or a typo is actually visible: the row table stops
+    // at twenty rows in line order, so a mistake on line 260 is not on screen.
+    const page = mount();
+    page.paste(CSV);
+    const lands = page.all('.lands li').join(' | ');
+    expect(lands).toContain('Prata');
+    expect(lands).toContain('Ouro');
   });
 
   it('draws one preview row per line, saying where it lands and what happens', () => {

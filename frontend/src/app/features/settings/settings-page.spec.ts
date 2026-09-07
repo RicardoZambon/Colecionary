@@ -103,6 +103,13 @@ class FakeArchiveApi {
   readonly attempts: (readonly ReplaceDecision[] | undefined)[] = [];
   plan: ImportPlan | null = null;
   imported: Collection[] = [];
+  /** When set, `downloadVault` rejects with it — a failed export. */
+  downloadFails: Error | null = null;
+
+  async downloadVault(): Promise<{ blob: Blob; filename: string }> {
+    if (this.downloadFails) throw this.downloadFails;
+    return { blob: new Blob([new Uint8Array(1)]), filename: 'vault-export.zip' };
+  }
 
   async importArchive(
     _file: File,
@@ -169,6 +176,7 @@ async function mount(
     click,
     pick,
     toast: () => TestBed.inject(ToastService).message(),
+    tone: () => TestBed.inject(ToastService).current()?.tone ?? null,
     tabs: () => [...el.querySelectorAll('[role="tab"]')] as HTMLElement[],
     byLabel: (aria: string) => el.querySelector(`[aria-label="${aria}"]`) as HTMLSelectElement,
   };
@@ -261,14 +269,30 @@ describe('SettingsPage', () => {
     await tick();
     page.fixture.detectChanges();
 
-    // Nothing was written; the dialog is asking.
+    // Nothing was written; the dialog is asking. `alertdialog`, since it
+    // interrupts to ask about a consequence.
     expect(page.archives.attempts).toEqual([undefined]);
-    expect(page.el.querySelector('app-import-dialog [role="dialog"]')).not.toBeNull();
+    expect(page.el.querySelector('app-import-dialog [role="alertdialog"]')).not.toBeNull();
 
-    await page.click(page.el.querySelector('app-import-dialog .actions ui-button:last-of-type button')!);
+    // And it cannot be answered by pressing the button: an unanswered
+    // collision is a third state, not a synonym for "create a new one".
+    const confirm = () =>
+      page.el.querySelector(
+        'app-import-dialog .panel__actions ui-button:last-of-type button',
+      ) as HTMLButtonElement;
+    expect(confirm().disabled).toBe(true);
+
+    const createNew = page.el.querySelectorAll(
+      'app-import-dialog .choice input[type="radio"]',
+    )[0] as HTMLInputElement;
+    createNew.checked = true;
+    createNew.dispatchEvent(new Event('change'));
+    page.fixture.detectChanges();
+
+    await page.click(confirm());
 
     expect(page.archives.attempts).toEqual([undefined, []]);
-    expect(page.el.querySelector('app-import-dialog [role="dialog"]')).toBeNull();
+    expect(page.el.querySelector('app-import-dialog [role="alertdialog"]')).toBeNull();
   });
 
   it('sends each overwrite with the version the plan reported for it', async () => {
@@ -297,8 +321,38 @@ describe('SettingsPage', () => {
     overwrite.dispatchEvent(new Event('change'));
     page.fixture.detectChanges();
 
-    await page.click(page.el.querySelector('app-import-dialog .actions ui-button:last-of-type button')!);
+    await page.click(
+      page.el.querySelector('app-import-dialog .panel__actions ui-button:last-of-type button')!,
+    );
 
     expect(page.archives.attempts.at(-1)).toEqual([{ id: 'c1', version: '"4"' }]);
+  });
+});
+
+describe('SettingsPage failure reporting', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('reports a refused export as a failure, not as neutral news', async () => {
+    // `flash` is the info tone: no --danger, no "Failed" marker, no
+    // `role="alert"`, no dismiss — and a 2.6s timer, which is what took the
+    // only evidence away before anyone watching their downloads folder saw it.
+    const page = await mount({ tab: 'account' });
+    page.archives.downloadFails = new Error('nope');
+
+    const button = page.el.querySelector('.account-card ui-button button') as HTMLElement;
+    await page.click(button);
+
+    expect(page.tone()).toBe('error');
+    expect(page.toast()).toBe(TestBed.inject(I18nService).t('toast.export.failed'));
+  });
+
+  it('marks a successful export as a success, so the Done marker is drawn', async () => {
+    const page = await mount({ tab: 'account' });
+    const button = page.el.querySelector('.account-card ui-button button') as HTMLElement;
+    await page.click(button);
+    expect(page.tone()).toBe('success');
   });
 });

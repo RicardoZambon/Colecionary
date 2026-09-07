@@ -66,10 +66,25 @@ export class SetupService {
     await firstValueFrom(this.http.post(`${this.base}/setup/apply`, payload));
   }
 
-  /** After apply, polls until the setup endpoint disappears (404 = configured). */
-  async waitUntilConfigured(timeoutMs = 90000): Promise<boolean> {
+  /**
+   * After apply, polls until the setup endpoint disappears (404 = configured).
+   *
+   * `onPoll` is called with the attempt number, starting at 1, so the caller
+   * can say something about a wait it cannot otherwise see: the backend
+   * restarts in-process and nothing on the page changes for up to a minute and
+   * a half, which most people read as a hang. There is no percentage to report —
+   * the end is an event, not a fraction — so what the caller gets is elapsed
+   * attempts and the text is its own.
+   */
+  async waitUntilConfigured(
+    options: { timeoutMs?: number; onPoll?: (attempt: number) => void } = {},
+  ): Promise<boolean> {
+    const timeoutMs = options.timeoutMs ?? 90000;
     const start = Date.now();
+    let attempt = 0;
     while (Date.now() - start < timeoutMs) {
+      attempt += 1;
+      options.onPoll?.(attempt);
       try {
         await firstValueFrom(this.http.get(`${this.base}/setup/status`, { context: this.silent }));
         // Still 200 → host is still in setup mode; keep waiting.

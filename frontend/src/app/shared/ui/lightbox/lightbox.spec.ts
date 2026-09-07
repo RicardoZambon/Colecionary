@@ -44,7 +44,7 @@ describe('UiLightbox', () => {
     const { el } = mount();
 
     // Big, but not the multi-megabyte original — that is a deliberate click.
-    expect((el.querySelector('.picture') as HTMLImageElement).src).toContain('size=display');
+    expect((el.querySelector('.picture img') as HTMLImageElement).src).toContain('size=display');
     expect((el.querySelector('.original') as HTMLAnchorElement).href).toContain('size=full');
   });
 

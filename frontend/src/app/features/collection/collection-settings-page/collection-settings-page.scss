@@ -25,6 +25,46 @@ h1 {
   margin: 0;
 }
 
+// The panel the tab strip points at with `aria-controls`. It carries the column
+// layout the three tabs used to have as direct children of the host — the gap
+// included, since the groups tab is two cards — and grows, so the sticky
+// done-row stays pinned to the bottom.
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+// The document moved under an unsaved draft. --warn rather than --danger:
+// nothing is broken and nothing is lost yet, which is the entire reason there
+// is a decision to make.
+.moved-on {
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--bw) solid var(--warn);
+  border-radius: var(--radius);
+  background: var(--panel2);
+  color: var(--text2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+
+  p {
+    margin: 0 0 var(--sp-2);
+  }
+
+  &__title {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+}
+
 .general {
   display: flex;
   flex-direction: column;
@@ -83,7 +123,10 @@ h1 {
  * flexing and every name input collapsed to its intrinsic width.
  */
 .groups-split__detail {
-  .rename {
+  // A composer is the row it is about to become, so it takes the same metrics
+  // as the rename box rather than declaring its own.
+  .rename,
+  .composer {
     flex: 1;
     min-width: 0;
 
@@ -101,19 +144,46 @@ h1 {
     color: var(--muted);
   }
 
-  /* Wide enough for a five-digit run, narrow enough to read as a number rather
-     than as another dropdown. */
-  .target {
+  // Wide enough for a five-digit run, narrow enough to read as a number rather
+  // than as another dropdown. The section row only: the group target is a field
+  // in the grid above, where 78px truncated its own placeholder.
+  .section-chip .target {
     flex: none;
     width: 78px;
   }
 }
 
-.detail__name,
-.detail__parent,
-.detail__order,
+// One control per cell, each with the sentence that explains it underneath —
+// `ui-field` owns the label and the hint, so the four rows that used to be
+// inline label-plus-control pairs are now fields in a grid. A `minmax` minimum
+// and no column count: at 280px the grid is one column, which is a phone.
+.detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--sp-4);
+  padding: var(--sp-3) 0 0;
+}
+
+// Two selects answering one question — what to order by, and which way — so
+// they share a line inside the one field.
+.detail__pair {
+  display: flex;
+  gap: 6px;
+
+  .order-by {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .direction {
+    flex: none;
+    min-width: 86px;
+  }
+}
+
 .detail__fields,
-.detail__sections {
+.detail__sections,
+.detail__migrate {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -124,6 +194,19 @@ h1 {
     @include mono-label(var(--fs-xs), 0.1em);
     text-transform: uppercase;
   }
+}
+
+// The sentence that used to be one paragraph of everything, split and attached
+// to the list it describes. Same size and colour as `ui-field`'s own hint, so a
+// hint under a control and a hint under a list read as one thing — and the
+// sharing tab's note is the same object, so it is the same rule.
+.detail__hint,
+.sharing__note {
+  width: 100%;
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--text2);
+  line-height: 1.5;
 }
 
 /* One declaration per line, for fields and sections alike. Both are lists of
@@ -141,74 +224,24 @@ h1 {
   }
 }
 
-.detail__parent {
-  .parent {
-    flex: 1;
-    min-width: 170px;
-  }
+// The one control on the page that shows a value nothing has applied yet. A
+// native select cannot be snapped back to a value its binding never left, so
+// instead of pretending it was not operated the box says it is uncommitted —
+// the same dashed accent a composer row uses, plus a label.
+.detail__parent--pending .parent ::ng-deep select {
+  border-style: dashed;
+  border-color: var(--accent);
 }
 
-/*
- * The preview a move has to survive before it commits. `fieldsFor` merges the
- * whole ancestor path and `sortFor` takes the nearest ancestor that sets one,
- * so a move re-declares what every item in the branch shows — and nothing
- * afterwards looks broken, which is exactly why it is stated up front.
- */
-.move-preview {
-  margin-top: var(--sp-3);
-  padding: var(--sp-3);
-  border: var(--bw) solid var(--accent);
-  border-radius: var(--radius);
-  background: var(--panel2);
-  font-size: var(--fs-sm);
-
-  &__head {
-    margin: var(--sp-1) 0 var(--sp-2);
-    color: var(--text);
-    font-weight: 600;
-  }
-
-  &__list {
-    margin: 0;
-    padding-left: var(--sp-5);
-    color: var(--text2);
-  }
-
-  &__lost {
-    color: var(--warn);
-  }
-
-  &__note {
-    margin: var(--sp-2) 0 0;
-    color: var(--muted);
-    font-size: var(--fs-xs);
-  }
-
-  &__clash {
-    margin: var(--sp-2) 0 0;
-    color: var(--warn);
-  }
-
-  &__actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--sp-2);
-    margin-top: var(--sp-3);
-  }
+.detail__unapplied {
+  color: var(--warn);
+  font-size: var(--fs-xs);
 }
 
-.detail__order {
-  .order-by {
-    min-width: 170px;
-  }
-
-  .direction {
-    min-width: 86px;
-  }
-
-  .fields-label.spaced {
-    margin-left: 10px;
-  }
+// Held away from the add beside it: the two used to share a 10px gap, and one
+// of them deletes the whole group with no undo.
+.detail__remove {
+  margin-left: 12px;
 }
 
 /* The shared row. A declared field and a section are the same kind of thing to
@@ -258,44 +291,39 @@ h1 {
   }
 }
 
-/* A field row now carries a name and *two* selects, and on a phone those three
-   cannot share a line: the name is the only one whose width is not fixed, so it
-   is the one that collapses, and a name like "Box condition" wrapped into the
-   type select beside it. Below the breakpoint the name takes the whole first
-   line and the controls line up under it — which is the same shape the fields
-   list already takes against the detail column, one declaration per line. */
+// A field row carries a name and *two* selects; a section row carries a name, a
+// count, a target and four buttons. On a phone neither fits a line: the name is
+// the only column whose width is not fixed, so it is the one that collapses —
+// and the section row, which had no wrap rule at all, pushed the remove button
+// off the right edge and gave the whole document a horizontal scrollbar. Below
+// the breakpoint the name takes the first line and the fixed columns share the
+// second, which is the shape the detail column already uses everywhere else.
 @include upto($bp-md) {
-  .field-chip {
+  .field-chip,
+  .section-chip {
     flex-wrap: wrap;
     padding-top: 6px;
     padding-bottom: 6px;
+  }
 
-    .name {
-      flex: 1 0 100%;
-    }
+  .field-chip .name,
+  .section-chip .rename {
+    flex: 1 0 100%;
+  }
 
-    .type,
-    .scope {
-      flex: 1;
-      width: auto;
-      min-width: 0;
-    }
+  .field-chip .type,
+  .field-chip .scope,
+  .section-chip .target {
+    flex: 1;
+    width: auto;
+    min-width: 0;
   }
 }
 
-/* The inline editor inside a "new" row. It has to read as the row it is about
-   to become — same height, same metrics, filling the line — which is why it is
-   no longer the 120px, 11px inline scrap that suited a pill. */
-.field-input {
+// Its share of the line; `ui-inline-edit` brings the box.
+.composer {
   flex: 1;
   min-width: 0;
-  padding: 7px 10px;
-  color: var(--text);
-  font-size: 12.5px;
-  font-family: var(--font-body);
-  background: var(--panel2);
-  border: var(--bw) solid var(--border);
-  border-radius: var(--radius);
 }
 
 .new-group {
@@ -318,16 +346,10 @@ h1 {
     flex: none;
   }
 
-  &__input {
-    flex: 1;
-    min-width: 0;
-    background: var(--panel2);
-    border: var(--bw) dashed var(--accent);
-    color: var(--text);
-    border-radius: var(--radius);
-    padding: 7px 10px;
-    font-family: var(--font-body);
-    font-size: 12.5px;
+  // Dashed accent, like every other row that does not exist yet.
+  .composer ::ng-deep input {
+    border-style: dashed;
+    border-color: var(--accent);
   }
 }
 
@@ -350,11 +372,20 @@ h1 {
 
 .invite-row {
   display: flex;
+  // The email now carries a label and, when it is refused, a message under it;
+  // the role and the button line up with the box rather than with the label.
+  align-items: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 
   .invite-email {
-    flex: 1;
+    flex: 1 1 200px;
     min-width: 0;
+  }
+
+  .invite-role {
+    flex: none;
+    min-width: 116px;
   }
 }
 
@@ -419,6 +450,14 @@ h1 {
     font-size: var(--fs-xs);
     color: var(--muted);
   }
+
+  // The secondary type layer, not the decorative grey: this is the one line
+  // that says whether the work on screen has left the page.
+  &__state {
+    margin-left: var(--sp-2);
+    color: var(--muted-strong);
+    font-weight: 600;
+  }
 }
 
 .missing {
@@ -432,6 +471,13 @@ h1 {
 .section-chip .count {
   font-family: var(--font-mono);
   font-size: 10.5px;
+}
+
+// `ui-reorder` is absolutely positioned by default, to overlay a draggable
+// card. This row is inline, so it takes its place in the line.
+.section-chip__reorder {
+  position: static;
+  flex: none;
 }
 
 /* Master–detail. 280px is enough for four levels of indent plus a name before

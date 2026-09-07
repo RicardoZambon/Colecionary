@@ -6,14 +6,7 @@ import { GroupStats } from '../../../../core/utils/group-stats.util';
 import { groupLinkParams } from '../../browse-params';
 import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import {
-  MosaicTile,
-  UiBadge,
-  UiCard,
-  UiEmpty,
-  UiMosaic,
-  UiProgress,
-} from '../../../../shared/ui';
+import { MosaicTile, UiBadge, UiCard, UiEmpty, UiMosaic, UiProgress, UiTruncate } from '../../../../shared/ui';
 import { BadgeTone } from '../../../../shared/ui/badge/badge';
 import { VaultStore } from '../../../../core/state/vault.store';
 
@@ -29,7 +22,7 @@ import { VaultStore } from '../../../../core/state/vault.store';
 @Component({
   selector: 'app-group-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, ItemValuePipe, TPipe, UiBadge, UiCard, UiEmpty, UiMosaic, UiProgress],
+  imports: [RouterLink, ItemValuePipe, TPipe, UiBadge, UiCard, UiEmpty, UiMosaic, UiProgress, UiTruncate],
   templateUrl: './group-card.html',
   styleUrl: './group-card.scss',
 })

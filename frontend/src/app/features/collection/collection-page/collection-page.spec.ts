@@ -135,6 +135,8 @@ async function mount(
     collection?: Collection;
     g?: string;
     v?: string;
+    /** `?s=` — the divider the list is narrowed to. */
+    s?: string;
     cond?: string;
     own?: string;
     tag?: string;
@@ -159,6 +161,7 @@ async function mount(
   fixture.componentRef.setInput('collectionId', 'c1');
   if (opts.g !== undefined) fixture.componentRef.setInput('g', opts.g);
   if (opts.v !== undefined) fixture.componentRef.setInput('v', opts.v);
+  if (opts.s !== undefined) fixture.componentRef.setInput('s', opts.s);
   if (opts.cond !== undefined) fixture.componentRef.setInput('cond', opts.cond);
   if (opts.own !== undefined) fixture.componentRef.setInput('own', opts.own);
   if (opts.tag !== undefined) fixture.componentRef.setInput('tag', opts.tag);
@@ -189,7 +192,32 @@ async function mount(
       (c.textContent ?? '').trim().startsWith('#'),
     ) ?? null;
 
-  return { el, fixture, headings, empty, emptyTitle, emptyIcon, cardNames, filterChips, tagChip };
+  const summary = () => el.querySelector('app-browse-summary');
+  const summaryCount = () =>
+    (summary()?.querySelector('.summary__count')?.textContent ?? '').trim();
+  const summaryChips = () =>
+    [...(summary()?.querySelectorAll('.summary__state .chip') ?? [])].map(c =>
+      (c.textContent ?? '').replace(/\s+/g, ' ').replace('\u00d7', '').trim(),
+    );
+  const summaryClear = () => summary()?.querySelector<HTMLElement>('ui-button button') ?? null;
+  const addTile = () => el.querySelector('.add-tile');
+
+  return {
+    el,
+    fixture,
+    headings,
+    empty,
+    emptyTitle,
+    emptyIcon,
+    cardNames,
+    filterChips,
+    tagChip,
+    summary,
+    summaryCount,
+    summaryChips,
+    summaryClear,
+    addTile,
+  };
 }
 
 describe('CollectionPage — sections', () => {
@@ -461,5 +489,171 @@ describe('CollectionPage — the tag filter', () => {
     expect(page.cardNames()).toHaveLength(3);
     expect(page.tagChip()).toBeNull();
     expect(page.empty()).toBeNull();
+  });
+});
+
+
+/**
+ * The main screen's answer to "why am I looking at nine of two hundred?".
+ *
+ * Everything asserted here used to be absent: the grid never said how many rows
+ * it was showing, the hero's ratio was the *unfiltered* total and so contradicted
+ * the screen, the `?s=` section filter was represented by nothing but one
+ * heading in a slightly different colour, and "Clear filters" existed only
+ * inside the zero-result empty state — i.e. only once the filters had hidden
+ * everything.
+ */
+describe('CollectionPage — what the list is showing', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+
+  it('counts the rows on screen against the scope, with no filters at all', async () => {
+    const page = await mount({ g: 'espanha', v: 'grid' });
+    expect(page.summaryCount()).toBe('3 of 3 items');
+    expect(page.summaryChips()).toEqual([]);
+    // Nothing to clear, so nothing offering to.
+    expect(page.summaryClear()).toBeNull();
+  });
+
+  it('names every narrowing in force, the section included, and offers the way out', async () => {
+    const page = await mount({ g: 'espanha', v: 'grid', own: 'owned' });
+
+    expect(page.summaryChips()).toEqual(['Status: Owned']);
+    expect(page.summaryCount()).toBe('0 of 3 items');
+    expect(page.summaryClear()).not.toBeNull();
+  });
+
+  it('shows the section filter, which had no representation but a colour', async () => {
+    const page = await mount({ g: 'espanha', v: 'grid', s: 'ouro' });
+    expect(page.summaryChips()).toEqual(['Section: Cavaleiros de Ouro']);
+  });
+
+  it('offers the way out while results remain, not only once the list is empty', async () => {
+    // The whole defect: `filtering()` already knew the answer for a non-empty
+    // result and nothing consumed it.
+    const page = await mount({ g: 'espanha', v: 'grid', s: 'ouro' });
+    expect(page.cardNames()).toEqual(['aiolia']);
+    expect(page.empty()).toBeNull();
+    expect(page.summaryClear()).not.toBeNull();
+  });
+
+  it('drops one narrowing from its chip, leaving the others in force', async () => {
+    const page = await mount({ g: 'espanha', v: 'grid', own: 'owned', s: 'ouro' });
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    const sectionChip = [
+      ...page.el.querySelectorAll<HTMLElement>('app-browse-summary .summary__state .chip'),
+    ].find(c => (c.textContent ?? '').includes('Cavaleiros de Ouro'))!;
+    sectionChip.click();
+    page.fixture.detectChanges();
+
+    const [, options] = navigate.mock.calls[0] as [unknown[], Record<string, unknown>];
+    // Only the section, and nothing else nulled with it.
+    expect(options['queryParams']).toEqual({ s: null });
+  });
+
+  it('announces the change rather than rebuilding the list in silence', async () => {
+    // Neither view is inside a live region and ui-empty is deliberately not
+    // role=status, which left the page owing an announcement nothing supplied.
+    const page = await mount({ g: 'espanha', v: 'grid' });
+    const live = page.el.querySelector('app-browse-summary [aria-live="polite"]');
+    expect(live).not.toBeNull();
+    expect(live!.textContent).toContain('3 of 3 items');
+  });
+});
+
+describe('CollectionPage — one call to action, in the right place', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+
+  it('leaves an empty group one empty state, not a tile plus a panel', async () => {
+    // It used to draw a dashed "+ Add item" tile and, directly under it, a
+    // bordered panel headed "Nothing catalogued here yet" with its own Add item
+    // and Import CSV buttons: the same instruction three times in two boxes.
+    const page = await mount({ collection: collection({ items: [], sections: [] }), v: 'grid' });
+
+    expect(page.addTile()).toBeNull();
+    expect(page.emptyTitle()).toBe('Nothing catalogued here yet');
+  });
+
+  it('does not offer "add item" as the answer to a filtering mistake', async () => {
+    const page = await mount({ g: 'espanha', v: 'grid', s: 'ouro' });
+    expect(page.cardNames()).toEqual(['aiolia']);
+    expect(page.addTile()).toBeNull();
+  });
+
+  it('still offers "add another" at the end of an unfiltered list', async () => {
+    const page = await mount({ g: 'espanha', v: 'grid' });
+    expect(page.addTile()).not.toBeNull();
+  });
+});
+
+describe('CollectionPage — a condition and "wanted" cannot both be on', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+
+  it('drops the condition in the same navigation that picks Wanted', async () => {
+    // A condition matches when some copy is in it; `wanted` matches when there
+    // are none. The pair is empty by construction, and the empty state could
+    // only say "nothing fits the filters" without saying which two fought.
+    const page = await mount({ g: 'espanha', v: 'grid', cond: 'Mint' });
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    const wanted = [
+      ...page.el.querySelectorAll<HTMLElement>('app-collection-filters .chip'),
+    ].find(c => (c.textContent ?? '').trim() === 'Wanted')!;
+    wanted.click();
+    page.fixture.detectChanges();
+
+    const [, options] = navigate.mock.calls[0] as [unknown[], Record<string, unknown>];
+    expect(options['queryParams']).toEqual({ own: 'wanted', cond: null });
+  });
+
+  it('withdraws the condition chips while Wanted is in force, and says why', async () => {
+    const page = await mount({ g: 'espanha', v: 'grid', own: 'wanted' });
+    const row = page.el.querySelector('app-collection-filters')!;
+
+    expect(row.querySelector('.note')).not.toBeNull();
+    // Status chips only — the five condition chips are gone.
+    expect([...row.querySelectorAll('.chip')].map(c => c.textContent!.trim())).toEqual([
+      'Owned',
+      'Wanted',
+    ]);
   });
 });

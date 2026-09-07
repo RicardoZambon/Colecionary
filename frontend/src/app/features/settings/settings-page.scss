@@ -20,14 +20,30 @@ h1 {
   margin: 0;
 }
 
+/*
+ * The tab's panel. It carries the column gap the host used to give the notice
+ * and the section directly, now that they are nested one level deeper inside a
+ * real `role="tabpanel"`.
+ */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
 .section {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+/* An <h2> now, so heading navigation finds the six sections; the class carries
+   the whole look, so nothing moved. */
+h2.heading,
 .heading {
   @include mono-label(10.5px);
+  margin: 0;
   // Uppercase is presentation, so it lives here and not in the dictionary —
   // translators get sentence case (docs/frontend-standards.md §2.8).
   text-transform: uppercase;
@@ -42,7 +58,7 @@ h1 {
 // Opens a second block inside a section that already had one — the
 // per-collection backups under the vault-wide ones.
 .heading.spaced {
-  margin-top: 22px;
+  margin-top: 10px;
 }
 
 .mono {
@@ -68,14 +84,31 @@ h1 {
 }
 
 .theme-card {
-  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 9px;
 
   &--active {
     border-color: var(--accent);
     border-width: 2px;
+  }
+
+  /*
+   * The card's whole surface is one button. `flex: 1` so the grid row's equal
+   * heights still hold: `.themes` sets `grid-auto-rows: 1fr` precisely so the
+   * state line sits at the same height in every card.
+   */
+  .pick {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 14px;
+    border: 0;
+    background: none;
+    font-family: var(--font-body);
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
   }
 
   .swatches {
@@ -97,7 +130,7 @@ h1 {
 
   .desc {
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
     line-height: 1.45;
   }
 
@@ -106,17 +139,20 @@ h1 {
     font-size: 9.5px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-strong);
+    /* Pushed to the bottom of the card, which is what the equal-height rows
+       were for; it used to be the last flex child of the card itself. */
+    margin-top: auto;
 
     &.active {
-      color: var(--accent);
+      color: var(--accent-strong);
     }
   }
 }
 
 // Same card with the flag standing in for the swatch row; the tighter gap and
 // the bottom alignment keep its state line level with the themes'.
-.lang-card {
+.lang-card .pick {
   justify-content: flex-end;
   gap: 5px;
 
@@ -163,7 +199,8 @@ h1 {
   &__price {
     font-size: 13px;
     font-weight: 700;
-    color: var(--accent2);
+    /* Type, not a fill: --accent2 is a 3:1 token. */
+    color: var(--accent2-strong);
   }
 
   &__features {
@@ -245,19 +282,49 @@ h1 {
   .email {
     display: block;
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
     margin-top: 2px;
+    /* An address has no break opportunities of its own, so on a phone it spilled
+       out of the row it belongs to rather than wrapping inside it. */
+    overflow-wrap: anywhere;
   }
 }
 
 
 // --- account ---
 
+/*
+ * A flex column, not a grid.
+ *
+ * *Every* direct child of a grid is a grid item, and this section's children
+ * are not only cards: two `p.sub` hints, a `div.heading`, N per-collection cards
+ * and `app-import-dialog`, which has no `:host { display }` of its own and so
+ * claimed a live empty cell. At desktop width that offset every card by one, so
+ * the paragraph explaining Import sat beside the next heading and no heading was
+ * above the list it introduced. On a phone — one column — it read correctly,
+ * which is why it survived. Only the cards are gridded now.
+ */
 .account {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+}
+
+/*
+ * An inert dialog claims no layout. It has no `:host { display }` of its own,
+ * so as a flex item of `.account` it left a gap's worth of dead space at the
+ * end of the section — and as a *grid* item, before this section stopped being
+ * a grid, it occupied a live empty cell and shifted every card after it.
+ */
+.account app-import-dialog {
+  display: contents;
+}
+
+.cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 14px;
-  max-width: 760px;
 }
 
 .account-card {
@@ -282,7 +349,7 @@ h1 {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--accent);
+  color: var(--accent-strong);
   border: 1px solid var(--accent);
   border-radius: var(--pill);
   padding: 3px 10px;

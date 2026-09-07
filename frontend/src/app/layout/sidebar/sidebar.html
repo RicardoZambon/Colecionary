@@ -4,30 +4,76 @@
   </ui-button>
 </div>
 
+<!--
+  `ariaCurrentWhenActive` on every one of these. The active class is a colour
+  swap, which rule 12 forbids as the only signal, and nothing emitted
+  `aria-current` anywhere in the nav — so a screen-reader user heard four
+  identical links with nothing marking the page they were on.
+-->
 <nav class="group" [attr.aria-label]="'nav.primaryAria' | t">
-  <a #firstLink class="nav-item" routerLink="/dashboard" routerLinkActive="active">
+  <a #firstLink class="nav-item" routerLink="/dashboard" routerLinkActive="active" ariaCurrentWhenActive="page">
     <ui-icon name="home" />{{ 'nav.dashboard' | t }}
   </a>
-  <a class="nav-item" routerLink="/store" routerLinkActive="active">
+  <a class="nav-item" routerLink="/store" routerLinkActive="active" ariaCurrentWhenActive="page">
     <ui-icon name="grid" />{{ 'nav.store' | t }}
   </a>
 </nav>
 
 <nav class="group" [attr.aria-label]="'nav.collections' | t">
-  <div class="heading">{{ 'nav.collections' | t }}</div>
+  <div class="heading-row">
+    <div class="heading">{{ 'nav.collections' | t }}</div>
+    <!--
+      The section a user comes here to manage had no create control at all; the
+      only one in the app was a tile at the end of the dashboard's grid.
+    -->
+    @if (store.canEdit()) {
+      <ui-button
+        variant="icon"
+        [ariaLabel]="'dashboard.createCollection' | t"
+        [pending]="create.pending()"
+        (click)="create.run()"
+      ><ui-icon name="plus" [size]="13" [strokeWidth]="2.4" /></ui-button>
+    }
+  </div>
   @for (collection of store.collections(); track collection.id) {
-    <a class="nav-item nav-item--split" [routerLink]="['/c', collection.id]" routerLinkActive="active">
+    <a
+      class="nav-item nav-item--split"
+      [routerLink]="['/c', collection.id]"
+      routerLinkActive="active"
+      ariaCurrentWhenActive="page"
+    >
       <span class="name">{{ collection.name }}</span>
       <span class="count">{{ collection.items.length }}</span>
     </a>
+  } @empty {
+    <p class="empty">{{ 'nav.collections.empty' | t }}</p>
   }
 </nav>
 
 <div class="footer">
-  <a class="nav-item" routerLink="/settings" routerLinkActive="active">
+  <!--
+    Below $bp-lg the top bar drops its theme and language pickers — they were
+    the two most prominent controls on a phone and the two a user touches least
+    — so the drawer carries the way to them. Above the breakpoint the pickers
+    are in the bar and this row would be a second door to the same room.
+  -->
+  @if (layout.compact()) {
+    <a class="nav-item" routerLink="/settings" [queryParams]="{ tab: 'appearance' }">
+      <ui-icon name="contrast" />{{ 'nav.appearance' | t }}
+    </a>
+  }
+  <a class="nav-item" routerLink="/settings" routerLinkActive="active" ariaCurrentWhenActive="page">
     <ui-icon name="gear" />{{ 'nav.settings' | t }}
   </a>
-  <!-- Derived, not decorative. This read "synced - v0.1 mock API" in a product
-       running on a real .NET backend, and the dot never changed colour. -->
-  <div class="status" [attr.data-sync]="store.syncState()">{{ store.syncStatusKey() | t }}</div>
+  <!--
+    Derived, not decorative. This read "synced - v0.1 mock API" in a product
+    running on a real .NET backend, and the dot never changed colour. All four
+    states then rendered identically in the app's decorative grey — the one line
+    whose job is to say whether the user's work is safe. The mark beside the
+    label is what keeps tone off colour alone.
+  -->
+  <p class="status" role="status" [attr.data-sync]="store.syncState()">
+    <ui-icon class="status__mark" [name]="store.syncIcon()" [size]="11" [strokeWidth]="2.4" />
+    <span>{{ store.syncStatusKey() | t }}</span>
+  </p>
 </div>

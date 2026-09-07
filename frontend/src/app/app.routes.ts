@@ -71,7 +71,19 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/collection/item-form-page/item-form-page').then(m => m.ItemFormPage),
       },
+      {
+        /*
+         * A page, not a redirect, and a *child* of the shell so the address bar
+         * keeps the URL that failed. `redirectTo: 'dashboard'` answered every
+         * mistyped or stale link by rendering the dashboard and rewriting the
+         * address, so the user believed the navigation had worked and could not
+         * recover the URL to retry it. Being under the shell it also keeps
+         * `authGuard`: an unknown path reached while signed out still goes to
+         * the sign-in screen.
+         */
+        path: '**',
+        loadComponent: () => import('./layout/not-found/not-found').then(m => m.NotFound),
+      },
     ],
   },
-  { path: '**', redirectTo: 'dashboard' },
 ];

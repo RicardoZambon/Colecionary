@@ -1,21 +1,21 @@
 <div class="head">
   <ui-section-label>{{ 'groupTree.heading' | t }}</ui-section-label>
-  <button
-    type="button"
-    class="head__collapse"
-    [attr.aria-label]="'groupTree.hidePanel' | t"
-    [title]="'groupTree.hidePanel' | t"
-    (click)="collapse.emit()"
-  ><ui-icon name="chevron-left" [size]="14" /></button>
 </div>
 
 <ul role="tree" [attr.aria-label]="'groupTree.aria' | t">
   @for (row of rows(); track row.node.id; let i = $index) {
+    <!--
+      role="none" on the li, and the tree semantics on the anchor below.
+
+      ARIA state is reported for the element that has focus, and the focusable
+      element here is the link. With role="treeitem" on the li, a screen reader
+      heard "Cavaleiros, 3/24, link" — no tree item, no level, no
+      expanded/collapsed, no selected — while the arrow keys moved through a
+      structure it was never told about. role="treeitem" on an anchor keeps the
+      real href, so middle-click and open-in-new-tab still work.
+    -->
     <li
-      role="treeitem"
-      [attr.aria-level]="row.depth + 1"
-      [attr.aria-expanded]="row.hasChildren ? row.expanded : null"
-      [attr.aria-selected]="row.selected"
+      role="none"
       class="row"
       [class.row--selected]="row.selected"
       [style.padding-left.px]="row.depth * 14"
@@ -37,6 +37,10 @@
 
       <a
         class="row__link"
+        role="treeitem"
+        [attr.aria-level]="row.depth + 1"
+        [attr.aria-expanded]="row.hasChildren ? row.expanded : null"
+        [attr.aria-selected]="row.selected"
         [routerLink]="['/c', collectionId()]"
         [queryParams]="linkParams(row.node.id)"
         queryParamsHandling="merge"
@@ -44,23 +48,31 @@
         (keydown)="onKeydown($event, i)"
       >
         <span class="row__top">
-          <span class="row__name">{{ row.node.name }}</span>
+          <span class="row__name"><ui-truncate [text]="row.node.name" /></span>
           <span class="row__count">{{ row.count }}</span>
           @if (row.copiesNote) {
             <span class="row__copies" [title]="row.copiesNote">{{ row.copiesNote }}</span>
           }
         </span>
-        <ui-progress
-          size="sm"
-          [pct]="row.pct"
-          [secondaryPct]="row.secondaryPct"
-          [label]="'progress.label' | t: { name: row.node.name }"
-          [valueText]="row.valueText"
-        />
+        <!--
+          Only where the denominator means something. A group that declares no
+          target and holds nothing measures 0/0, and an empty track there reads
+          as "0% complete" when the truth is "nothing declared yet" —
+          `target: null` is an absence and must never render as a zero.
+        -->
+        @if (row.denominator > 0) {
+          <ui-progress
+            size="sm"
+            [pct]="row.pct"
+            [secondaryPct]="row.secondaryPct"
+            [label]="'progress.label' | t: { name: row.node.name }"
+            [valueText]="row.valueText"
+          />
+        }
       </a>
     </li>
   } @empty {
-    <li>
+    <li role="none">
       <ui-empty icon="grid" [compact]="true" [title]="'groupTree.empty' | t" />
     </li>
   }

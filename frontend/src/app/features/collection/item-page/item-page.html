@@ -21,9 +21,15 @@
             <span class="browse__name">{{ prev.name }}</span>
           </a>
         } @else {
-          <span class="browse__step browse__step--off" aria-disabled="true">
+          <!-- "Início" named a destination that is not an item and does not
+               exist; this side says what it is — there is nothing earlier. -->
+          <span
+            class="browse__step browse__step--off"
+            aria-disabled="true"
+            [attr.aria-label]="'item.browse.noEarlier' | t"
+          >
             <ui-icon class="browse__chev" name="chevron-left" [size]="13" />
-            <span class="browse__name">{{ 'item.browse.start' | t }}</span>
+            <span class="browse__name">{{ 'item.browse.noEarlier' | t }}</span>
           </span>
         }
 
@@ -46,7 +52,7 @@
           </a>
         } @else {
           <span class="browse__step browse__step--off" aria-disabled="true">
-            <span class="browse__name">{{ 'item.browse.end' | t }}</span>
+            <span class="browse__name">{{ 'item.browse.noLater' | t }}</span>
             <ui-icon class="browse__chev" name="chevron-right" [size]="13" />
           </span>
         }
@@ -67,14 +73,55 @@
             [style.background-position]="focus.position(photo.id)"
             (click)="viewerOpen.set(true)"
           ></button>
+        } @else if (canEdit()) {
+          <!-- With no photos the frame *is* the control, and it says so. It
+               used to be a presentational box next to a small dashed tile
+               containing a bare "+": two affordances for one act, one of them
+               unlabelled and with no accessible name either. -->
+          <button
+            type="button"
+            class="gallery__main gallery__main--empty"
+            [disabled]="photoBusy()"
+            (click)="addPhoto()"
+          >
+            <ui-empty [compact]="true" icon="image" [title]="'item.noPhotoAdd' | t" />
+          </button>
         } @else {
-          <!-- No photograph. This printed the raw `img` filename in English,
-               on the largest surface of the page. `img` is still on the wire but
-               nothing fetches it — photos are `photoIds`. -->
+          <!-- No photograph, and nothing a reader could do about it. This
+               printed the raw `img` filename in English, on the largest surface
+               of the page. `img` is still on the wire but nothing fetches it —
+               photos are `photoIds`. -->
           <div class="gallery__main">
             <ui-empty [compact]="true" icon="image" [title]="'item.noPhoto' | t" />
           </div>
         }
+
+        <!-- The same rows the form's dropzone draws, from the same queue: a
+             4 MB photo picked here used to change nothing on screen for several
+             seconds, which is what invited the second click that threw a photo
+             away. -->
+        @for (upload of uploads.queue(); track upload.key) {
+          <div class="upload" [class.upload--failed]="upload.status === 'failed'">
+            <span class="upload__name">{{ upload.name }}</span>
+            @if (upload.status === 'failed') {
+              <span class="upload__error" role="alert">{{ upload.error }}</span>
+              <ui-button
+                variant="icon"
+                size="sm"
+                [ariaLabel]="'photos.dismiss' | t"
+                (click)="uploads.dismiss(upload.key)"
+              ><ui-icon name="close" [size]="12" /></ui-button>
+            } @else {
+              <ui-progress
+                class="upload__bar"
+                size="sm"
+                [pct]="upload.progress * 100"
+                [label]="'photos.uploading' | t: { name: upload.name }"
+              />
+            }
+          </div>
+        }
+
         <div class="gallery__thumbs">
           @for (photo of photos(); track photo.id) {
             <button
@@ -89,14 +136,15 @@
               (click)="selectedPhoto.set($index)"
             ></button>
           }
-          @if (it.photoIds.length < 8 && canEdit()) {
+          @if (it.photoIds.length && it.photoIds.length < 8 && canEdit()) {
             <button
               type="button"
               class="thumb thumb--add"
               [attr.aria-label]="'item.addPhoto' | t"
               [title]="'item.addPhoto' | t"
+              [disabled]="photoBusy()"
               (click)="addPhoto()"
-            >+</button>
+            ><ui-icon name="plus" [size]="16" /></button>
           }
         </div>
         @if (mainPhoto(); as photo) {
@@ -107,6 +155,17 @@
             <ui-button variant="ghost" size="sm" (click)="reframe(photo.id)">
               {{ 'item.adjustFraming' | t }}
             </ui-button>
+            @if (canEdit()) {
+              <ui-button
+                variant="ghost"
+                size="sm"
+                class="gallery__remove"
+                [pending]="saving()"
+                (click)="removePhoto(photo.id)"
+              >
+                {{ 'item.removePhoto' | t }}
+              </ui-button>
+            }
           </div>
         }
       </div>
@@ -160,7 +219,9 @@
         @if (!owned()) {
           <div class="wantlist">
             <span>{{ 'item.onWantlist' | t }}</span>
-            <ui-button size="sm" (click)="markOwned()">{{ 'item.markOwned' | t }}</ui-button>
+            <ui-button size="sm" [pending]="saving()" (click)="markOwned()"
+              ><ui-icon name="check" [size]="12" />{{ 'item.markOwnedPlain' | t }}</ui-button
+            >
           </div>
         }
 
@@ -169,18 +230,35 @@
         <ui-card class="fields">
           <ui-section-label class="fields__heading">{{ 'item.details' | t }}</ui-section-label>
           <div class="field-row"><span class="key">{{ 'item.year' | t }}</span><span>{{ it.year }}</span></div>
-          <div class="field-row"><span class="key">{{ 'item.group' | t }}</span><span>{{ groupPath() }}</span></div>
-          <div class="field-row"><span class="key">{{ valuePerCopyKey() | t }}</span><span>{{ unitValue() | itemValue: currency() : fromPaid() }}</span></div>
+          <div class="field-row">
+            <span class="key">{{ 'item.group' | t }}</span>
+            <!-- A real <a>, so middle-click and open-in-new-tab work. -->
+            <a
+              [routerLink]="collectionLink()"
+              [queryParams]="groupLink()"
+              queryParamsHandling="merge"
+              [attr.aria-label]="'item.viewGroup' | t: { name: groupPath() }"
+              >{{ groupPath() }}</a
+            >
+          </div>
+          @if (showUnitValue()) {
+            <div class="field-row"><span class="key">{{ valuePerCopyKey() | t }}</span><span>{{ unitValue() | itemValue: currency() : fromPaid() }}</span></div>
+          }
         </ui-card>
 
-        @if (owned()) {
+        @if (showCopies()) {
           <ui-card class="fields copies">
             <ui-section-label class="fields__heading">{{ 'item.copiesHeading' | t: { n: it.copies.length } }}</ui-section-label>
             @for (copy of copyRows(); track copy.id) {
               <div class="copy-row">
-                <ui-badge [tone]="copy.tone">{{ copy.conditionKey | t }}</ui-badge>
-                <span class="copy-row__paid">{{ 'item.copyPaid' | t: { value: copy.price | money: currency() } }}</span>
-                <span class="copy-row__est">{{ copy.value | itemValue: currency() : copy.valueFromPaid }}</span>
+                <!-- Skipped for a single copy: the hero above carries the badge,
+                     the estimate and the price paid, so printing all three
+                     again read as three more independent numbers. -->
+                @if (!singleCopy()) {
+                  <ui-badge [tone]="copy.tone">{{ copy.conditionKey | t }}</ui-badge>
+                  <span class="copy-row__paid">{{ 'item.copyPaid' | t: { value: copy.price | money: currency() } }}</span>
+                  <span class="copy-row__est">{{ copy.value | itemValue: currency() : copy.valueFromPaid }}</span>
+                }
                 @if (copy.acquiredOnLabel) {
                   <span class="copy-row__date">{{ copy.acquiredOnLabel }}</span>
                 }
@@ -202,7 +280,11 @@
                 }
               </div>
             }
-            <div class="copies__total">{{ copiesTotal() }}</div>
+            <!-- Only from two rows up: on one it restated the row above it word
+                 for word. -->
+            @if (showCopiesTotal()) {
+              <div class="copies__total">{{ copiesTotal() }}</div>
+            }
           </ui-card>
         }
 
@@ -220,13 +302,27 @@
         @if (canEdit()) {
           <div class="actions">
             <ui-button [routerLink]="['/c', coll.id, 'items', it.id, 'edit']" queryParamsHandling="preserve">{{ 'item.edit' | t }}</ui-button>
-            <ui-button variant="danger" (click)="deleteItem()">{{ 'item.delete' | t }}</ui-button>
+            <!-- Pushed to the far end of the row: it was the same size as
+                 "Edit item" and sharing its gap, which on a phone puts Delete
+                 under the same thumb. -->
+            <ui-button class="actions__danger" variant="danger" (click)="deleteItem()">{{ 'item.delete' | t }}</ui-button>
           </div>
         }
       </div>
     </div>
   } @else {
-    <div class="missing">{{ 'item.notFound' | t }}</div>
+    <!-- The collection-missing branch below offers a way out; this one used to
+         be one grey sentence and nothing else. -->
+    <ui-empty icon="search" [title]="'item.notFound' | t" [body]="'item.notFound.body' | t">
+      <div emptyActions>
+        <ui-button
+          variant="ghost"
+          [routerLink]="['/c', coll.id]"
+          queryParamsHandling="preserve"
+          >{{ 'item.backToCollection' | t: { name: coll.name } }}</ui-button
+        >
+      </div>
+    </ui-empty>
   }
 } @else if (loading()) {
   <!--

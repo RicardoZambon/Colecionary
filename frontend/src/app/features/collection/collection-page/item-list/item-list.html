@@ -12,15 +12,17 @@
       <!-- Once, at the top: the columns do not change between sections, and
            repeating them under every heading would double the chrome. -->
       <div class="list-head" [class.list--manual]="manual()">
+        <!--
+          The checkbox track, without a checkbox in it. Select-all lives on the
+          page's summary line now: the grid is the default view for any group
+          without children and the view a search forces, and there the tri-state
+          box and the "hold Shift for a range" hint were simply unreachable —
+          forty cards meant forty clicks. One control, beside the count it acts
+          on, serving both views. The track itself stays, because the sticky
+          `left: var(--check-w)` on the name cell is the same number.
+        -->
         @if (canEdit()) {
-          <span class="pick" [attr.title]="'select.rangeHint' | t">
-            <ui-checkbox
-              [checked]="allSelected()"
-              [indeterminate]="someSelected()"
-              [ariaLabel]="'select.all' | t"
-              (picked)="allPicked.emit($event.checked)"
-            />
-          </span>
+          <span class="pick"></span>
         }
         <div class="list-cells">
           <button
@@ -80,10 +82,11 @@
           <div
             class="list-line"
             [class.dragging]="drag.index() === entry.index"
+            [class.drop-target]="drag.overIndex() === entry.index"
             [class.selected]="isSelected(entry.item)"
             [attr.draggable]="manual() && canEdit() ? true : null"
             (dragstart)="drag.start($event, entry.index)"
-            (dragover)="drag.over($event)"
+            (dragover)="drag.over($event, entry.index)"
             (drop)="onDrop($event, entry.index)"
             (dragend)="drag.end()"
           >
@@ -109,11 +112,15 @@
               [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
               queryParamsHandling="preserve"
             >
+              <!-- The name column is minmax(150px, 2fr) and the group cell a
+                   hard 100px, so both clip constantly — ui-truncate is the
+                   ellipsis and the tooltip that has to go with it, which is
+                   exactly the pair that kept being separated here. -->
               <span class="name">
                 @if (fieldChip(entry.item); as chip) { <span class="field">{{ chip }}</span> }
-                {{ entry.item.name }}
+                <ui-truncate [text]="entry.item.name" />
               </span>
-              <span class="group">{{ groupName(entry.item) }}</span>
+              <span class="group"><ui-truncate [text]="groupName(entry.item)" /></span>
               <span class="year">{{ entry.item.year }}</span>
               <span class="right copies" [class.copies--many]="entry.item.copies.length > 1">{{ entry.item.copies.length }}</span>
               <span class="cond" [class]="'tone-' + badgeTone(entry.item)">{{ badgeLabel(entry.item) }}</span>
@@ -121,7 +128,7 @@
                 <!-- An absence is `—`, never a blank cell: the same "unknown,
                      not zero" distinction the value column makes. -->
                 @if (cell(entry.item, field); as value) {
-                  <span class="fieldcell" [class.right]="rightAligned(field)">{{ value }}</span>
+                  <span class="fieldcell" [class.right]="rightAligned(field)" [title]="value">{{ value }}</span>
                 } @else {
                   <span class="fieldcell fieldcell--empty" [class.right]="rightAligned(field)">{{ 'value.none' | t }}</span>
                 }
@@ -133,6 +140,8 @@
                 [label]="entry.item.name"
                 [first]="entry.index === 0"
                 [last]="entry.index === items().length - 1"
+                [index]="entry.index"
+                [count]="items().length"
                 (moved)="moved.emit({ from: entry.index, to: entry.index + $event })"
               />
             }

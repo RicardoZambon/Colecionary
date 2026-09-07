@@ -500,6 +500,55 @@ npm test -- --watch=false</code></pre>
       <td><code>vault.store.spec.ts</code> nas falhas de carga</td>
     </tr>
     <tr>
+      <td>Entrar como outra pessoa mostrava o acervo da conta anterior</td>
+      <td><strong>Todo spec deste arquivo monta uma store nova</strong> — que é
+          exatamente por que nenhum deles podia ver um defeito de uma store que
+          sobrevive à sessão para a qual foi preenchida. Só um navegador com dois
+          logins seguidos no mesmo tab mostra isso</td>
+      <td><code>vault.store.spec.ts</code> → “session boundary”: carrega, chama
+          <code>reset()</code> e cobra <code>loaded === false</code> com zero
+          coleções; cobra que <code>ensureLoaded()</code> volta a buscar em vez
+          de curto-circuitar; cobra que os tokens de versão foram esquecidos; e
+          cobra que <code>SessionReset.run()</code> — o que
+          <code>AuthService</code> de fato chama — produz o mesmo efeito</td>
+    </tr>
+    <tr>
+      <td>Um item que ninguém estimou valia <code>R$ 0,00</code> no painel</td>
+      <td>A linha renderizava <code>sortValue(item) | money</code>: uma chave de
+          ordenação passada a um formatador de dinheiro. As duas peças estão
+          corretas isoladamente, e nada media o <em>par</em></td>
+      <td><code>dashboard-page.spec.ts</code>, nos três casos: ausência
+          (<code>—</code>), substituição pelo preço pago (<code>≈</code>) e
+          estimativa real</td>
+    </tr>
+    <tr>
+      <td>O painel dividia BRL por USD e imprimia <code>37,8%</code></td>
+      <td>Uma porcentagem é adimensional: parece um número legítimo por mais
+          incomensuráveis que sejam as parcelas, então nenhuma asserção sobre
+          <em>o formato</em> da linha reprovaria</td>
+      <td><code>dashboard-page.spec.ts</code>, nos quatro caminhos de
+          <a href="decisions.html">ADR-75</a>: uma moeda, várias com a da conta
+          presente, várias sem ela, e nenhum dado de compra</td>
+    </tr>
+    <tr>
+      <td>Uma falha era relatada no tom neutro e sumia em 2,6 s</td>
+      <td><code>flash</code> e <code>error</code> compilam igual e renderizam a
+          mesma frase. O que difere é marcador, papel ARIA, dispensa e
+          temporizador — nada disso é a mensagem</td>
+      <td><code>settings-page.spec.ts</code> cobra o <em>tom</em>
+          (<code>ToastService.current()?.tone</code>) de um export recusado e de
+          um bem-sucedido</td>
+    </tr>
+    <tr>
+      <td>Um <code>Viewer</code> recebia “+ Adicionar ao vault” na loja</td>
+      <td>A <code>StorePage</code> nunca lia <code>canEdit()</code>, e todo spec
+          dela autenticava como Owner — o mesmo ponto cego que
+          <code>RoleAuthorizationTests</code> fechou no servidor</td>
+      <td><code>store-page.spec.ts</code>: o Viewer não recebe a ação, o Editor
+          recebe, e “já está no seu vault” continua visível para os dois porque é
+          informação e não escrita</td>
+    </tr>
+    <tr>
       <td>Um toast vermelho de alarme falso em <em>todo</em> carregamento</td>
       <td>É a composição de duas peças corretas: um 404 de propósito e um
           relator global correto. Nada num teste unitário observa as duas

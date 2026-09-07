@@ -13,6 +13,7 @@
         <button
           type="button"
           class="pick__twisty"
+          data-tap-ok
           tabindex="-1"
           [attr.aria-label]="
             (row.expanded ? 'groupTree.collapseGroup' : 'groupTree.expandGroup')
@@ -26,12 +27,13 @@
 
       <a
         class="pick__link"
+        data-tap-ok
         [routerLink]="[]"
         [queryParams]="{ tab: 'groups', g: row.node.id }"
         [tabindex]="focusedId() === row.node.id ? 0 : -1"
         (keydown)="onKeydown($event, i)"
       >
-        <span class="pick__name">{{ row.node.name }}</span>
+        <span class="pick__name" [title]="row.node.name">{{ row.node.name }}</span>
         <span class="pick__count">{{ row.count }}</span>
       </a>
     </li>

@@ -10,7 +10,7 @@ import { CanDeactivateFn } from '@angular/router';
  * undo `loadComponent`. A structural type costs nothing at runtime.
  */
 interface HasUnsavedCheck {
-  canLeave(): boolean;
+  confirmLeave(): boolean | Promise<boolean>;
 }
 
 /**
@@ -22,6 +22,12 @@ interface HasUnsavedCheck {
  * page reachable in one click from anywhere. It is wired onto **both**
  * item-form routes, `items/new` and `items/:itemId/edit`: they are the same
  * component, and an edit is at least as expensive to lose as a creation.
+ *
+ * The answer may be a `Promise<boolean>` — `CanDeactivateFn` returns
+ * `MaybeAsync<GuardResult>`, so the component can put a real `ui-dialog` in
+ * front of the user (whose buttons can say what they do) instead of the
+ * browser's own confirm box. Nothing half-finished is held anywhere: the router
+ * simply awaits the promise `ConfirmService.ask()` already returns.
  */
 export const unsavedItemGuard: CanDeactivateFn<HasUnsavedCheck> = component =>
-  component.canLeave();
+  component.confirmLeave();

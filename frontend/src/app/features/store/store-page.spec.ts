@@ -15,6 +15,7 @@ import {
   Item,
   Lang,
   Member,
+  MemberRole,
   StoreListing,
   StoreListingItem,
   TenantSettings,
@@ -28,6 +29,7 @@ import { StorePage } from './store-page';
 class FakeVaultApi extends VaultApi {
   collections: Collection[] = [];
   listings: StoreListing[] = [];
+  role: MemberRole = 'Owner';
   currency: CurrencyCode = 'USD';
   readonly imported: string[] = [];
 
@@ -99,7 +101,7 @@ class FakeVaultApi extends VaultApi {
     return of(settings);
   }
   getProfile(): Observable<UserProfile> {
-    return of({ name: 'Marcus', email: 'marcus@example.com', initials: 'MC', plan: 'free', role: 'Owner' });
+    return of({ name: 'Marcus', email: 'marcus@example.com', initials: 'MC', plan: 'free', role: this.role });
   }
   updateProfile(profile: UserProfile): Observable<UserProfile> {
     return of(profile);
@@ -125,12 +127,19 @@ const normalize = (s: string) => s.replace(/\s/g, ' ').trim();
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
 async function mount(
-  opts: { currency?: CurrencyCode; lang?: Lang; collections?: Collection[] } = {},
+  opts: {
+    currency?: CurrencyCode;
+    lang?: Lang;
+    collections?: Collection[];
+    listings?: StoreListing[];
+    role?: MemberRole;
+  } = {},
 ) {
   const api = new FakeVaultApi();
-  api.listings = [PS1];
+  api.listings = opts.listings ?? [PS1];
   api.currency = opts.currency ?? 'USD';
   api.collections = opts.collections ?? [];
+  api.role = opts.role ?? 'Owner';
 
   TestBed.configureTestingModule({
     providers: [
@@ -158,6 +167,7 @@ async function mount(
     navigate,
     estimate: () => normalize(el.querySelector('.value')!.textContent!),
     action: () => el.querySelector('.foot ui-button button') as HTMLButtonElement,
+    empty: () => el.querySelector('ui-empty'),
   };
 }
 
@@ -228,5 +238,54 @@ describe('StorePage', () => {
     expect(page.navigate).toHaveBeenCalledWith(['/c', PS1.id]);
     // And the card flips over, because the new collection carries the listing id.
     expect(page.action().disabled).toBe(true);
+  });
+});
+
+describe('StorePage permissions and empty catalogue', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('does not offer a Viewer an action the server would refuse', async () => {
+    // `importStoreListing` is a write and earns a 403. This page never read
+    // `canEdit()`, so a reader met "+ Add to vault" on every card and a grey
+    // message on every click.
+    const page = await mount({ role: 'Viewer' });
+    expect(page.action()).toBeNull();
+  });
+
+  it('still tells a Viewer what is already in the vault', async () => {
+    // Information, not a write — everybody gets it.
+    const page = await mount({
+      role: 'Viewer',
+      collections: [
+        {
+          id: PS1.id,
+          name: 'PS1 RPGs',
+          description: '',
+          fields: [],
+          groups: [],
+          sections: [],
+          items: [],
+          members: [],
+          linkShare: true,
+          currency: null,
+        },
+      ],
+    });
+    expect(page.action()).not.toBeNull();
+    expect(page.action().disabled).toBe(true);
+  });
+
+  it('says the shelf is empty rather than showing blank space', async () => {
+    const page = await mount({ listings: [] });
+    expect(page.empty()).not.toBeNull();
+  });
+
+  it('offers the catalogue to an Editor', async () => {
+    const page = await mount({ role: 'Editor' });
+    expect(page.action()).not.toBeNull();
+    expect(page.action().disabled).toBe(false);
   });
 });

@@ -16,7 +16,7 @@
   text-align: center;
   font-size: 12.5px;
   font-family: var(--font-body);
-  color: var(--muted);
+  color: var(--muted-strong);
   background: transparent;
   cursor: pointer;
 
@@ -27,21 +27,13 @@
   }
 
   &:hover {
-    color: var(--accent);
+    color: var(--accent-strong);
     border-color: var(--accent);
     text-decoration: none;
   }
 
   &--new {
-    color: var(--accent);
+    color: var(--accent-strong);
   }
 }
 
-.empty {
-  border: var(--bw) dashed var(--border);
-  border-radius: var(--radius);
-  padding: 40px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 13px;
-}

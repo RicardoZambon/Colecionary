@@ -56,6 +56,30 @@
   &.selected {
     --row-bg: var(--panel2);
   }
+
+  /**
+   * What is being carried. The class was bound in this template since the
+   * gesture existed and defined in no stylesheet, so a drag looked exactly like
+   * nothing happening.
+   */
+  &.dragging {
+    opacity: 0.45;
+  }
+
+  /**
+   * Where it would land: a rule along the top of the row the pointer is over.
+   * An inset shadow rather than a border or a gap, because either would change
+   * the row's height mid-drag and move the target out from under the pointer.
+   */
+  &.drop-target::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 2px;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 2;
+  }
 }
 
 /**
@@ -117,6 +141,18 @@
   padding-right: 78px;
 }
 
+/*
+ * Below $bp-lg the move buttons are finger-sized (44px, from the global tap
+ * rule) and sit 8px down from the row's top edge, while a row's own content box
+ * is about 38px — so the arrows hung ~14px into the row below and visibly
+ * overlapped it. The row that carries the overlay is given room for it.
+ */
+@include upto($bp-lg) {
+  .list-row.list--manual {
+    min-height: calc(var(--tap) + 16px);
+  }
+}
+
 .list-head {
   @include mono-label(10px, 0.1em);
   text-transform: uppercase;
@@ -148,7 +184,9 @@
   text-align: inherit;
 
   &:hover {
-    color: var(--accent);
+    /* Type, not a fill: the raw --accent measures below 4.5:1 as small text in
+       three of the seven themes. */
+    color: var(--accent-strong);
   }
 
   &:focus-visible {
@@ -157,6 +195,22 @@
 
   &.right {
     text-align: right;
+  }
+
+  /* The header is a 10px tracked mono label, so its painted box must not grow —
+     the target does instead. */
+  @include upto($bp-lg) {
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      min-height: var(--tap);
+      transform: translateY(-50%);
+    }
   }
 }
 
@@ -199,7 +253,7 @@
   }
 
   .year {
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   .group,
@@ -213,17 +267,17 @@
   /* A declared field the item has no value for. Muted rather than blank: the
      data says "unknown", and an empty cell reads as a rendering fault. */
   .fieldcell--empty {
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   .copies {
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
 
     /* Holding more than one is the exception, so it is what gets the ink. */
     &--many {
-      color: var(--accent2);
+      color: var(--accent2-strong);
       font-weight: 700;
     }
   }
@@ -236,19 +290,19 @@
 
     &.field {
       font-size: 11px;
-      color: var(--accent);
+      color: var(--accent-strong);
     }
 
     &.tone-good {
-      color: var(--good);
+      color: var(--good-strong);
     }
 
     &.tone-warn {
-      color: var(--warn);
+      color: var(--warn-strong);
     }
 
     &.tone-accent {
-      color: var(--accent);
+      color: var(--accent-strong);
     }
 
     &.tone-neutral {
@@ -258,7 +312,7 @@
 
   .value {
     font-weight: 700;
-    color: var(--accent2);
+    color: var(--accent2-strong);
   }
 }
 
@@ -270,7 +324,7 @@
   padding: var(--sp-2) var(--sp-4);
   border-top: var(--bw) solid var(--border);
   font-size: var(--fs-xs);
-  color: var(--muted);
+  color: var(--muted-strong);
 
   &__count {
     font-family: var(--font-mono);
@@ -284,7 +338,7 @@
 
   &__value {
     font-weight: 700;
-    color: var(--accent2);
+    color: var(--accent2-strong);
   }
 }
 

@@ -1,8 +1,23 @@
 <header>
-  <h1>{{ 'dashboard.title' | t }}</h1>
-  <p class="sub">
-    {{ sub() }}
-  </p>
+  <div class="head-row">
+    <div>
+      <h1>{{ 'dashboard.title' | t }}</h1>
+      <p class="sub">
+        {{ sub() }}
+      </p>
+    </div>
+    <!--
+      The primary action, in a fixed place. It used to be a dashed ghost tile at
+      the *end* of the collections grid, so the app's single most important act
+      for a new user moved every time a collection was added and sat below the
+      fold past about a dozen of them.
+    -->
+    @if (canEdit()) {
+      <ui-button variant="primary" [pending]="creating()" (click)="newCollection()">
+        <ui-icon name="plus" [size]="12" [strokeWidth]="2.4" />{{ 'dashboard.createCollection' | t }}
+      </ui-button>
+    }
+  </div>
 </header>
 
 <!--
@@ -37,14 +52,19 @@
             <span class="stat__amount">{{ amount }}</span>
           }
         </div>
-        <div class="stat__sub">{{ stat.sub }}</div>
+        <div class="stat__sub">
+          @if (stat.trend; as trend) {
+            <ui-icon class="stat__trend" [name]="trend" [size]="11" [strokeWidth]="2.4" />
+          }
+          <span>{{ stat.sub }}</span>
+        </div>
       </ui-card>
     }
   }
 </div>
 
 <section class="collections">
-  <ui-section-label>{{ 'dashboard.collections' | t }}</ui-section-label>
+  <ui-section-label role="heading" aria-level="2">{{ 'dashboard.collections' | t }}</ui-section-label>
   <div class="grid" [attr.aria-busy]="loading() ? 'true' : null">
     @if (loading()) {
       <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
@@ -63,39 +83,85 @@
       }
     } @else {
       @for (collection of store.collections(); track collection.id) {
-        <ui-card [interactive]="true" [routerLink]="['/c', collection.id]">
-          <div class="banner">
-            <ui-image-slot
-              [src]="images.url(collection.bannerImageId, 'thumb')"
-              [focal]="focus.position(collection.bannerImageId)"
-              [placeholder]="collection.name"
-            />
-          </div>
-          <div class="card-body">
-            <div class="name">{{ collection.name }}</div>
-            <div class="meta">
-              {{ collectionMeta(collection) }}
+        <!--
+          A real <a>, inside the card rather than on it. `[routerLink]` on a
+          non-anchor host binds a click listener and nothing else: no `href`, no
+          tab stop, so Tab walked straight past every card and there was no
+          middle-click and no "open in a new tab" either. `ui-card` is a plain
+          div by design, so the anchor is the call site's job.
+        -->
+        <ui-card [interactive]="true">
+          <a class="card-link" [routerLink]="['/c', collection.id]">
+            <div class="banner">
+              <!--
+                No `placeholder`: the card's own title is 40px below it, so the
+                name was rendered twice — once muted inside the empty banner and
+                once in white under it. The mark alone reads as "no picture".
+              -->
+              <ui-image-slot
+                [src]="images.url(collection.bannerImageId, 'thumb')"
+                [focal]="focus.position(collection.bannerImageId)"
+                [fillable]="false"
+              />
             </div>
-            <div class="value">{{ ownedValue(collection.id) | money: store.currencyFor(collection.id) }}</div>
-          </div>
+            <div class="card-body">
+              <div class="name">{{ collection.name }}</div>
+              <div class="meta">
+                {{ collectionMeta(collection) }}
+              </div>
+              <div class="value">{{ ownedValue(collection.id) | money: store.currencyFor(collection.id) }}</div>
+            </div>
+          </a>
         </ui-card>
-      }
-      @if (canEdit()) {
-        <button type="button" class="new-tile" (click)="newCollection()">{{ 'dashboard.newCollection' | t }}</button>
+      } @empty {
+        <!--
+          An empty vault used to be a heading followed by one dashed tile, or —
+          for a reader, who never saw the tile — genuinely nothing at all, with
+          no sentence anywhere saying what to do first. The two facts are
+          different and get different copy: an editor is told how to start, a
+          reader is told why the page is bare.
+        -->
+        @if (canEdit()) {
+          <ui-empty
+            class="empty"
+            icon="grid"
+            [title]="'dashboard.empty.title' | t"
+            [body]="'dashboard.empty.body' | t"
+          >
+            <div emptyActions>
+              <ui-button variant="primary" [pending]="creating()" (click)="newCollection()">
+                <ui-icon name="plus" [size]="12" [strokeWidth]="2.4" />{{ 'dashboard.createCollection' | t }}
+              </ui-button>
+              <ui-button variant="ghost" routerLink="/store">{{ 'dashboard.empty.store' | t }}</ui-button>
+            </div>
+          </ui-empty>
+        } @else {
+          <ui-empty
+            class="empty"
+            icon="eye"
+            [title]="'dashboard.empty.readOnly.title' | t"
+            [body]="'dashboard.empty.readOnly.body' | t"
+          />
+        }
       }
     }
   </div>
 </section>
 
 <ui-card class="recent">
-  <ui-section-label class="recent__heading">{{ 'dashboard.recent' | t }}</ui-section-label>
+  <ui-section-label class="recent__heading" role="heading" aria-level="2">{{ 'dashboard.recent' | t }}</ui-section-label>
   @for (entry of recent(); track entry.itemId) {
     <a class="recent__row" [routerLink]="['/c', entry.collectionId, 'items', entry.itemId]">
       <span>
         <span class="recent__name">{{ entry.name }}</span>
         <span class="recent__sub">{{ entry.sub }}</span>
       </span>
-      <span class="recent__value">{{ entry.value | money: entry.currency }}</span>
+      <!-- itemValue, not money: an item nobody estimated renders as — rather
+           than as a confident R$ 0,00, and a figure standing in for the price
+           paid carries the ≈ marker. -->
+      <span class="recent__value">{{ entry.item | itemValue: entry.currency }}</span>
     </a>
+  } @empty {
+    <ui-empty class="recent__empty" [compact]="true" icon="tag" [title]="'dashboard.recent.empty' | t" />
   }
 </ui-card>

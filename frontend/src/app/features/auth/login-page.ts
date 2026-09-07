@@ -1,15 +1,27 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  afterNextRender,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { I18nService, MessageKey } from '../../core/i18n';
+import { LangPicker } from '../../layout/lang-picker/lang-picker';
 import { TPipe } from '../../shared/pipes/t.pipe';
-import { UiButton, UiCard, UiField, UiIcon, UiTextInput } from '../../shared/ui';
+import { UiButton } from '../../shared/ui/button/button';
+import { UiCard } from '../../shared/ui/card/card';
+import { UiField } from '../../shared/ui/field/field';
+import { UiIcon } from '../../shared/ui/icon/icon';
+import { UiTextInput } from '../../shared/ui/text-input/text-input';
 
 @Component({
   selector: 'app-login-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiButton, UiCard, UiField, UiIcon, UiTextInput],
+  imports: [LangPicker, TPipe, UiButton, UiCard, UiField, UiIcon, UiTextInput],
   templateUrl: './login-page.html',
   styleUrl: './login-page.scss',
 })
@@ -18,6 +30,26 @@ export class LoginPage {
   private readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+
+  /**
+   * Whether the last session ended by itself rather than by choice.
+   *
+   * `AuthService.sessionExpired()` puts it in the query string; a deliberate
+   * `logout()` does not, so a sign-out is never accused of expiring.
+   */
+  protected readonly expired = signal(
+    this.route.snapshot.queryParamMap.get('expired') === '1',
+  );
+
+  private readonly emailInput = viewChild<UiTextInput>('emailInput');
+
+  constructor() {
+    // Explicitly, and after render: this is the one field on the screen, and
+    // every sign-in used to start with a click. `autofocus` is not an option —
+    // it is honoured only on initial document load, and reaching /login is a
+    // router navigation.
+    afterNextRender(() => this.emailInput()?.focus());
+  }
 
   protected readonly email = signal('');
   protected readonly password = signal('');
@@ -31,6 +63,9 @@ export class LoginPage {
     try {
       await this.auth.login(this.email().trim(), this.password());
       const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') ?? '/dashboard';
+      // The notice described the session that just ended; it must not survive
+      // into the next screen if the navigation is slow.
+      this.expired.set(false);
       await this.router.navigateByUrl(returnUrl);
     } catch (err) {
       const status = (err as { status?: number })?.status;

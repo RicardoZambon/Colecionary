@@ -119,10 +119,12 @@
   --accent: #5453C4;
   --accent-strong: #5453C4; // 5.44 worst surface — the raw accent already reads here
   --accent-contrast: #FFFFFF;
-  --accent2: #1F8A5B;
+  --accent2: #1E8457;
   --accent2-strong: #1B774F; // 4.88 worst surface (the raw accent2 was 3.83)
   --good: #1F8A5B;
   --warn: #A16207;
+  --good-strong: #1B7950; // 4.76 worst surface — good as *type*, not as a fill
+  --warn-strong: #995D07; // 4.73 worst surface
   --danger: #C2352B;
   --danger-contrast: #FFFFFF;
   --radius: 10px;
@@ -153,6 +155,8 @@
   --accent2-strong: #34B37A; // 5.71 worst surface
   --good: #34B37A;
   --warn: #D9A521;
+  --good-strong: #34B37A; // 5.71 worst surface — good as *type*, not as a fill
+  --warn-strong: #D9A521; // 6.79 worst surface
   --danger: #E5645A;
   --danger-contrast: #141417;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
@@ -175,6 +179,8 @@
   --accent2-strong: #FBBF24; // 10.18 worst surface
   --good: #4ADE80;
   --warn: #FBBF24;
+  --good-strong: #4ADE80; // 10.19 worst surface — good as *type*, not as a fill
+  --warn-strong: #FBBF24; // 10.64 worst surface
   --danger: #FF5F56;
   --danger-contrast: #0B0E0B;
   --radius: 0px;
@@ -203,6 +209,8 @@
   --accent2-strong: #F472B6; // 6.04 worst surface
   --good: #4ADE80;
   --warn: #FBBF24;
+  --good-strong: #4ADE80; // 9.18 worst surface — good as *type*, not as a fill
+  --warn-strong: #FBBF24; // 9.58 worst surface
   --danger: #FF4D6D;
   --danger-contrast: #131022;
   --radius: 0px;
@@ -232,6 +240,8 @@
   --accent2-strong: #FBBF24; // 10.18 worst surface
   --good: #34D399;
   --warn: #FBBF24;
+  --good-strong: #34D399; // 8.84 worst surface — good as *type*, not as a fill
+  --warn-strong: #FBBF24; // 10.18 worst surface
   --danger: #FF6B6B;
   --danger-contrast: #060B14;
   --radius: 4px;
@@ -253,13 +263,15 @@
   --text2: #45443C;
   --muted: #8A8778;
   --muted-strong: #636055; // 5.48 on --bg, 6.02 on --panel, 4.90 on --panel2
-  --accent: #D2481F;
+  --accent: #C8441D;
   --accent-strong: #AA3A19; // 4.91 worst surface (the raw accent was 3.49)
   --accent-contrast: #FBFAF4;
   --accent2: #1B1A16;
   --accent2-strong: #1B1A16; // 13.55 worst surface
   --good: #2A6E4E;
   --warn: #A16207;
+  --good-strong: #2A6E4E; // 4.75 worst surface — good as *type*, not as a fill
+  --warn-strong: #8E5606; // 4.69 worst surface
   --danger: #8C1D18;
   --danger-contrast: #FBFAF4;
   --radius: 0px;
@@ -289,6 +301,8 @@
   --accent2-strong: #22D3EE; // 9.08 worst surface
   --good: #34D399;
   --warn: #FBBF24;
+  --good-strong: #34D399; // 8.54 worst surface — good as *type*, not as a fill
+  --warn-strong: #FBBF24; // 9.83 worst surface
   --danger: #FF4D4D;
   --danger-contrast: #150A20;
   --radius: 8px;

@@ -174,6 +174,24 @@ export function flattenTree(groups: GroupNode[]): { node: GroupNode; depth: numb
   return out;
 }
 
+/**
+ * How one group reads inside a flat `<select>` of the whole tree.
+ *
+ * Three call sites hand-rolled the same expression, and the drift was already
+ * visible: an option list is the only place the hierarchy has no lines to draw
+ * it with, so the indent *is* the tree, and a picker that indents differently
+ * from the next one is a different tree to the reader.
+ *
+ * The indent is non-breaking spaces because an `<option>` collapses ordinary
+ * runs of whitespace, which is what the old `\u21b3` glyph was there to work
+ * around — and that glyph was a raw Unicode mark doing an icon's work inside a
+ * user-facing label, announced by a screen reader as "downwards arrow with tip
+ * rightwards" before every nested name. Indentation carries it on its own.
+ */
+export function groupOptionLabel(name: string, depth: number): string {
+  return '\u00a0\u00a0\u00a0'.repeat(Math.max(0, depth)) + name;
+}
+
 export interface TreeRow {
   node: GroupNode;
   depth: number;

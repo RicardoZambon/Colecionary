@@ -11,7 +11,7 @@ import { SectionChunk } from '../../../../core/utils/sections.util';
 import { fieldValue } from '../../../../core/utils/sort.util';
 import { ItemValuePipe } from '../../../../shared/pipes/item-value.pipe';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiBadge, UiCard, UiCheckbox, UiIcon, UiReorder } from '../../../../shared/ui';
+import { UiBadge, UiCard, UiCheckbox, UiIcon, UiReorder, UiTruncate } from '../../../../shared/ui';
 import { itemBadgeLabel, itemTone } from '../../../../shared/ui/badge/badge';
 import { DragOrder } from '../drag-order';
 import { RowPick } from '../item-list/item-list';
@@ -36,6 +36,7 @@ import { VaultStore } from '../../../../core/state/vault.store';
     UiCheckbox,
     UiIcon,
     UiReorder,
+    UiTruncate,
   ],
   templateUrl: './item-grid.html',
   styleUrl: './item-grid.scss',
@@ -90,6 +91,15 @@ export class ItemGrid {
 
   /** Which visible cards are selected. Shared with the table, row for row. */
   readonly selectedIds = input<ReadonlySet<string>>(new Set());
+
+  /**
+   * Whether the list on screen is a narrowed subset.
+   *
+   * Only the trailing "add another" tile reads it. The page owns the answer —
+   * `filtering()` is what tells an empty group apart from a filter that matched
+   * nothing, and this view must agree with the empty state below it.
+   */
+  readonly filtering = input(false);
 
   readonly moved = output<{ from: number; to: number }>();
   readonly sectionToggled = output<string>();

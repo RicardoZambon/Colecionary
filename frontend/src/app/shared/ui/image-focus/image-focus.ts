@@ -135,16 +135,22 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
     }
   `,
   styles: `
+    @use '../../../../styles/mixins' as *;
+
     .scrim {
       position: fixed;
       inset: 0;
-      z-index: 80;
+      /* The token, not a literal. 80/81 put this overlay *above*
+         app-conflict-notice, so a write refused while the framing editor was
+         open had nowhere to be seen — and that notice is the only message
+         saying a save did not happen. */
+      z-index: var(--z-overlay);
       background: color-mix(in srgb, var(--bg) 72%, transparent);
     }
 
     .panel {
       position: fixed;
-      z-index: 81;
+      z-index: var(--z-modal);
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -207,6 +213,13 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
       user-select: none;
     }
 
+    /*
+     * 26px of paint, 44px of target, at every width — the same trade
+     * styles.scss makes for the reframe pip and for the same reason: the disc
+     * sits on top of the photograph the user is trying to judge, so growing it
+     * would hide the thing being aimed at. On a phone the stage is ~320px wide
+     * and a 26px tap target on it is guesswork.
+     */
     .target {
       position: absolute;
       width: 26px;
@@ -218,6 +231,16 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
       background: color-mix(in srgb, var(--accent) 55%, transparent);
       box-shadow: 0 0 0 2px var(--accent);
       cursor: grab;
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: var(--tap);
+        height: var(--tap);
+        transform: translate(-50%, -50%);
+      }
     }
 
     .previews {
@@ -287,6 +310,35 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
       display: flex;
       gap: 8px;
     }
+
+    /*
+     * The phone pass this file did not have. The body was a two-column row with
+     * a fixed 190px preview rail, so inside a 358px panel the *stage* — the
+     * photograph you aim at — came out about 118px wide, less than five times
+     * the drag pip. The previews become a scrolling strip under the stage
+     * instead: you can still see the trade-off you are making, and the picture
+     * gets the whole width.
+     */
+    @include upto($bp-md) {
+      .body {
+        flex-direction: column;
+      }
+
+      .stage,
+      .stage img {
+        max-height: 54vh;
+      }
+
+      .previews {
+        width: 100%;
+        flex-direction: row;
+        overflow-x: auto;
+
+        .preview {
+          flex: 0 0 150px;
+        }
+      }
+    }
   `,
 })
 export class UiImageFocus {
@@ -335,8 +387,15 @@ export class UiImageFocus {
       // dragging feel like the picture is slipping.
       const previous = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
+      const opener = document.activeElement as HTMLElement | null;
       onCleanup(() => {
         document.body.style.overflow = previous;
+        // Back where it came from. Escape or Cancel used to leave focus on
+        // nothing at all, so the next Tab restarted at the top of the document
+        // and a screen reader announced the page rather than the control the
+        // user had pressed. `isConnected` because the opener can be gone — the
+        // photo whose tile opened this may have been removed since.
+        if (opener?.isConnected) opener.focus({ preventScroll: true });
       });
     });
   }
@@ -385,6 +444,11 @@ export class UiImageFocus {
     if (!delta) return;
 
     event.preventDefault();
+    // `preventDefault` alone let the event carry on bubbling to the document,
+    // where `ItemPage` binds its own ← / → stepper — so every nudge of the
+    // focal point also stepped the page behind to the next item, and after four
+    // you were framing a photo while looking at somebody else's card.
+    event.stopImmediatePropagation();
     const current = this.point();
     this.point.set(clampFocal({ x: current.x + delta[0], y: current.y + delta[1] }));
   }

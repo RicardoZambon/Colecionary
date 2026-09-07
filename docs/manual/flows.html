@@ -203,6 +203,45 @@
   </p>
 </div>
 
+<h3 id="fim-sessao">2b · Terminar a sessão — os dois fins, e o reset</h3>
+
+<ol class="steps">
+  <li>
+    <strong>Por escolha:</strong> <code>AuthService.logout()</code> limpa a
+    sessão, chama <code>SessionReset.run()</code> e navega para
+    <code>/login</code>. Sem mensagem — a pessoa pediu isso.
+  </li>
+  <li>
+    <strong>Por expiração:</strong> um 401 no meio da sessão leva o
+    <code>authInterceptor</code> a chamar <code>sessionExpired()</code>, que lê
+    <code>router.url</code> <em>antes</em> de desmontar a sessão e navega para
+    <code>/login</code> com <code>expired=1</code> e <code>returnUrl</code>. O
+    cartão de login desenha a frase <code>login.expired</code> e, depois de
+    entrar, devolve a pessoa à tela em que estava. Isto existe porque o
+    <code>errorInterceptor</code> exclui 401 de propósito (“401 é do
+    authInterceptor”): enquanto o authInterceptor não dizia nada, um timeout de
+    sessão era a <em>única</em> falha HTTP do app sem repórter — a tela
+    simplesmente virava o formulário de login, o que se lê como o app deslogando
+    a pessoa ao acaso.
+  </li>
+  <li>
+    <code>SessionReset</code> é um registro sem dependências em
+    <code>core/auth</code>: cada store se inscreve no próprio construtor e
+    <code>AuthService</code> só chama <code>run()</code>. Síncrono, porque o
+    chamador navega em seguida; e um handler que estoura não interrompe os
+    outros.
+    <span class="where">frontend: core/auth/session-reset.ts</span>
+  </li>
+  <li>
+    <code>VaultStore.reset()</code> é o handler que importa. Sem ele, entrar como
+    outra pessoa no mesmo tab mostrava o acervo da conta anterior:
+    <code>ensureLoaded()</code> abre com <code>if (this.loaded()) return;</code>
+    e <code>GET /api/collections</code> nunca acontecia. Detalhes e medição em
+    <a href="security.html#auth">Segurança → terminar uma sessão</a> e
+    <a href="decisions.html">ADR-76</a>.
+  </li>
+</ol>
+
 <h2 id="bootstrap">3 · Carregar o app — e o que acontece quando falha</h2>
 
 <p>
@@ -389,18 +428,41 @@
   </li>
   <li>
     <strong>Abrir move o foco para o primeiro item de navegação</strong>
-    (<code>viewChild('firstLink')</code> num <code>effect</code>). Abrir sem mover
-    o foco deixa o usuário de teclado exatamente onde estava, tabulando por uma
-    página que ele já não vê.
+    (<code>viewChild('firstLink')</code> num
+    <strong><code>afterRenderEffect</code></strong>). Abrir sem mover o foco
+    deixa o usuário de teclado exatamente onde estava, tabulando por uma página
+    que ele já não vê. E precisa ser <em>depois</em> do render, não um
+    <code>effect</code> comum: <code>.focus()</code> dentro de uma subárvore
+    <code>inert</code> é ignorado em silêncio, e um <code>effect</code> rodava
+    antes do binding que levanta o <code>inert</code> desta própria gaveta — o
+    foco ficava no ☰, ou no <code>&lt;body&gt;</code> depois que o topbar passou
+    a ficar inert atrás dele, e aí <strong>o Escape também parava de
+    funcionar</strong>, porque o handler do <code>Shell</code> nunca vê um
+    keydown que aconteceu fora dele.
+  </li>
+  <li>
+    <strong>Enquanto a gaveta está aberta, o resto do documento é
+    <code>inert</code> e <code>aria-hidden</code></strong> —
+    <code>&lt;app-topbar&gt;</code> e <code>&lt;main&gt;</code>, ligados ao
+    <code>navModal()</code> do <code>Shell</code>. A gaveta é apresentada
+    modalmente (scrim, página escurecida, Escape fecha) mas não é um
+    <code>ui-dialog</code>, então não herda trap de foco nenhum: sem isso o Tab
+    descia a nav, passava pelo scrim e entrava na página embaixo, escurecida e
+    ilegível — o usuário digitando num formulário que não consegue ver. O scrim
+    vem <em>antes</em> da gaveta na ordem do DOM, para ser uma barreira na borda
+    e não uma parada <em>entre</em> a nav e a página.
   </li>
   <li>
     <strong>Escape, o scrim e o ✕ fecham e devolvem o foco ao ☰.</strong> O foco
     tem de <em>voltar</em>: a gaveta fica <code>inert</code> ao fechar, então quem
     tinha foco lá dentro é despejado no <code>&lt;body&gt;</code> e o próximo Tab
     recomeça do topo do documento. Os três caminhos concordam por
-    <code>focusNavToggle(document)</code> — um id é o menor contrato possível entre
-    a topbar, a sidebar e o shell, que não podem trocar
-    <code>ElementRef</code>.
+    <code>focusNavToggle(document, injector)</code> — um id é o menor contrato
+    possível entre a topbar, a sidebar e o shell, que não podem trocar
+    <code>ElementRef</code>. O <code>injector</code> está ali porque a função
+    foca por <code>afterNextRender</code>: o botão de destino vive no topbar,
+    que é inert enquanto a gaveta está aberta, e focar no mesmo turno em que se
+    fecha roda antes do binding que lhe devolve o foco.
     <span class="where">frontend: layout/nav-focus.ts</span>
   </li>
   <li>

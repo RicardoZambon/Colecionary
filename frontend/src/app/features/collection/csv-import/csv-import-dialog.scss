@@ -214,3 +214,43 @@ th {
   margin-left: var(--sp-1);
   color: var(--muted-strong);
 }
+
+/* The new groups and fields, by name, under the count pills. Their own
+   paragraph because a list of names is not a pill. */
+.summary__created {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* The destination roll-up. One line per place the file writes to, with its row
+   count on the right so the odd one out is the short line. */
+.lands {
+  list-style: none;
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    font-size: var(--fs-sm);
+  }
+
+  &__where {
+    min-width: 0;
+    color: var(--text);
+  }
+
+  &__count {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text2);
+  }
+}

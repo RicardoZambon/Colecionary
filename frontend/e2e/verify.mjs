@@ -531,6 +531,21 @@ await touch.close();
         const cs = getComputedStyle(el);
         // Declared its own scroller: legitimate, and the point of the rule.
         if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') continue;
+        // A deliberate full-bleed, read from the DOM rather than from a list of
+        // blessed selectors.
+        //
+        // A sticky action bar that spans the page's gutters does it with
+        // `margin-inline: calc(var(--page-x) * -1)`. That makes the bar wider
+        // than its container's content box on purpose, so every *ancestor*
+        // reports overflow — `.form` at 374 against a 358 clientWidth — while
+        // nothing actually scrolls and `.main` stays exactly viewport-wide. The
+        // negative margin is the declaration of intent, but it is on the child,
+        // so the exemption has to look down rather than at `el` itself.
+        const bleeds = [...el.children].some(c => {
+          const m = getComputedStyle(c);
+          return parseFloat(m.marginLeft) < 0 || parseFloat(m.marginRight) < 0;
+        });
+        if (bleeds) continue;
         // A deliberate scroller further up already owns this content.
         let owned = false;
         for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {

@@ -146,6 +146,43 @@ describe('bulk-patch', () => {
       expect(out[0].value).toBe(12.5);
     });
 
+    /**
+     * The blocker, on the surface where it costs the most.
+     *
+     * This used to carry its own `parseFloat(raw.replace(',', '.'))`, which for
+     * anyone using a Brazilian keyboard — or pasting the app's own formatting
+     * back in — is wrong in both directions and says nothing: `4.200,00` became
+     * 4.2, `85,50` became 8550, `12,5` became 125 and `1.000` became 1. The
+     * single-item form had the same bug and shipped it to one item at a time;
+     * here one Apply lands it on up to forty. No spec had ever typed a
+     * separator that was not `12,50`, which is the one shape the broken version
+     * happened to get right.
+     */
+    it.each([
+      ['4.200,00', 4200],
+      ['85,50', 85.5],
+      ['12,5', 12.5],
+      ['1.000', 1000],
+      ['4,200.00', 4200],
+      ['R$ 1.234,56', 1234.56],
+      ['—', 0],
+    ])('reads %s as %s, whichever locale wrote it', (typed, expected) => {
+      const out = applyBulkPatch([item('a')], ids('a'), { value: typed }, CTX);
+      expect(out[0].value).toBe(expected);
+    });
+
+    it('reads a pasted thousands separator in a year as a year', () => {
+      // `1.998` used to arrive as 1.998 — a year of one.
+      const out = applyBulkPatch([item('a')], ids('a'), { year: '1.998' }, CTX);
+      expect(out[0].year).toBe(1998);
+    });
+
+    it('applies one typed amount identically across the whole selection', () => {
+      const items = [item('a'), item('b'), item('c')];
+      const out = applyBulkPatch(items, ids('a', 'b', 'c'), { value: '4.200,00' }, CTX);
+      expect(out.map(i => i.value)).toEqual([4200, 4200, 4200]);
+    });
+
     describe('custom fields', () => {
       const withFields = item('a', {
         custom: [

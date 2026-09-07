@@ -18,45 +18,54 @@
 
 <span class="crumb">{{ crumb() }}</span>
 
+<!--
+  The sidebar's status line is inside a closed drawer below $bp-lg, so the two
+  states that matter — the app is not connected, or a save was refused — would
+  otherwise not be on screen at all: the user had to open the menu to find out
+  the app was offline. Rendered where the crumb is hidden at that width, so it
+  costs no room.
+-->
+@if (store.syncNeedsAttention()) {
+  <span class="sync" [attr.data-sync]="store.syncState()" role="status">
+    <ui-icon [name]="store.syncIcon()" [size]="11" [strokeWidth]="2.4" />
+    <span>{{ store.syncStatusKey() | t }}</span>
+  </span>
+}
+
 <span class="spacer"></span>
 
-<ui-text-input
-  class="search"
-  variant="subtle"
-  [placeholder]="'topbar.search' | t"
-  [value]="store.query()"
-  (valueChange)="store.query.set($event)"
-/>
+<!--
+  Only where there are results to show. It was rendered on every authenticated
+  route and read by exactly two — the collection page and the item page — so on
+  the dashboard, the store and settings a user typed what they were looking for
+  into the most inviting control on the screen and nothing whatever happened.
+  The text also survived the navigation, so it was still filtering a list the
+  next time they opened a collection.
+-->
+@if (inCollection()) {
+  <ui-text-input
+    class="search"
+    variant="subtle"
+    name="q"
+    [ariaLabel]="'topbar.search' | t"
+    [placeholder]="'topbar.search' | t"
+    [value]="store.query()"
+    (valueChange)="store.query.set($event)"
+  />
+}
 
-<ui-dropdown #langMenu [width]="180">
-  <button ddTrigger type="button" class="theme-trigger" [title]="'topbar.language' | t">
-    <ui-flag [lang]="i18n.currentDef.id" [size]="16" />
-    <span>{{ i18n.currentDef.id }}</span>
-    <ui-icon class="caret" name="chevron-down" [size]="11" />
-  </button>
-  <ng-container ddPanel>
-    @for (lang of i18n.langs; track lang.id) {
-      <button
-        type="button"
-        class="theme-row"
-        [attr.aria-current]="lang.id === i18n.current() ? 'true' : null"
-        [class.active]="lang.id === i18n.current()"
-        (click)="i18n.apply(lang.id); langMenu.close()"
-      >
-        <ui-flag [lang]="lang.id" [size]="20" />
-        <span class="theme-row__name">{{ lang.name }}</span>
-        <span class="theme-row__check">
-          @if (lang.id === i18n.current()) {
-            <ui-icon name="check" [size]="13" />
-          }
-        </span>
-      </button>
-    }
-  </ng-container>
-</ui-dropdown>
+<app-lang-picker class="lang" />
 
-<ui-dropdown #themeMenu [width]="236">
-  <button ddTrigger type="button" class="theme-trigger" [title]="'topbar.theme' | t">
+<ui-dropdown #themeMenu class="theme" [width]="236">
+  <button
+    ddTrigger
+    type="button"
+    class="theme-trigger"
+    [title]="'topbar.theme' | t"
+    [attr.aria-haspopup]="true"
+    [attr.aria-expanded]="themeMenu.open()"
+    [attr.aria-controls]="themeMenu.panelId"
+  >
     <ui-icon name="contrast" [size]="13" />
     <span>{{ theme.currentDef.name }}</span>
     <ui-icon class="caret" name="chevron-down" [size]="11" />
@@ -94,7 +103,15 @@
 </a>
 
 <ui-dropdown #profileMenu [width]="200">
-  <button ddTrigger type="button" class="avatar-trigger" [title]="'topbar.account' | t">
+  <button
+    ddTrigger
+    type="button"
+    class="avatar-trigger"
+    [title]="'topbar.account' | t"
+    [attr.aria-haspopup]="true"
+    [attr.aria-expanded]="profileMenu.open()"
+    [attr.aria-controls]="profileMenu.panelId"
+  >
     <ui-avatar [initials]="store.profile()?.initials ?? '··'" />
   </button>
   <ng-container ddPanel>

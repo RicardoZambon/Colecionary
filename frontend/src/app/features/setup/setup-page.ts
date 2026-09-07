@@ -1,21 +1,29 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 
 import { I18nService, MessageKey } from '../../core/i18n';
 import { SetupService } from '../../core/setup/setup.service';
 import { SetupTestResult } from '../../core/models/setup.model';
 import { ThemeId } from '../../core/models';
 import { ThemeService } from '../../core/state/theme.service';
+import { LangPicker } from '../../layout/lang-picker/lang-picker';
 import { TPipe } from '../../shared/pipes/t.pipe';
-import {
-  UiButton,
-  UiCard,
-  UiField,
-  UiIcon,
-  UiSelect,
-  UiTextInput,
-  UiToggle,
-} from '../../shared/ui';
-import { SelectOption } from '../../shared/ui/select/select';
+import { UiButton } from '../../shared/ui/button/button';
+import { UiCard } from '../../shared/ui/card/card';
+import { UiField } from '../../shared/ui/field/field';
+import { UiIcon } from '../../shared/ui/icon/icon';
+import { SelectOption, UiSelect } from '../../shared/ui/select/select';
+import { UiTextInput } from '../../shared/ui/text-input/text-input';
+import { UiToggle } from '../../shared/ui/toggle/toggle';
 import {
   CurrencyCode,
   FALLBACK_CURRENCY,
@@ -33,7 +41,7 @@ interface Note {
 @Component({
   selector: 'app-setup-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiButton, UiCard, UiField, UiIcon, UiSelect, UiTextInput, UiToggle],
+  imports: [LangPicker, TPipe, UiButton, UiCard, UiField, UiIcon, UiSelect, UiTextInput, UiToggle],
   templateUrl: './setup-page.html',
   styleUrl: './setup-page.scss',
 })
@@ -46,6 +54,10 @@ export class SetupPage {
    * Preferences step preview the choice live.
    */
   private readonly theme = inject(ThemeService);
+  private readonly injector = inject(Injector);
+
+  private readonly stepPanel = viewChild<ElementRef<HTMLElement>>('stepPanel');
+  private readonly firstField = viewChild<UiTextInput>('firstField');
 
   protected readonly stepKeys: MessageKey[] = [
     'setup.step.token',
@@ -110,6 +122,68 @@ export class SetupPage {
       this.ownerPassword() === this.ownerPasswordConfirm(),
   );
 
+  /**
+   * Whether the user has tried to leave this step yet.
+   *
+   * Nothing is marked wrong before they have. Reset on every step change, so
+   * arriving at the next screen never opens with a page of refusals for fields
+   * nobody has reached — and a value corrected after the attempt clears its own
+   * message, because the message is derived rather than stored.
+   */
+  private readonly attempted = signal(false);
+
+  /** "Fill this in to continue", but only once Next has actually been pressed. */
+  protected fieldError(valid: boolean): string {
+    return this.attempted() && !valid ? this.i18n.t('setup.required') : '';
+  }
+
+  protected readonly passwordError = computed(() => {
+    if (this.ownerPassword() && this.ownerPassword().length < 8) {
+      return this.i18n.t('setup.admin.passwordTooShort');
+    }
+    return this.fieldError(this.ownerPassword().length >= 8);
+  });
+
+  protected readonly confirmError = computed(() => {
+    if (this.ownerPasswordConfirm() && this.ownerPassword() !== this.ownerPasswordConfirm()) {
+      return this.i18n.t('setup.admin.passwordMismatch');
+    }
+    return this.fieldError(this.ownerPassword() === this.ownerPasswordConfirm());
+  });
+
+  /** Whether the step on screen is complete enough to leave. */
+  private stepValid(): boolean {
+    switch (this.step()) {
+      case 0:
+        return this.tokenValid();
+      case 1:
+        return this.dbValid() && this.tokenValid();
+      case 2:
+        return this.adminValid();
+      default:
+        return true;
+    }
+  }
+
+  /** The `<li>` a step's panel is named by, so the group carries a real label. */
+  protected stepLabelId(index: number): string {
+    return `setup-step-${index}`;
+  }
+
+  /** "Step 3 of 5 — Administrator", for the live region. */
+  protected readonly stepAnnounce = computed(() =>
+    this.i18n.t('setup.stepAnnounce', {
+      n: this.step() + 1,
+      total: this.stepKeys.length,
+      name: this.i18n.t(this.stepKeys[this.step()]),
+    }),
+  );
+
+  /** The currency's localized name, for the review step. */
+  protected readonly currencyName = computed(() =>
+    currencyLabel(this.defaultCurrency(), this.i18n.locale()),
+  );
+
   /** Theme ids are storage keys; the review step shows the human name. */
   protected readonly themeLabel = computed(
     () => this.themeOptions.find(option => option.value === this.defaultTheme())?.label ?? this.defaultTheme(),
@@ -158,14 +232,54 @@ export class SetupPage {
     this.theme.current.set(id as ThemeId);
   }
 
+  /**
+   * Advances, or says what is missing.
+   *
+   * The button stays live on purpose: a control that goes dead can only ever
+   * withhold the outcome, while one that reports can explain itself. The first
+   * refused field takes focus so the answer is where the caret is.
+   */
   protected next(): void {
     this.error.set(null);
+    if (!this.stepValid()) {
+      this.attempted.set(true);
+      this.error.set(this.i18n.t('setup.fixFirst'));
+      this.focusStep({ field: true });
+      return;
+    }
+    this.attempted.set(false);
     this.step.update(s => Math.min(s + 1, this.stepKeys.length - 1));
+    this.focusStep();
   }
 
   protected back(): void {
     this.error.set(null);
+    this.attempted.set(false);
     this.step.update(s => Math.max(s - 1, 0));
+    this.focusStep();
+  }
+
+  /**
+   * Moves focus into the step that is now showing.
+   *
+   * Without this the panel swapped under an unmoved cursor: focus stayed on
+   * Next, so a keyboard user had to Shift+Tab backwards to reach the new step's
+   * first field and a screen reader was told nothing had changed. Not the
+   * `autofocus` attribute — it is honoured only on initial document load and
+   * does nothing to content inserted later.
+   *
+   * The group rather than the field by default: landing on the panel lets the
+   * hint above the fields be read first, which is where the step explains
+   * itself. A *refusal* focuses the field, because there the user has to type.
+   */
+  private focusStep(options: { field?: boolean } = {}): void {
+    afterNextRender(
+      () => {
+        if (options.field && this.firstField()) this.firstField()!.focus();
+        else this.stepPanel()?.nativeElement.focus({ preventScroll: true });
+      },
+      { injector: this.injector },
+    );
   }
 
   protected async test(): Promise<void> {
@@ -184,12 +298,29 @@ export class SetupPage {
     }
   }
 
+  /** True once the wait has been going long enough to need reassuring. */
+  protected readonly slow = signal(false);
+
   protected async finish(): Promise<void> {
-    if (this.busy() || !this.adminValid()) {
+    if (this.busy()) {
+      return;
+    }
+    if (!this.adminValid()) {
+      // The review step has no fields of its own, so the refusal points back at
+      // the one that does rather than marking nothing.
+      this.error.set(this.i18n.t('setup.fixFirst'));
+      this.attempted.set(true);
+      this.step.set(2);
+      this.focusStep({ field: true });
       return;
     }
     this.busy.set(true);
+    this.slow.set(false);
     this.error.set(null);
+    // Reloading here loses the whole wizard: none of it is persisted, and the
+    // one thing the screen used to say was the word "Applying…".
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
     try {
       await this.setup.apply({
         token: this.token().trim(),
@@ -205,7 +336,11 @@ export class SetupPage {
       // Persist the choice for this browser so the sign-in screen matches.
       this.theme.apply(this.defaultTheme());
 
-      const ready = await this.setup.waitUntilConfigured();
+      // Roughly thirty seconds in, the message changes rather than the screen
+      // staying identical for a minute and a half.
+      const ready = await this.setup.waitUntilConfigured({
+        onPoll: attempt => this.slow.set(attempt >= 15),
+      });
       if (ready) {
         window.location.href = '/';
       } else {
@@ -214,7 +349,9 @@ export class SetupPage {
     } catch (err) {
       this.error.set(this.messageFrom(err) ?? this.i18n.t('setup.error.applyFailed'));
     } finally {
+      window.removeEventListener('beforeunload', warn);
       this.busy.set(false);
+      this.slow.set(false);
     }
   }
 

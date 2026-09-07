@@ -1,15 +1,21 @@
 <div class="setup">
   <ui-card class="panel">
-    <div class="brand">
-      <span class="brand__mark"><ui-icon name="diamond" [size]="13" /></span>
-      <span class="brand__name">Vault</span>
-      <span class="brand__sub">{{ 'setup.brandSub' | t }}</span>
+    <div class="head">
+      <div class="brand">
+        <span class="brand__mark"><ui-icon name="diamond" [size]="13" /></span>
+        <span class="brand__name">Vault</span>
+        <span class="brand__sub">{{ 'setup.brandSub' | t }}</span>
+      </div>
+      <!-- The wizard runs outside the app shell, so the top bar's pickers do not
+           exist here — and this is the first screen a self-hosting user sees. -->
+      <app-lang-picker />
     </div>
 
     <ol class="steps" [attr.aria-label]="'setup.stepsAria' | t">
       @for (key of stepKeys; track key; let i = $index) {
         <li
           class="steps__item"
+          [id]="stepLabelId(i)"
           [class.active]="i === step()"
           [class.done]="i < step()"
           [attr.aria-current]="i === step() ? 'step' : null"
@@ -19,114 +25,150 @@
       }
     </ol>
 
-    <!-- 0 — Token -->
-    @if (step() === 0) {
-      <p class="hint">{{ 'setup.token.hint' | t: { marker: 'SETUP MODE — … token …' } }}</p>
-      <ui-field [label]="'setup.token.label' | t">
-        <ui-text-input [placeholder]="'setup.token.placeholder' | t" [value]="token()" (valueChange)="token.set($event)" />
-      </ui-field>
-    }
+    <!--
+      A changed attribute on a static list is not an announcement, so advancing a
+      step told a screen-reader user nothing at all. This says which step is now
+      showing; the panel below takes focus, which is the other half — focus used
+      to stay on the Next button, so a keyboard user had to Shift+Tab backwards
+      to reach the new step's first field.
+    -->
+    <p class="sr-only" role="status">{{ stepAnnounce() }}</p>
 
-    <!-- 1 — Database -->
-    @if (step() === 1) {
-      <p class="hint">{{ 'setup.db.hint' | t }}</p>
-      <div class="grid">
-        <ui-field [label]="'setup.db.server' | t">
-          <ui-text-input [placeholder]="'setup.db.serverPlaceholder' | t" [value]="server()" (valueChange)="server.set($event)" />
-        </ui-field>
-        <ui-field [label]="'setup.db.port' | t">
-          <ui-text-input type="number" [value]="port()" (valueChange)="port.set($event)" />
-        </ui-field>
-        <ui-field [label]="'setup.db.database' | t">
-          <ui-text-input [value]="database()" (valueChange)="database.set($event)" />
-        </ui-field>
-        <ui-field [label]="'setup.db.username' | t">
-          <ui-text-input [value]="username()" (valueChange)="username.set($event)" />
-        </ui-field>
-        <ui-field [label]="'setup.db.password' | t">
-          <ui-text-input type="password" [value]="password()" (valueChange)="password.set($event)" />
-        </ui-field>
-        <ui-field [label]="'setup.db.trustCert' | t">
-          <ui-toggle
-            [ariaLabel]="'setup.db.trustCert' | t"
-            [on]="trustCert()"
-            (onChange)="trustCert.set($event)"
+    <div
+      #stepPanel
+      class="step"
+      role="group"
+      tabindex="-1"
+      [attr.aria-labelledby]="stepLabelId(step())"
+    >
+      <!-- 0 — Token -->
+      @if (step() === 0) {
+        <p class="hint">{{ 'setup.token.hint' | t: { marker: 'SETUP MODE — … token …' } }}</p>
+        <ui-field [label]="'setup.token.label' | t" [error]="fieldError(tokenValid())">
+          <ui-text-input
+            #firstField
+            name="setup-token"
+            autocomplete="off"
+            [placeholder]="'setup.token.placeholder' | t"
+            [value]="token()"
+            (valueChange)="token.set($event)"
           />
         </ui-field>
-      </div>
-      <div class="test-row">
-        <ui-button variant="ghost" size="sm" [disabled]="testing() || !dbValid() || !tokenValid()" (click)="test()">
-          {{ (testing() ? 'setup.db.testing' : 'setup.db.test') | t }}
-        </ui-button>
-      </div>
-      @if (testNote(); as note) {
-        <p class="note" [class.ok]="note.tone === 'ok'" role="status">
-          <ui-icon
-            class="note__icon"
-            [name]="note.tone === 'ok' ? 'check' : 'alert'"
-            [size]="13"
-            [strokeWidth]="2.1"
+      }
+
+      <!-- 1 — Database -->
+      @if (step() === 1) {
+        <p class="hint">{{ 'setup.db.hint' | t }}</p>
+        <div class="grid">
+          <ui-field [label]="'setup.db.server' | t" [error]="fieldError(!!server().trim())">
+            <ui-text-input
+              #firstField
+              name="setup-server"
+              autocomplete="off"
+              [placeholder]="'setup.db.serverPlaceholder' | t"
+              [value]="server()"
+              (valueChange)="server.set($event)"
+            />
+          </ui-field>
+          <ui-field [label]="'setup.db.port' | t">
+            <ui-text-input type="number" name="setup-port" autocomplete="off" [value]="port()" (valueChange)="port.set($event)" />
+          </ui-field>
+          <ui-field [label]="'setup.db.database' | t" [error]="fieldError(!!database().trim())">
+            <ui-text-input name="setup-database" autocomplete="off" [value]="database()" (valueChange)="database.set($event)" />
+          </ui-field>
+          <ui-field [label]="'setup.db.username' | t" [error]="fieldError(!!username().trim())">
+            <ui-text-input name="setup-username" autocomplete="off" [value]="username()" (valueChange)="username.set($event)" />
+          </ui-field>
+          <ui-field [label]="'setup.db.password' | t">
+            <ui-text-input type="password" name="setup-db-password" autocomplete="off" [value]="password()" (valueChange)="password.set($event)" />
+          </ui-field>
+          <ui-field [label]="'setup.db.trustCert' | t">
+            <ui-toggle
+              [ariaLabel]="'setup.db.trustCert' | t"
+              [on]="trustCert()"
+              (onChange)="trustCert.set($event)"
+            />
+          </ui-field>
+        </div>
+        <div class="test-row">
+          <ui-button variant="ghost" size="sm" [pending]="testing()" [disabled]="!dbValid() || !tokenValid()" (click)="test()">
+            {{ 'setup.db.test' | t }}
+          </ui-button>
+        </div>
+        @if (testNote(); as note) {
+          <p class="note" [class.ok]="note.tone === 'ok'" role="status">
+            <ui-icon
+              class="note__icon"
+              [name]="note.tone === 'ok' ? 'check' : 'alert'"
+              [size]="13"
+              [strokeWidth]="2.1"
+            />
+            <span>{{ note.text }}</span>
+          </p>
+        }
+      }
+
+      <!-- 2 — Administrator -->
+      @if (step() === 2) {
+        <p class="hint">{{ 'setup.admin.hint' | t }}</p>
+        <ui-field [label]="'setup.admin.org' | t" [error]="fieldError(!!organizationName().trim())">
+          <ui-text-input
+            #firstField
+            name="organization"
+            autocomplete="organization"
+            [placeholder]="'setup.admin.orgPlaceholder' | t"
+            [value]="organizationName()"
+            (valueChange)="organizationName.set($event)"
           />
-          <span>{{ note.text }}</span>
-        </p>
+        </ui-field>
+        <div class="grid">
+          <ui-field [label]="'setup.admin.ownerName' | t" [error]="fieldError(!!ownerName().trim())">
+            <ui-text-input name="name" autocomplete="name" [value]="ownerName()" (valueChange)="ownerName.set($event)" />
+          </ui-field>
+          <ui-field [label]="'setup.admin.ownerEmail' | t" [error]="fieldError(!!ownerEmail().trim())">
+            <ui-text-input type="email" name="email" autocomplete="email" [value]="ownerEmail()" (valueChange)="ownerEmail.set($event)" />
+          </ui-field>
+          <!--
+            The rule goes on the field it applies to, not in a shared note under
+            the pair: "Next is grey" used to be the only signal for five
+            conditions at once, two of which got an inline note and three of
+            which — an empty Organization above, an empty name, an empty email —
+            got nothing.
+          -->
+          <ui-field [label]="'setup.admin.password' | t" [error]="passwordError()">
+            <ui-text-input type="password" name="new-password" autocomplete="new-password" [value]="ownerPassword()" (valueChange)="ownerPassword.set($event)" />
+          </ui-field>
+          <ui-field [label]="'setup.admin.confirm' | t" [error]="confirmError()">
+            <ui-text-input type="password" name="confirm-password" autocomplete="new-password" [value]="ownerPasswordConfirm()" (valueChange)="ownerPasswordConfirm.set($event)" />
+          </ui-field>
+        </div>
       }
-    }
 
-    <!-- 2 — Administrator -->
-    @if (step() === 2) {
-      <p class="hint">{{ 'setup.admin.hint' | t }}</p>
-      <ui-field [label]="'setup.admin.org' | t">
-        <ui-text-input [placeholder]="'setup.admin.orgPlaceholder' | t" [value]="organizationName()" (valueChange)="organizationName.set($event)" />
-      </ui-field>
-      <div class="grid">
-        <ui-field [label]="'setup.admin.ownerName' | t">
-          <ui-text-input [value]="ownerName()" (valueChange)="ownerName.set($event)" />
+      <!-- 3 — Preferences -->
+      @if (step() === 3) {
+        <p class="hint">{{ 'setup.prefs.hint' | t }}</p>
+        <ui-field [label]="'setup.prefs.theme' | t">
+          <ui-select [options]="themeOptions" [value]="defaultTheme()" (valueChange)="pickTheme($event)" />
         </ui-field>
-        <ui-field [label]="'setup.admin.ownerEmail' | t">
-          <ui-text-input type="email" [value]="ownerEmail()" (valueChange)="ownerEmail.set($event)" />
+        <ui-field [label]="'setup.prefs.currency' | t" [hint]="'setup.prefs.currencyHint' | t">
+          <ui-select [options]="currencyOptions()" [value]="defaultCurrency()" (valueChange)="pickCurrency($event)" />
         </ui-field>
-        <ui-field [label]="'setup.admin.password' | t">
-          <ui-text-input type="password" [value]="ownerPassword()" (valueChange)="ownerPassword.set($event)" />
-        </ui-field>
-        <ui-field [label]="'setup.admin.confirm' | t">
-          <ui-text-input type="password" [value]="ownerPasswordConfirm()" (valueChange)="ownerPasswordConfirm.set($event)" />
-        </ui-field>
-      </div>
-      @if (ownerPassword() && ownerPassword().length < 8) {
-        <p class="note" role="status">
-          <ui-icon class="note__icon" name="alert" [size]="13" [strokeWidth]="2.1" />
-          <span>{{ 'setup.admin.passwordTooShort' | t }}</span>
-        </p>
-      } @else if (ownerPasswordConfirm() && ownerPassword() !== ownerPasswordConfirm()) {
-        <p class="note" role="status">
-          <ui-icon class="note__icon" name="alert" [size]="13" [strokeWidth]="2.1" />
-          <span>{{ 'setup.admin.passwordMismatch' | t }}</span>
-        </p>
       }
-    }
 
-    <!-- 3 — Preferences -->
-    @if (step() === 3) {
-      <p class="hint">{{ 'setup.prefs.hint' | t }}</p>
-      <ui-field [label]="'setup.prefs.theme' | t">
-        <ui-select [options]="themeOptions" [value]="defaultTheme()" (valueChange)="pickTheme($event)" />
-      </ui-field>
-      <ui-field [label]="'setup.prefs.currency' | t" [hint]="'setup.prefs.currencyHint' | t">
-        <ui-select [options]="currencyOptions()" [value]="defaultCurrency()" (valueChange)="pickCurrency($event)" />
-      </ui-field>
-    }
-
-    <!-- 4 — Review -->
-    @if (step() === 4) {
-      <p class="hint">{{ 'setup.review.hint' | t }}</p>
-      <dl class="review">
-        <dt>{{ 'setup.review.database' | t }}</dt><dd>{{ server() }},{{ port() }} / {{ database() }}</dd>
-        <dt>{{ 'setup.review.organization' | t }}</dt><dd>{{ organizationName() }}</dd>
-        <dt>{{ 'setup.review.owner' | t }}</dt><dd>{{ ownerName() }} &lt;{{ ownerEmail() }}&gt;</dd>
-        <dt>{{ 'setup.review.theme' | t }}</dt><dd>{{ themeLabel() }}</dd>
-        <dt>{{ 'setup.review.currency' | t }}</dt><dd>{{ defaultCurrency() }}</dd>
-      </dl>
-    }
+      <!-- 4 — Review -->
+      @if (step() === 4) {
+        <p class="hint">{{ 'setup.review.hint' | t }}</p>
+        <dl class="review">
+          <dt>{{ 'setup.review.database' | t }}</dt><dd>{{ server() }},{{ port() }} / {{ database() }}</dd>
+          <dt>{{ 'setup.review.organization' | t }}</dt><dd>{{ organizationName() }}</dd>
+          <dt>{{ 'setup.review.owner' | t }}</dt><dd>{{ ownerName() }} &lt;{{ ownerEmail() }}&gt;</dd>
+          <dt>{{ 'setup.review.theme' | t }}</dt><dd>{{ themeLabel() }}</dd>
+          <!-- The localized name, not the wire code: the picker two steps back
+               offered "Real brasileiro" and this line said "BRL". -->
+          <dt>{{ 'setup.review.currency' | t }}</dt><dd>{{ currencyName() }}</dd>
+        </dl>
+      }
+    </div>
 
     @if (error(); as message) {
       <p class="note" role="alert">
@@ -138,17 +180,31 @@
     <div class="nav">
       <ui-button variant="ghost" size="sm" [disabled]="step() === 0 || busy()" (click)="back()">{{ 'setup.back' | t }}</ui-button>
       @if (step() < stepKeys.length - 1) {
-        <ui-button
-          variant="primary"
-          size="sm"
-          [disabled]="(step() === 0 && !tokenValid()) || (step() === 1 && !dbValid()) || (step() === 2 && !adminValid())"
-          (click)="next()"
-        >{{ 'setup.next' | t }}</ui-button>
+        <!--
+          Enabled, and it *reports*. A composite `[disabled]` answering one
+          boolean for five conditions cannot say which one is unmet, so the
+          button simply went dead with nothing on screen explaining why — worst
+          of all on the Database step, whose Test button was also dead because
+          of the token two screens back.
+        -->
+        <ui-button variant="primary" size="sm" (click)="next()">{{ 'setup.next' | t }}</ui-button>
       } @else {
-        <ui-button variant="primary" size="sm" [disabled]="busy() || !adminValid()" (click)="finish()">
-          {{ (busy() ? 'setup.applying' : 'setup.finish') | t }}
+        <ui-button variant="primary" size="sm" [pending]="busy()" (click)="finish()">
+          {{ 'setup.finish' | t }}
         </ui-button>
       }
     </div>
+
+    <!--
+      Applying posts the config and then polls for up to ninety seconds while the
+      backend restarts in-process. The only feedback used to be the word
+      "Applying…" on a disabled button, so most people concluded it had hung and
+      reloaded — which loses the whole wizard, none of which is persisted.
+    -->
+    @if (busy()) {
+      <p class="hint" role="status">
+        {{ (slow() ? 'setup.applying.slow' : 'setup.applying.hint') | t }}
+      </p>
+    }
   </ui-card>
 </div>

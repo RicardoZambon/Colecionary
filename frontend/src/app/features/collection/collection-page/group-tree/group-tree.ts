@@ -6,7 +6,6 @@ import {
   inject,
   input,
   model,
-  output,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
@@ -17,7 +16,7 @@ import { visibleTree } from '../../../../core/utils/groups.util';
 import { groupLinkParams } from '../../browse-params';
 import { TreeKeyboard } from '../../tree-keyboard';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiEmpty, UiIcon, UiProgress, UiSectionLabel } from '../../../../shared/ui';
+import { UiEmpty, UiIcon, UiProgress, UiSectionLabel, UiTruncate } from '../../../../shared/ui';
 
 interface TreeRowView {
   node: GroupNode;
@@ -27,6 +26,8 @@ interface TreeRowView {
   selected: boolean;
   /** "1/2" — exact where the bar can only be approximate. */
   count: string;
+  /** What progress would be measured against. 0 means nothing declares one. */
+  denominator: number;
   /** "×6" when the group holds more physical copies than it has items. */
   copiesNote: string | null;
   pct: number;
@@ -42,12 +43,19 @@ interface TreeRowView {
  * recursive components — the legal ARIA pattern, and far easier to keep
  * correct under OnPush with signal inputs. Every node is a real anchor, so
  * middle-click, open-in-new-tab and the global focus ring all work without
- * this component doing anything about them.
+ * this component doing anything about them. `role="treeitem"` is on that
+ * anchor and not on the `<li>` around it: ARIA state is reported for the
+ * element that takes focus, and a plain link nested inside a `treeitem`
+ * announced none of the tree at all.
+ *
+ * **A pure navigator, with no controls of its own.** Hiding the panel is the
+ * breadcrumb strip's disclosure and only its — the two used to swap places, so
+ * pressing either destroyed the button that had just been pressed.
  */
 @Component({
   selector: 'app-group-tree',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, TPipe, UiEmpty, UiIcon, UiProgress, UiSectionLabel],
+  imports: [RouterLink, TPipe, UiEmpty, UiIcon, UiProgress, UiSectionLabel, UiTruncate],
   templateUrl: './group-tree.html',
   styleUrl: './group-tree.scss',
 })
@@ -64,9 +72,6 @@ export class GroupTree {
   readonly selectedId = input<string | null>(null);
   readonly expanded = model<ReadonlySet<string>>(new Set());
 
-  /** Asked to hide itself. The page owns whether the panel is shown. */
-  readonly collapse = output<void>();
-
   protected readonly rows = computed<TreeRowView[]>(() => {
     const stats = this.stats();
     const selected = this.selectedId();
@@ -79,6 +84,7 @@ export class GroupTree {
         expanded: this.expanded().has(row.node.id),
         selected: selected === row.node.id,
         count: `${owned}/${denominator}`,
+        denominator,
         copiesNote:
           nodeStats && nodeStats.copies > nodeStats.catalogued ? `×${nodeStats.copies}` : null,
         pct: nodeStats?.pct ?? 0,

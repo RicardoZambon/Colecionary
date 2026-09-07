@@ -89,6 +89,11 @@
           <li>{{ part }}</li>
         }
       </ul>
+      <!-- Named, not counted. See `creations` for why a count on its own let a
+           typo in the Grupo column import without a word. -->
+      @for (line of creations(); track line) {
+        <p class="summary__created">{{ line }}</p>
+      }
       @if (inert()) {
         <p class="summary__quiet">{{ 'csvImport.nothingToWrite' | t }}</p>
       }
@@ -114,6 +119,26 @@
 
   @if (previewRows().length) {
     <section class="preview">
+      <!-- Where the rows land, before the rows themselves: five to ten lines
+           for a 400-row file, and the place a wrong column shows up. -->
+      <h3 class="preview__heading">{{ 'csvImport.landsIn' | t }}</h3>
+      <ul class="lands">
+        @for (dest of destinations(); track dest.path + dest.section) {
+          <li>
+            <span class="lands__where">
+              {{ dest.path }}
+              @if (dest.section) {
+                <span class="section">&rsaquo; {{ dest.section }}</span>
+              }
+              @if (dest.fresh) {
+                <span class="mark">{{ 'csvImport.newGroupMark' | t }}</span>
+              }
+            </span>
+            <span class="lands__count">{{ dest.count }}</span>
+          </li>
+        }
+      </ul>
+
       <h3 class="preview__heading">{{ 'csvImport.previewHeading' | t }}</h3>
       <!-- Its own scroller: a long name or a deep group path must not widen the
            dialog past the viewport (rule 17). -->
@@ -154,6 +179,10 @@
       </div>
       @if (hiddenRows()) {
         <p class="preview__more">{{ 'csvImport.moreRows' | t: { n: hiddenRows() } }}</p>
+      }
+      @if (hiddenRows() || allRows()) {
+        <ui-button variant="link" size="sm" (click)="allRows.set(!allRows())"
+          >{{ showAllLabel() }}</ui-button>
       }
     </section>
   }

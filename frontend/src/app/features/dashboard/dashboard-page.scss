@@ -21,9 +21,21 @@ h1 {
   margin: 0;
 }
 
+/* The title and the page's primary action share a row and separate onto two
+   when there is no room for both. */
+.head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
 .sub {
   font-size: 13px;
-  color: var(--muted);
+  /* --muted is documented as decoration and is excluded from the AA check on
+     purpose; this is the page's own subtitle. */
+  color: var(--muted-strong);
   margin: 6px 0 0;
 }
 
@@ -76,6 +88,18 @@ h1 {
   &__sub {
     font-size: 11.5px;
     color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  /* The direction of the trend, as a mark rather than as a glyph inside the
+     sentence. Coloured by nothing: up is not automatically good — a collection
+     bought as an investment and one bought to keep read the same figure
+     differently — and the arrow already carries the direction without colour. */
+  &__trend {
+    flex: none;
+    color: var(--muted-strong);
   }
 }
 
@@ -121,32 +145,36 @@ h1 {
 
   .meta {
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   .value {
     font-size: 12.5px;
     font-weight: 700;
-    color: var(--accent2);
+    /* The type layer of the accent, not the fill: --accent2 is a 3:1 token for
+       bars and swatches, and this is a figure being read. */
+    color: var(--accent2-strong);
   }
 }
 
-.new-tile {
-  border: var(--bw) dashed var(--border);
-  border-radius: var(--radius);
-  background: none;
-  display: grid;
-  place-items: center;
-  font-size: 12.5px;
-  font-family: var(--font-body);
-  color: var(--muted);
-  min-height: 120px;
-  cursor: pointer;
+/*
+ * The card's whole surface is one link. `display: block` and `color: inherit`
+ * so it looks exactly as the card did when the click listener was on the host,
+ * and the focus ring lands on the card's own box rather than on a line of text
+ * inside it.
+ */
+.card-link {
+  display: block;
+  color: inherit;
 
   &:hover {
-    color: var(--accent);
-    border-color: var(--accent);
+    text-decoration: none;
   }
+}
+
+/* The empty state speaks for the whole grid, not for one cell of it. */
+.empty {
+  grid-column: 1 / -1;
 }
 
 .recent {
@@ -182,13 +210,17 @@ h1 {
   &__sub {
     display: block;
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
     margin-top: 2px;
   }
 
   &__value {
     font-size: 13px;
     font-weight: 700;
-    color: var(--accent2);
+    color: var(--accent2-strong);
+  }
+
+  &__empty {
+    padding-top: var(--sp-2);
   }
 }

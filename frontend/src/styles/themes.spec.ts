@@ -25,10 +25,42 @@ const AA = 4.5;
  * bar fill, a border, a button ground), which is a 3:1 job. Their `-strong`
  * siblings are the ones type is allowed to use, and they are held here.
  */
-const READABLE = ['muted-strong', 'accent-strong', 'accent2-strong', 'text2', 'text'] as const;
+const READABLE = [
+  'muted-strong',
+  'accent-strong',
+  'accent2-strong',
+  // `--good` and `--warn` were absent from this list for as long as it existed,
+  // which is why a browser pass found `--good` carrying a 9.5px condition label
+  // at 4.33:1 on Paperwhite. They are status *colours*, and status is read as
+  // often as it is seen, so they need the same fill/type split every other hue
+  // here already has.
+  'good-strong',
+  'warn-strong',
+  'text2',
+  'text',
+] as const;
 
 /** Surfaces a label can sit on. */
 const SURFACES = ['bg', 'panel', 'panel2'] as const;
+
+/**
+ * A label painted **on** a fill, and the fill it sits on.
+ *
+ * The three surfaces above are the page's own grounds. These are the other
+ * place text lands: inside a primary button, inside a selected chip, inside a
+ * destructive button. Nothing measured those, so two themes shipped a label
+ * below AA on its own button — Zine at 4.28:1 and Paperwhite's `--accent2` at
+ * 4.33:1 — while every existing assertion passed, because the token is correct
+ * *on a surface* and simply never sits on one.
+ *
+ * A fill still only owes 3:1 against the page (it is chosen to be seen). This
+ * is about the type on top of it, which owes 4.5:1 like all other type.
+ */
+const ON_FILL = [
+  ['accent-contrast', 'accent'],
+  ['accent-contrast', 'accent2'],
+  ['danger-contrast', 'danger'],
+] as const;
 
 /**
  * Angular's unit-test builder bundles specs through esbuild for the browser, so
@@ -111,6 +143,14 @@ describe('theme palettes', () => {
           `--${token} (${themes[id][token]}) on --${surface} (${themes[id][surface]}) in ${id}`,
         ).toBeGreaterThanOrEqual(AA);
       }
+    });
+
+    it.each(ON_FILL)('--%s clears AA on --%s', (token, fill) => {
+      const measured = contrastRatio(themes[id][token], themes[id][fill]);
+      expect(
+        Math.round(measured * 100) / 100,
+        `--${token} (${themes[id][token]}) on --${fill} (${themes[id][fill]}) in ${id}`,
+      ).toBeGreaterThanOrEqual(AA);
     });
   });
 

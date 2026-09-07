@@ -277,11 +277,34 @@ textarea::placeholder {
     }
   }
 
+  /* The ✕ inside a tag chip, same trade again. It measured 27×10 on the item
+     form at 390px — a 10px-tall target for a destructive action, sitting
+     directly beside the text the user is trying to read. The chip is dense by
+     design, so the paint stays and the target grows around it. `right`/`left`
+     are not pinned the way the filter-chip rule pins them: this target is
+     centred on a mark near the chip's trailing edge, and stretching it edge to
+     edge would swallow taps meant for the label. */
+  ui-tag-input .tag__remove {
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: var(--tap);
+      height: var(--tap);
+      transform: translate(-50%, -50%);
+    }
+  }
+
   /* Same trade for a selection box, and the same reason: 15px is the size it
      should look, and growing it would wreck the density of the table row it
-     lives in. This rule is here rather than in `checkbox.ts` because an inline
-     styles block cannot `@use` the breakpoint mixins, and writing the media
-     query by hand there put a third hand-copied 900 in the codebase. */
+     lives in. It stays here rather than in `checkbox.ts` to sit beside the
+     other pseudo-element targets, which is the same reason the chips above are
+     here. (This comment used to say an inline styles block *cannot* `@use` the
+     breakpoint mixins. It can — `ui-select`, `ui-text-input`, `ui-tabs` and
+     `ui-toggle` all do — so that was never the reason.) */
   ui-checkbox {
     position: relative;
 

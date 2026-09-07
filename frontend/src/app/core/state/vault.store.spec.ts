@@ -13,6 +13,7 @@ import {
 } from '../api/vault-api';
 import { Collection, Item, Member, MemberRole, StoreListing, TenantSettings, UserProfile } from '../models';
 import { ConflictService } from './conflict.service';
+import { SessionReset } from '../auth/session-reset';
 import { I18nService } from '../i18n';
 import { VaultStore } from './vault.store';
 
@@ -530,5 +531,63 @@ describe('VaultStore permissions', () => {
     expect(store.profile()).toBeNull();
     expect(store.canEdit()).toBe(true);
     expect(store.canAdminister()).toBe(true);
+  });
+});
+
+/**
+ * The one bug no other spec in this file could see: every one of them builds a
+ * fresh store, and this is about a store that outlives the session it was
+ * filled for.
+ */
+describe('VaultStore session boundary', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('is empty and unloaded again after the session ends', async () => {
+    const { store } = await mount([collection({ items: [item()] })]);
+    expect(store.loaded()).toBe(true);
+    expect(store.collections()).toHaveLength(1);
+    expect(store.canAdminister()).toBe(true);
+
+    store.reset();
+
+    expect(store.loaded()).toBe(false);
+    expect(store.collections()).toEqual([]);
+    expect(store.tenantMembers()).toEqual([]);
+    expect(store.profile()).toBeNull();
+    expect(store.tenantSettings()).toBeNull();
+    expect(store.totalItems()).toBe(0);
+    expect(store.query()).toBe('');
+  });
+
+  it('re-fetches the vault for the next session instead of short-circuiting', async () => {
+    const { api, store } = await mount([collection()]);
+    expect(api.reads).toBe(1);
+
+    // `ensureLoaded` opens with `if (this.loaded()) return;`. Without the
+    // reset, the second session's shell asked for the vault and was handed the
+    // first session's — no request was made at all.
+    await store.ensureLoaded();
+    expect(api.reads).toBe(1);
+
+    store.reset();
+    await store.ensureLoaded();
+    expect(api.reads).toBe(2);
+  });
+
+  it('forgets the version tokens, so no write can quote another account’s', async () => {
+    const { store } = await mount([collection()]);
+    // A write after a reset has nothing to quote, which is a conflict rather
+    // than an invented precondition — the same path a failed reload takes.
+    store.reset();
+    await expect(store.updateCollection(collection({ name: 'Renamed' }))).rejects.toThrow(
+      VaultConflictError,
+    );
+  });
+
+  it('is what AuthService actually runs when the session ends', async () => {
+    const { store } = await mount([collection()]);
+    TestBed.inject(SessionReset).run();
+    expect(store.loaded()).toBe(false);
+    expect(store.collections()).toEqual([]);
   });
 });

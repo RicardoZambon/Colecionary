@@ -82,7 +82,7 @@ describe('GroupTree', () => {
   });
 
   it('puts the tab stop on the selected group', () => {
-    const { read } = mount({ selectedId: 'revistas' });
+    const { read, el } = mount({ selectedId: 'revistas' });
     expect(read().links[1].getAttribute('tabindex')).toBe('0');
     expect(read().links[0].getAttribute('tabindex')).toBe('-1');
   });
@@ -129,7 +129,7 @@ describe('GroupTree', () => {
   });
 
   it('marks the selected row for assistive tech', () => {
-    const { read } = mount({ selectedId: 'revistas' });
+    const { read, el } = mount({ selectedId: 'revistas' });
     expect(read().items.map(li => li.getAttribute('aria-selected'))).toEqual(['false', 'true']);
   });
 
@@ -151,5 +151,48 @@ describe('GroupTree', () => {
     const { read } = mount();
     expect(read().links.every(a => a.tagName === 'A')).toBe(true);
     expect(read().links[0].getAttribute('href')).toContain('/c/c1');
+  });
+
+  it('puts the tree semantics on the element that actually takes focus', () => {
+    // ARIA state is reported for the focused element. With role="treeitem" on
+    // the <li> and the roving tabindex on the anchor inside it, a screen reader
+    // heard "Cavaleiros, 3/24, link" — no tree item, no level, no
+    // expanded/collapsed, no selected — while the arrow keys moved through a
+    // structure it had never been told about.
+    const { read, el } = mount({ selectedId: 'revistas' });
+
+    for (const link of read().links) {
+      expect(link.getAttribute('role')).toBe('treeitem');
+      expect(link.getAttribute('aria-level')).not.toBeNull();
+    }
+    expect(read().links[0].getAttribute('aria-expanded')).toBe('false');
+    expect(read().links[1].getAttribute('aria-selected')).toBe('true');
+    // And the li stops claiming to be the same tree item.
+    expect(el.querySelectorAll('li[role="treeitem"]')).toHaveLength(0);
+  });
+
+  it('draws no progress track for a group with nothing to measure', () => {
+    // Every group here declares no target and holds no items, so each measures
+    // 0/0. An empty track there reads as "0% complete" when the truth is
+    // "nothing declared yet" — `target: null` is an absence, never a zero.
+    const { el } = mount();
+    expect(el.querySelectorAll('ui-progress')).toHaveLength(0);
+    // The exact count still shows, which is the honest statement.
+    expect([...el.querySelectorAll('.row__count')].map(n => n.textContent!.trim())).toEqual([
+      '0/0',
+      '0/0',
+    ]);
+  });
+
+  it('draws the track again as soon as the denominator means something', () => {
+    const withTarget = [node('bonecos'), node('revistas')];
+    withTarget[0] = { ...withTarget[0], target: 12 };
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.componentInstance.groups = withTarget;
+    fixture.componentInstance.stats = statsIndex(withTarget, []);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('ui-progress')).toHaveLength(1);
   });
 });

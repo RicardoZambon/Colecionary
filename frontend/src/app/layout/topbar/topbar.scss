@@ -48,7 +48,30 @@
 .crumb {
   font-family: var(--font-mono);
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--muted-strong);
+}
+
+/*
+ * The sidebar's status line, promoted to the bar for the two states the user
+ * has to know about while the drawer is shut. Tone is paired with a mark, never
+ * carried by colour alone.
+ */
+.sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+
+  &[data-sync='offline'] {
+    color: var(--warn);
+  }
+
+  &[data-sync='conflict'] {
+    color: var(--danger);
+  }
 }
 
 .spacer {
@@ -88,7 +111,7 @@
    beside it, not to the next control. */
 .caret {
   margin-left: -3px;
-  color: var(--muted);
+  color: var(--muted-strong);
 }
 
 .theme-row {
@@ -142,7 +165,7 @@
 .theme-more {
   padding: 8px 10px;
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--muted-strong);
   border-top: 1px solid var(--border);
   margin-top: 4px;
 
@@ -175,7 +198,7 @@
 
   &__email {
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 }
 
@@ -239,8 +262,20 @@
     display: inline-block;
   }
 
+  /*
+   * What the bar drops on a phone, and why.
+   *
+   * The crumb repeats the URL and the gear repeats the drawer's Settings row,
+   * so neither carries information here. The theme and language pickers are
+   * the two controls a user touches almost never, and they were given the most
+   * prominent position on every screen — about 170px of a 390px bar, which
+   * pushed the avatar onto a row of its own and the bar to three rows. The
+   * drawer carries a "Theme and language" row at this width instead.
+   */
   .crumb,
-  .gear {
+  .gear,
+  .lang,
+  .theme {
     display: none;
   }
 

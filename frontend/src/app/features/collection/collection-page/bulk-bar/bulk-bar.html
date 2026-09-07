@@ -5,19 +5,38 @@
   <span class="bar__count" aria-live="polite">{{ countLabel() }}</span>
   <span class="bar__spacer"></span>
 
-  <ui-button variant="ghost" size="sm" (click)="open.set(!open())">
+  <!-- The disclosure says it is one: ui-button carries the three attributes for
+       exactly this, and the panel below carries the id. Flipping its own label
+       between "Edit fields" and "Close fields" never announced that a panel had
+       opened. -->
+  <ui-button
+    variant="ghost"
+    size="sm"
+    [ariaExpanded]="open()"
+    ariaControls="bulk-fields"
+    (click)="open.set(!open())"
+  >
     {{ (open() ? 'bulk.hideEdit' : 'bulk.showEdit') | t }}
   </ui-button>
-  <ui-button variant="danger" size="sm" [disabled]="saving()" (click)="removeRequested.emit()">
-    {{ 'bulk.delete' | t }}
-  </ui-button>
+  <!--
+    Deselecting comes before deleting, so the destructive button ends the row.
+    It also gets its own words: `bulk.clear` is the label on every field-clear
+    link inside the panel below, where it blanks a value on every selected item
+    — and sitting next to a red Delete, a bare "Clear" invites the reading
+    "clear these items".
+  -->
   <ui-button variant="ghost" size="sm" (click)="cleared.emit()">
-    {{ 'bulk.clear' | t }}
+    {{ 'bulk.clearSelection' | t }}
+  </ui-button>
+  <!-- pending, not disabled: it implies both, plus aria-busy and a spinner, so
+       the write says it is running rather than merely refusing to start. -->
+  <ui-button variant="danger" size="sm" [pending]="saving()" (click)="removeRequested.emit()">
+    {{ 'bulk.delete' | t }}
   </ui-button>
 </div>
 
 @if (open()) {
-  <div class="fields">
+  <div class="fields" id="bulk-fields">
     <!-- Group ------------------------------------------------------------ -->
     <div class="row">
       <span class="row__label">{{ 'bulk.field.group' | t }}</span>
@@ -214,7 +233,8 @@
       <ui-button
         variant="primary"
         size="sm"
-        [disabled]="!canApply() || saving()"
+        [disabled]="!canApply()"
+        [pending]="saving()"
         (click)="apply()"
       >
         {{ (saving() ? 'bulk.applying' : 'bulk.apply') | t }}

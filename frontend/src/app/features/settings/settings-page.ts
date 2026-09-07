@@ -17,7 +17,14 @@ import { VaultStore } from '../../core/state/vault.store';
 import { MemberRole } from '../../core/models';
 import { saveFile } from '../../core/utils/download.util';
 import { CurrencyCode, SUPPORTED_CURRENCIES, currencyLabel } from '../../core/utils/money.util';
-import { SelectOption, TabDef, UiAvatar, UiButton, UiCard, UiFlag, UiIcon, UiReadOnlyNotice, UiSelect, UiTabs } from '../../shared/ui';
+import { UiAvatar } from '../../shared/ui/avatar/avatar';
+import { UiButton } from '../../shared/ui/button/button';
+import { UiCard } from '../../shared/ui/card/card';
+import { UiFlag } from '../../shared/ui/flag/flag';
+import { UiIcon } from '../../shared/ui/icon/icon';
+import { UiReadOnlyNotice } from '../../shared/ui/read-only-notice/read-only-notice';
+import { SelectOption, UiSelect } from '../../shared/ui/select/select';
+import { TabDef, UiTabs } from '../../shared/ui/tabs/tabs';
 import { TPipe } from '../../shared/pipes/t.pipe';
 
 const TAB_KEYS: { id: string; label: MessageKey }[] = [
@@ -242,10 +249,16 @@ export class SettingsPage {
     this.exporting.set(true);
     try {
       saveFile(await this.archives.downloadVault());
-      this.toast.flash(this.i18n.t('toast.export.done'));
+      // `success`, so the "Done" marker is actually drawn; `flash` is the info
+      // tone and renders no marker at all.
+      this.toast.success(this.i18n.t('toast.export.done'));
     } catch {
       // A failed download is otherwise silent — the anchor just never fires.
-      this.toast.flash(this.i18n.t('toast.export.failed'));
+      // An error, not a flash: only `'error'` paints --danger, carries the
+      // "Failed" marker, gets `role="alert"`, offers a dismiss and — the point
+      // — is withheld from the 2.6s timer that took this message away before
+      // anybody looking at their downloads folder could see it.
+      this.toast.error(this.i18n.t('toast.export.failed'));
     } finally {
       this.exporting.set(false);
     }
@@ -263,9 +276,9 @@ export class SettingsPage {
     this.exportingCollection.set(collectionId);
     try {
       saveFile(await this.archives.downloadCollection(collectionId));
-      this.toast.flash(this.i18n.t('toast.export.collectionDone'));
+      this.toast.success(this.i18n.t('toast.export.collectionDone'));
     } catch {
-      this.toast.flash(this.i18n.t('toast.export.failed'));
+      this.toast.error(this.i18n.t('toast.export.failed'));
     } finally {
       this.exportingCollection.set(null);
     }
@@ -338,7 +351,7 @@ export class SettingsPage {
     this.importing.set(true);
     try {
       const imported = await this.store.importArchive(file, replace);
-      this.toast.flash(
+      this.toast.success(
         this.i18n.t(
           imported.length === 1 ? 'toast.import.done.one' : 'toast.import.done.other',
           { n: imported.length },
@@ -355,8 +368,10 @@ export class SettingsPage {
 
       // The server's own explanation when it gave one — it is localized, and it
       // is the only thing that can say *why* an archive was refused.
+      // On a timer this threw away the server's own localized explanation of
+      // why an archive was refused — the only sentence that could say why.
       const reason = error instanceof Error ? error.message : '';
-      this.toast.flash(reason || this.i18n.t('toast.import.failed'));
+      this.toast.error(reason || this.i18n.t('toast.import.failed'));
     } finally {
       this.importing.set(false);
     }

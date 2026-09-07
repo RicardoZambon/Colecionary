@@ -4,7 +4,7 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { Observable, of } from 'rxjs';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VaultApi, VersionedCollection, VersionedItem } from '../../../core/api/vault-api';
 import {
@@ -17,6 +17,8 @@ import {
   UserProfile,
 } from '../../../core/models';
 import { I18nService } from '../../../core/i18n';
+import { ConfirmService } from '../../../core/state/confirm.service';
+import { ImageFocusService } from '../../../core/state/image-focus.service';
 import { VaultStore } from '../../../core/state/vault.store';
 import { WANTED_TAG } from '../../../core/utils/tags.util';
 import { ItemPage } from './item-page';
@@ -249,7 +251,12 @@ describe('ItemPage — tags', () => {
     const names = [...filtered.el.querySelectorAll('.browse__name')].map(n =>
       (n.textContent ?? '').trim(),
     );
-    expect(names).toEqual(['Start', 'c']);
+    // "Nothing earlier" rather than "Start": the back slot used to name a
+    // destination that is not an item and does not exist.
+    expect(names).toEqual([
+      TestBed.inject(I18nService).t('item.browse.noEarlier'),
+      'c',
+    ]);
 
     // Without the tag, 'b' sits between them.
     TestBed.resetTestingModule();
@@ -257,6 +264,152 @@ describe('ItemPage — tags', () => {
     const unfiltered = [...all.el.querySelectorAll('.browse__name')].map(n =>
       (n.textContent ?? '').trim(),
     );
-    expect(unfiltered).toEqual(['Start', 'b']);
+    expect(unfiltered).toEqual([
+      TestBed.inject(I18nService).t('item.browse.noEarlier'),
+      'b',
+    ]);
+  });
+});
+
+describe('ItemPage — the arrows do not fire through an overlay', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  /**
+   * Three failures with one cause, and no keyboard test in this file at all
+   * until now.
+   *
+   * `ItemPage` binds a **document**-level keydown, and its only stand-downs
+   * were form controls and the thumbnail strip. None of the three overlays
+   * matches either: the framing editor and the confirmation are rendered from
+   * the shell, and the photo viewer's own document listener is registered
+   * *after* this one because it is a child of this template. So a nudge of the
+   * focal point also stepped to the next item, → in the viewer advanced the
+   * photo and the item together, and ← with the delete confirmation open
+   * navigated away and then deleted an item nobody could see.
+   */
+  const arrow = (el: HTMLElement, key: 'ArrowLeft' | 'ArrowRight') =>
+    el.querySelector('h1')!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+
+  const openPage = async () => {
+    const items = [
+      item('a', [], OWNED),
+      item('b', [], OWNED),
+      item('c', [], OWNED),
+    ];
+    items[1].photoIds = ['p1', 'p2'];
+    const page = await mount(items, 'b', { g: 'retro', sort: 'name' });
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    return { ...page, navigate };
+  };
+
+  it('steps to the neighbour when nothing covers the page', async () => {
+    const page = await openPage();
+    arrow(page.el, 'ArrowRight');
+    expect(page.navigate).toHaveBeenCalledWith(['/c', 'c1', 'items', 'c'], expect.anything());
+  });
+
+  it('stands down while the photo viewer is open', async () => {
+    const page = await openPage();
+    (page.el.querySelector('.gallery__main--photo') as HTMLElement).click();
+    page.fixture.detectChanges();
+
+    arrow(page.el, 'ArrowRight');
+    expect(page.navigate).not.toHaveBeenCalled();
+  });
+
+  it('stands down while the framing editor is open', async () => {
+    const page = await openPage();
+    void TestBed.inject(ImageFocusService).frame('p1', 'item');
+    page.fixture.detectChanges();
+
+    arrow(page.el, 'ArrowLeft');
+    expect(page.navigate).not.toHaveBeenCalled();
+  });
+
+  it('stands down while a confirmation is open', async () => {
+    const page = await openPage();
+    void TestBed.inject(ConfirmService).ask({
+      titleKey: 'item.delete.confirm.title',
+      bodyKey: 'item.delete.confirm.body',
+      confirmKey: 'item.delete.confirm.ok',
+    });
+    page.fixture.detectChanges();
+
+    arrow(page.el, 'ArrowLeft');
+    expect(page.navigate).not.toHaveBeenCalled();
+    TestBed.inject(ConfirmService).answer(false);
+  });
+});
+
+describe('ItemPage — one copy is not a list', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('does not restate the hero four times over for a single copy', async () => {
+    // On the overwhelmingly common case the same figure appeared four times and
+    // the "1 copy · paid … · est. …" line restated the row directly above it
+    // word for word, which reads as though something is wrong with the page.
+    const page = await mount([item('contra', [], OWNED)], 'contra');
+    expect(page.el.querySelector('.copies')).toBeNull();
+    expect(page.el.querySelector('.copies__total')).toBeNull();
+    // And "Est. value / copy" in DETAILS is the hero figure divided by one.
+    const keys = [...page.el.querySelectorAll('.fields .field-row .key')].map(k =>
+      (k.textContent ?? '').trim(),
+    );
+    const i18n = TestBed.inject(I18nService);
+    expect(keys).not.toContain(i18n.t('item.valuePerCopy'));
+    expect(keys).not.toContain(i18n.t('item.valuePaidPerCopy'));
+  });
+
+  it('still shows a single copy that carries something the hero cannot', async () => {
+    const dated = item('contra', [], [{ ...OWNED[0], acquiredOn: '2024-03-11' }]);
+    const page = await mount([dated], 'contra');
+    expect(page.el.querySelector('.copies')).not.toBeNull();
+    // The badge, the price paid and the estimate are the hero's job.
+    expect(page.el.querySelector('.copy-row ui-badge')).toBeNull();
+    expect(page.el.querySelector('.copy-row__date')).not.toBeNull();
+    // A summary line over one row would say what the row says.
+    expect(page.el.querySelector('.copies__total')).toBeNull();
+  });
+
+  it('keeps the card and the summary from two copies up', async () => {
+    const two = item('contra', [], [OWNED[0], { ...OWNED[0], id: 'cp2' }]);
+    const page = await mount([two], 'contra');
+    expect(page.el.querySelectorAll('.copy-row')).toHaveLength(2);
+    expect(page.el.querySelector('.copy-row ui-badge')).not.toBeNull();
+    expect(page.el.querySelector('.copies__total')).not.toBeNull();
+  });
+});
+
+describe('ItemPage — the page is not a dead end', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('makes the group row a real link into the group', async () => {
+    // "what else is in this group?" is the most natural next question from an
+    // item, and it was plain text.
+    const page = await mount([item('contra', [], OWNED)], 'contra', { g: 'retro' }, { g: 'retro' });
+    const link = page.el.querySelector<HTMLAnchorElement>('.fields .field-row a');
+    expect(link).not.toBeNull();
+    const href = link!.getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.slice(href.indexOf('?'))).get('g')).toBe('retro');
+  });
+
+  it('offers a way out of an item that is not there', async () => {
+    // A stale link used to land on one grey sentence with nothing else on it,
+    // while the missing-*collection* branch fifteen lines below did offer a way
+    // out.
+    const page = await mount([item('contra', [], OWNED)], 'gone');
+    const empty = page.el.querySelector('ui-empty');
+    expect(empty).not.toBeNull();
+    expect(empty!.textContent).toContain(TestBed.inject(I18nService).t('item.notFound'));
+    expect(empty!.querySelector('[emptyActions] button')).not.toBeNull();
   });
 });

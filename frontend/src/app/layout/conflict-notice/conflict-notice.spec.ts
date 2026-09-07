@@ -21,11 +21,19 @@ describe('ConflictNotice', () => {
   let fixture: ComponentFixture<ConflictNotice>;
   let el: HTMLElement;
   let conflicts: ConflictService;
-  let store: { load: ReturnType<typeof vi.fn> };
+  let store: {
+    load: ReturnType<typeof vi.fn>;
+    collection: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     TestBed.resetTestingModule();
-    store = { load: vi.fn().mockResolvedValue(undefined) };
+    store = {
+      load: vi.fn().mockResolvedValue(undefined),
+      // The notice names the collection that was refused, so the fake has to be
+      // able to answer for one.
+      collection: vi.fn((id: string) => (id === 'c1' ? { id, name: 'Vinyl' } : undefined)),
+    };
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -50,6 +58,22 @@ describe('ConflictNotice', () => {
 
   it('shows nothing until a save is refused', () => {
     expect(el.querySelector('.notice')).toBeNull();
+  });
+
+  it('names the collection whose save was refused', () => {
+    // The id has always been on the conflict, with a docblock saying it is
+    // there "so the notice can name it", and the template never read it —
+    // somebody with two collections open in two tabs had no way to tell what
+    // had been refused.
+    raise();
+    expect(el.querySelector('.notice__where')!.textContent!.trim()).toBe('In Vinyl');
+  });
+
+  it('says nothing about a collection the store no longer holds', () => {
+    // A name is better than none and a wrong one is worse than either.
+    conflicts.raise({ collectionId: 'gone', message: 'Nothing was saved.' });
+    fixture.detectChanges();
+    expect(el.querySelector('.notice__where')).toBeNull();
   });
 
   it('says what happened, in the server’s words, and that the work is still there', () => {

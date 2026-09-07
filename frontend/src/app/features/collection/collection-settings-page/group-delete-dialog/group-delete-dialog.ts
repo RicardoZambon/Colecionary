@@ -77,7 +77,7 @@ const NAMED_SUB_GROUPS = 4;
 
         <p class="undo" [id]="undoId">
           {{ 'collSettings.groups.delete.noUndo' | t }}
-          <button type="button" class="undo__link" [disabled]="exporting()" (click)="exportRequested.emit()">
+          <button type="button" class="undo__link" data-tap-ok [disabled]="exporting()" (click)="exportRequested.emit()">
             {{
               (exporting()
                 ? 'collSettings.groups.delete.exporting'
@@ -99,6 +99,8 @@ const NAMED_SUB_GROUPS = 4;
     }
   `,
   styles: `
+    @use '../../../../../styles/mixins' as *;
+
     .lede {
       margin: 0;
     }
@@ -188,6 +190,28 @@ const NAMED_SUB_GROUPS = 4;
       color: var(--muted);
       cursor: default;
       text-decoration: none;
+    }
+
+    /*
+     * The only safety net offered before an irreversible act, and on a phone it
+     * was a 15px line of text. The target grows and the sentence does not: this
+     * link sits inside a paragraph, so a 44px-tall box would push the copy
+     * around it apart.
+     */
+    @include upto($bp-lg) {
+      .undo__link {
+        position: relative;
+      }
+
+      .undo__link::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: var(--tap);
+        transform: translateY(-50%);
+      }
     }
 
     .sr-only {

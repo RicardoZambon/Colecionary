@@ -94,7 +94,7 @@
   }
 }
 
-@media (max-width: 560px) {
+@include upto($bp-sm) {
   // Only the arrows and the position survive on a narrow screen — the names
   // live on in the aria-label.
   .browse__name {
@@ -116,6 +116,7 @@
 .gallery {
   width: 380px;
   flex: none;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -133,6 +134,21 @@
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--muted);
+
+    /* It is a <button> when the item has no photo and the reader may add one,
+       so the browser's own button chrome has to be undone here too. */
+    &--empty {
+      width: 100%;
+      padding: 0;
+      cursor: pointer;
+      text-align: inherit;
+      font: inherit;
+
+      &:disabled {
+        cursor: default;
+        opacity: 0.6;
+      }
+    }
 
     /** Framing always arrives as an inline background-position, so declaring
         one here would be dead. */
@@ -196,10 +212,52 @@
     font-size: 15px;
     cursor: pointer;
 
-    &:hover {
+    &:hover:not(:disabled) {
       color: var(--accent);
       border-color: var(--accent);
     }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+  }
+}
+
+/* The upload queue, drawn here as well as in ui-photo-manager: the detail page
+   feeds the same shared queue and used to show nothing at all while a 4 MB
+   photo went up. */
+.upload {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 9px;
+  font-size: 11px;
+  color: var(--text2);
+  background: var(--panel2);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+
+  &--failed {
+    border-color: var(--danger);
+  }
+
+  &__name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__error {
+    color: var(--danger);
+  }
+
+  &__bar {
+    display: block;
+    width: 92px;
+    flex: none;
   }
 }
 
@@ -238,7 +296,7 @@ h1 {
 
   .note {
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 }
 
@@ -279,7 +337,7 @@ h1 {
   align-items: center;
   gap: 10px;
   padding: 8px 0;
-  border-top: 1px solid var(--border);
+  border-top: var(--bw) solid var(--border);
   font-size: 12.5px;
 
   &__paid {
@@ -290,21 +348,26 @@ h1 {
     font-weight: 600;
   }
 
+  /* A copy's acquisition date and its for-sale status are facts a cataloguer
+     reads, not ornament around them — so --muted-strong, the secondary type
+     tier, rather than --muted, which is decoration and below AA by design. */
   &__date,
   &__status {
     font-family: var(--font-mono);
     font-size: 10.5px;
     letter-spacing: 0.06em;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
+  /* --accent is a *fill* token at 3:1; type needs --accent-strong, and this is
+     10.5px. */
   &__status {
-    color: var(--accent);
+    color: var(--accent-strong);
   }
 
   &__notes {
     flex-basis: 100%;
-    color: var(--muted);
+    color: var(--muted-strong);
     font-size: 11.5px;
   }
 
@@ -326,7 +389,7 @@ h1 {
   font-size: 11.5px;
 
   dt {
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   dd {
@@ -337,18 +400,18 @@ h1 {
 
 .copies__total {
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: var(--bw) solid var(--border);
   font-family: var(--font-mono);
   font-size: 10.5px;
   letter-spacing: 0.06em;
-  color: var(--muted);
+  color: var(--muted-strong);
 }
 
 .field-row {
   display: flex;
   gap: 12px;
   padding: 7px 0;
-  border-top: 1px solid var(--border);
+  border-top: var(--bw) solid var(--border);
   font-size: 12.5px;
 
   .key {
@@ -357,7 +420,7 @@ h1 {
     font-family: var(--font-mono);
     font-size: 10.5px;
     letter-spacing: 0.06em;
-    color: var(--muted);
+    color: var(--muted-strong);
     padding-top: 1px;
     text-transform: uppercase;
   }
@@ -366,10 +429,17 @@ h1 {
 .actions {
   display: flex;
   gap: 10px;
+
+  /* Never beside "Edit item": same size, same gap, and on a phone both are
+     under the same thumb. The group detail card already does this with its own
+     remove control. */
+  &__danger {
+    margin-inline-start: auto;
+  }
 }
 
 .missing {
-  color: var(--muted);
+  color: var(--muted-strong);
   font-size: 13px;
 }
 
@@ -379,4 +449,46 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/*
+ * The phone pass, which this file simply did not have: 60px of host gutter and
+ * a `width: 380px; flex: none` gallery inside a 330px content box, so the page
+ * could be dragged sideways by ~50px and the picture and the thumb strip ran
+ * off the right edge. `.details`'s 320px floor is what wrapped *it* below and
+ * kept it looking fine, which is why only the gallery stuck out.
+ *
+ * The gallery states a minimum and grows, the way every grid in this codebase
+ * is required to; nothing states a fixed column.
+ */
+@include upto($bp-lg) {
+  :host {
+    padding: var(--sp-4);
+  }
+
+  /* One column, declared rather than relied on. `flex-wrap` only wrapped
+     because `.details` carried a 320px floor; dropping that floor and leaving
+     the row to wrap on its own squeezed the details column to 3px and pushed
+     every heading, chip and figure out through the side of the page. */
+  .layout {
+    flex-direction: column;
+    gap: var(--sp-4);
+  }
+
+  .gallery {
+    width: 100%;
+    max-width: 380px;
+    flex: none;
+  }
+
+  .details {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* The strip is as wide as the number of photos; it scrolls rather than
+     widening the page. */
+  .gallery__thumbs {
+    overflow-x: auto;
+  }
 }

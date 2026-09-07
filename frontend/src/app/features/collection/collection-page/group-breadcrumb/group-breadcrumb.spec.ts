@@ -53,7 +53,8 @@ function mount(patch: Partial<HostComponent> = {}) {
     newChip: () =>
       [...el.querySelectorAll('ui-chip')].find(c => (c.textContent ?? '').includes('+ New')) ?? null,
     manageLink: () => el.querySelector('a.manage'),
-    nameInput: () => el.querySelector('input.chip-input'),
+    nameInput: () => el.querySelector('ui-inline-edit'),
+    panelToggle: () => el.querySelector('.panel-toggle'),
   };
 }
 
@@ -96,18 +97,41 @@ describe('GroupBreadcrumb', () => {
 
   it('leaves the sub-groups to the panel when it is open', () => {
     // Repeating them one hop shallower is what made this read as two controls.
-    const { children, el } = mount({ path: [node('rev', 'Revistas')], children: SUBS });
+    const { children } = mount({ path: [node('rev', 'Revistas')], children: SUBS });
     expect(children()).toEqual([]);
-    expect(el.querySelector('.panel-toggle')).toBeNull();
+  });
+
+  it('keeps one disclosure in both states, and says which one it is in', () => {
+    // The panel's own chevron and this pill used to be mutually exclusive
+    // branches, so pressing either destroyed the button that had just been
+    // pressed and focus fell to the top of the document — in both directions.
+    const open = mount({ path: [node('rev', 'Revistas')] });
+    expect(open.panelToggle()).not.toBeNull();
+    expect(open.panelToggle()!.getAttribute('aria-expanded')).toBe('true');
+    // Named only while the panel it names is actually in the document.
+    expect(open.panelToggle()!.getAttribute('aria-controls')).toBe('group-panel');
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+    const shut = mount({ path: [node('rev', 'Revistas')], collapsed: true });
+    expect(shut.panelToggle()).not.toBeNull();
+    expect(shut.panelToggle()!.getAttribute('aria-expanded')).toBe('false');
+    expect(shut.panelToggle()!.getAttribute('aria-controls')).toBeNull();
   });
 
   it('shows no sub-group strip on a leaf', () => {
     expect(mount({ path: [node('mad', 'MAD')], collapsed: true }).children()).toEqual([]);
   });
 
-  it('swaps the New pill for an input while a name is being typed', () => {
-    expect(mount().el.querySelector('.chip-input')).toBeNull();
-    expect(mount({ pending: true }).el.querySelector('.chip-input')).not.toBeNull();
+  it('swaps the New pill for a composer while a name is being typed', () => {
+    // ui-inline-edit, not a hand-rolled input: it takes the caret on reveal,
+    // which is the half the old box got wrong — `autofocus` does nothing to
+    // content inserted after load.
+    expect(mount().el.querySelector('ui-inline-edit')).toBeNull();
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+    expect(mount({ pending: true }).el.querySelector('ui-inline-edit')).not.toBeNull();
   });
 });
 

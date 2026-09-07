@@ -49,8 +49,17 @@
     </aside>
 
     <form class="form" (submit)="$event.preventDefault(); save()">
-      <ui-field [label]="'itemForm.name' | t">
-        <ui-text-input [value]="name()" (valueChange)="name.set($event)" />
+      <!-- The one required field on the page. The error is on the field rather
+           than only in a toast: the toast expires, and Name can be 900px above
+           the Save button that refused. -->
+      <ui-field [label]="'itemForm.name' | t" [error]="nameErrorText()">
+        <ui-text-input
+          #nameControl
+          [required]="true"
+          [value]="name()"
+          (valueChange)="setName($event)"
+          (blurred)="checkName()"
+        />
       </ui-field>
 
       <ui-field [label]="'itemForm.description' | t">
@@ -71,19 +80,28 @@
         <ui-field [label]="'itemForm.group' | t">
           <ui-select [options]="groupOptions()" [value]="groupId()" (valueChange)="setGroupId($event)" />
         </ui-field>
+        <!-- The cell is reserved whether or not the group declares dividers:
+             appearing and disappearing reflowed the whole auto-fit row, so Year
+             and Est. value moved sideways under the pointer. The placeholder is
+             inert and unfocusable. -->
         @if (sectionOptions().length) {
-          <ui-field [label]="'itemForm.section' | t">
+          <ui-field class="section" [label]="'itemForm.section' | t">
             <ui-select
               [options]="sectionOptions()"
               [value]="sectionId()"
               (valueChange)="sectionId.set($event)"
             />
           </ui-field>
+        } @else {
+          <div class="section section--placeholder" aria-hidden="true"></div>
         }
         <ui-field [label]="'itemForm.year' | t">
           <ui-text-input [value]="year()" (valueChange)="year.set($event)" />
         </ui-field>
-        <ui-field [label]="'itemForm.value' | t">
+        <!-- The currency code as the hint, because it is data and never
+             translated: a field that names no currency is a field where
+             "4.200,00" and "4,200.00" look equally plausible. -->
+        <ui-field [label]="'itemForm.value' | t" [hint]="currency()">
           <ui-text-input
             [value]="value()"
             [placeholder]="'itemForm.valuePlaceholder' | t"
@@ -97,7 +115,7 @@
         <!-- copyIndex is aliased because the nested field loop below has a
              $index of its own, and every handler here means the copy's. -->
         @for (copy of copies(); track copy.id; let copyIndex = $index) {
-          <div class="copies__row">
+          <div class="copies__row" [attr.data-copy-id]="copy.id">
             <div class="copies__row-head">
               <span class="tag">{{ 'itemForm.copyTag' | t: { n: $index + 1 } }}</span>
               <ui-select
@@ -121,7 +139,7 @@
               ><ui-icon name="close" [size]="13" /></ui-button>
             </div>
             <div class="copies__fields">
-              <ui-field [label]="'itemForm.paid' | t">
+              <ui-field [label]="'itemForm.paid' | t" [hint]="currency()">
                 <ui-text-input
                   variant="subtle"
                   placeholder="0"
@@ -129,7 +147,7 @@
                   (valueChange)="patchCopy($index, { price: $event })"
                 />
               </ui-field>
-              <ui-field [label]="'itemForm.copyValue' | t">
+              <ui-field [label]="'itemForm.copyValue' | t" [hint]="currency()">
                 <ui-text-input
                   variant="subtle"
                   [placeholder]="'itemForm.copyValuePlaceholder' | t"
@@ -160,17 +178,33 @@
             <!-- Drawn only where the collection or the group declared one:
                  an empty heading reads as a setting that went missing. -->
             @if (copyFieldDefs().length) {
+              <!-- Headed, so a per-copy field is identifiable without inferring
+                   it from position. The old objection — a heading over no
+                   inputs reads as a setting gone missing — does not apply: the
+                   block only exists when something is declared. -->
+              <ui-section-label class="copies__custom-heading">{{
+                'itemForm.copyFieldsHeading' | t
+              }}</ui-section-label>
               <div class="copies__custom">
                 @for (field of copyFieldDefs(); track field.name) {
                   <ui-field [label]="field.name">
-                    <ui-text-input
-                      variant="subtle"
-                      placeholder="—"
-                      [ariaLabel]="'itemForm.copyFieldAria' | t: { n: copyIndex + 1, name: field.name }"
-                      [type]="inputType(field)"
-                      [value]="copyFieldValue(copyIndex, field.name)"
-                      (valueChange)="setCopyFieldValue(copyIndex, field.name, $event)"
-                    />
+                    @if (isDate(field)) {
+                      <ui-date-input
+                        variant="subtle"
+                        [ariaLabel]="'itemForm.copyFieldAria' | t: { n: copyIndex + 1, name: field.name }"
+                        [value]="copyFieldValue(copyIndex, field.name)"
+                        (valueChange)="setCopyFieldValue(copyIndex, field.name, $event)"
+                      />
+                    } @else {
+                      <ui-text-input
+                        variant="subtle"
+                        placeholder="—"
+                        [ariaLabel]="'itemForm.copyFieldAria' | t: { n: copyIndex + 1, name: field.name }"
+                        [type]="inputType(field)"
+                        [value]="copyFieldValue(copyIndex, field.name)"
+                        (valueChange)="setCopyFieldValue(copyIndex, field.name, $event)"
+                      />
+                    }
                   </ui-field>
                 }
               </div>
@@ -180,26 +214,42 @@
           <div class="copies__empty">{{ 'itemForm.noCopies' | t }}</div>
         }
         <div class="copies__actions">
-          <ui-button variant="ghost" size="sm" (click)="addCopy()">{{ 'itemForm.addCopy' | t }}</ui-button>
+          <ui-button variant="ghost" size="sm" (click)="addCopy()"
+            ><ui-icon name="plus" [size]="12" />{{ 'itemForm.addCopyLabel' | t }}</ui-button
+          >
         </div>
       </ui-card>
 
       <ui-card class="group-fields">
-        <div class="group-fields__heading">{{ 'itemForm.groupFieldsHeading' | t: { name: groupLabel() } }}</div>
+        <div class="group-fields__heading">{{ 'itemForm.declaredFieldsHeading' | t: { name: declaredFieldsLabel() } }}</div>
         @for (field of groupFields(); track field.name) {
           <div class="group-fields__row">
             <span class="key">{{ field.name }}</span>
-            <ui-text-input
-              variant="subtle"
-              placeholder="—"
-              [ariaLabel]="field.name"
-              [type]="inputType(field)"
-              [value]="customValue(field.name)"
-              (valueChange)="setCustomValue(field.name, $event)"
-            />
+            @if (isDate(field)) {
+              <ui-date-input
+                variant="subtle"
+                [ariaLabel]="field.name"
+                [value]="customValue(field.name)"
+                (valueChange)="setCustomValue(field.name, $event)"
+              />
+            } @else {
+              <ui-text-input
+                variant="subtle"
+                placeholder="—"
+                [ariaLabel]="field.name"
+                [type]="inputType(field)"
+                [value]="customValue(field.name)"
+                (valueChange)="setCustomValue(field.name, $event)"
+              />
+            }
           </div>
         } @empty {
-          <div class="group-fields__empty">{{ 'itemForm.noGroupFields' | t }}</div>
+          <!-- Two different facts, and they used to share one sentence: nothing
+               is declared at all, against everything declared here being
+               per-copy and edited above. -->
+          <div class="group-fields__empty">{{
+            (onlyCopyFields() ? 'itemForm.onlyCopyFields' : 'itemForm.noGroupFields') | t
+          }}</div>
         }
         <div class="group-fields__hint">
           {{ 'itemForm.groupFieldsHint' | t }}
@@ -213,7 +263,7 @@
            "did that take?" is answerable without scrolling back up. -->
       <div class="actions">
         <span class="actions__state" aria-live="polite">
-          @if (dirty()) {
+          @if (unsaved()) {
             <span class="dot" aria-hidden="true">●</span>{{ 'itemForm.unsaved' | t }}
           }
         </span>
@@ -221,8 +271,14 @@
         <!-- Disabled while this collection's own write is in flight: a second
              save would quote the version the first is about to move, and come
              back refused as a conflict with a writer who does not exist. -->
-        <ui-button type="submit" [disabled]="saving()">
-          {{ (saving() ? 'itemForm.saving' : 'itemForm.save') | t }}
+        <ui-button type="submit" [pending]="saving() || uploadsBusy()">
+          {{
+            (saving()
+              ? 'itemForm.saving'
+              : uploadsBusy()
+                ? 'itemForm.savingPhotos'
+                : 'itemForm.save') | t
+          }}
         </ui-button>
       </div>
     </form>

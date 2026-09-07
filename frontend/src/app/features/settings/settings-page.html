@@ -1,237 +1,293 @@
 <h1>{{ 'settings.title' | t }}</h1>
 
-<ui-tabs [tabs]="tabs()" [active]="activeTab()" (activeChange)="onTabChange($event)" />
+<!--
+  `[panels]="true"` and a real `role="tabpanel"` below. Declaring `role="tab"`
+  without the panel it controls is worse than plain buttons: the role tells the
+  user which keys to press, and choosing a tab was then announced as nothing at
+  all because the content that changed was not identified as this tab's panel.
+-->
+<ui-tabs #tabstrip [tabs]="tabs()" [active]="activeTab()" [panels]="true" (activeChange)="onTabChange($event)" />
 
-@switch (activeTab()) {
-  @case ('plan') {
-    <section class="section">
-      <div>
-        <div class="heading">{{ 'settings.plan.heading' | t }}</div>
-        <p class="sub">{{ planSub() }}</p>
-      </div>
-      <p class="sub">{{ 'settings.plan.billingNote' | t }}</p>
-      <div class="plans">
-        @for (plan of plans; track plan.id) {
-          <ui-card class="plan" [class.plan--active]="store.profile()?.plan === plan.id">
-            <div class="plan__head">
-              <span class="plan__name">{{ plan.name }}</span>
-              <span class="plan__price">{{ plan.priceKey | t }}</span>
-            </div>
-            <div class="plan__features">
-              @for (feature of plan.featureKeys; track feature) {
-                <!-- A tick, not a chevron. This was a `›` — the mark that
-                     means "goes deeper" everywhere else in the app — standing in
-                     for "included in this plan", which is a different claim. -->
-                <div class="feature">
-                  <ui-icon class="tick" name="check" [size]="12" [strokeWidth]="2.4" />
-                  {{ feature | t }}
-                </div>
+<div
+  role="tabpanel"
+  class="panel"
+  [id]="tabstrip.panelDomId(activeTab())"
+  [attr.aria-labelledby]="tabstrip.tabDomId(activeTab())"
+  tabindex="0"
+>
+  @switch (activeTab()) {
+    @case ('plan') {
+      <section class="section">
+        <div>
+          <h2 class="heading">{{ 'settings.plan.heading' | t }}</h2>
+          <p class="sub">{{ planSub() }}</p>
+        </div>
+        <p class="sub">{{ 'settings.plan.billingNote' | t }}</p>
+        <div class="plans">
+          @for (plan of plans; track plan.id) {
+            <ui-card class="plan" [class.plan--active]="store.profile()?.plan === plan.id">
+              <div class="plan__head">
+                <span class="plan__name">{{ plan.name }}</span>
+                <span class="plan__price">{{ plan.priceKey | t }}</span>
+              </div>
+              <div class="plan__features">
+                @for (feature of plan.featureKeys; track feature) {
+                  <!-- A tick, not a chevron. This was a `›` — the mark that
+                       means "goes deeper" everywhere else in the app — standing in
+                       for "included in this plan", which is a different claim. -->
+                  <div class="feature">
+                    <ui-icon class="tick" name="check" [size]="12" [strokeWidth]="2.4" />
+                    {{ feature | t }}
+                  </div>
+                }
+              </div>
+              @if (store.profile()?.plan === plan.id) {
+                <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.current' | t }}</ui-button>
+              } @else {
+                <!-- Disabled, and it says why. This used to be a live button that
+                     set the plan from the browser and toasted a welcome; there is
+                     no billing behind it and nothing in the app is gated on the
+                     plan, so an enabled control here would be a receipt for a
+                     purchase that never happened. -->
+                <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.unavailable' | t }}</ui-button>
               }
-            </div>
-            @if (store.profile()?.plan === plan.id) {
-              <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.current' | t }}</ui-button>
-            } @else {
-              <!-- Disabled, and it says why. This used to be a live button that
-                   set the plan from the browser and toasted a welcome; there is
-                   no billing behind it and nothing in the app is gated on the
-                   plan, so an enabled control here would be a receipt for a
-                   purchase that never happened. -->
-              <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.unavailable' | t }}</ui-button>
-            }
-          </ui-card>
-        }
-      </div>
-    </section>
-  }
-  @case ('access') {
+            </ui-card>
+          }
+        </div>
+      </section>
+    }
+    @case ('access') {
       <ui-read-only-notice scope="administer" />
-    <section class="section access">
-      <div>
-        <div class="heading">{{ 'settings.access.heading' | t }}</div>
-        <p class="sub">
-          {{ 'settings.access.subBefore' | t }} <span class="mono">acme-vault</span>{{ 'settings.access.subAfter' | t }}
-        </p>
-      </div>
-      <ui-card class="members">
-        @for (member of store.tenantMembers(); track member.email + '#' + memberRev()) {
-          <div class="member-row">
-            <ui-avatar [initials]="member.initials" />
-            <span class="who">
-              <span class="name">{{ member.name }}</span>
-              <span class="email">{{ member.email }}</span>
-            </span>
-            <!-- Membership is CanAdminister, not CanWrite: an Editor is
-                 refused it too, so this is `canAdminister` and not `canEdit`.
-                 The Owner's own row keeps its existing disabled/muted treatment,
-                 which explains why the *Owner* cannot be demoted — a different
-                 question from whether you may change anybody at all. -->
-            @if (store.canAdminister()) {
-              <ui-select
-                class="compact"
-                [ariaLabel]="'settings.access.memberRoleAria' | t: { name: member.name }"
-                [options]="roleOptions()"
-                [value]="member.role"
-                [disabled]="member.role === 'Owner'"
-                (valueChange)="setMemberRole(member.email, $event)"
-              />
-              <ui-button
-                variant="icon"
-                [muted]="member.role === 'Owner'"
-                [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
-                (click)="removeMember(member.email)"
-              ><ui-icon name="close" [size]="13" /></ui-button>
-            } @else {
-              <span class="role-static">{{ roleLabel(member.role) | t }}</span>
-            }
-          </div>
-        }
-      </ui-card>
-
-      <!-- The three "sharing policy" toggles that used to sit here are gone.
-           They were held in a component signal, had no field on the wire, were
-           never sent anywhere and reset on navigation — security-shaped
-           switches that did nothing at all. What actually controls access today
-           is the member list above and a collection's own link sharing, and
-           saying so is more honest than three switches that only look like
-           settings. -->
-      <p class="sub">{{ 'settings.access.policyNote' | t }}</p>
-    </section>
-  }
-  @case ('account') {
-    <section class="account">
-      <ui-card class="account-card">
-        <ui-avatar size="lg" [initials]="store.profile()?.initials ?? '··'" />
-        <span class="who">
-          <span class="name">{{ store.profile()?.name }}</span>
-          <span class="email">{{ store.profile()?.email }}</span>
-        </span>
-        <span class="plan-chip">{{ store.profile()?.plan?.toUpperCase() }}</span>
-      </ui-card>
-      <ui-card class="account-card">
-        <span class="who">
-          <span class="name">{{ 'settings.account.data' | t }}</span>
-          <span class="email">{{ dataSub() }}</span>
-        </span>
-        <ui-button variant="ghost" size="sm" [disabled]="exporting()" (click)="exportArchive()">
-          {{ (exporting() ? 'settings.account.exporting' : 'settings.account.export') | t }}
-        </ui-button>
-        <!-- The input stays hidden and the button drives it: a bare file input
-             cannot be labelled or styled like the rest of the app, and it is the
-             button that has to look like every other action on this page. -->
-        <ui-button
-          variant="ghost"
-          size="sm"
-          [disabled]="importing()"
-          [disabled]="importing() || !store.canAdminister()"
-          (click)="archiveInput.click()"
-        >
-          {{ (importing() ? 'settings.account.importing' : 'settings.account.import') | t }}
-        </ui-button>
-        <input
-          #archiveInput
-          type="file"
-          accept=".zip,application/zip"
-          hidden
-          (change)="importArchive($event)"
-        />
-      </ui-card>
-      <p class="sub">{{ 'settings.account.importHint' | t }}</p>
-
-      <div class="heading spaced">{{ 'settings.account.perCollection' | t }}</div>
-      <p class="sub">{{ 'settings.account.perCollectionHint' | t }}</p>
-      @for (collection of store.collections(); track collection.id) {
-        <ui-card class="account-card">
-          <span class="who">
-            <span class="name">{{ collection.name }}</span>
-            <span class="email">{{ itemCount(collection.items.length) }}</span>
-          </span>
-          <ui-button
-            variant="ghost"
-            size="sm"
-            [disabled]="exportingCollection() === collection.id"
-            (click)="exportCollection(collection.id)"
-          >
-            {{
-              (exportingCollection() === collection.id
-                ? 'settings.account.exporting'
-                : 'settings.account.export') | t
-            }}
-          </ui-button>
-        </ui-card>
-      } @empty {
-        <p class="sub">{{ 'settings.account.noCollections' | t }}</p>
-      }
-
-      <app-import-dialog
-        [plan]="importPlan()"
-        [busy]="importing()"
-        (confirmed)="applyImport($event)"
-        (cancelled)="cancelImport()"
-      />
-    </section>
-  }
-  @default {
-    <section class="section">
-      <div>
-        <div class="heading">{{ 'settings.theme.heading' | t }}</div>
-        <p class="sub">{{ 'settings.theme.sub' | t }}</p>
-      </div>
-      <div class="themes">
-        @for (t of theme.themes; track t.id) {
-          <ui-card
-            class="theme-card"
-            [interactive]="true"
-            [class.theme-card--active]="t.id === theme.current()"
-            (click)="theme.apply(t.id)"
-          >
-            <div class="swatches">
-              @for (swatch of t.swatches; track $index) {
-                <span [style.background]="swatch"></span>
+      <section class="section access">
+        <div>
+          <!--
+            "Tenant" is model jargon, and the sentence under it used to name a
+            workspace called `acme-vault` — a literal left in the template
+            between two message fragments, in an app where nobody's account is
+            called that. There is nowhere for a real name to come from
+            (`TenantSettings` carries only `defaultCurrency`), so the honest
+            sentence names nothing. One key, not two: adjacent fragments are a
+            concatenation a translator cannot reorder.
+          -->
+          <h2 class="heading">{{ 'settings.access.people' | t }}</h2>
+          <p class="sub">{{ 'settings.access.sub' | t }}</p>
+        </div>
+        <ui-card class="members">
+          @for (member of store.tenantMembers(); track member.email + '#' + memberRev()) {
+            <div class="member-row">
+              <ui-avatar [initials]="member.initials" />
+              <span class="who">
+                <span class="name">{{ member.name }}</span>
+                <span class="email">{{ member.email }}</span>
+              </span>
+              <!-- Membership is CanAdminister, not CanWrite: an Editor is
+                   refused it too, so this is `canAdminister` and not `canEdit`.
+                   The Owner's own row keeps its existing disabled/muted treatment,
+                   which explains why the *Owner* cannot be demoted — a different
+                   question from whether you may change anybody at all. -->
+              @if (store.canAdminister()) {
+                <ui-select
+                  class="compact"
+                  [ariaLabel]="'settings.access.memberRoleAria' | t: { name: member.name }"
+                  [options]="roleOptions()"
+                  [value]="member.role"
+                  [disabled]="member.role === 'Owner'"
+                  (valueChange)="setMemberRole(member.email, $event)"
+                />
+                <ui-button
+                  variant="icon"
+                  [muted]="member.role === 'Owner'"
+                  [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
+                  (click)="removeMember(member.email)"
+                ><ui-icon name="close" [size]="13" /></ui-button>
+              } @else {
+                <span class="role-static">{{ roleLabel(member.role) | t }}</span>
               }
             </div>
-            <div class="name">{{ t.name }}</div>
-            <div class="desc">{{ t.descriptionKey | t }}</div>
-            <div class="state" [class.active]="t.id === theme.current()">
-              {{ (t.id === theme.current() ? 'common.active' : 'common.clickToApply') | t }}
-            </div>
-          </ui-card>
-        }
-      </div>
+          }
+        </ui-card>
 
-      <div>
-        <div class="heading">{{ 'settings.language.heading' | t }}</div>
-        <p class="sub">{{ 'settings.language.sub' | t }}</p>
-      </div>
-      <div class="themes">
-        @for (lang of i18n.langs; track lang.id) {
-          <ui-card
-            class="theme-card lang-card"
-            [interactive]="true"
-            [class.theme-card--active]="lang.id === i18n.current()"
-            (click)="i18n.apply(lang.id)"
-          >
-            <ui-flag [lang]="lang.id" [size]="34" />
-            <div class="name">{{ lang.name }}</div>
-            <div class="desc mono">{{ lang.locale }}</div>
-            <div class="state" [class.active]="lang.id === i18n.current()">
-              {{ (lang.id === i18n.current() ? 'common.active' : 'common.clickToApply') | t }}
-            </div>
+        <!-- The three "sharing policy" toggles that used to sit here are gone.
+             They were held in a component signal, had no field on the wire, were
+             never sent anywhere and reset on navigation — security-shaped
+             switches that did nothing at all. What actually controls access today
+             is the member list above and a collection's own link sharing, and
+             saying so is more honest than three switches that only look like
+             settings. -->
+        <p class="sub">{{ 'settings.access.policyNote' | t }}</p>
+      </section>
+    }
+    @case ('account') {
+      <!--
+        The notice belongs here as much as on the access tab — its own doc
+        comment says so. An Editor used to meet a greyed-out "Import ZIP" beside
+        a live "Export ZIP" with no way to tell whether that was a permission, a
+        bug, or something that unlocked later, and the one screen carrying the
+        explanation was a tab they may never open.
+      -->
+      <ui-read-only-notice scope="administer" />
+      <section class="account">
+        <div class="cards">
+          <ui-card class="account-card">
+            <ui-avatar size="lg" [initials]="store.profile()?.initials ?? '··'" />
+            <span class="who">
+              <span class="name">{{ store.profile()?.name }}</span>
+              <span class="email">{{ store.profile()?.email }}</span>
+            </span>
+            <span class="plan-chip">{{ store.profile()?.plan?.toUpperCase() }}</span>
           </ui-card>
-        }
-      </div>
+          <ui-card class="account-card">
+            <span class="who">
+              <span class="name">{{ 'settings.account.data' | t }}</span>
+              <span class="email">{{ dataSub() }}</span>
+            </span>
+            <ui-button variant="ghost" size="sm" [pending]="exporting()" (click)="exportArchive()">
+              {{ 'settings.account.export' | t }}
+            </ui-button>
+            <!--
+              Not rendered rather than disabled: the app's stated policy is to
+              prefer withholding a write affordance, with one read-only notice per
+              surface saying why. Import is `CanAdminister` on the server — one
+              request can overwrite every collection in the vault.
+            -->
+            @if (store.canAdminister()) {
+              <!-- The input stays hidden and the button drives it: a bare file input
+                   cannot be labelled or styled like the rest of the app, and it is the
+                   button that has to look like every other action on this page. -->
+              <ui-button
+                variant="ghost"
+                size="sm"
+                [pending]="importing()"
+                (click)="archiveInput.click()"
+              >
+                {{ 'settings.account.import' | t }}
+              </ui-button>
+              <input
+                #archiveInput
+                type="file"
+                accept=".zip,application/zip"
+                hidden
+                (change)="importArchive($event)"
+              />
+            }
+          </ui-card>
+        </div>
+        <p class="sub">{{ 'settings.account.importHint' | t }}</p>
 
-      <div>
-        <div class="heading">{{ 'settings.currency.heading' | t }}</div>
-        <p class="sub">{{ 'settings.currency.sub' | t }}</p>
-      </div>
-      <div class="currency">
-        <ui-select
-          [ariaLabel]="'settings.currency.heading' | t"
-          [options]="currencyOptions()"
-          [value]="store.tenantSettings()?.defaultCurrency ?? ''"
-          (valueChange)="chooseCurrency($event)"
+        <!--
+          A heading and its hint used to be grid items of the same `auto-fit`
+          grid as the cards, so at desktop width the paragraph explaining Import
+          sat beside the next heading, every per-collection card was offset by
+          one cell, and the inert `app-import-dialog` occupied a live empty one.
+          The section is a flex column now and only the cards are gridded.
+        -->
+        <h2 class="heading spaced">{{ 'settings.account.perCollection' | t }}</h2>
+        <p class="sub">{{ 'settings.account.perCollectionHint' | t }}</p>
+        <div class="cards">
+          @for (collection of store.collections(); track collection.id) {
+            <ui-card class="account-card">
+              <span class="who">
+                <span class="name">{{ collection.name }}</span>
+                <span class="email">{{ itemCount(collection.items.length) }}</span>
+              </span>
+              <ui-button
+                variant="ghost"
+                size="sm"
+                [pending]="exportingCollection() === collection.id"
+                (click)="exportCollection(collection.id)"
+              >
+                {{ 'settings.account.export' | t }}
+              </ui-button>
+            </ui-card>
+          } @empty {
+            <p class="sub">{{ 'settings.account.noCollections' | t }}</p>
+          }
+        </div>
+
+        <app-import-dialog
+          [plan]="importPlan()"
+          [busy]="importing()"
+          (confirmed)="applyImport($event)"
+          (cancelled)="cancelImport()"
         />
-      </div>
-    </section>
+      </section>
+    }
+    @default {
+      <section class="section">
+        <div>
+          <h2 class="heading">{{ 'settings.theme.heading' | t }}</h2>
+          <p class="sub">{{ 'settings.theme.sub' | t }}</p>
+        </div>
+        <div class="themes">
+          @for (t of theme.themes; track t.id) {
+            <!--
+              A real <button> inside the card, not a `(click)` on it. `ui-card`
+              is a plain host with no role, no tabindex and no keydown handler,
+              so Tab walked past all seven themes and both languages — they could
+              not be focused, so they could not be activated, while the copy said
+              "Click to apply". `aria-pressed` carries the state, which is why
+              the label is now device-neutral.
+            -->
+            <ui-card class="theme-card" [class.theme-card--active]="t.id === theme.current()">
+              <button
+                type="button"
+                class="pick"
+                [attr.aria-pressed]="t.id === theme.current()"
+                (click)="theme.apply(t.id)"
+              >
+                <div class="swatches">
+                  @for (swatch of t.swatches; track $index) {
+                    <span [style.background]="swatch"></span>
+                  }
+                </div>
+                <div class="name">{{ t.name }}</div>
+                <div class="desc">{{ t.descriptionKey | t }}</div>
+                <div class="state" [class.active]="t.id === theme.current()">
+                  {{ (t.id === theme.current() ? 'common.inUse' : 'common.select') | t }}
+                </div>
+              </button>
+            </ui-card>
+          }
+        </div>
+
+        <div>
+          <h2 class="heading">{{ 'settings.language.heading' | t }}</h2>
+          <p class="sub">{{ 'settings.language.sub' | t }}</p>
+        </div>
+        <div class="themes">
+          @for (lang of i18n.langs; track lang.id) {
+            <ui-card class="theme-card lang-card" [class.theme-card--active]="lang.id === i18n.current()">
+              <button
+                type="button"
+                class="pick"
+                [attr.aria-pressed]="lang.id === i18n.current()"
+                (click)="i18n.apply(lang.id)"
+              >
+                <ui-flag [lang]="lang.id" [size]="34" />
+                <div class="name">{{ lang.name }}</div>
+                <!-- The locale code was the card's description. It is a wire
+                     value, and the card already names the language. -->
+                <div class="state" [class.active]="lang.id === i18n.current()">
+                  {{ (lang.id === i18n.current() ? 'common.inUse' : 'common.select') | t }}
+                </div>
+              </button>
+            </ui-card>
+          }
+        </div>
+
+        <div>
+          <h2 class="heading">{{ 'settings.currency.heading' | t }}</h2>
+          <p class="sub">{{ 'settings.currency.sub' | t }}</p>
+        </div>
+        <div class="currency">
+          <ui-select
+            [ariaLabel]="'settings.currency.heading' | t"
+            [options]="currencyOptions()"
+            [value]="store.tenantSettings()?.defaultCurrency ?? ''"
+            (valueChange)="chooseCurrency($event)"
+          />
+        </div>
+      </section>
+    }
   }
-}
+</div>

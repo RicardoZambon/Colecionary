@@ -132,11 +132,52 @@ export class CsvImportDialog {
     () => this.plan().created + this.plan().updated,
   );
 
+  /**
+   * Whether the table is showing everything.
+   *
+   * The cap exists so a 2000-row paste does not put 2000 DOM rows inside a
+   * dialog on a phone, but "and 380 more" with no way to reach them meant a
+   * mistake on line 260 was simply not on screen — and the row table is the
+   * only thing that could ever have caught it.
+   */
+  protected readonly allRows = signal(false);
+
   /** Rows the table draws, and how many it does not. */
-  protected readonly previewRows = computed(() => this.plan().rows.slice(0, PREVIEW_ROWS));
-  protected readonly hiddenRows = computed(() =>
-    Math.max(0, this.plan().rows.length - PREVIEW_ROWS),
+  protected readonly previewRows = computed(() =>
+    this.allRows() ? this.plan().rows : this.plan().rows.slice(0, PREVIEW_ROWS),
   );
+  protected readonly hiddenRows = computed(() =>
+    Math.max(0, this.plan().rows.length - this.previewRows().length),
+  );
+
+  /**
+   * One line per destination, above the row table.
+   *
+   * This is where a wrong column or a typo in `Grupo` is actually visible: a
+   * 400-row file lands in five to ten places, and "Cavalheiros — 1 row · new
+   * group" beside "Cavaleiros — 398 rows" is the whole defect, on one line. The
+   * row table underneath cannot show it, because it stops at twenty rows in
+   * line order.
+   */
+  protected readonly destinations = computed(() => {
+    const groups = new Map<string, { path: string; section: string; rows: number; fresh: boolean }>();
+    for (const row of this.plan().rows) {
+      const key = `${row.groupPath}\u0000${row.sectionName}`;
+      const entry = groups.get(key);
+      if (entry) entry.rows += 1;
+      else
+        groups.set(key, {
+          path: row.groupPath,
+          section: row.sectionName,
+          rows: 1,
+          fresh: row.newGroup,
+        });
+    }
+    return [...groups.values()].map(entry => ({
+      ...entry,
+      count: this.i18n.plural(entry.rows, 'csvImport.landsInRows.one', 'csvImport.landsInRows.other'),
+    }));
+  });
   protected readonly previewIssues = computed(() => this.plan().issues.slice(0, PREVIEW_ISSUES));
   protected readonly hiddenIssues = computed(() =>
     Math.max(0, this.plan().issues.length - PREVIEW_ISSUES),
@@ -179,18 +220,50 @@ export class CsvImportDialog {
     if (plan.skipped) {
       parts.push(this.i18n.plural(plan.skipped, 'csvImport.willSkip.one', 'csvImport.willSkip.other'));
     }
+    return parts;
+  });
+
+  /**
+   * The new groups and fields, **named**.
+   *
+   * They used to be counted and nothing more — "1 group created" is exactly
+   * what somebody importing a file expects to read, so a 400-row file with
+   * "Cavalheiros" typed once instead of "Cavaleiros" imported cleanly and left
+   * a typo in the tree holding one item. The names were already on the plan.
+   * Their own paragraph rather than a count pill, because a list of names is
+   * not a pill.
+   */
+  protected readonly creations = computed(() => {
+    const plan = this.plan();
+    const lines: string[] = [];
     if (plan.newGroups.length) {
-      parts.push(
-        this.i18n.plural(plan.newGroups.length, 'csvImport.newGroups.one', 'csvImport.newGroups.other'),
+      lines.push(
+        this.i18n.plural(
+          plan.newGroups.length,
+          'csvImport.newGroupsNamed.one',
+          'csvImport.newGroupsNamed.other',
+          { names: plan.newGroups.map(node => node.name).join(', ') },
+        ),
       );
     }
     if (plan.newFields.length) {
-      parts.push(
-        this.i18n.plural(plan.newFields.length, 'csvImport.newFields.one', 'csvImport.newFields.other'),
+      lines.push(
+        this.i18n.plural(
+          plan.newFields.length,
+          'csvImport.newFieldsNamed.one',
+          'csvImport.newFieldsNamed.other',
+          { names: plan.newFields.map(entry => entry.field.name).join(', ') },
+        ),
       );
     }
-    return parts;
+    return lines;
   });
+
+  protected readonly showAllLabel = computed(() =>
+    this.allRows()
+      ? this.i18n.t('csvImport.showFewerRows')
+      : this.i18n.t('csvImport.showAllRows', { n: this.plan().rows.length }),
+  );
 
   protected readonly issuesHeading = computed(() =>
     this.i18n.plural(this.plan().issues.length, 'csvImport.issues.one', 'csvImport.issues.other'),

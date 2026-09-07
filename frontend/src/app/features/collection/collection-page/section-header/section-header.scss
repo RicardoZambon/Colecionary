@@ -1,3 +1,5 @@
+@use '../../../../../styles/mixins' as *;
+
 .sec {
   display: flex;
   align-items: center;
@@ -15,6 +17,14 @@
   color: inherit;
   cursor: pointer;
   text-align: left;
+
+  /* Narrowing to one run is worth a finger. The heading has room to grow, so it
+     takes the height directly rather than through a pseudo-element. */
+  @include upto($bp-lg) {
+    min-height: var(--tap);
+    display: flex;
+    align-items: center;
+  }
 }
 
 .sec__toggle:focus-visible {
@@ -24,7 +34,7 @@
 }
 
 .sec--active .sec__toggle ui-section-label {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .sec__ratio {

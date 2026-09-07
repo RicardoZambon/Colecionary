@@ -210,7 +210,10 @@ async function mount(opts: { collection?: Collection; g?: string; v?: string } =
     [...(rowFor(name)?.querySelectorAll('.fieldcell') ?? [])].map(n =>
       (n.textContent ?? '').trim(),
     );
-  const headBox = () => el.querySelector<HTMLInputElement>('.list-head .pick input')!;
+  // Select-all moved off the table header onto the page's summary line, so the
+  // card grid — the default view for any group without children — could reach
+  // it at all. One control, both views.
+  const headBox = () => el.querySelector<HTMLInputElement>('app-browse-summary input')!;
   const bar = () => el.querySelector('app-bulk-bar');
   const barCount = () => (el.querySelector('.bar__count')?.textContent ?? '').trim();
   const headings = () =>

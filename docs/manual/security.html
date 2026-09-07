@@ -133,6 +133,46 @@
 </table>
 </div>
 
+<h3>Terminar uma sessão é jogar fora o estado dela</h3>
+
+<div class="callout warn">
+  <span class="label">Isto foi um vazamento entre contas, medido no navegador</span>
+  <p>
+    Sair da conta limpava o token e o <code>localStorage</code> e navegava para
+    <code>/login</code>. Nada mais. Toda store do app é
+    <code>providedIn: 'root'</code>, e <em>entrar</em> é uma navegação de router,
+    não um carregamento de página — então o <code>Shell</code> era reconstruído,
+    chamava <code>ensureLoaded()</code>, e isso retornava na primeira linha
+    porque <code>loaded</code> continuava <code>true</code>. Medido com um
+    sign-out puramente SPA e um login com outro usuário no mesmo tab, as únicas
+    chamadas foram <code>POST /api/auth/login</code> e
+    <code>GET /api/images/meta</code>: <code>GET /api/collections</code>
+    <strong>não acontecia</strong>, e o painel do segundo usuário listava as
+    coleções, os totais e os membros do primeiro. O papel vinha do mesmo perfil
+    velho, então <code>canEdit()</code>/<code>canAdminister()</code> respondiam
+    pela sessão anterior — um Viewer herdava as ações de um Owner até o primeiro
+    403 — e um <code>versions</code> residual deixava uma escrita citar o token
+    de um documento de <em>outro tenant</em>.
+  </p>
+  <p>
+    O servidor nunca esteve em risco: o filtro global e as políticas continuavam
+    respondendo pelo token novo, e qualquer leitura ou escrita real seria
+    recusada. O que vazava era a <strong>tela</strong> — que, com dois tenants no
+    mesmo navegador, é dado de uma conta exibido para outra pessoa.
+  </p>
+  <p>
+    <code>AuthService</code> agora chama <code>SessionReset.run()</code> nos dois
+    fins de sessão, e <code>VaultStore.reset()</code> zera coleções, listings,
+    membros, perfil, settings, <code>versions</code>, <code>writing</code>,
+    <code>query</code>, <code>loadError</code>, <code>loadInFlight</code> e
+    <code>loaded</code>, além de descartar o aviso de conflito e voltar a moeda
+    da conta ao piso do formatador. Ver <a href="decisions.html">ADR-76</a>.
+    Nenhum spec existente podia ver o defeito, porque todos montam uma store
+    nova; <code>vault.store.spec.ts</code> passa a carregar, resetar e cobrar o
+    re-fetch.
+  </p>
+</div>
+
 <h3>Autenticar não é autorizar</h3>
 
 <p>
@@ -408,7 +448,11 @@
     </tr>
     <tr>
       <td>JWT em <code>localStorage</code>, sem refresh</td>
-      <td>Exposto a XSS; sessão expira sem aviso em 8 h</td>
+      <td>Exposto a XSS; a sessão expira em 8 h. Ela já <em>não</em> expira em
+          silêncio: <code>sessionExpired()</code> leva
+          <code>expired=1</code> e <code>returnUrl</code>, então o cartão de
+          login diz que a sessão terminou e devolve a pessoa à tela em que
+          estava</td>
       <td>Refresh token + cookie <code>HttpOnly</code></td>
     </tr>
     <tr>

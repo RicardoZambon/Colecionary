@@ -28,12 +28,7 @@ const LOCAL_MAX = 2;
  * only ever shrinks.** Adding to it means a sixth overlay invented its own
  * layer, which is the thing this spec exists to stop.
  */
-const PENDING = [
-  'src/app/layout/conflict-notice/conflict-notice.ts',
-  'src/app/shared/ui/lightbox/lightbox.ts',
-  'src/app/shared/ui/image-focus/image-focus.ts',
-  'src/app/features/settings/import-dialog/import-dialog.ts',
-];
+const PENDING: string[] = [];
 
 /** See the note in `themes.spec.ts` for why the module is reached this way. */
 function nodeFs(): {
