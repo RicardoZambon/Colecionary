@@ -47,18 +47,37 @@
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   // Layering. One scale, declared once, so a dropdown inside a modal cannot end
-  // up behind it because two components each guessed a z-index.
+  // up behind it because two components each guessed a z-index. The order is
+  // the order of interruption: page chrome, then a menu, then something
+  // covering the page, then news about it, then a question, then the one
+  // message that must never be covered.
   --z-sticky: 10;
   --z-dropdown: 100;
   --z-overlay: 500;
-  --z-modal: 600;
-  --z-toast: 800;
+  // A toast sits *under* a dialog, not over it. It used to outrank it (800 vs
+  // 600), and since both dock to the bottom of a phone screen, a two-line
+  // Portuguese message was drawn over a dialog's Cancel and Delete buttons —
+  // the user tapped the message instead of the answer.
+  --z-toast: 700;
+  --z-modal: 800;
   // The conflict notice outlives the toast and must never be covered: it is the
   // only message that says a save did not happen.
   --z-notice: 900;
 
   --focus-width: 2px;
   --focus-offset: 2px;
+
+  /*
+   * The one scrim, for every overlay that dims the page.
+   *
+   * Derived from a token rather than a literal black: the scrim has to dim
+   * towards the theme's own ground, or it reads as a hole in a dark theme and
+   * as soot in a light one. Structural rather than per-theme because the
+   * *amount* of dimming is not a theme's business — `var(--bg)` already is.
+   * It lives here so a fourth overlay cannot invent a fourth value; ui-dialog
+   * and the nav drawer had two different ones.
+   */
+  --scrim: color-mix(in srgb, var(--bg) 78%, transparent);
 }
 
 // ============================================================================

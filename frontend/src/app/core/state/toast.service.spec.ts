@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ToastService } from './toast.service';
+import { TOAST_DURATION_MS, ToastService } from './toast.service';
 
 /**
  * The queue and the tones.
@@ -38,11 +38,11 @@ describe('ToastService', () => {
     expect(toast.waiting()).toBe(1);
 
     // The first one gets its full turn, and only then does the second start.
-    vi.advanceTimersByTime(2600);
+    vi.advanceTimersByTime(TOAST_DURATION_MS);
     expect(toast.message()).toBe('Copy added');
     expect(toast.waiting()).toBe(0);
 
-    vi.advanceTimersByTime(2600);
+    vi.advanceTimersByTime(TOAST_DURATION_MS);
     expect(toast.message()).toBeNull();
   });
 
@@ -109,7 +109,7 @@ describe('ToastService', () => {
     toast.dismiss();
     expect(toast.message()).toBe('Second');
     // The new head is on a timer of its own, not on the remainder of the old one.
-    vi.advanceTimersByTime(2599);
+    vi.advanceTimersByTime(TOAST_DURATION_MS - 1);
     expect(toast.message()).toBe('Second');
     vi.advanceTimersByTime(1);
     expect(toast.message()).toBeNull();

@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 
 import { I18nService } from '../../../core/i18n';
 import { UiButton } from '../button/button';
@@ -13,6 +21,13 @@ import { UiIcon } from '../icon/icon';
  * clickable (an item card carrying a routerLink), and reordering must never
  * double as "open it". Containing that here keeps every usage site from having
  * to remember it.
+ *
+ * **A move says where the thing landed.** Pass `index` and `count` and the
+ * buttons name the position in their own labels and announce the new one after
+ * each move — without them a keyboard user pressed "move later" and heard
+ * nothing at all, while the list silently re-ordered around them. They are
+ * optional so that a call site which has not been updated keeps working; the
+ * labels then read as they did before.
  */
 @Component({
   selector: 'ui-reorder',
@@ -24,16 +39,22 @@ import { UiIcon } from '../icon/icon';
       variant="ghost"
       size="sm"
       [disabled]="first()"
-      [ariaLabel]="i18n.t('ui.reorder.earlier', { name: label() })"
-      (click)="moved.emit(-1)"
+      [ariaLabel]="moveLabel(-1)"
+      (click)="move(-1)"
     ><ui-icon name="chevron-up" [size]="12" /></ui-button>
     <ui-button
       variant="ghost"
       size="sm"
       [disabled]="last()"
-      [ariaLabel]="i18n.t('ui.reorder.later', { name: label() })"
-      (click)="moved.emit(1)"
+      [ariaLabel]="moveLabel(1)"
+      (click)="move(1)"
     ><ui-icon name="chevron-down" [size]="12" /></ui-button>
+    <!--
+      Present from the start and empty, because a live region only announces
+      what changes inside one already being observed. This is the only statement
+      that the move happened: the list re-orders somewhere else on the page.
+    -->
+    <span class="sr-only" role="status">{{ announcement() }}</span>
   `,
   styles: `
     :host {
@@ -81,13 +102,65 @@ import { UiIcon } from '../icon/icon';
 })
 export class UiReorder {
   protected readonly i18n = inject(I18nService);
+  private readonly host = inject(ElementRef<HTMLElement>);
 
   /** Names the thing being moved, for the buttons' accessible labels. */
   readonly label = input('item');
   readonly first = input(false);
   readonly last = input(false);
+  /** Zero-based position in the list, for the labels and the announcement. */
+  readonly index = input(0);
+  /** How many things are in the list. `0` means "not told", not "empty". */
+  readonly count = input(0);
   /** -1 to move earlier, +1 to move later. */
   readonly moved = output<-1 | 1>();
+
+  protected readonly announcement = signal('');
+
+  /** "Move Zelda later (now 3 of 12)" — position without having to move. */
+  protected moveLabel(direction: -1 | 1): string {
+    const name = this.label();
+    if (!this.count()) {
+      return this.i18n.t(direction === -1 ? 'ui.reorder.earlier' : 'ui.reorder.later', { name });
+    }
+    return this.i18n.t(direction === -1 ? 'ui.reorder.earlierAt' : 'ui.reorder.laterAt', {
+      name,
+      position: this.index() + 1,
+      total: this.count(),
+    });
+  }
+
+  /**
+   * Moves, and keeps focus somewhere.
+   *
+   * The button that completes the last move is the button that is about to be
+   * `disabled`, and the browser blows focus off a disabled element — so the
+   * next Tab restarts at the top of the document and the user cannot tell "it
+   * stopped moving" from "the control vanished". Focus goes to the sibling
+   * first, which stays live.
+   */
+  protected move(direction: -1 | 1): void {
+    const next = this.index() + direction;
+    const total = this.count();
+    const willDisable = total ? next <= 0 || next >= total - 1 : false;
+    if (willDisable) {
+      const buttons = (this.host.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        'button',
+      );
+      buttons[direction === -1 ? 1 : 0]?.focus();
+    }
+
+    this.moved.emit(direction);
+    this.announcement.set(
+      total
+        ? this.i18n.t('ui.reorder.moved', {
+            name: this.label(),
+            position: next + 1,
+            total,
+          })
+        : this.i18n.t('ui.reorder.movedPlain', { name: this.label() }),
+    );
+  }
 
   /**
    * Stops the click reaching whatever this sits on. Covers the gap between the

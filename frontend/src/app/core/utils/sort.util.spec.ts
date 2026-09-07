@@ -123,8 +123,8 @@ describe('sort.util', () => {
 
   it('labels sorts for the menu', () => {
     // A custom field's name is user data, so it is interpolated, not looked up.
-    expect(sortLabel(byNumero('asc'), t)).toBe('sort.field(name=Número,arrow=↑)');
-    expect(sortLabel(byNumero('desc'), t)).toBe('sort.field(name=Número,arrow=↓)');
+    expect(sortLabel(byNumero('asc'), t)).toBe('sort.field.asc(name=Número)');
+    expect(sortLabel(byNumero('desc'), t)).toBe('sort.field.desc(name=Número)');
     expect(sortLabel({ by: 'manual', direction: 'asc' }, t)).toBe('sort.manual');
     expect(sortLabel({ by: 'added', direction: 'desc' }, t)).toBe('sort.added.desc');
   });

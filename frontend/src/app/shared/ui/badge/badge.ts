@@ -19,7 +19,7 @@ export type BadgeTone = 'good' | 'warn' | 'accent' | 'neutral';
       font-size: 9px;
       font-weight: 700;
       letter-spacing: 0.07em;
-      border: 1px solid currentColor;
+      border: var(--bw) solid currentColor;
       border-radius: var(--pill);
       padding: 2px 8px;
       text-transform: uppercase;
@@ -27,7 +27,7 @@ export type BadgeTone = 'good' | 'warn' | 'accent' | 'neutral';
 
     :host(.tone-good) { color: var(--good); }
     :host(.tone-warn) { color: var(--warn); }
-    :host(.tone-accent) { color: var(--accent); }
+    :host(.tone-accent) { color: var(--accent-strong); }
     :host(.tone-neutral) { color: var(--text2); }
   `,
 })

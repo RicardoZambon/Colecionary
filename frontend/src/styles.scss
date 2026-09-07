@@ -33,7 +33,11 @@ body {
 }
 
 a {
-  color: var(--accent);
+  /* A link is type, so the readable sibling of the accent: the raw --accent is
+     a fill token (3:1) and measures 4.28:1 on --panel and 3.49:1 on --panel2
+     in `paper`. Rule 18 already said this; every link in the app was the
+     exception. */
+  color: var(--accent-strong);
   text-decoration: none;
 
   &:hover {

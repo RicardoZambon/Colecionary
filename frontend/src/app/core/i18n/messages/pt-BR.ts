@@ -973,4 +973,10 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.csvImport.done.other': '{n} itens importados ✓',
   'toast.csvImport.failed': 'Não deu para importar — nada foi gravado',
 
+  'sort.field.asc': '{name} crescente',
+  'sort.field.desc': '{name} decrescente',
+  'ui.reorder.earlierAt': 'Mover {name} para antes ({position} de {total})',
+  'ui.reorder.laterAt': 'Mover {name} para depois ({position} de {total})',
+  'ui.reorder.moved': '{name} movido para {position} de {total}',
+  'ui.reorder.movedPlain': '{name} movido',
 };

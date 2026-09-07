@@ -14,7 +14,8 @@ export type ButtonSize = 'md' | 'sm';
   template: `
     <button
       [type]="type()"
-      [disabled]="disabled()"
+      [disabled]="disabled() || pending()"
+      [attr.aria-busy]="pending() || null"
       [attr.aria-label]="ariaLabel() || null"
       [attr.id]="controlId() || null"
       [attr.aria-expanded]="ariaExpanded() ?? null"
@@ -27,6 +28,7 @@ export type ButtonSize = 'md' | 'sm';
       [class.btn--link]="variant() === 'link'"
       [class.btn--icon]="variant() === 'icon'"
       [class.btn--muted]="muted()"
+      [class.btn--pending]="pending()"
       [class.btn--sm]="size() === 'sm'"
       [class.btn--block]="block()"
     >
@@ -34,6 +36,8 @@ export type ButtonSize = 'md' | 'sm';
     </button>
   `,
   styles: `
+    @use '../../../../styles/mixins' as *;
+
     :host {
       display: inline-block;
     }
@@ -115,7 +119,9 @@ export type ButtonSize = 'md' | 'sm';
       padding: 0;
       font-size: 12px;
       font-weight: 600;
-      color: var(--accent);
+      /* Type, so the readable sibling: the raw accent is a fill token and
+         measures 4.28:1 on --panel and 3.49:1 on --panel2 in paper. */
+      color: var(--accent-strong);
 
       &:hover:not(:disabled) {
         text-decoration: underline;
@@ -146,7 +152,10 @@ export type ButtonSize = 'md' | 'sm';
       min-width: 20px;
       font-size: 13px;
       line-height: 1;
-      color: var(--muted);
+      /* The x that removes a copy, a field or a member is a control, not
+         decoration — and on a phone there is no hover to reveal it, so the
+         resting state is the only state. */
+      color: var(--muted-strong);
 
       &:hover:not(:disabled) {
         color: var(--danger);
@@ -156,6 +165,45 @@ export type ButtonSize = 'md' | 'sm';
     .btn--icon.btn--sm {
       font-size: 11px;
       padding: 1px 3px;
+    }
+
+    /*
+     * In progress. The ring is drawn from currentColor, so it works on all five
+     * variants without a second token, and it sits *before* the label so the
+     * label does not have to change — which is the whole point: three callers
+     * each carried a second i18n key ("Retrying…", "Reloading…") to say this,
+     * and the fourth simply greyed out and said nothing.
+     */
+    .btn--pending {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--sp-2);
+
+      &::before {
+        content: '';
+        flex: none;
+        width: 11px;
+        height: 11px;
+        border: 2px solid currentColor;
+        /* One transparent quarter is what makes the rotation visible; at
+           reduced motion it is a static broken ring, which still reads as
+           "not finished" without anything moving. */
+        border-right-color: transparent;
+        border-radius: 50%;
+      }
+    }
+
+    @include motion-safe {
+      .btn--pending::before {
+        animation: ui-btn-spin 0.7s linear infinite;
+      }
+    }
+
+    @keyframes ui-btn-spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     /*
@@ -207,4 +255,19 @@ export class UiButton {
    * `disabled`.
    */
   readonly muted = input(false);
+
+  /**
+   * This button's own write is in flight.
+   *
+   * It implies `disabled` — a write affordance must stop offering itself while
+   * it runs (CLAUDE.md rule 20: two writes quoting the same version means the
+   * second is refused with a 412 nobody can act on, and half a second is
+   * enough for a double click). It also sets `aria-busy`, so the state is
+   * announced rather than merely dimmed, and draws a spinner, so "in progress"
+   * does not need a second label.
+   *
+   * Bind it from `VaultStore.saving(id)`, passed down as an input — never by
+   * injecting the store into a leaf.
+   */
+  readonly pending = input(false);
 }

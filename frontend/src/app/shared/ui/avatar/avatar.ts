@@ -12,7 +12,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       border-radius: var(--pill);
       background: var(--panel2);
       border: var(--bw) solid var(--border);
-      color: var(--accent);
+      color: var(--accent-strong);
       display: grid;
       place-items: center;
       font-size: 10.5px;

@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, model, output } from '@angular/core';
 
+import { UiFieldControl } from '../field/field-control';
+
 /**
  * A selection checkbox — for choosing which rows an action applies to.
  *
@@ -17,10 +19,13 @@ import { ChangeDetectionStrategy, Component, computed, input, model, output } fr
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <input
+      #control
       type="checkbox"
       [checked]="checked()"
       [indeterminate]="indeterminate()"
+      [attr.id]="fieldId()"
       [attr.aria-label]="ariaLabel() || null"
+      [attr.aria-describedby]="ariaDescribedBy()"
       [attr.aria-checked]="ariaChecked()"
       [disabled]="disabled()"
       (click)="onClick($event)"
@@ -36,11 +41,13 @@ import { ChangeDetectionStrategy, Component, computed, input, model, output } fr
     }
 
     /*
-     * The 44px touch target is NOT here. It is a breakpointed rule, and an
-     * inline styles block cannot @use the breakpoint mixins, so writing it here
-     * meant a third hand-copied 900 beside the two in _mixins.scss and
-     * layout.service.ts. It lives in styles.scss instead, next to the other
-     * tap-target rules, where it can say upto($bp-lg) and mean it.
+     * The 44px touch target is not here but in styles.scss, beside the other
+     * tap-target rules. (An inline styles block *can* @use the breakpoint
+     * mixins — ui-select, ui-text-input, ui-tabs and ui-toggle now do, and this
+     * comment used to claim otherwise. The reason it stays in styles.scss is
+     * that the rule needs to grow the target without growing the 15px box a
+     * dense table row depends on, which is the same pseudo-element trade the
+     * chips beside it make; the two belong together.)
      */
 
     input {
@@ -73,7 +80,7 @@ import { ChangeDetectionStrategy, Component, computed, input, model, output } fr
     }
   `,
 })
-export class UiCheckbox {
+export class UiCheckbox extends UiFieldControl {
   readonly checked = model(false);
   /**
    * Neither all nor none — the state a "select all" header sits in while some

@@ -1042,4 +1042,10 @@ export const en = {
   'toast.csvImport.done.other': 'Imported {n} items ✓',
   'toast.csvImport.failed': 'Could not import — nothing was written',
 
+  'sort.field.asc': '{name} ascending',
+  'sort.field.desc': '{name} descending',
+  'ui.reorder.earlierAt': 'Move {name} earlier (now {position} of {total})',
+  'ui.reorder.laterAt': 'Move {name} later (now {position} of {total})',
+  'ui.reorder.moved': 'Moved {name} to {position} of {total}',
+  'ui.reorder.movedPlain': 'Moved {name}',
 } as const;

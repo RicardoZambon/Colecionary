@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 
 import { I18nService } from '../../../core/i18n';
+import { UiFieldControl } from '../field/field-control';
 
 let nextId = 0;
 
@@ -42,13 +43,17 @@ let nextId = 0;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <input
+      #control
       type="date"
       [lang]="i18n.current()"
       [value]="value()"
+      [attr.id]="fieldId()"
+      [attr.name]="name() || null"
       [attr.min]="min() || null"
       [attr.max]="max() || null"
       [attr.aria-label]="ariaLabel() || null"
-      [attr.aria-describedby]="hintId"
+      [attr.aria-describedby]="ariaDescribedBy()"
+      [attr.aria-invalid]="ariaInvalid()"
       [class.subtle]="variant() === 'subtle'"
       (input)="onInput($event)"
       (blur)="blurred.emit()"
@@ -56,6 +61,8 @@ let nextId = 0;
     <span class="hint" [id]="hintId">{{ pattern() }}</span>
   `,
   styles: `
+    @use '../../../../styles/mixins' as *;
+
     :host {
       display: block;
     }
@@ -77,17 +84,24 @@ let nextId = 0;
       }
     }
 
+    /*
+     * The one line that tells a Brazilian whether to type dd/mm or mm/dd was
+     * 9.5px of --muted (2.7-4.1:1 across the themes) — the least readable text
+     * in the form was the safeguard this component exists for. Same mixin as
+     * every other micro-label now, so it cannot drift again.
+     */
     .hint {
       display: block;
       margin-top: 3px;
-      font-family: var(--font-mono);
-      font-size: 9.5px;
-      letter-spacing: 0.06em;
-      color: var(--muted);
+      @include mono-label(var(--fs-xs), 0.06em);
+    }
+
+    input[aria-invalid='true'] {
+      border-color: var(--danger);
     }
   `,
 })
-export class UiDateInput {
+export class UiDateInput extends UiFieldControl {
   protected readonly i18n = inject(I18nService);
 
   /** ISO `yyyy-MM-dd`; `''` means no date. */
@@ -103,9 +117,19 @@ export class UiDateInput {
    * focusable thing.
    */
   readonly ariaLabel = input('');
+  readonly name = input('');
   readonly blurred = output<void>();
 
   protected readonly hintId = `date-hint-${nextId++}`;
+
+  /**
+   * The format hint is announced **as well as** the field's own hint and error,
+   * never instead of them: which order to type the numbers in is the one thing
+   * this control cannot afford to leave unsaid.
+   */
+  protected override describedIds(): string[] {
+    return [...super.describedIds(), this.hintId];
+  }
 
   /**
    * The field's order in the active locale — `dd/mm/aaaa`, `mm/dd/yyyy` — built

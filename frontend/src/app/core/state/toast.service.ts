@@ -2,8 +2,16 @@ import { Injectable, computed, signal } from '@angular/core';
 
 import { MessageKey } from '../i18n/messages';
 
-/** How long a message that is only *information* stays on screen. */
-const TOAST_DURATION_MS = 2600;
+/**
+ * How long a message that is only *information* stays on screen.
+ *
+ * 4 seconds, not the 2.6 it was: the toast lives in a corner the user is not
+ * looking at, because they are looking at the thing they just did. 2.6 s is
+ * the reading time for someone already watching — for everyone else it is the
+ * time available to notice something happened at all, and the longest pt-BR
+ * message is 45 characters.
+ */
+export const TOAST_DURATION_MS = 4000;
 
 /**
  * What a toast is saying, in the only three registers this app has.

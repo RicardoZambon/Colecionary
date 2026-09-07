@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 
-import { ToastService } from '../../../core/state/toast.service';
+import { I18nService } from '../../../core/i18n';
+import { Toast, ToastService } from '../../../core/state/toast.service';
 import { TPipe } from '../../pipes/t.pipe';
 import { UiButton } from '../button/button';
 import { UiIcon } from '../icon/icon';
@@ -14,25 +15,40 @@ import { UiIcon } from '../icon/icon';
  *    (`Done` / `Failed`) beside the message, so the difference between "saved"
  *    and "not saved" survives a colour-blind reader, a greyscale screenshot and
  *    a theme whose accent happens to be red.
- * 2. **An error is announced, not merely drawn.** It gets `role="alert"` and an
- *    assertive live region; information gets the polite `role="status"`, which
- *    is what stops "Photo added" from interrupting whatever is being read.
- * 3. **An error has to be dismissed.** The close button is the only way it
- *    leaves, so a failure cannot expire unread while the user was looking
- *    elsewhere.
+ * 2. **Every toast is announced, not merely drawn.** The two live regions are
+ *    always in the DOM and always empty until there is something to say.
+ *    That is the part that was wrong: assistive technology announces changes
+ *    to a region it was *already observing*, so a `role="status"` element
+ *    inserted together with its text is reliably missed. `role="alert"` is the
+ *    special case most readers still catch on insertion, which is why failures
+ *    appeared to work and nothing else did — a save, an export and a role
+ *    change were all silent.
+ * 3. **Every toast can be dismissed.** The close button used to be inside the
+ *    error branch, tying "can I get rid of this" to tone; an info toast owns
+ *    the bottom of a phone screen, which is where a docked dialog's buttons
+ *    are.
+ * 4. **An error has to be dismissed.** It carries no timer, so a failure
+ *    cannot expire unread while the user was looking elsewhere.
  */
 @Component({
   selector: 'ui-toast',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [TPipe, UiButton, UiIcon],
   template: `
+    <!--
+      Hoisted out of the @if, and never removed: these two are the live regions,
+      and a live region only announces what changes *inside* one that was
+      already being observed. The visual toast below carries no role of its own
+      any more, so nothing is announced twice.
+    -->
+    <div class="sr-only" role="status" aria-live="polite">{{ politeText() }}</div>
+    <div class="sr-only" role="alert">{{ assertiveText() }}</div>
+
     @if (toast.current(); as current) {
       <div
         class="toast"
         [class.toast--success]="current.tone === 'success'"
         [class.toast--error]="current.tone === 'error'"
-        [attr.role]="current.tone === 'error' ? 'alert' : 'status'"
-        [attr.aria-live]="current.tone === 'error' ? 'assertive' : 'polite'"
       >
         @if (current.tone !== 'info') {
           <!-- The marker is text as well as a mark: rule 12 does not allow
@@ -40,7 +56,7 @@ import { UiIcon } from '../icon/icon';
                ring is what carries it. The mark stays aria-hidden precisely
                because that word is already there: naming it too would announce
                the tone twice. -->
-          <span class="toast__mark">
+          <span class="toast__mark" aria-hidden="true">
             <ui-icon
               class="toast__glyph"
               [name]="current.tone === 'error' ? 'alert' : 'check'"
@@ -50,7 +66,7 @@ import { UiIcon } from '../icon/icon';
             {{ (current.tone === 'error' ? 'toast.failed' : 'toast.done') | t }}
           </span>
         }
-        <span class="toast__text">{{ current.message }}</span>
+        <span class="toast__text" aria-hidden="true">{{ current.message }}</span>
 
         @if (current.action; as action) {
           <ui-button variant="link" size="sm" class="toast__action" (click)="toast.act()">
@@ -58,19 +74,20 @@ import { UiIcon } from '../icon/icon';
           </ui-button>
         }
 
-        @if (current.tone === 'error') {
-          <button
-            type="button"
-            class="toast__close"
-            [attr.aria-label]="'toast.dismiss' | t"
-            (click)="toast.dismiss()"
-          ><ui-icon name="close" [size]="13" /></button>
-        }
+        <!-- Outside the tone branch: dismissal is not a property of tone. -->
+        <button
+          type="button"
+          class="toast__close"
+          [attr.aria-label]="'toast.dismiss' | t"
+          (click)="toast.dismiss()"
+        ><ui-icon name="close" [size]="13" /></button>
 
         @if (toast.waiting()) {
           <!-- Says out loud that something is queued behind this one, so a
                dismissal never looks like the end of the story. -->
-          <span class="toast__more">{{ 'toast.more' | t: { n: toast.waiting() } }}</span>
+          <span class="toast__more" aria-hidden="true">{{
+            'toast.more' | t: { n: toast.waiting() }
+          }}</span>
         }
       </div>
     }
@@ -162,7 +179,7 @@ import { UiIcon } from '../icon/icon';
 
     .toast__more {
       flex: none;
-      color: var(--muted);
+      color: var(--muted-strong);
       font-size: var(--fs-xs);
       font-weight: 600;
     }
@@ -180,4 +197,29 @@ import { UiIcon } from '../icon/icon';
 })
 export class UiToast {
   protected readonly toast = inject(ToastService);
+  private readonly i18n = inject(I18nService);
+
+  /** Success and information, announced without interrupting. */
+  protected readonly politeText = computed(() => {
+    const current = this.toast.current();
+    return current && current.tone !== 'error' ? this.spoken(current) : '';
+  });
+
+  /** Failures, which interrupt — the user is about to act on a wrong belief. */
+  protected readonly assertiveText = computed(() => {
+    const current = this.toast.current();
+    return current?.tone === 'error' ? this.spoken(current) : '';
+  });
+
+  /**
+   * The marker word plus the message, so what is spoken carries the same tone
+   * the drawn toast does. The `Done` / `Failed` word is the tone in text, and
+   * without it a spoken "Couldn't reach the server" and a spoken "Saved" are
+   * the same kind of sentence.
+   */
+  private spoken(current: Toast): string {
+    if (current.tone === 'info') return current.message;
+    const mark = this.i18n.t(current.tone === 'error' ? 'toast.failed' : 'toast.done');
+    return `${mark}: ${current.message}`;
+  }
 }

@@ -13,6 +13,7 @@ import {
 import { I18nService } from '../../../core/i18n';
 import { editableTags, withTagAdded, withTagRemoved } from '../../../core/utils/tags.util';
 import { TPipe } from '../../pipes/t.pipe';
+import { UiFieldControl } from '../field/field-control';
 import { UiIcon } from '../icon/icon';
 
 /**
@@ -56,12 +57,15 @@ import { UiIcon } from '../icon/icon';
       <div class="add">
         <input
           #field
+          #control
           class="add__field"
           type="text"
           autocomplete="off"
+          [attr.id]="fieldId()"
           [attr.list]="listId"
           [placeholder]="'tags.placeholder' | t"
           [attr.aria-label]="'tags.addAria' | t"
+          [attr.aria-describedby]="ariaDescribedBy()"
           [value]="draft()"
           (input)="draft.set($any($event.target).value)"
           (keydown.enter)="$event.preventDefault(); commit()"
@@ -177,7 +181,7 @@ import { UiIcon } from '../icon/icon';
     }
   `,
 })
-export class UiTagInput {
+export class UiTagInput extends UiFieldControl {
   private readonly i18n = inject(I18nService);
 
   /** The item's whole tag list, derived tag included — it is filtered here. */

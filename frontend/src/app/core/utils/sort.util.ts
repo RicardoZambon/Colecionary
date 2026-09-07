@@ -66,7 +66,12 @@ export function sortLabel(sort: GroupSort, t: Translate): string {
   if (sort.by === 'manual') return t('sort.manual');
   const field = customFieldName(sort.by);
   if (field) {
-    return t('sort.field', { name: field, arrow: sort.direction === 'asc' ? '↑' : '↓' });
+    // Words, not arrows. A bare ↑ interpolated into copy is a glyph nothing
+    // guarantees a font covers, a screen reader reads as its Unicode name, and
+    // rule 18 does not count as an icon — and unlike the built-in labels
+    // ("Value low → high") a custom field may be text, a number or a date, so
+    // the direction has to be stated in words that fit all three.
+    return t(sort.direction === 'asc' ? 'sort.field.asc' : 'sort.field.desc', { name: field });
   }
   const key = BUILTIN_LABELS[sort.by]?.[sort.direction];
   return key ? t(key) : sortLabel(DEFAULT_SORT, t);

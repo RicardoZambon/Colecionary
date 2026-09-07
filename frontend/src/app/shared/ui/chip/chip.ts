@@ -96,12 +96,13 @@ import { Params, RouterLink } from '@angular/router';
 
     .chip--on-path {
       border-color: var(--accent);
-      color: var(--accent);
+      /* Border is a fill (3:1), the label is type (4.5:1) — two tokens. */
+      color: var(--accent-strong);
     }
 
     .chip--dashed {
       border-style: dashed;
-      color: var(--accent);
+      color: var(--accent-strong);
     }
 
     .chip__count {
