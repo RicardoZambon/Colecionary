@@ -657,3 +657,97 @@ describe('CollectionPage — a condition and "wanted" cannot both be on', () => 
     ]);
   });
 });
+
+/**
+ * A second move made while the first is still saving.
+ *
+ * `persistOrder` cleared `pendingOrder` in a `finally`, and a `finally` runs on
+ * the way out of a `return` — including the early return that re-arms the
+ * debounce after a `VaultBusyError`. So the one path whose entire purpose is to
+ * keep the pending order was the path that destroyed it: the re-armed timer
+ * found nothing pending and wrote nothing, the second move was silently lost,
+ * and the item visibly jumped back to where it started.
+ *
+ * The comment in that `finally` asserted the opposite ("the early return above
+ * is what keeps it"), which is why it survived review. Nothing here relies on
+ * that comment: the test holds the first write open, makes a second move, and
+ * asserts what actually reaches the API.
+ */
+/** The same token the fake hands out; its own field is private, and widening
+ *  that for a test's convenience would be the wrong trade. */
+const HELD_VERSION = '"1"';
+
+describe('CollectionPage — a reorder while a write is in flight', () => {
+  it('keeps the second move and writes it once the first save finishes', async () => {
+    vi.useFakeTimers();
+    try {
+      const api = new FakeVaultApi();
+      // A manual group, because only a manual order is persisted by index.
+      const manual = collection({
+        groups: [group('espanha', { sort: { by: 'manual', direction: 'asc' } })],
+        sections: [],
+        items: [item('a', 'espanha'), item('b', 'espanha'), item('c', 'espanha')],
+      });
+      api.collections = [manual];
+
+      // The first write is held open; every later one resolves at once.
+      const written: string[][] = [];
+      let releaseFirst: (() => void) | null = null;
+      api.updateCollection = (next: Collection) => {
+        written.push(next.items.map(i => i.id));
+        if (!releaseFirst) {
+          return new Observable<VersionedCollection>(subscriber => {
+            releaseFirst = () => {
+              subscriber.next({ version: HELD_VERSION, collection: next });
+              subscriber.complete();
+            };
+          });
+        }
+        return of({ version: HELD_VERSION, collection: next });
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          provideRouter([]),
+          { provide: VaultApi, useValue: api },
+        ],
+      });
+      TestBed.inject(I18nService).apply('en');
+      await TestBed.inject(VaultStore).load();
+
+      const fixture = TestBed.createComponent(CollectionPage);
+      fixture.componentRef.setInput('collectionId', 'c1');
+      fixture.componentRef.setInput('g', 'espanha');
+      fixture.detectChanges();
+
+      // `moveItem` is protected; the spec drives it as the template does.
+      const page = fixture.componentInstance as unknown as {
+        moveItem(from: number, to: number): void;
+      };
+
+      page.moveItem(0, 1); // a b c -> b a c
+      await vi.advanceTimersByTimeAsync(500);
+      expect(written, 'the first move is sent').toEqual([['b', 'a', 'c']]);
+
+      // Still in flight, so this one is refused as busy and must be kept.
+      page.moveItem(0, 2);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(written, 'nothing new is sent while the first write is open').toHaveLength(1);
+
+      releaseFirst!();
+      await vi.advanceTimersByTimeAsync(500);
+
+      // The assertion is the *count*, not a permutation: which order the second
+      // move produces depends on what the list was showing at the time, and
+      // pinning that here would test `moveInList` rather than this bug. What
+      // matters is that the refused move was written at all — before the fix
+      // `pendingOrder` was already null by now, the re-armed run found nothing
+      // and returned, and this stayed at one write for ever.
+      expect(written, 'the refused move is written after the re-arm').toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -866,7 +866,7 @@ export class CollectionPage {
     if (!pending || !collection || pending.id !== collection.id) return;
     try {
       await this.store.updateCollection({ ...collection, items: pending.items });
-      this.toast.flash(this.i18n.t('toast.order.saved'));
+      this.toast.success(this.i18n.t('toast.order.saved'));
     } catch (err) {
       // Refused here, not sent: another write of this collection was still in
       // flight. The order is still only in `pendingOrder`, so it is kept and
@@ -880,16 +880,32 @@ export class CollectionPage {
       // A conflict already has the shell's notice, which says more and stays
       // put; a toast on top would say less and then take itself away.
       if (!isReportedWriteFailure(err)) {
-        this.toast.flash(
+        this.toast.error(
           err instanceof Error ? err.message : this.i18n.t('toast.order.failed'),
         );
       }
-    } finally {
-      // Either way the store is now the authority again — except after a
-      // re-arm, where the pending order is the only copy of the drag and the
-      // early return above is what keeps it.
-      this.pendingOrder.set(null);
     }
+
+    // Clear the pending order only if it is still the one we just wrote.
+    //
+    // Two things conspired here, and each hid the other.
+    //
+    // This used to be a `finally`, and a `finally` runs on the way out of a
+    // `return` as well — including the early return above, whose entire purpose
+    // is to *keep* the pending order for the re-arm. (The comment that lived
+    // there claimed the return prevented that. It does not, which is why the
+    // bug survived review.)
+    //
+    // Moving it out of the `finally` is necessary and not sufficient: this
+    // request was awaited, so a move made *while it was in flight* has already
+    // replaced `pendingOrder`, and clearing unconditionally on our own success
+    // discards that newer move instead. The identity check is what makes the
+    // re-armed run find something to write.
+    //
+    // Either way the symptom was the same and silent: a second reorder made
+    // before the first had saved was thrown away, and the item jumped back to
+    // where it started with no toast and no conflict notice.
+    if (this.pendingOrder() === pending) this.pendingOrder.set(null);
   }
 
   // --- actions ---

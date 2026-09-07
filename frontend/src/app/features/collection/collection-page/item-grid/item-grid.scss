@@ -47,10 +47,9 @@
    * reading order where the name is.
    *
    * `z-index: 1` puts the cover above the artwork and the badges but below
-   * `&__pick` at 2 — a control drawn on top of a link has to be *reachable* on
-   * top of it too, or ticking a card would navigate instead of selecting.
-   * `ui-reorder` is also at 1 and clears the cover on DOM order alone, being
-   * the later sibling; that is why it must stay after the body in the template.
+   * `&__pick` and `ui-reorder` at 2 — a control drawn on top of a link has to
+   * be *reachable* on top of it too, or ticking a card would navigate instead
+   * of selecting.
    */
   &__link {
     color: inherit;
@@ -71,6 +70,29 @@
       outline-offset: var(--focus-offset);
       border-radius: 3px;
     }
+  }
+
+  /**
+   * The reorder arrows move to the bottom of the card, out of the pick's corner.
+   *
+   * `ui-reorder` defaults to `top: 8px; right: 10px` — which is where
+   * `&__pick` also sits. Two controls in one corner: the checkbox is drawn on
+   * top, and below `$bp-lg` its 44px tap pseudo-element covers the arrows
+   * completely, so pressing "move later" on a card in a manually ordered group
+   * selected the item instead. Raising the arrows' z-index would not help,
+   * because the problem is the *target*, not the paint order — the only real
+   * fix is for them not to share the corner.
+   *
+   * Bottom rather than left: the top-left already carries the field chip, and
+   * the card's foot is the one edge with nothing on it.
+   */
+  ui-reorder {
+    top: auto;
+    bottom: var(--sp-2);
+    right: var(--sp-2);
+    /* Above the stretched link's cover by declaration rather than by DOM order,
+       so moving the template around cannot silently break it. */
+    z-index: 2;
   }
 
   /** Over the top-right corner, opposite the field chip. */

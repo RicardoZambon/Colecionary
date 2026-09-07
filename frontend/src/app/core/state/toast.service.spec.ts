@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SessionReset } from '../auth/session-reset';
 import { TOAST_DURATION_MS, ToastService } from './toast.service';
 
 /**
@@ -117,6 +118,46 @@ describe('ToastService', () => {
 
   it('ignores an empty message', () => {
     toast.flash('');
+    expect(toast.current()).toBeNull();
+  });
+});
+
+describe('ToastService — an error is not forever', () => {
+  it('lets a success retract a failure whose condition has cleared', () => {
+    const toast = TestBed.inject(ToastService);
+
+    toast.error('Could not reach the Vault server');
+    expect(toast.current()?.tone).toBe('error');
+
+    // The retry worked. The failure it reported is no longer true, and it has
+    // no timer of its own, so without this it stays on screen over a working
+    // page and holds every later message behind it.
+    toast.success('Order saved');
+    expect(toast.current()?.message).toBe('Order saved');
+    expect(toast.waiting(), 'the error is gone, not merely queued behind').toBe(0);
+  });
+
+  it('does not let mere information retract a failure', () => {
+    const toast = TestBed.inject(ToastService);
+
+    toast.error('Could not reach the Vault server');
+    // Says nothing about whether the failure still holds — this is exactly the
+    // case the queue-holding rule exists for.
+    toast.flash('Filters cleared');
+
+    expect(toast.current()?.tone).toBe('error');
+    expect(toast.waiting()).toBe(1);
+  });
+
+  it('drops a previous session’s messages when the session ends', () => {
+    const toast = TestBed.inject(ToastService);
+    // An error outlives its session otherwise: it has no timer, so the previous
+    // account's failure was still in the corner of the next person's dashboard,
+    // naming a collection they cannot see.
+    toast.error('Could not save “Retro Consoles”');
+    expect(toast.current()).not.toBeNull();
+
+    TestBed.inject(SessionReset).run();
     expect(toast.current()).toBeNull();
   });
 });

@@ -75,31 +75,34 @@ ul {
 }
 
 /*
- * Below the tablet breakpoint every one of these is a touch target, and none of
- * them may grow: a 280px column holding five levels of indent has no room for
- * 44px rows, and a tree whose rows are 44px tall shows four groups on a phone.
- * So the *target* grows and the box does not — the documented ::after trick.
+ * Below the tablet breakpoint every one of these is a touch target.
+ *
+ * The row's *pitch* grows, not just its target — and it has to. Two adjacent
+ * 44px targets cannot fit a 28px pitch without overlapping by 8px each way,
+ * and the later sibling wins the hit test: a tap on the bottom third of "Atari"
+ * selected "Handhelds", and the editor beside it then renamed, re-parented or
+ * deleted the wrong group. That is far worse than the thing the pseudo-element
+ * trick was protecting, which was seeing more rows at once.
+ *
+ * So this is the case where the rule's escape hatch does not apply. The trick
+ * works for a control with *space around it* — a chip in a row, a checkbox in a
+ * cell, a pip on a photograph. It cannot work for a stack of controls whose
+ * neighbours are 28px away, because there is nowhere for the target to go. On a
+ * phone a tree row is 44px tall and you see fewer groups; that is the trade the
+ * 44px rule is asking for, not a reason to work around it.
  */
 @include upto($bp-lg) {
-  .pick__link,
+  .pick__link {
+    min-height: var(--tap);
+  }
+
+  /* The twisty grows inside the row it already lives in, so it overlaps
+     nothing. Vertical only would be pointless now that the row is 44px;
+     horizontal is still withheld, because widening it to 44px in a 280px
+     column would put its target over the name beside it and tapping a group
+     would fold it instead. */
   .pick__twisty {
     position: relative;
+    min-height: var(--tap);
   }
-
-  /* Vertical only, and deliberately: widening the twisty to 44px would put its
-     target over the name beside it in a 280px column, so tapping a group would
-     fold it instead. It also has to stay inside its own box — an overflowing
-     pseudo-element makes the element report as horizontally scrollable, which
-     is exactly what the browser check looks for. */
-  .pick__link::after,
-  .pick__twisty::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: var(--tap);
-    transform: translateY(-50%);
-  }
-
 }

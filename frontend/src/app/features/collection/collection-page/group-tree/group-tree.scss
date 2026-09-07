@@ -61,20 +61,15 @@ ul {
       color: var(--accent-strong);
     }
 
-    /* 14px is all the painted box may be — the column is narrow and, on a leaf,
-       empty — so below $bp-lg the *target* grows instead. */
+    /* The twisty grows inside its row rather than over its neighbours. A
+       centred 44px pseudo-element on a 28px row reaches 8px into the rows above
+       and below, and the later sibling wins the hit test — which is how a tap
+       near the bottom of one group came to select the next one. The row itself
+       carries the pitch now (see `&__link` below), so there is room. */
     @include upto($bp-lg) {
       position: relative;
-
-      &::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: var(--tap);
-        height: var(--tap);
-        transform: translate(-50%, -50%);
-      }
+      min-width: var(--tap);
+      min-height: var(--tap);
     }
 
     &--leaf {
@@ -99,6 +94,16 @@ ul {
     &:hover {
       text-decoration: none;
       background: var(--panel2);
+    }
+
+    /* The row carries the pitch on touch. A 44px target centred on a 28px row
+       reaches into its neighbours, and the later sibling wins the hit test, so
+       growing the target without growing the pitch means tapping one group and
+       selecting the next. Fewer rows on screen is the trade the 44px rule asks
+       for. */
+    @include upto($bp-lg) {
+      min-height: var(--tap);
+      justify-content: center;
     }
   }
 

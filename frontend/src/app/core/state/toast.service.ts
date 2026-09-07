@@ -1,4 +1,6 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+
+import { SessionReset } from '../auth/session-reset';
 
 import { MessageKey } from '../i18n/messages';
 
@@ -66,6 +68,19 @@ export class ToastService {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private nextId = 1;
 
+  constructor() {
+    /**
+     * A message belongs to the session that produced it.
+     *
+     * An error does not expire, so without this the previous account's failure
+     * outlived their session: a 500 naming Marcus's collection was still in the
+     * corner of the next person's dashboard, and it named a collection they
+     * cannot see. Registered here rather than cleared by `AuthService`, so the
+     * auth layer keeps no import edge into the state layer.
+     */
+    inject(SessionReset).register(() => this.clear());
+  }
+
   /** The toast on screen, or null. Everything else is waiting behind it. */
   readonly current = computed<Toast | null>(() => this.queueState()[0] ?? null);
 
@@ -95,6 +110,25 @@ export class ToastService {
     // Same words, already said or about to be: emphasis is not what repeating
     // them achieves.
     if (this.queueState().some(t => t.message === message)) return;
+
+    // A success retracts a failure that is still on screen.
+    //
+    // An error deliberately has no timer and deliberately holds the queue
+    // behind it (see `arm`) — a consequence of a failure must not cover the
+    // failure. But nothing retracted an error whose condition had *cleared*, so
+    // after a retry succeeded the app showed "Could not reach the Vault server"
+    // indefinitely, over a working page, with every later message stuck behind
+    // it and counted as "+1 more".
+    //
+    // A success is evidence that the thing which failed now works, which is
+    // exactly the fact the stale error contradicts. So it supersedes it. An
+    // `info` message does not: it says nothing about whether the failure still
+    // holds, and that is the case the queue-holding rule was written for.
+    if (tone === 'success') {
+      this.queueState.update(queue => queue.filter(t => t.tone !== 'error'));
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
 
     this.queueState.update(queue => [...queue, { id: this.nextId++, message, tone, action }]);
     this.arm();
@@ -130,6 +164,12 @@ export class ToastService {
    * behind it: the messages after a failure are almost always consequences of
    * it, and showing them over the top of the failure is how the failure gets
    * missed.
+   *
+   * That rule needs its one exception stated here too, or this comment reads as
+   * "an error is forever": a **success** clears a pending error in
+   * {@link show}, because a success is evidence the failed thing now works.
+   * Without that exception the hold was unbounded — a cleared failure sat on
+   * screen over a working page and everything behind it was never said.
    */
   private arm(): void {
     if (this.timer !== undefined) return;
