@@ -176,7 +176,7 @@
 
   /* A warning: the app is working from what it already has. */
   &[data-sync='offline'] {
-    color: var(--warn);
+    color: var(--warn-strong);
     font-weight: 700;
   }
 

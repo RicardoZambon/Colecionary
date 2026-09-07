@@ -91,7 +91,7 @@
 }
 
 .issues__heading {
-  color: var(--warn);
+  color: var(--warn-strong);
 }
 
 .summary__quiet {
@@ -132,7 +132,7 @@
 .issues__where {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
-  color: var(--warn);
+  color: var(--warn-strong);
   margin-right: var(--sp-2);
 }
 

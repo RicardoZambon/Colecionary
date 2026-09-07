@@ -35,7 +35,7 @@ import { formatDate } from '../../../core/utils/date.util';
 import { formatFieldValue } from '../../../core/utils/field-format.util';
 import { editableTags } from '../../../core/utils/tags.util';
 import { copyFields, fieldsFor, groupById, itemFields, pathOf } from '../../../core/utils/groups.util';
-import { groupLinkParams, readCriteria } from '../browse-params';
+import { groupLinkParams, readCriteria, tagParams } from '../browse-params';
 import { formatMoney } from '../../../core/utils/money.util';
 import { conditionLabelKey, conditionTone, itemBadgeLabel, itemTone } from '../../../shared/ui/badge/badge';
 import { ItemValuePipe } from '../../../shared/pipes/item-value.pipe';
@@ -440,7 +440,7 @@ export class ItemPage {
    * the link stays stable while the page's own `?tag=` changes around it.
    */
   protected readonly tags = computed(() =>
-    editableTags(this.item()?.tags ?? []).map(name => ({ name, params: { tag: name } })),
+    editableTags(this.item()?.tags ?? []).map(name => ({ name, params: tagParams(name) })),
   );
 
   /**

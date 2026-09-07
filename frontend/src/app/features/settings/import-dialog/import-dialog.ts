@@ -210,7 +210,7 @@ import { UiButton, UiDialog } from '../../../shared/ui';
     .warning {
       margin: 0;
       font-size: 12px;
-      color: var(--warn);
+      color: var(--warn-strong);
     }
 
     .pending {

@@ -199,6 +199,18 @@ export class CollectionSettingsPage {
 
   readonly collectionId = input.required<string>();
   readonly tab = input<string>('general');
+
+  /**
+   * `?new=1`, set by the create-collection action.
+   *
+   * A collection is created with the placeholder name "New collection" and the
+   * user is sent straight here to rename it — so the box has to be focused and
+   * its text selected, or the first thing they do is select it themselves. It
+   * arrives as a query param rather than as router state because the URL is
+   * this app's state and a reload must not lose it. Not `autofocus`: that
+   * attribute is honoured only on initial page load, and this is a navigation.
+   */
+  readonly isNew = input<string | undefined>(undefined, { alias: 'new' });
   /**
    * The group selected in the groups tab — the tree on the left, its editor on
    * the right. It is a route param rather than local state so that back works
@@ -344,8 +356,30 @@ export class CollectionSettingsPage {
   private autoSelectedFor: string | null = null;
   /** The preview panel, scrolled into view when a move is first weighed up. */
   private readonly movePreview = viewChild<ElementRef<HTMLElement>>('movePreview');
+  private readonly nameInput = viewChild<UiTextInput>('nameInput');
+
+  /** So the rename box is claimed once, not on every render pass. */
+  private greetedNew = false;
 
   constructor() {
+    /**
+     * A freshly created collection lands here to be named.
+     *
+     * `afterRenderEffect` rather than `effect`: the input does not exist until
+     * the general tab has rendered, and the draft has to have arrived for the
+     * box to hold the placeholder name worth selecting. `selectAll()` so the
+     * first keystroke replaces "New collection" instead of appending to it —
+     * the toast says "name it here", and the box should mean it.
+     */
+    afterRenderEffect(() => {
+      if (this.greetedNew || !this.isNew() || this.tab() !== 'general') return;
+      const input = this.nameInput();
+      if (!input) return;
+      this.greetedNew = true;
+      input.focus();
+      input.selectAll();
+    });
+
     effect(() => {
       const collection = this.store.collection(this.collectionId());
       if (!collection) return;

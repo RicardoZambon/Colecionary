@@ -105,7 +105,7 @@ export interface MoveImpactCopy {
 
       &__lost,
       &__clash {
-        color: var(--warn);
+        color: var(--warn-strong);
       }
 
       &__note {

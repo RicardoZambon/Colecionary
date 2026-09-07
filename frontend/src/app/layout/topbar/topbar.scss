@@ -66,7 +66,7 @@
   font-weight: 700;
 
   &[data-sync='offline'] {
-    color: var(--warn);
+    color: var(--warn-strong);
   }
 
   &[data-sync='conflict'] {

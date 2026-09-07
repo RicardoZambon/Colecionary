@@ -87,7 +87,7 @@
     }
 
     &.done {
-      color: var(--good);
+      color: var(--good-strong);
     }
   }
 
@@ -148,7 +148,7 @@
   }
 
   &.ok &__icon {
-    color: var(--good);
+    color: var(--good-strong);
   }
 }
 
