@@ -162,7 +162,7 @@ import { UiIcon } from '../icon/icon';
 
     .toast__more {
       flex: none;
-      color: var(--muted);
+      color: var(--muted-strong);
       font-size: var(--fs-xs);
       font-weight: 600;
     }

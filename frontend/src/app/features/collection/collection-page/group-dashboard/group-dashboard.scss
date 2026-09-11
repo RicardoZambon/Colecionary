@@ -1,3 +1,9 @@
+/* The board is one of two regions on this surface now — the sub-groups and,
+   below them, the group's own items — so each says which it is. */
+.board__heading {
+  margin-bottom: var(--sp-2);
+}
+
 .board {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -16,15 +22,10 @@
   text-align: center;
   font-size: 12.5px;
   font-family: var(--font-body);
-  color: var(--muted);
+  color: var(--muted-strong);
   background: transparent;
   cursor: pointer;
 
-  /* Inherits the tile's colour, so the mark follows the hover with the label
-     rather than staying grey beside an accented one. */
-  &__glyph {
-    opacity: 0.7;
-  }
 
   &:hover {
     color: var(--accent);
@@ -42,6 +43,6 @@
   border-radius: var(--radius);
   padding: 40px;
   text-align: center;
-  color: var(--muted);
+  color: var(--muted-strong);
   font-size: 13px;
 }

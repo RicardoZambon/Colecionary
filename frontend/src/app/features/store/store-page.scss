@@ -22,7 +22,7 @@ h1 {
 
 .sub {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--muted-strong);
   margin: 6px 0 0;
 }
 
@@ -32,6 +32,21 @@ h1 {
      card reads fine at 260 and the track still grows to fill. */
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
+
+  /* The empty state is the row, not a card in it: dropped into one 260px track
+     it would read as a listing that failed to load. */
+  &__empty {
+    grid-column: 1 / -1;
+  }
+}
+
+/* An icon inside a projected button label. `ui-button` renders plain inline
+   content, so the row is made here — the span belongs to this template, which
+   is why this component's scoped styles reach it. */
+.btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
 }
 
 .listing {
@@ -70,7 +85,7 @@ h1 {
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--accent);
-      border: 1px solid var(--accent);
+      border: var(--bw) solid var(--accent);
       border-radius: var(--pill);
       padding: 2px 9px;
     }
@@ -95,8 +110,8 @@ h1 {
 
     .meta {
       font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--muted);
+      font-size: var(--fs-xs);
+      color: var(--muted-strong);
     }
 
     .desc {

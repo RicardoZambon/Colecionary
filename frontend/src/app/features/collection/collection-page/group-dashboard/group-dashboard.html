@@ -1,3 +1,9 @@
+@if (cards().length) {
+  <ui-section-label class="board__heading" level="h2">
+    {{ 'groupDashboard.subgroups' | t }}
+  </ui-section-label>
+}
+
 <div class="board">
   @for (card of cards(); track card.id) {
     <app-group-card
@@ -7,18 +13,6 @@
       [stats]="card.stats"
       [tiles]="card.tiles"
     />
-  }
-
-  @if (directCount()) {
-    <a
-      class="tile"
-      [routerLink]="['/c', collectionId()]"
-      [queryParams]="{ v: 'grid' }"
-      queryParamsHandling="merge"
-    >
-      <ui-icon class="tile__glyph" name="grid" [size]="22" [strokeWidth]="1.6" />
-      {{ filedHere() }}
-    </a>
   }
 
   @if (canEdit()) {

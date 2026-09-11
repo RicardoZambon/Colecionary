@@ -99,9 +99,32 @@
     font-weight: 600;
   }
 
+  /* The name is the card's link (see the template). It keeps the name's own
+     type so nothing moved, and drops the underline because the whole card is
+     already the affordance — the border lift and the press state say it. */
+  &__link {
+    color: var(--text);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
   &__meta {
     font-size: 11.5px;
-    color: var(--muted);
+    /* The year and the group name are content, not decoration, so they take the
+       readable grey. `--muted` is deliberately below AA and reserved for things
+       that repeat what is already said elsewhere. */
+    color: var(--muted-strong);
+  }
+
+  /* Both sit above the name's stretched hit area, or the overlay would eat
+     their clicks. The pick already had z-index 2 for the old click-swallow;
+     the reorder pair never needed one until the overlay existed. */
+  ui-reorder {
+    position: relative;
+    z-index: 2;
   }
 
   &__copies {
@@ -129,7 +152,7 @@
   display: grid;
   place-items: center;
   font-size: 12.5px;
-  color: var(--muted);
+  color: var(--muted-strong);
   min-height: 180px;
 
   &:hover {

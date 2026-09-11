@@ -199,7 +199,7 @@
   }
 
   .year {
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   .group,
@@ -213,13 +213,13 @@
   /* A declared field the item has no value for. Muted rather than blank: the
      data says "unknown", and an empty cell reads as a rendering fault. */
   .fieldcell--empty {
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   .copies {
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
 
     /* Holding more than one is the exception, so it is what gets the ink. */
     &--many {
@@ -270,7 +270,7 @@
   padding: var(--sp-2) var(--sp-4);
   border-top: var(--bw) solid var(--border);
   font-size: var(--fs-xs);
-  color: var(--muted);
+  color: var(--muted-strong);
 
   &__count {
     font-family: var(--font-mono);
@@ -290,4 +290,20 @@
 
 .right {
   text-align: right;
+}
+
+/*
+ * A row is a target, and this one measured 39px tall at 390px.
+ *
+ * Grown rather than target-grown: unlike a chip in a filter bar or a twisty in
+ * a tree, a table row has nothing beside it to collide with, so 5px of extra
+ * height costs nothing but a slightly longer page — and this is the surface
+ * where a mis-tap opens the wrong item. The checkbox in the sticky cell keeps
+ * its 15px paint and its own centred target from `styles.scss`; only the row
+ * around it grows.
+ */
+@include upto($bp-lg) {
+  .list-row {
+    min-height: var(--tap);
+  }
 }

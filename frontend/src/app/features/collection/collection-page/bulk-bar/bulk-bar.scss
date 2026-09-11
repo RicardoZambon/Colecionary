@@ -79,7 +79,7 @@
   &__hint {
     flex: 0 0 auto;
     font-size: var(--fs-xs);
-    color: var(--muted);
+    color: var(--muted-strong);
 
     /* Why a control is off, not what is in it. It replaces the whole row's
        worth of hint, so it may wrap. */
@@ -100,5 +100,5 @@
 
 .fields__note {
   font-size: var(--fs-xs);
-  color: var(--muted);
+  color: var(--muted-strong);
 }

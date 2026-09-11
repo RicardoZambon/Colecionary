@@ -9,6 +9,7 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
       [value]="value()"
       [rows]="rows()"
       [placeholder]="placeholder()"
+      [attr.aria-label]="ariaLabel() || null"
       (input)="onInput($event)"
     ></textarea>
   `,
@@ -48,6 +49,14 @@ export class UiTextarea {
   readonly value = model('');
   readonly rows = input(3);
   readonly placeholder = input('');
+  /**
+   * Accessible name, for a field the page labels by proximity.
+   *
+   * Every other control in the kit exposed one and this did not, so a page that
+   * wanted to name a textarea had to reach into this component's DOM after
+   * render — which is exactly what the item form ended up doing.
+   */
+  readonly ariaLabel = input('');
   /** Monospace, for content read as columns rather than as prose. */
   readonly mono = input(false);
 

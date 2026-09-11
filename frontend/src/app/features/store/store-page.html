@@ -59,13 +59,32 @@
           <div class="foot">
             <span class="value">{{ 'store.estimate' | t: { value: totalValue(listing) | money } }}</span>
             @if (inVault(listing)) {
-              <ui-button variant="ghost" size="sm" [disabled]="true">{{ 'store.inVault' | t }}</ui-button>
-            } @else {
-              <ui-button size="sm" (click)="add(listing)">{{ 'store.add' | t }}</ui-button>
+              <!-- The mark sits beside its own text label, so it stays
+                   aria-hidden: labelling it would announce "check, in your
+                   vault". It used to be a glyph baked into the copy, which no
+                   font guarantees and a reader spells out. -->
+              <ui-button variant="ghost" size="sm" [disabled]="true">
+                <span class="btn-label"><ui-icon name="check" [size]="13" />{{ 'store.inVault' | t }}</span>
+              </ui-button>
+            } @else if (canEdit()) {
+              <!-- Stops offering itself while its own write runs, and says which
+                   of the two it is doing. -->
+              <ui-button size="sm" [disabled]="isAdding(listing)" (click)="add(listing)">
+                {{ (isAdding(listing) ? 'store.adding' : 'store.add') | t }}
+              </ui-button>
             }
           </div>
         </div>
       </ui-card>
+    } @empty {
+      <!-- The heading used to sit over an empty page. Nothing about the vault
+           is wrong here, which is why the body says so. -->
+      <ui-empty
+        class="grid__empty"
+        icon="grid"
+        [title]="'store.empty.title' | t"
+        [body]="'store.empty.body' | t"
+      />
     }
   }
 </div>

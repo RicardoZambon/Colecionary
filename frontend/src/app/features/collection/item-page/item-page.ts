@@ -98,6 +98,28 @@ export class ItemPage {
 
   protected readonly store = inject(VaultStore);
 
+  /**
+   * A write of this collection is in flight.
+   *
+   * Both immediate writes on this page — adding a copy to a wantlist entry and
+   * adding a photo — used to offer themselves throughout their own save, so a
+   * slow one looked like a dead button and a second click was refused by
+   * `VaultStore.exclusive` with a conflict nobody could act on.
+   */
+  protected readonly saving = computed(() => this.store.saving(this.collectionId()));
+
+  /**
+   * A photograph is on its way up.
+   *
+   * Separate from {@link saving} because uploading and saving the item are two
+   * acts (rule 6) and the upload is the slow one: it finishes before the store
+   * write starts, so `saving()` alone leaves the control live for exactly the
+   * part of the wait a user would click through. Raised only once a file has
+   * actually been chosen — a cancelled picker fires no event, so arming it at
+   * `click` would disable the button for the rest of the session.
+   */
+  protected readonly addingPhoto = signal(false);
+
   /** The vault is still in flight — not the same fact as 'no such collection'. */
   protected readonly loading = computed(() => !this.store.loaded());
   protected readonly images = inject(ImagesApi);
@@ -228,6 +250,15 @@ export class ItemPage {
   protected browseLink(item: Item): unknown[] {
     return ['/c', this.collectionId(), 'items', item.id];
   }
+
+  /**
+   * Ties both arrows to the visible keyboard hint through `aria-describedby`.
+   *
+   * A constant rather than a generated id: exactly one item page is mounted at
+   * a time, and a stable id is the one thing a template can reference without
+   * reaching into the DOM after render.
+   */
+  protected readonly hintId = 'item-browse-hint';
 
   /**
    * ← and → walk the group. They belong to the items, except while the focus is
@@ -402,6 +433,7 @@ export class ItemPage {
   protected addPhoto(): void {
     const item = this.item();
     if (!item) return;
+    if (this.addingPhoto() || this.saving()) return;
     if (item.photoIds.length >= 8) {
       this.toast.flash(this.i18n.t('toast.photo.limit'));
       return;
@@ -412,6 +444,7 @@ export class ItemPage {
     picker.onchange = async () => {
       const file = picker.files?.[0];
       if (!file) return;
+      this.addingPhoto.set(true);
       try {
         // No editor in the way: the photo lands centred and the gallery's
         // "adjust framing" is there whenever the user wants it.
@@ -431,6 +464,10 @@ export class ItemPage {
         this.toast.flash(
           err instanceof Error ? err.message : this.i18n.t('toast.photo.uploadFailed'),
         );
+      } finally {
+        // Every path out, rejections included: a control that stays disabled
+        // after a failed upload cannot be retried.
+        this.addingPhoto.set(false);
       }
     };
     picker.click();
@@ -444,6 +481,10 @@ export class ItemPage {
   protected async markOwned(): Promise<void> {
     const item = this.item();
     if (!item) return;
+    // The button disables itself while the save runs; this is the same answer
+    // for a click that arrives some other way. Not a queue — the second
+    // payload was built before the first landed (rule 20).
+    if (this.saving()) return;
     // Owning something means having a copy of it — so add one.
     try {
       await this.store.upsertItem(

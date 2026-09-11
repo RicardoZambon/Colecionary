@@ -463,3 +463,91 @@ describe('CollectionPage — the tag filter', () => {
     expect(page.empty()).toBeNull();
   });
 });
+
+/**
+ * The group board answers "what is in here?" with the contents, not a count.
+ *
+ * A group can hold sub-groups *and* items of its own. `defaultView` only looked
+ * at the children, so a group with one sub-group and twenty-two items opened on
+ * the board and demoted those items to a tile reading "22 items filed here" —
+ * a tile that was not a place but a switch to `?v=grid`.
+ */
+describe('CollectionPage — a group holding both sub-groups and its own items', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+  });
+
+  /** `espanha` has a child group and three items filed on itself. */
+  function mixed(): Collection {
+    return collection({
+      groups: [group('espanha'), group('teste', { parentId: 'espanha' })],
+    });
+  }
+
+  it('renders the group own items on the board, not a tile counting them', async () => {
+    const page = await mount({ collection: mixed(), g: 'espanha' });
+
+    // The board is the default view here, because the group has a child.
+    expect(page.el.querySelector('app-group-dashboard')).not.toBeNull();
+    // And the items are on it.
+    expect(page.cardNames().sort()).toEqual(['aiolia', 'loose', 'seiya']);
+  });
+
+  it('still shows the sub-group card beside them', async () => {
+    const page = await mount({ collection: mixed(), g: 'espanha' });
+    const names = [...page.el.querySelectorAll('app-group-card .card__name')].map(n =>
+      (n.textContent ?? '').trim(),
+    );
+    expect(names).toContain('teste');
+  });
+
+  it('offers no reorder control on the board, because the indices are not the stored order', async () => {
+    // `directVisible()` is a filtered subset, so its indices are not positions
+    // in `collection.items` — and manual order is persisted by index. The board
+    // passes `manual = false` for exactly that reason.
+    const page = await mount({ collection: mixed(), g: 'espanha' });
+    expect(page.el.querySelector('app-group-dashboard ~ app-item-grid ui-reorder')).toBeNull();
+    expect(page.el.querySelector('app-item-grid ui-reorder')).toBeNull();
+  });
+
+  it('calls a group with no sub-groups and no items of its own empty', async () => {
+    const page = await mount({
+      collection: collection({ groups: [group('espanha'), group('teste', { parentId: 'espanha' })], items: [] }),
+      g: 'espanha',
+    });
+    expect(page.cardNames()).toEqual([]);
+  });
+
+  it('does not call a group empty just because it has no sub-groups', async () => {
+    // The mirror of the old tile's lie: a group with twenty items of its own and
+    // no children is not empty, and saying so over a full grid would be the
+    // same falsehood the other way round.
+    const page = await mount({ collection: collection(), g: 'espanha', v: 'dashboard' });
+    expect(page.el.querySelector('app-group-dashboard ui-empty')).toBeNull();
+    expect(page.cardNames()).toHaveLength(3);
+  });
+
+  it('makes each item card reachable by keyboard, through a real anchor on the name', async () => {
+    // `ui-card` is a plain custom element: [routerLink] on it registered a click
+    // listener and nothing else, so the primary way into an item had no href and
+    // no tab stop at all.
+    const page = await mount({ collection: mixed(), g: 'espanha' });
+    const links = [...page.el.querySelectorAll<HTMLAnchorElement>('.item-card__name a')];
+    expect(links).toHaveLength(3);
+    for (const link of links) {
+      expect(link.getAttribute('href')).toBeTruthy();
+      expect(link.classList.contains('stretch-hit')).toBe(true);
+    }
+  });
+});

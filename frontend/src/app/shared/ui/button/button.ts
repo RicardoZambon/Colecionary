@@ -146,7 +146,7 @@ export type ButtonSize = 'md' | 'sm';
       min-width: 20px;
       font-size: 13px;
       line-height: 1;
-      color: var(--muted);
+      color: var(--muted-strong);
 
       &:hover:not(:disabled) {
         color: var(--danger);

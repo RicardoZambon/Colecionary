@@ -427,6 +427,33 @@ npm test -- --watch=false</code></pre>
     que roda.
   </li>
   <li>
+      <strong>Um nome acessível é contável, então é contado.</strong>
+      <code>item-form-page.spec.ts</code> conta os controles visíveis sem nome
+      acessível na página e prende <strong>zero</strong>. A medida foi tomada
+      contra o <code>HEAD</code> anterior primeiro — eram <strong>8</strong>, todos
+      dentro de um <code>ui-field</code> que não rotulava nada (ADR-80) — porque um
+      teste que só sabe dizer “zero agora” não prova que havia algo para consertar.
+    </li>
+    <li>
+      <strong>Um card clicável tem de ser alcançável.</strong>
+      <code>dashboard-page.spec.ts</code> e <code>collection-page.spec.ts</code>
+      assertam que o card é uma âncora de verdade, com <code>href</code> e nome
+      acessível, e <code>settings-page.spec.ts</code> que os cards de tema e de
+      idioma são <code>&lt;button type="button"&gt;</code>. Nenhum deles era
+      alcançável por teclado: <code>[routerLink]</code> num custom element registra
+      um listener de clique e mais nada (ADR-74). A asserção é sobre o elemento, e
+      não sobre uma tecla, porque o ambiente de teste não entrega eventos de
+      teclado sintéticos à página — o que o elemento certo garante, o evento
+      simulado não provaria.
+    </li>
+    <li>
+      <strong>A hierarquia de cabeçalhos é estrutura, não estilo.</strong>
+      Os specs de página assertam <code>&lt;h2&gt;</code>s sob um único
+      <code>&lt;h1&gt;</code>. Antes toda página tinha exatamente um cabeçalho, e a
+      lista de cabeçalhos de um leitor de tela — a principal forma de passar os
+      olhos por uma tela sem vê-la — tinha uma entrada só (ADR-76).
+    </li>
+    <li>
     <code>icon.spec.ts</code> asserta que <em>todo</em> nome de
     <code>ICON_NAMES</code> desenha geometria, porque um <code>@case</code>
     digitado errado renderiza um <code>&lt;svg&gt;</code> vazio e nada mais

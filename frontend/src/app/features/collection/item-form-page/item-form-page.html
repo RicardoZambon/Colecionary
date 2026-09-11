@@ -22,7 +22,10 @@
       />
 
       <ui-card class="summary">
-        <div class="summary__heading">{{ 'itemForm.summaryHeading' | t }}</div>
+        <!-- A real h2, not a div that looks like one: the page rendered a single
+             h1 and nothing else, so a screen reader's heading list — the primary
+             way a non-visual reader skims — was one entry long. -->
+        <ui-section-label level="h2">{{ 'itemForm.summaryHeading' | t }}</ui-section-label>
         <dl class="summary__rows">
           <dt>{{ 'itemForm.summaryOwnership' | t }}</dt>
           <dd>
@@ -49,12 +52,71 @@
     </aside>
 
     <form class="form" (submit)="$event.preventDefault(); save()">
-      <ui-field [label]="'itemForm.name' | t">
-        <ui-text-input [value]="name()" (valueChange)="name.set($event)" />
-      </ui-field>
+      <!--
+        Whether the item is owned or wanted is the one thing about it this form
+        could not say. A new item arrives with one copy and the only way to make
+        it a wantlist entry was to delete that copy — nothing on the page
+        mentioned it, and the Summary simply flipped to "Wantlist" afterwards.
+
+        Radios rather than chips: two mutually exclusive answers to one question
+        is what the platform radio is, and it brings the group semantics, the
+        arrow keys and the "1 of 2" announcement with it. The control stores
+        nothing of its own — it reads `copies` and writes `copies` (rule 3).
+      -->
+      <fieldset class="ownership">
+        <legend class="ownership__legend">{{ 'itemForm.ownership.heading' | t }}</legend>
+        <div class="ownership__choices">
+          <ui-radio
+            name="itemOwnership"
+            optionValue="owned"
+            [(value)]="ownership"
+            (picked)="setOwnership($event)"
+            >{{ 'itemForm.ownership.owned' | t }}</ui-radio
+          >
+          <ui-radio
+            name="itemOwnership"
+            optionValue="wanted"
+            [(value)]="ownership"
+            (picked)="setOwnership($event)"
+            >{{ 'itemForm.ownership.wanted' | t }}</ui-radio
+          >
+        </div>
+        <p class="ownership__hint">{{ 'itemForm.ownership.hint' | t }}</p>
+      </fieldset>
+
+      <!-- The refusal is reported once, and where the field is: a message under
+           it, the field described by that message, and the focus moved onto it.
+           The toast that used to say the same thing from the far corner took the
+           reader's place in the form with it. -->
+      <div class="named">
+        <ui-field [label]="nameLabel()">
+          <!-- `required` rather than the native attribute: that one hands the
+               browser the submit and its own bubble, which would pre-empt the
+               message this form renders. -->
+          <ui-text-input
+            #nameInput
+            [ariaLabel]="'itemForm.name' | t"
+            [required]="true"
+            [invalid]="nameError()"
+            [describedBy]="nameError() ? nameErrorId : ''"
+            [value]="name()"
+            (valueChange)="setName($event)"
+          />
+        </ui-field>
+        @if (nameError()) {
+          <p class="named__error" role="alert" [id]="nameErrorId">
+            {{ 'itemForm.error.name' | t }}
+          </p>
+        }
+      </div>
 
       <ui-field [label]="'itemForm.description' | t">
-        <ui-textarea [rows]="3" [value]="description()" (valueChange)="description.set($event)" />
+        <ui-textarea
+          [ariaLabel]="'itemForm.description' | t"
+          [rows]="3"
+          [value]="description()"
+          (valueChange)="description.set($event)"
+        />
       </ui-field>
 
       <!--
@@ -69,11 +131,17 @@
 
       <div class="pair">
         <ui-field [label]="'itemForm.group' | t">
-          <ui-select [options]="groupOptions()" [value]="groupId()" (valueChange)="setGroupId($event)" />
+          <ui-select
+            [ariaLabel]="'itemForm.group' | t"
+            [options]="groupOptions()"
+            [value]="groupId()"
+            (valueChange)="setGroupId($event)"
+          />
         </ui-field>
         @if (sectionOptions().length) {
           <ui-field [label]="'itemForm.section' | t">
             <ui-select
+              [ariaLabel]="'itemForm.section' | t"
               [options]="sectionOptions()"
               [value]="sectionId()"
               (valueChange)="sectionId.set($event)"
@@ -81,19 +149,28 @@
           </ui-field>
         }
         <ui-field [label]="'itemForm.year' | t">
-          <ui-text-input [value]="year()" (valueChange)="year.set($event)" />
-        </ui-field>
-        <ui-field [label]="'itemForm.value' | t">
           <ui-text-input
+            [ariaLabel]="'itemForm.year' | t"
+            [value]="year()"
+            (valueChange)="year.set($event)"
+          />
+        </ui-field>
+        <!-- The fallback is a hint, not a placeholder: a placeholder disappears
+             exactly when someone starts typing, which is when they need it, and
+             this one was cut off mid-word in a 150px column. -->
+        <ui-field [label]="'itemForm.value' | t" [hint]="'itemForm.hint.value' | t">
+          <ui-text-input
+            [ariaLabel]="'itemForm.value' | t"
             [value]="value()"
-            [placeholder]="'itemForm.valuePlaceholder' | t"
             (valueChange)="value.set($event)"
           />
         </ui-field>
       </div>
 
       <ui-card class="copies">
-        <div class="copies__heading">{{ 'itemForm.copiesHeading' | t: { n: copies().length } }}</div>
+        <ui-section-label level="h2">{{
+          'itemForm.copiesHeading' | t: { n: copies().length }
+        }}</ui-section-label>
         <!-- copyIndex is aliased because the nested field loop below has a
              $index of its own, and every handler here means the copy's. -->
         @for (copy of copies(); track copy.id; let copyIndex = $index) {
@@ -125,14 +202,23 @@
                 <ui-text-input
                   variant="subtle"
                   placeholder="0"
+                  [ariaLabel]="
+                    'itemForm.copyFieldAria' | t: { n: copyIndex + 1, name: 'itemForm.paid' | t }
+                  "
                   [value]="copy.price"
                   (valueChange)="patchCopy($index, { price: $event })"
                 />
               </ui-field>
-              <ui-field [label]="'itemForm.copyValue' | t">
+              <ui-field
+                [label]="'itemForm.copyValue' | t"
+                [hint]="'itemForm.hint.copyValue' | t"
+              >
                 <ui-text-input
                   variant="subtle"
-                  [placeholder]="'itemForm.copyValuePlaceholder' | t"
+                  [ariaLabel]="
+                    'itemForm.copyFieldAria'
+                      | t: { n: copyIndex + 1, name: 'itemForm.copyValue' | t }
+                  "
                   [value]="copy.value"
                   (valueChange)="patchCopy($index, { value: $event })"
                 />
@@ -140,7 +226,9 @@
               <ui-field [label]="'itemForm.acquired' | t">
                 <!-- Not a bare type="date": that follows the *browser's* locale
                      and shows mm/dd/yyyy inside a Portuguese UI, which does not
-                     fail — it records the wrong date. -->
+                     fail — it records the wrong date. The expected order is
+                     printed by the component itself and wired to its
+                     aria-describedby, so the form must not print it again. -->
                 <ui-date-input
                   variant="subtle"
                   [ariaLabel]="'itemForm.copyAcquiredAria' | t: { n: $index + 1 }"
@@ -153,6 +241,9 @@
               <ui-text-input
                 variant="subtle"
                 [placeholder]="'itemForm.notesPlaceholder' | t"
+                [ariaLabel]="
+                  'itemForm.copyFieldAria' | t: { n: copyIndex + 1, name: 'itemForm.notes' | t }
+                "
                 [value]="copy.notes"
                 (valueChange)="patchCopy($index, { notes: $event })"
               />
@@ -185,7 +276,9 @@
       </ui-card>
 
       <ui-card class="group-fields">
-        <div class="group-fields__heading">{{ 'itemForm.groupFieldsHeading' | t: { name: groupLabel() } }}</div>
+        <ui-section-label level="h2">{{
+          'itemForm.groupFieldsHeading' | t: { name: groupLabel() }
+        }}</ui-section-label>
         @for (field of groupFields(); track field.name) {
           <div class="group-fields__row">
             <span class="key">{{ field.name }}</span>
@@ -210,11 +303,16 @@
       <!-- Sticky, because Save used to sit below the fold of a page tall enough
            to scroll on every screen: the control that commits the work was the
            one control you had to go looking for. The dirty flag is beside it so
-           "did that take?" is answerable without scrolling back up. -->
+           "did that take?" is answerable without scrolling back up. The page
+           reserves the bar's height at its foot — see --bar-h — so the space it
+           paints over is space nothing is drawn in. -->
       <div class="actions">
         <span class="actions__state" aria-live="polite">
           @if (dirty()) {
-            <span class="dot" aria-hidden="true">●</span>{{ 'itemForm.unsaved' | t }}
+            <!-- An icon, not a U+25CF glyph: nothing guarantees a font covers a
+                 code point, and a reader used to hear its Unicode name. It stays
+                 unnamed because the words beside it already say this. -->
+            <ui-icon class="dot" name="diamond" [size]="8" />{{ 'itemForm.unsaved' | t }}
           }
         </span>
         <ui-button variant="ghost" (click)="cancel()">{{ 'itemForm.cancel' | t }}</ui-button>

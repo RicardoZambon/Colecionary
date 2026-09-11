@@ -101,6 +101,51 @@ class FakeVaultApi extends VaultApi {
   }
 }
 
+/**
+ * The accessible name a form control would be announced by, or `''`.
+ *
+ * Deliberately not a full accname implementation — it resolves the four sources
+ * a control in this app can take a name from, in the order the algorithm does:
+ * `aria-label`, a resolving `aria-labelledby`, an associated `<label>` (by
+ * `for=` or by wrapping the control), and `title`.
+ */
+function accessibleName(control: HTMLElement): string {
+  const label = control.getAttribute('aria-label')?.trim();
+  if (label) return label;
+
+  const referenced = (control.getAttribute('aria-labelledby') ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(id => control.ownerDocument.getElementById(id)?.textContent?.trim() ?? '')
+    .join(' ')
+    .trim();
+  if (referenced) return referenced;
+
+  // A `ui-field` label is a *sibling* of the control it names, so `closest`
+  // finding nothing is exactly the defect this guards: a styled span next to an
+  // input is not a label.
+  const wrapping = control.closest('label')?.textContent?.trim();
+  if (wrapping) return wrapping;
+
+  const id = control.getAttribute('id');
+  const associated = id
+    ? control.ownerDocument.querySelector('label[for="' + id + '"]')?.textContent?.trim()
+    : '';
+  if (associated) return associated;
+
+  return control.getAttribute('title')?.trim() ?? '';
+}
+
+/** Every control on the page with no accessible name at all, named for the report. */
+function unnamedControls(root: HTMLElement): string[] {
+  return [...root.querySelectorAll<HTMLElement>('input, select, textarea')]
+    .filter(control => !accessibleName(control))
+    .map(control => {
+      const type = control.getAttribute('type');
+      return control.tagName.toLowerCase() + (type ? `[type=${type}]` : '');
+    });
+}
+
 function group(id: string, parentId: string | null = null, fields: GroupField[] = []): GroupNode {
   return { id, name: id, parentId, fields, sort: null, target: null };
 }
@@ -255,9 +300,32 @@ async function mount(
     fixture.detectChanges();
   };
 
+  /**
+   * Lets the render hooks run.
+   *
+   * `detectChanges()` alone does not flush them, and the attributes this page
+   * puts on the controls inside `ui-text-input`/`ui-textarea` — and the focus it
+   * moves — live in an `afterRenderEffect`, exactly like `ui-confirm`'s.
+   */
+  const settle = async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+  };
+
   const save = async () => {
     el.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
     await tick();
+    await settle();
+  };
+
+  const ownershipRadio = (value: 'owned' | 'wanted') =>
+    el.querySelector(`.ownership input[value="${value}"]`) as HTMLInputElement;
+
+  /** Picks an ownership option the way a user does — a real change event. */
+  const pickOwnership = (value: 'owned' | 'wanted') => {
+    const radio = ownershipRadio(value);
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
     fixture.detectChanges();
   };
 
@@ -281,7 +349,10 @@ async function mount(
     tagField,
     addTag,
     removeTag,
+    settle,
     save,
+    ownershipRadio,
+    pickOwnership,
     /** The item handed to the API by the last save. */
     lastSaved: () => api.saved[api.saved.length - 1].item,
   };
@@ -475,6 +546,51 @@ describe('ItemFormPage', () => {
     expect(page.api.saved).toHaveLength(0);
   });
 
+  it('says why it refused at the field, and puts the caret there', async () => {
+    // The refusal used to be a toast in the far corner: nothing marked the
+    // field required, nothing pointed at it, and the focus stayed wherever it
+    // was — so the reader had to find the one field the message was about.
+    const page = await mount();
+    await page.save();
+
+    const error = page.el.querySelector('.named__error')!;
+    expect(error.getAttribute('role')).toBe('alert');
+    expect(error.textContent!.trim()).toBe('Give the item a name before saving.');
+
+    const input = page.nameInput();
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')).toBe(error.id);
+    expect(error.id).toBeTruthy();
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('marks the name required, and says so in the label', async () => {
+    const page = await mount();
+    // `aria-required`, not the native attribute: `required` hands the browser
+    // the submit and its own bubble, which pre-empts the page's own message.
+    expect(page.nameInput().getAttribute('aria-required')).toBe('true');
+    expect(page.el.querySelector('.named ui-field .label')!.textContent).toContain('required');
+  });
+
+  it('validates on submit and not on every keystroke', async () => {
+    const page = await mount();
+    page.type(page.nameInput(), 'Revolv');
+    page.type(page.nameInput(), '');
+    // Emptying the field is not itself a failure — nothing has been asked yet.
+    expect(page.el.querySelector('.named__error')).toBeNull();
+
+    await page.save();
+    expect(page.el.querySelector('.named__error')).not.toBeNull();
+
+    // …and typing takes the message away rather than leaving it to contradict
+    // the field it points at.
+    page.type(page.nameInput(), 'Revolver');
+    await page.settle();
+    expect(page.el.querySelector('.named__error')).toBeNull();
+    expect(page.nameInput().hasAttribute('aria-invalid')).toBe(false);
+    expect(page.nameInput().hasAttribute('aria-describedby')).toBe(false);
+  });
+
   it('keeps a refused save on screen instead of navigating away with it', async () => {
     const page = await mount();
     page.type(page.nameInput(), 'Revolver');
@@ -596,6 +712,22 @@ describe('ItemFormPage — nothing is destroyed without a question', () => {
     expect(page.copyRows()).toHaveLength(2);
   });
 
+  it('asks before a switch to the wantlist throws copies away, and obeys a no', async () => {
+    // Switching to the wantlist *is* removing every copy, so it asks the same
+    // question the copy's own ✕ asks — and a declined question has to put the
+    // control back, or the form would show "wantlist" over an item that still
+    // has copies and save the copies.
+    const page = await mount({ itemId: 'i1', items: [item({ copies: [copy()] })] });
+    expect(page.ownershipRadio('owned').checked).toBe(true);
+
+    page.pickOwnership('wanted');
+    await page.answerConfirm(false);
+
+    expect(page.copyRows()).toHaveLength(1);
+    expect(page.ownershipRadio('owned').checked).toBe(true);
+    expect(page.ownershipRadio('wanted').checked).toBe(false);
+  });
+
   it('does not ask about an untouched blank copy', async () => {
     // "Add copy" hands you an empty one. Asking about that would teach people to
     // dismiss the question without reading it, which is how a confirmation
@@ -611,5 +743,147 @@ describe('ItemFormPage — nothing is destroyed without a question', () => {
 
     expect(TestBed.inject(ConfirmService).pending()).toBeNull();
     expect(page.copyRows()).toHaveLength(1);
+  });
+});
+
+describe('ItemFormPage — ownership is a control, not a side effect', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('reflects the copies rather than storing a flag of its own', async () => {
+    // There is no `owned` field to bind to (rule 3): at least one copy means
+    // owned, none means wanted. So the control has to move when the copies do.
+    const page = await mount({ itemId: 'i1', items: [item({ copies: [copy()] })] });
+    expect(page.ownershipRadio('owned').checked).toBe(true);
+
+    page.click(page.copyRows()[0].querySelector('.copies__row-head ui-button button')!);
+    await page.answerConfirm();
+
+    expect(page.ownershipRadio('wanted').checked).toBe(true);
+
+    page.click(page.el.querySelector('.copies__actions ui-button button')!);
+    expect(page.ownershipRadio('owned').checked).toBe(true);
+  });
+
+  it('puts a blank copy back when the item returns to the vault', async () => {
+    const page = await mount({ itemId: 'i1', items: [item({ tags: ['wanted'], copies: [] })] });
+    expect(page.ownershipRadio('wanted').checked).toBe(true);
+    expect(page.copyRows()).toHaveLength(0);
+
+    page.pickOwnership('owned');
+    expect(page.copyRows()).toHaveLength(1);
+
+    page.type(page.nameInput(), 'Revolver');
+    await page.save();
+    expect(page.lastSaved().copies).toHaveLength(1);
+    expect(page.lastSaved().tags).not.toContain('wanted');
+  });
+
+  it('empties the copies without a question when none of them holds anything', async () => {
+    // A fresh item's single copy is blank, and a question in front of an act
+    // that costs nothing is a question people learn to dismiss unread.
+    const page = await mount();
+    page.pickOwnership('wanted');
+
+    expect(TestBed.inject(ConfirmService).pending()).toBeNull();
+    expect(page.copyRows()).toHaveLength(0);
+
+    page.type(page.nameInput(), 'Grail');
+    await page.save();
+    expect(page.lastSaved().copies).toHaveLength(0);
+    expect(page.lastSaved().tags).toContain('wanted');
+  });
+});
+
+describe('ItemFormPage — every control has a name', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('names every input, select, textarea and date field on the page', async () => {
+    // Eight controls had no accessible name at all, because every visible label
+    // here is a `ui-field` <label> with no `for` sitting *beside* its control —
+    // a styled span, which names nothing. Measured, not assumed: the assertion
+    // lists whatever is still unnamed.
+    const page = await mount({
+      g: 'starwars',
+      itemId: 'i1',
+      items: [item({ copies: [copy(), copy({ id: 'cp2' })] })],
+      fields: [{ name: 'Lacre', type: 'text', scope: 'copy' }],
+    });
+    await page.settle();
+
+    expect(unnamedControls(page.el)).toEqual([]);
+    // And the count is not zero because there is nothing to count.
+    expect(page.el.querySelectorAll('input, select, textarea').length).toBeGreaterThan(8);
+  });
+
+  it('leaves nothing unnamed on the add-item page either', async () => {
+    // The page exactly as `/c/:id/items/new` renders it — one copy, no declared
+    // fields — which is where the eight unnamed controls were measured in a
+    // real browser: name, description, group, year, est. value, and the copy's
+    // paid, est. value and notes.
+    const page = await mount();
+    await page.settle();
+
+    expect(unnamedControls(page.el)).toEqual([]);
+  });
+
+  it('gives the page a document outline instead of one lonely h1', async () => {
+    const page = await mount();
+    const headings = [...page.el.querySelectorAll('h1, h2, h3')].map(h => h.tagName);
+
+    expect(headings.filter(tag => tag === 'H1')).toHaveLength(1);
+    // Summary, Copies, Group fields — each of which was a div that only looked
+    // like a heading, so a screen reader's heading list was one entry long.
+    expect(headings.filter(tag => tag === 'H2').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('states the value fallbacks as hints, where they survive being typed over', async () => {
+    const page = await mount();
+    const hints = [...page.el.querySelectorAll('.form ui-field .hint')].map(h =>
+      h.textContent!.trim(),
+    );
+
+    expect(hints).toContain('Leave empty and the item is worth what you paid for it.');
+    expect(hints).toContain(
+      'Leave empty to follow the item estimate, or what this copy cost.',
+    );
+    // A placeholder disappears exactly when the reader starts typing, and the
+    // copy one was cut off mid-word in its column.
+    const placeholders = [...page.el.querySelectorAll('.form input')].map(
+      input => input.getAttribute('placeholder') ?? '',
+    );
+    expect(placeholders.some(text => text.includes('uses what you paid'))).toBe(false);
+    expect(placeholders.some(text => text.includes('uses item value'))).toBe(false);
+  });
+
+  it('draws the unsaved mark as an icon rather than a Unicode glyph', async () => {
+    const page = await mount();
+    page.type(page.nameInput(), 'Revolver');
+
+    const state = page.el.querySelector('.actions__state')!;
+    expect(state.querySelector('ui-icon svg')).not.toBeNull();
+    expect(state.textContent).not.toContain('\u25CF');
+  });
+
+  it('prints the expected date order once — ui-date-input already owns it', async () => {
+    // The component derives the order from Intl and wires it to its own
+    // aria-describedby; a second copy in the form would be the same fact twice.
+    const page = await mount({ itemId: 'i1', items: [item({ copies: [copy()] })] });
+    const acquired = page.copyRows()[0].querySelector('ui-date-input')!;
+    const dateInput = acquired.querySelector('input')!;
+
+    expect(acquired.querySelectorAll('.hint')).toHaveLength(1);
+    expect(dateInput.getAttribute('aria-describedby')).toBe(
+      acquired.querySelector('.hint')!.id,
+    );
+    // Once in the whole copy row: the component's, and no second copy printed
+    // by the form beside it.
+    const printed = page.copyRows()[0].textContent!.match(/mm\/dd\/yyyy/g) ?? [];
+    expect(printed).toHaveLength(1);
   });
 });

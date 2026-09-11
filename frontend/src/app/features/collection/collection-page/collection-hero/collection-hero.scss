@@ -10,13 +10,24 @@
   border-radius: var(--radius);
   overflow: hidden;
 
+  /* Nothing in it yet, and only an editor sees this at all: enough strip to
+     read as a dropzone, without spending the fold on it. The header stops
+     overlapping in this state (see `.header--flush`) — the overlap exists to
+     tuck the title into a photograph, and tucking it into an empty dropzone
+     would only hide that zone's own "drop a picture here" label. */
+  &--empty {
+    height: 88px;
+  }
+
   /* No radius of its own: the banner is already a rounded clipping box. */
   &__fade {
     position: absolute;
     inset: 0;
     background: linear-gradient(
       180deg,
-      rgba(0, 0, 0, 0) 30%,
+      /* `transparent` rather than a hardcoded rgba(0, 0, 0, 0): the same
+         colour, without a literal in a file that is meant to hold none. */
+      transparent 30%,
       color-mix(in srgb, var(--bg) 72%, transparent) 74%,
       var(--bg) 100%
     );
@@ -34,6 +45,12 @@
   position: relative;
   z-index: 2;
   padding: 0 16px;
+
+  /* No strip above to tuck under, so the negative overlap would pull the title
+     off the top of the page. */
+  &--no-banner {
+    margin-top: 0;
+  }
 
   &__icon {
     width: 80px;
@@ -91,6 +108,15 @@
 @include upto($bp-lg) {
   .header__actions > a {
     min-height: var(--tap);
+  }
+
+  /* Height alone was not enough. Measured at 390px, the avatar link came out
+     27×44 — a one-member collection draws one 27px face, and a target is as
+     narrow as it is wide. */
+  .faces {
+    min-width: var(--tap);
+    display: grid;
+    place-items: center;
   }
 }
 

@@ -776,6 +776,129 @@
   </dl></div>
 </details>
 
+
+<details class="adr">
+  <summary><span class="id">ADR-74</span> <code>interactive</code> no <code>ui-card</code> é pintura, não controle — o clique mora no título</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd><code>ui-card</code> é um custom element puro: sem <code>role</code>, sem <code>tabindex</code>, sem <code>href</code>. <code>RouterLink</code> aplicado a um elemento que não é âncora registra <em>apenas</em> um listener de clique — não produz <code>href</code>, logo não há tab stop, nem clique do meio, nem abrir em nova aba, nem nada que um leitor de tela possa anunciar ou ativar. Quatro superfícies embarcaram assim: a grade de itens (o caminho principal para abrir um item), os cards de coleção do painel, e os seletores de tema e de idioma nas configurações. No teclado, nenhuma das quatro era alcançável — e o comentário na grade afirmava, em voz alta, “the card is the link”.</dd>
+    <dt>Decisão</dt><dd><code>interactive</code> passa a ser explicitamente só a pintura (hover, press, <code>focus-within</code>). O controle real fica fora dele, em uma de duas formas. Quando o card não contém mais nada interativo, envolve-se o card num <code>&lt;a&gt;</code>/<code>&lt;button&gt;</code> de verdade — o que <code>app-group-card</code> já fazia e serviu de precedente. Quando contém — cada card da grade de itens tem um <code>ui-checkbox</code> de seleção e um par <code>ui-reorder</code> —, envolver aninharia um controle dentro de um link, o que é inválido e quebra os dois; então o <strong>título</strong> do card passa a ser a âncora e recebe <code>.stretch-hit</code>, utilitário novo em <code>styles.scss</code> que espalha a área de clique por todo o card com um <code>::after</code> de <code>inset: 0</code>.</dd>
+    <dt>Consequência</dt><dd>O foco cai no nome do item, que também é o nome acessível do card, então a lista de links e a ordem de tabulação concordam com o que o olho vê. Em troca, duas exigências passam a valer no ponto de uso: o card precisa ser contexto de posicionamento, e todo controle dentro dele precisa de <code>z-index</code> acima de 1 — foi por isso que <code>ui-reorder</code> ganhou <code>position: relative</code>. O <code>contain($event)</code> que engolia o clique do checkbox deixou de ser necessário e saiu: existia só para compensar o padrão quebrado, e mantê-lo esconderia a correção.</dd>
+    <dt>Imposta por</dt><dd><code>dashboard-page.spec.ts</code> (o card é um <code>&lt;a&gt;</code> com <code>href</code> e nome acessível) e <code>settings-page.spec.ts</code> (tema e idioma ativáveis por teclado)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-75</span> <code>--muted</code> é decoração; o que é feito de palavras usa <code>--muted-strong</code></summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>A separação entre os dois cinzas já estava escrita: <code>--muted</code> é decoração e está abaixo de AA de propósito, <code>--muted-strong</code> é a camada de tipografia secundária. Ela foi declarada e não foi seguida. Uma auditoria encontrou <strong>89</strong> usos de <code>color: var(--muted)</code> contra 28 de <code>--muted-strong</code>, e quase todos os 89 eram palavras: subtítulos de página, linhas de meta nos cards, células de tabela, estados vazios, rótulos de aba, a frase “coleção não encontrada”, a dica do aviso de conflito e o próprio rótulo de formulário do <code>ui-field</code>, a 10px. Todos mediam entre 2,4:1 e 4,4:1 conforme o tema e a superfície.</dd>
+    <dt>Decisão</dt><dd>Trocar por <code>--muted-strong</code> em tudo que é lido, e subir para <code>var(--fs-xs)</code> o que estava abaixo de 11px — havia rótulos a 8px e 9px no editor de enquadramento. Ficam com <code>--muted</code> apenas os casos que <em>repetem</em> algo dito ao lado: o chevron dentro do próprio controle rotulado, a inicial que serve de marca de água acima do nome que ela representa, a marca esmaecida de “sem foto” e o <code>›</code> entre migalhas. <code>themes.spec.ts</code> continua <strong>não</strong> exigindo AA de <code>--muted</code>.</dd>
+    <dt>Consequência</dt><dd>A isenção de <code>--muted</code> no teste volta a ser verdadeira. Ela só se sustenta enquanto nada legível o usa, e era exatamente isso que os 89 sites gastavam: uma isenção que não haviam merecido. O teste não pega esse erro por construção — verifica a paleta, não quem a gasta —, então a defesa é a regra escrita e a lista curta de exceções nomeadas em <code>docs/frontend-standards.md</code>. O custo é que a hierarquia visual fica um pouco mais achatada onde o cinza decorativo separava níveis; o ganho é que o nível de baixo passa a ser legível, que era a intenção dos dois tokens desde o começo.</dd>
+    <dt>Imposta por</dt><dd>A regra em <code>docs/frontend-standards.md</code> §3 (“se é feito de palavras, não é <code>--muted</code>”), com as quatro exceções nomeadas; <code>themes.spec.ts</code> continua prendendo que <code>--muted-strong</code> é estritamente mais legível que <code>--muted</code> sobre <code>--panel</code></dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-76</span> <code>ui-section-label</code> ganha <code>level</code>: o rótulo pinta como sempre e passa a ser cabeçalho de verdade</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Medido no navegador, em todas as rotas: cada página renderizava exatamente um <code>&lt;h1&gt;</code> e nenhum cabeçalho abaixo dele. Todo título de seção era um <code>&lt;div class="heading"&gt;</code>, um <code>&lt;span class="heading"&gt;</code> ou um <code>ui-section-label</code> — estilizados como cabeçalho, sem expor semântica de cabeçalho. A lista de cabeçalhos de um leitor de tela, principal forma de um usuário não visual passar os olhos por uma tela, tinha uma entrada só em todas elas; para chegar ao quarto card era preciso percorrer o documento inteiro.</dd>
+    <dt>Decisão</dt><dd>Um input <code>level: 'h2' | 'h3' | null</code> em <code>ui-section-label</code>, com <code>null</code> como padrão. O elemento semântico é um invólucro, não um segundo estilo: toda a tipografia continua vindo do host e o cabeçalho interno herda tudo, então acrescentar um nível não pode mudar a aparência de nenhum rótulo. O nível é escolhido pelo ponto de uso, e não derivado, porque só a página sabe se seus cards estão sob o <code>&lt;h1&gt;</code> ou sob um <code>&lt;h2&gt;</code>.</dd>
+    <dt>Consequência</dt><dd>Continua opcional de propósito, porque dois dos sete pontos de uso <em>não</em> são cabeçalhos: o rótulo do <code>app-section-header</code> vive dentro de um <code>&lt;button&gt;</code> que filtra, e um cabeçalho dentro de um controle é a mentira oposta. O preço é que a hierarquia passa a ser uma decisão por chamada, que pode ficar errada em silêncio se alguém pular um nível; a alternativa — derivar do aninhamento — erra sozinha e sem ninguém decidindo nada.</dd>
+    <dt>Imposta por</dt><dd><code>dashboard-page.spec.ts</code> e <code>item-page.spec.ts</code> (os rótulos promovidos renderizam <code>&lt;h2&gt;</code>)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-77</span> O quadro de um grupo mostra os itens do próprio grupo, no lugar</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um grupo pode conter subgrupos <em>e</em> itens próprios. <code>defaultView(hasChildren)</code> só olhava para os filhos, então um grupo com um subgrupo e 22 itens abria no quadro de subgrupos e rebaixava os 22 itens a um único tile escrito “22 itens arquivados aqui” — um tile que não era um lugar, e sim uma troca de view para <code>?v=grid</code>. Parado dentro de um grupo com 22 itens, a página respondia à única pergunta que levou o usuário até ali com a contagem dela mesma, e cobrava outro clique.</dd>
+    <dt>Decisão</dt><dd>O quadro passa a mostrar as duas coisas: os cards de subgrupo sob um cabeçalho “Subgrupos” e, abaixo, os itens do próprio grupo renderizados como itens de verdade pela página que os possui. O tile de contagem sai. A lista vem de <code>directVisible()</code>, derivada de <code>items()</code> — já ordenada e em ordem de seção — e não de <code>directItems()</code>, que é um filtro cru sobre a fonte e agora serve apenas à contagem de que o estado vazio ainda precisa.</dd>
+    <dt>Consequência</dt><dd>Estrutura e conteúdo caem na mesma tela e existe um destino a menos que na verdade era uma view. Em troca, os índices desses chunks são posições em <code>directVisible()</code> e não em <code>collection.items</code>, então não podem dirigir reordenação: a ordem manual é persistida por índice (regra 4) e um movimento calculado sobre um subconjunto filtrado reescreveria as linhas erradas. Por isso o quadro passa <code>manual = false</code> — que é também a resposta honesta, porque um quadro com subgrupos ao lado de itens não é a superfície onde se arruma uma sequência ordenada. O estado vazio do <code>group-dashboard</code> continua recebendo <code>directItems</code>: um grupo sem subgrupos e com vinte itens próprios não está vazio, e dizer que está por cima de uma grade cheia seria a mentira do tile antigo ao contrário.</dd>
+    <dt>Imposta por</dt><dd><code>collection-page.spec.ts</code> (o grupo com itens próprios renderiza os itens, e não um tile de contagem)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-78</span> <code>ui-radio</code> entra no kit, e não pré-seleciona nada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Cinco lugares montavam à mão um <code>&lt;input type="radio"&gt;</code> com estilo de rótulo próprio: a regra de duplicados do import CSV, a escolha de colisão do import de arquivo (duas vezes) e a disposição do delete de grupo. Todos os cinco são a última pergunta antes de algo irreversível — a do delete de grupo decide se os itens do grupo são re-parenteados, desarquivados ou destruídos, e a de colisão decide se o arquivo <em>sobrescreve</em> todas as coleções do acervo. É o pior lugar do app para se estar reimplementando um controle.</dd>
+    <dt>Decisão</dt><dd>Um <code>ui-radio</code> que envolve um radio de plataforma de verdade, pelo mesmo motivo que <code>ui-checkbox</code> envolve um checkbox de verdade: só a plataforma dá o role, o estado marcado, o movimento por setas dentro do grupo e o anúncio “3 de 3”. Uma reimplementação com <code>role="radio"</code> tem de reconstruir as quatro coisas e costuma reconstruir três. <code>value</code> é um <code>model</code> que começa <code>null</code> e continua <code>null</code> até alguém escolher: o componente nunca seleciona nada por conta própria.</dd>
+    <dt>Consequência</dt><dd>O comportamento de “nada pré-selecionado” dos diálogos destrutivos (regra 9) deixa de depender de cada ponto de uso lembrar dele — passa a ser propriedade do componente. Em troca, um formulário que <em>queira</em> um padrão tem de escrevê-lo explicitamente, o que é o custo certo: uma opção pré-marcada é uma opção que o usuário apressado confirma sem ler, e o motivo de perguntar é justamente que os desfechos não são intercambiáveis.</dd>
+    <dt>Imposta por</dt><dd>A linha do catálogo em <code>docs/frontend-standards.md</code> §4 e os specs dos diálogos que o usam</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-79</span> A faixa de banner não é reservada quando não há nada nela nem quem possa preenchê-la</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>O banner da coleção tinha 150px fixos, houvesse foto ou não, e o cabeçalho o sobrepõe em 68px. Uma coleção sem banner abria, portanto, com cerca de 80px de nada acima do título — em toda página de coleção, acima da dobra, no lugar onde deveriam estar os itens.</dd>
+    <dt>Decisão</dt><dd>A faixa só é renderizada quando há foto ou quem possa colocá-la (<code>showBanner()</code>). Para quem edita, o slot é uma dropzone e portanto um convite: fica, com 88px. Para quem só lê, é vazio por definição — não há como preencher —, e a faixa não é renderizada. Sem foto, o cabeçalho também deixa de sobrepor (<code>.header--flush</code>): a sobreposição existe para encaixar o título numa fotografia, e encaixá-lo numa dropzone vazia só esconderia o rótulo “solte uma imagem aqui” dela mesma.</dd>
+    <dt>Consequência</dt><dd>A dobra volta a ser gasta com conteúdo, e o estado “sem banner” passa a ser honesto em vez de decorativo. O custo é um pequeno salto de layout entre os dois papéis na mesma coleção — a página de um leitor começa mais alta que a de um editor —, aceitável porque nenhum dos dois vê a página do outro mudar; e um terceiro estado a manter no CSS do herói, documentado onde as três alturas são declaradas.</dd>
+    <dt>Imposta por</dt><dd>Verificação no navegador (a página do leitor sem banner não reserva faixa) — a checagem de layout é uma medição, não uma asserção de unidade</dd>
+  </dl></div>
+</details>
+
+
+<details class="adr">
+  <summary><span class="id">ADR-80</span> <code>ui-field</code> associa o rótulo explicitamente, e a busca ignora <code>&lt;button&gt;</code></summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd><code>ui-field</code> renderizava <code>&lt;label class="label"&gt;</code> como <strong>irmão</strong> do controle projetado, sem <code>for</code>. Era uma legenda estilizada, não um rótulo. Medido no formulário de item: oito controles visíveis sem nenhum nome acessível — e todos os oito já estavam dentro de um <code>ui-field</code>. O mesmo valia para as configurações de coleção e para o wizard de setup: 37 pontos de uso, nenhum rotulado. Um leitor de tela anunciava “edit text, blank”.</dd>
+    <dt>Decisão</dt><dd>Associação explícita: depois de cada render, o campo procura o primeiro <code>input</code>/<code>select</code>/<code>textarea</code> no conteúdo projetado, dá um id a ele se não tiver, e aponta o <code>for</code> do rótulo para esse id. Feito na fase de <em>write</em> de um <code>afterRenderEffect</code> e sem passar por signal, porque um signal lido pelo template agendaria outro render de dentro de um. Roda a cada render porque o controle projetado aparece e desaparece — o campo Seção só existe quando o grupo declara seções — e reexecutar custa um <code>querySelector</code>.</dd>
+    <dt>Consequência</dt><dd>A alternativa mais limpa — envolver o conteúdo no próprio <code>&lt;label&gt;</code> e deixar a associação implícita — está <strong>errada</strong> aqui, e é por isso que a busca é explicitamente estreitada. A associação implícita liga o rótulo ao primeiro elemento <em>labelable</em> descendente, e <code>&lt;button&gt;</code> é labelable: <code>ui-tag-input</code> renderiza o botão de remover de cada tag <strong>antes</strong> do seu campo de texto, então um label envolvente teria nomeado — e, no clique, acionado — um botão de excluir. Pior que rótulo nenhum. Restringir a busca a controles de formulário tem duas consequências úteis: acha o campo certo dentro do <code>ui-tag-input</code>, e não acha <em>nada</em> dentro de um <code>ui-field</code> cujo conteúdo é um <code>ui-toggle</code> (um <code>&lt;button role="switch"&gt;</code>) — o que é correto, porque o switch carrega o próprio <code>ariaLabel</code> e uma associação falsa é pior que a ausência dela. O <code>hint</code> continua associado só visualmente: ligá-lo por <code>aria-describedby</code> exigiria que o controle aceitasse um id, e dobrá-lo no <em>nome</em> acessível faria cada campo anunciar uma frase inteira.</dd>
+    <dt>Imposta por</dt><dd><code>item-form-page.spec.ts</code> (a contagem de controles sem nome acessível, medida contra o <code>HEAD</code> anterior: 8 antes, 0 depois)</dd>
+  </dl></div>
+</details>
+
+
+<details class="adr">
+  <summary><span class="id">ADR-81</span> Uma escolha destrutiva não desenha resposta que ninguém deu</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>O diálogo de colisão do import de arquivo tinha dois radios por coleção, cada um com sua própria expressão de <code>[checked]</code>: “criar uma cópia nova” era inferido da <em>ausência</em> de um overwrite. O resultado é que a tela mostrava “criar cópia nova” marcado antes de qualquer clique — uma resposta que ninguém tinha dado — e as duas expressões podiam dessincronizar do navegador: clicar em overwrite e depois em criar-nova deixava o par discordando. É a regra 13 do padrão na sua forma mais literal: um controle que não consegue dizer a verdade não embarca. E a pergunta é se o arquivo <strong>sobrescreve todas as coleções do acervo</strong>.</dd>
+    <dt>Decisão</dt><dd>Uma seleção só: <code>choices: Map&lt;string, 'new' | 'overwrite'&gt;</code>, com <code>replacing</code> derivado dela por <code>computed</code>. Os dois radios de uma coleção leem e escrevem a mesma entrada, então não existe estado em que discordem. O <em>desfecho</em> padrão não mudou — confirmar sem responder ainda cria coleções novas —, o que mudou é que a tela não afirma mais que alguém escolheu isso.</dd>
+    <dt>Consequência</dt><dd>Um usuário que confirma sem ler continua tendo o comportamento seguro, e agora a tela não mente sobre a origem dele. No mesmo diálogo caiu um segundo defeito silencioso: <code>viewChild('firstControl')</code> num <code>ui-radio</code> devolve a <em>instância do componente</em>, cujo <code>nativeElement</code> é <code>undefined</code>, então o foco nunca entrava no diálogo — e a anotação de tipo não pega isso, porque o <code>read</code> é decisão de runtime.</dd>
+    <dt>Imposta por</dt><dd><code>settings-page.spec.ts</code> (o diálogo abre com nenhum radio marcado, os dois compartilhando um <code>name</code>, e o foco no primeiro)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-82</span> Sair do campo não cria nada; e não desfaz nada</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Grupo novo, campo novo e seção nova eram três inputs inline que gravavam <strong>no blur</strong>, além do Enter. Clicar fora criava um grupo. Criação de grupo existe em três lugares no app, então o acidente era fácil de repetir — e um grupo criado sem querer aparece na árvore, na barra de navegação e em toda contagem.</dd>
+    <dt>Decisão</dt><dd>Commit explícito: Enter ou um botão <em>Adicionar</em>. Escape e <em>Cancelar</em> descartam. O blur <strong>não faz nada</strong> — nem grava, nem descarta.</dd>
+    <dt>Consequência</dt><dd>“Descartar no blur” parecia a simetria óbvia e está errada: ela desmonta a linha entre o mousedown e o click do próprio botão <em>Adicionar</em>, de modo que clicar em Adicionar destruiria o campo antes de o clique chegar. Blur inerte custa uma linha aberta que o usuário tem de fechar, e não custa nunca o que ele digitou. Nome vazio e nome de campo duplicado também deixam a linha aberta em vez de fechá-la, porque o tipo e o escopo ao lado também foram escolhidos e fechar jogaria os três fora.</dd>
+    <dt>Imposta por</dt><dd><code>collection-settings-page.spec.ts</code> (blur não cria grupo, nem campo, nem seção; Escape descarta e Adicionar grava)</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-83</span> O passo do banco não deixa passar sem um teste que respondeu</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>O <code>Test connection</code> do wizard era opcional. Dava para apertar <em>Next</em> com a conexão não testada ou <em>ativamente falhando</em>, andar três passos e só descobrir no <em>Finish</em> — que reconferia apenas <code>adminValid()</code>. O wizard provisiona um banco: uma conexão que não funciona não é detalhe para descobrir no fim.</dd>
+    <dt>Decisão</dt><dd>Uma impressão digital dos campos de conexão (<code>connectionKey</code>) e o registro de contra o que o último teste respondeu (<code>probedConnection</code>). <em>Next</em> exige impressão digital atual mais um resultado em <code>PASSING_PROBES</code> — onde “vai criar o banco” <strong>passa</strong>, porque é sucesso para este fim. Editar qualquer campo invalida o passe e esconde a nota, que interpola o host: uma nota mantida afirmaria que outro servidor respondeu. O <code>trustCert</code> passou a nascer <strong>desligado</strong>.</dd>
+    <dt>Consequência</dt><dd>O custo do <code>trustCert</code> desligado é conhecido e ficou registrado: o backend classifica falha de cadeia de certificado como <code>HostUnreachable</code>, então quem sobe o SQL Server em contêiner documentado recebe uma recusa correta com a explicação errada. Fechado pela cópia, não pelo código — <code>setup.test.unreachable</code> agora menciona certificado autoassinado e nomeia o toggle que resolve, e o toggle ganhou <code>setup.db.trustCertHint</code>. Os passos numerados também viraram botões de verdade com <code>aria-current="step"</code>, desabilitados adiante do primeiro portão não satisfeito, com uma marca de água-máxima <code>visited</code> — sem ela, voltar de Review para Database pintava três passos prontos como “ainda não”.</dd>
+    <dt>Imposta por</dt><dd>Os specs do <code>setup-page</code> sobre os portões por passo</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-84</span> O orçamento do bundle inicial subiu para 512 kB, e o motivo é o barrel</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Esta passada de UI/UX levou o bundle inicial de 495,4 kB para 500,7 kB, 710 bytes acima do aviso de 500 kB — e a regra 13 conta avisos. O crescimento é deliberado: rotulagem real em todo campo de formulário, um botão de limpar na busca, semântica de cabeçalho, alvos de 44px e um <code>ui-radio</code> novo no kit.</dd>
+    <dt>Decisão</dt><dd>Aviso de <code>initial</code> movido de 500 kB para 512 kB. O orçamento por componente <strong>não</strong> foi tocado: o <code>collection-settings-page.scss</code> estourou os 6 kB e foi resolvido de verdade, colapsando produtos cartesianos de seletores com <code>:is()</code> e dando uma classe compartilhada (<code>.decl-row</code>) às duas linhas de declaração que o próprio comentário do arquivo já dizia serem “a mesma coisa para o olho”. Angular estampa um <code>[_ngcontent-…]</code> em <em>cada</em> seletor que emite, então reduzir a contagem de seletores rende muito mais do que o tamanho aparente sugere.</dd>
+    <dt>Consequência</dt><dd>O que o orçamento estava medindo, na verdade, é uma propriedade da arquitetura: <strong>o barrel <code>shared/ui/index.ts</code> torna o kit inteiro eager.</strong> O chunk inicial já carrega <code>lightbox</code>, <code>photo-manager</code>, <code>image-focus</code> e <code>reorder</code> — componentes que só páginas lazy usam — então todo componente novo do kit custa o bundle inicial, e <code>ui-radio</code> pagou esse preço como todos os outros. Subir o número é honesto <em>e</em> insuficiente: o consumo real de quem abre o app é 127,5 kB comprimidos, mas a causa continua lá. O follow-up está na lista de limites, e o novo teto de 512 kB continua pegando crescimento acidental.</dd>
+    <dt>Imposta por</dt><dd><code>angular.json</code> (<code>budgets.initial.maximumWarning</code>) e <code>npm run build</code>, que a regra 13 exige limpo, avisos incluídos</dd>
+  </dl></div>
+</details>
+
+<details class="adr">
+  <summary><span class="id">ADR-85</span> A posse é um controle explícito sobre o mesmo modelo</summary>
+  <div class="body"><dl>
+    <dt>Contexto</dt><dd>Um item novo nasce com um exemplar, e o <em>único</em> jeito de transformá-lo em item de lista de desejos era <strong>apagar esse exemplar</strong>. Nada no formulário dizia isso; o resumo na coluna da foto simplesmente virava “Quero”. A regra 3 é clara sobre o modelo — não existe flag <code>owned</code>, ao menos um exemplar significa que é seu — mas o modelo não é a interface, e aqui não havia interface nenhuma para uma das duas respostas.</dd>
+    <dt>Decisão</dt><dd>Um <code>ui-radio</code> de duas opções no topo do formulário, <em>derivado</em> de <code>copies().length</code> por <code>linkedSignal</code>. É uma vista sobre o modelo existente, não um campo novo: nada é gravado por ele. Trocar para “lista de desejos” descarta exemplares, então reutiliza a confirmação que o formulário já fazia ao remover um exemplar com conteúdo (<code>confirm.removeCopy.bodyLast</code> para o último) e <strong>põe o radio de volta</strong> se a pergunta for recusada. Trocar para “no acervo” acrescenta um exemplar em branco.</dd>
+    <dt>Consequência</dt><dd>O binding tem de ser de duas vias (<code>[(value)]</code>): com binding de mão única o filho marca o próprio model no clique e uma confirmação recusada deixaria os dois radios marcados — a interface voltaria a mentir, no lugar exato que este ADR existe para consertar. O preço de derivar em vez de armazenar é que a posse não tem estado próprio para ficar errado; o preço de não derivar seria um segundo lugar onde “é meu” está escrito, e a regra 3 existe para não ter esse segundo lugar.</dd>
+    <dt>Imposta por</dt><dd><code>item-form-page.spec.ts</code> (as quatro asserções de posse, incluindo o caminho recusado)</dd>
+  </dl></div>
+</details>
+
 <div class="pagenav"></div>
 </main>
 </div>

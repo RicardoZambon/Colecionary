@@ -86,7 +86,11 @@ describe('I18nService', () => {
   it('picks the singular only for exactly one', () => {
     const i18n = freshService();
     i18n.apply('en');
-    expect(i18n.plural(1, 'common.active', 'common.clickToApply')).toBe('● Active');
+    // The two keys are just a convenient pair; what is under test is which of
+    // them `plural` reaches for. `common.active` used to read "● Active" — the
+    // glyph moved out of the copy and into a `ui-icon` at the call site, since a
+    // raw glyph is not an icon and announces badly.
+    expect(i18n.plural(1, 'common.active', 'common.clickToApply')).toBe('Active');
     expect(i18n.plural(0, 'common.active', 'common.clickToApply')).toBe('Click to apply');
     expect(i18n.plural(2, 'common.active', 'common.clickToApply')).toBe('Click to apply');
   });

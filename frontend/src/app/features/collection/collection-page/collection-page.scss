@@ -18,11 +18,22 @@
      permanent column would squeeze the board on anything narrower. Below this
      the panel opens in normal flow above the content instead — the breadcrumb
      and the group row are the navigation that is always there, the tree is an
-     accelerator. */
-  @media (min-width: 1200px) {
+     accelerator.
+
+     The boundary is `$bp-xl`, and the `WIDE_ENOUGH` matchMedia in
+     `collection-page.ts` is the same boundary written for script — CSS cannot
+     tell the component how wide the window is. Both now read "above xl" so
+     they cannot drift by the pixel they used to. */
+  @include from($bp-xl) {
     &--wide {
-      grid-template-columns: 240px 1fr;
+      grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
     }
+  }
+
+  /* The group's own items, under the board of its sub-groups. */
+  .direct__heading {
+    margin-top: var(--sp-4);
+    margin-bottom: var(--sp-2);
   }
 
   &__main {
@@ -62,7 +73,7 @@
   border-radius: var(--radius);
   padding: 40px;
   text-align: center;
-  color: var(--muted);
+  color: var(--muted-strong);
   font-size: 13px;
 }
 
@@ -116,6 +127,6 @@
 
 .missing {
   padding: 16px 0;
-  color: var(--muted);
+  color: var(--muted-strong);
   font-size: 13px;
 }

@@ -23,15 +23,14 @@
         (dragover)="drag.over($event)"
         (drop)="onDrop($event, entry.index)"
         (dragend)="drag.end()"
-        [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
-        queryParamsHandling="preserve"
         [class.item-card--picked]="isSelected(entry.item)"
       >
-        <!-- Over the corner, and swallowing its own click: the card is the
-             link, so without that a tick would navigate. Absent for a reader,
-             because selecting is only ever a prelude to editing. -->
+        <!-- Over the corner. Absent for a reader, because selecting is only
+             ever a prelude to editing.
+             It no longer has to swallow its own click: the link is the name
+             below, not this card, so a tick cannot reach it. -->
         @if (canEdit()) {
-          <span class="item-card__pick" (click)="contain($event)">
+          <span class="item-card__pick">
             <ui-checkbox
               [checked]="isSelected(entry.item)"
               [ariaLabel]="selectLabel(entry.item)"
@@ -67,7 +66,22 @@
           }
         </div>
         <div class="item-card__body">
-          <div class="item-card__name">{{ entry.item.name }}</div>
+          <!-- The card used to carry [routerLink] itself. `ui-card` is a plain
+               custom element, so that registered a click listener and nothing
+               else: no href, no tab stop, no role — the primary way anyone
+               opens an item was unreachable by keyboard. The card cannot simply
+               be wrapped in an anchor either, because it contains a checkbox
+               and a reorder pair, and a control inside a link breaks both.
+               So the name is the link and `.stretch-hit` (styles.scss) spreads
+               its target over the whole card. Focus lands on the name, which is
+               also the card's accessible name. -->
+          <div class="item-card__name">
+            <a
+              class="item-card__link stretch-hit"
+              [routerLink]="['/c', collectionId(), 'items', entry.item.id]"
+              queryParamsHandling="preserve"
+            >{{ entry.item.name }}</a>
+          </div>
           <div class="item-card__meta">
             {{ entry.item.year }} · {{ groupName(entry.item) }}
             @if (entry.item.copies.length > 1) {

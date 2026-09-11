@@ -48,7 +48,7 @@
 .crumb {
   font-family: var(--font-mono);
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--muted-strong);
 }
 
 .spacer {
@@ -85,7 +85,12 @@
 }
 
 /* Tighter than the trigger's 7px content gap: a caret belongs to the label
-   beside it, not to the next control. */
+   beside it, not to the next control.
+
+   One of the few places `--muted` is still correct: the decorative grey is
+   deliberately below AA and reserved for marks that repeat what is already
+   said. This chevron says "this opens a menu", which the trigger it sits inside
+   already says, so nothing is lost by it being quiet. */
 .caret {
   margin-left: -3px;
   color: var(--muted);
@@ -112,11 +117,17 @@
     gap: 3px;
     flex: none;
 
+    /* One swatch of ANOTHER theme. The hairline has to read against an
+       arbitrary swatch colour on either a light or a dark panel, so it is mixed
+       from this theme's own ink rather than being a fixed grey — the same
+       color-mix pattern `settings-page` uses for its larger swatches and
+       `collection-hero` for its veil. The radius stays literal: `var(--radius)`
+       is 10px, which on a 13px square is a circle. */
     span {
       width: 13px;
       height: 13px;
       border-radius: 3px;
-      border: 1px solid rgba(128, 128, 128, 0.4);
+      border: var(--bw) solid color-mix(in srgb, var(--text) 35%, transparent);
     }
   }
 
@@ -142,8 +153,8 @@
 .theme-more {
   padding: 8px 10px;
   font-size: 11.5px;
-  color: var(--muted);
-  border-top: 1px solid var(--border);
+  color: var(--muted-strong);
+  border-top: var(--bw) solid var(--border);
   margin-top: 4px;
 
   &:hover {
@@ -165,7 +176,7 @@
   flex-direction: column;
   gap: 2px;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--bw) solid var(--border);
 
   &__name {
     font-size: 12.5px;
@@ -175,7 +186,7 @@
 
   &__email {
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 }
 
@@ -264,7 +275,7 @@
     place-items: center;
   }
 
-  .search ::ng-deep input {
-    min-height: var(--tap);
-  }
+  /* The search field's own height is no longer stated here: `styles.scss` now
+     grows every `ui-text-input input` in the app at this breakpoint, and a
+     second rule saying 44px is exactly the drift that block exists to prevent. */
 }

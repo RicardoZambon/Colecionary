@@ -53,7 +53,7 @@ export const en = {
   'confirm.removePhoto.confirm': 'Remove the photo',
   'common.collectionNotFound': 'Collection not found —',
   'common.backToDashboard': 'back to Dashboard',
-  'common.active': '● Active',
+  'common.active': 'Active',
   'common.clickToApply': 'Click to apply',
   // The text alternative behind a skeleton. Said once, by the region that is
   // loading — the skeletons themselves are aria-hidden pictures of a layout.
@@ -149,7 +149,6 @@ export const en = {
   // rendered count phrase.
   'dashboard.collectionMeta': '{owned}/{total} owned · {groups}',
   'dashboard.newCollection': '+ New collection',
-  'dashboard.newCollectionName': 'New collection',
   'dashboard.recent': 'Recent additions',
   'dashboard.recentSub': '{collection} · added {when}',
 
@@ -160,7 +159,7 @@ export const en = {
   'store.curated': 'Curated',
   'store.listingMeta': 'by {publisher} · {items} · {groups}',
   'store.estimate': 'est {value}',
-  'store.inVault': '✓ In your vault',
+  'store.inVault': 'In your vault',
   'store.add': '+ Add to vault',
 
   // --- shared/ui ---------------------------------------------------------
@@ -236,7 +235,7 @@ export const en = {
   'settings.plan.heading': 'Plan',
   'settings.plan.onPro': 'You are on Pro — thanks for supporting Vault.',
   'settings.plan.onFree': 'You are on Free — upgrade to unlock custom fields, photos and backups.',
-  'settings.plan.current': '● Current plan',
+  'settings.plan.current': 'Current plan',
   // No client-set plan any more: there is no billing behind it and nothing in
   // the app is gated on the plan, so the control says so instead of pretending.
   'settings.plan.unavailable': 'Not available yet',
@@ -525,7 +524,7 @@ export const en = {
   'item.paid': 'paid {value}',
   'item.marketEstimate': 'market estimate',
   'item.onWantlist': 'On your wantlist — not in your vault yet.',
-  'item.markOwned': '✓ I own one — add a copy',
+  'item.markOwned': 'I own one — add a copy',
   'item.details': 'Details',
   'item.year': 'Year',
   'item.group': 'Group',
@@ -742,6 +741,10 @@ export const en = {
   'setup.db.username': 'Username',
   'setup.db.password': 'Password',
   'setup.db.trustCert': 'Trust server certificate',
+  // Named as a consequence, not as a mechanism: the toggle used to default to on,
+  // which is the permissive value, and nothing on screen said what it accepted.
+  'setup.db.trustCertHint':
+    'Accept a certificate the server cannot prove. A containerised SQL Server signs its own, so a local or self-hosted install usually needs this.',
   'setup.db.test': 'Test connection',
   'setup.db.testing': 'Testing…',
 
@@ -753,7 +756,7 @@ export const en = {
   'setup.test.loginRejected':
     '{target} refused this username and password. Check the credentials, and make sure the server allows SQL Server authentication (not Windows-only).',
   'setup.test.unreachable':
-    "Couldn't reach a SQL Server at {target}. Check the host name and port, that the server is running and accepting TCP connections, and that no firewall is in the way.",
+    "Couldn't reach a SQL Server at {target}. Check the host name and port, that the server is running and accepting TCP connections, and that no firewall is in the way. A server using a self-signed certificate also answers this way — if that is your case, turn on Trust server certificate.",
   'setup.test.unknown':
     'The connection to {target} failed for an unrecognized reason. Double-check the details and try again.',
 
@@ -834,7 +837,7 @@ export const en = {
   'import.cancel': 'Cancel',
   'import.confirm': 'Import',
   'import.importing': 'Importing…',
-  'toast.collection.created': 'Collection created — name it here',
+  'toast.collection.created': 'Collection created',
   'toast.collection.createFailed': 'Could not create the collection',
   'toast.collection.added': 'Added to your vault ✓',
   'toast.collection.addFailed': 'Could not add checklist',
@@ -983,6 +986,7 @@ export const en = {
   'csvImport.formatMore':
     'Any other column is a field of your own. A row already in the destination group is matched by name.',
   'csvImport.pasteLabel': 'Paste your rows',
+  'csvImport.dropHint': 'Paste the rows, choose a file, or drop one onto this box.',
   'csvImport.pastePlaceholder':
     'Name;Group;Year;Copies;Cond;Value\nPegasus Seiya;Bronze Saints;2006;1;Mint;120\nDragon Shiryu;Bronze Saints;2006;0;Wanted;—',
   'csvImport.chooseFile': 'Choose a file…',
@@ -1041,5 +1045,53 @@ export const en = {
   'toast.csvImport.done.one': 'Imported 1 item ✓',
   'toast.csvImport.done.other': 'Imported {n} items ✓',
   'toast.csvImport.failed': 'Could not import — nothing was written',
+
+  // --- UI/UX pass: states, labels and validation -------------------------
+  // An empty state names the *fact*, never the remedy alone: "no collections
+  // yet" and "nothing matches" are different situations, and one message
+  // serving both is what tells people to clear filters they never set.
+  'dashboard.empty.title': 'No collections yet',
+  // Deliberately not an instruction. The create button sits beside this and is
+  // hidden from a reader, so an imperative body told the one person who cannot
+  // act to go and act. Describing what a collection *is* serves both roles.
+  'dashboard.empty.body':
+    'A collection is one shelf — consoles, a card set, a run of comics. Everything catalogued gets filed on one.',
+  'dashboard.recent.empty': 'Nothing filed yet. Items you add show up here.',
+  'dashboard.newCollection.title': 'New collection',
+  'dashboard.newCollection.nameLabel': 'Name',
+  'dashboard.newCollection.namePlaceholder': 'Retro consoles, 1985 Topps, …',
+  'dashboard.newCollection.confirm': 'Create collection',
+  'store.empty.title': 'Nothing published yet',
+  'store.empty.body':
+    'The store has no checklists right now. Your own collections are not affected.',
+  'store.adding': 'Adding…',
+  'toast.store.addFailed': 'Could not add that collection — nothing was written',
+
+  // A required field says so beside its label, not only after a refused save.
+  'form.required': 'required',
+  'itemForm.error.name': 'Give the item a name before saving.',
+  // The estimate falls back to what was paid (rule 3). That belongs in a hint
+  // under the field, not in placeholder text: a placeholder disappears exactly
+  // when the user starts typing, which is when they need to know what empty
+  // means.
+  'itemForm.hint.value': 'Leave empty and the item is worth what you paid for it.',
+  'itemForm.hint.copyValue': 'Leave empty to follow the item estimate, or what this copy cost.',
+  'itemForm.ownership.heading': 'Ownership',
+  'itemForm.ownership.owned': 'In my vault',
+  'itemForm.ownership.wanted': 'On my wantlist',
+  'itemForm.ownership.hint': 'A wantlist entry has no copies. Add one and it moves into your vault.',
+  'item.markingOwned': 'Adding…',
+
+  // The group page used to answer "what is in here?" with a tile saying how
+  // many. The items are the answer.
+  'groupDashboard.subgroups': 'Sub-groups',
+  'groupDashboard.itemsHere': 'Items filed here',
+  'collection.searchClear': 'Clear the search',
+  'collection.searchScope': 'Searches the open collection',
+  'collSettings.sections.convertConfirm.title': 'Turn {n} sub-groups into dividers?',
+  'collSettings.sections.convertConfirm.body':
+    'Each sub-group becomes a divider in this group and its items move up here. A divider holds no fields and no order of its own, so anything those groups declared is lost. This cannot be undone — export first if you are unsure.',
+  'collSettings.sections.convertConfirm.confirm': 'Turn into dividers',
+  'collSettings.commit': 'Add',
 
 } as const;

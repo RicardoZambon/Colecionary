@@ -141,7 +141,7 @@ import { UiReorder } from '../reorder/reorder';
       font-family: var(--font-mono);
       font-size: 11px;
       line-height: 1.7;
-      color: var(--muted);
+      color: var(--muted-strong);
       text-align: center;
       cursor: pointer;
       background: var(--panel2);
@@ -196,7 +196,7 @@ import { UiReorder } from '../reorder/reorder';
       align-items: center;
       border: 0;
       background: none;
-      color: var(--muted);
+      color: var(--muted-strong);
       cursor: pointer;
     }
 

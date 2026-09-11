@@ -39,7 +39,7 @@ export interface TabDef {
       font-weight: 600;
       font-family: var(--font-body);
       cursor: pointer;
-      color: var(--muted);
+      color: var(--muted-strong);
       border-bottom: 2px solid transparent;
       margin-bottom: -1px;
 

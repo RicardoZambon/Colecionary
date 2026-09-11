@@ -81,9 +81,9 @@ let nextId = 0;
       display: block;
       margin-top: 3px;
       font-family: var(--font-mono);
-      font-size: 9.5px;
+      font-size: var(--fs-xs);
       letter-spacing: 0.06em;
-      color: var(--muted);
+      color: var(--muted-strong);
     }
   `,
 })

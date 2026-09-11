@@ -19,6 +19,7 @@ export * from './lightbox/lightbox';
 export * from './mosaic/mosaic';
 export * from './photo-manager/photo-manager';
 export * from './progress/progress';
+export * from './radio/radio';
 export * from './read-only-notice/read-only-notice';
 export * from './reorder/reorder';
 export * from './section-label/section-label';

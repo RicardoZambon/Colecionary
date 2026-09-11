@@ -69,10 +69,10 @@
 
 .heading {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--muted-strong);
   padding: 0 10px 7px;
 }
 
@@ -124,6 +124,6 @@
 .status {
   padding: 6px 10px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--muted);
+  font-size: var(--fs-xs);
+  color: var(--muted-strong);
 }

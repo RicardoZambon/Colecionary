@@ -1,5 +1,16 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  afterRenderEffect,
+  computed,
+  effect,
+  inject,
+  input,
+  linkedSignal,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../../core/api/images-api';
@@ -34,6 +45,8 @@ import {
   UiField,
   UiIcon,
   UiPhotoManager,
+  UiRadio,
+  UiSectionLabel,
   UiSelect,
   UiSkeleton,
   UiTagInput,
@@ -147,6 +160,8 @@ function fromDraft(draft: CopyDraft, fields: readonly GroupField[]): ItemCopy {
     UiField,
     UiIcon,
     UiPhotoManager,
+    UiRadio,
+    UiSectionLabel,
     UiSelect,
     UiSkeleton,
     UiTagInput,
@@ -228,6 +243,55 @@ export class ItemFormPage {
    */
   protected readonly tags = signal<readonly string[]>([]);
 
+  // --- the name, and the one rule this form has ----------------------------
+  //
+  // A blank name used to fail as a toast in the far corner *after* Save, with
+  // nothing marking the field as required and the focus left wherever it was.
+  // Three things fix that, and they are one report rather than three: the
+  // message renders under the field, the field is described by it and marked
+  // invalid, and the focus moves onto it. The toast is gone — the same failure
+  // said twice in two places is the reader wondering which one to act on.
+
+  /** Ties the message to the field it is about, through aria-describedby. */
+  protected readonly nameErrorId = 'item-form-name-error';
+
+  /**
+   * Whether the last submit was refused for a blank name.
+   *
+   * Validation happens on submit, never on a keystroke: a form that turns red
+   * while you are still typing the first letter is a form that has decided you
+   * are wrong before you have finished answering.
+   */
+  protected readonly nameError = signal(false);
+
+  /**
+   * Bumped by every refused submit, so the focus effect runs again on a second
+   * attempt. A boolean could not: it is already true.
+   */
+  private readonly focusNameAt = signal(0);
+
+  /**
+   * The name field itself, for the one thing a binding cannot express.
+   *
+   * The component *instance* is what is wanted here — `focus()` is its method —
+   * so this is a bare `viewChild`. Worth stating because the opposite mistake
+   * is easy and silent: asking for a component element without `read:
+   * ElementRef` hands back the instance, whose `nativeElement` is undefined,
+   * and the type annotation cannot catch it because the read is a runtime
+   * decision.
+   */
+  private readonly nameInput = viewChild<UiTextInput>('nameInput');
+
+  /**
+   * "Name · required" — the marker sits beside the label because `ui-field`
+   * takes its label as a plain string, so it cannot carry an element. The
+   * separator is punctuation between two translated strings, like the `▸`
+   * in {@link destination}, and not a piece of copy of its own.
+   */
+  protected readonly nameLabel = computed(
+    () => `${this.i18n.t('itemForm.name')} · ${this.i18n.t('form.required')}`,
+  );
+
   /**
    * The draft as it stood when the form opened, or when it was last saved.
    *
@@ -286,6 +350,33 @@ export class ItemFormPage {
       // them by having just written them.
       this.baseline.set(this.snapshot());
     });
+
+    // Focus lands after the render, not during the click that asked for it, so
+    // that the message exists and already describes the field before a screen
+    // reader is sent there. The `aria-*` half of this used to live here too, as
+    // a write phase poking the inner <input> and <textarea>: `ui-field` labelled
+    // nothing, and neither control exposed `invalid`, `describedBy` or
+    // `focus()`. They do now, so the attributes are plain bindings in the
+    // template and only the focus move — which is genuinely a render-timing
+    // concern — is left.
+    afterRenderEffect({
+      read: () => {
+        if (!this.focusNameAt()) return;
+        this.nameInput()?.focus();
+      },
+    });
+  }
+
+  /**
+   * Typing takes the refusal off the screen.
+   *
+   * Not validation on a keystroke — nothing new is checked here. It only stops
+   * a message contradicting the field it points at while somebody is in the
+   * middle of fixing exactly what it asked for.
+   */
+  protected setName(value: string): void {
+    this.name.set(value);
+    if (this.nameError()) this.nameError.set(false);
   }
 
   /**
@@ -339,6 +430,68 @@ export class ItemFormPage {
   /** Opens the framing editor for one photo. Cancelling changes nothing. */
   protected reframe(imageId: string): void {
     void this.focus.frame(imageId, 'item');
+  }
+
+  // --- ownership -----------------------------------------------------------
+  //
+  // "Wanted" used to be an emergent state with no control: a new item arrives
+  // with one copy, and the only way to put it on the wantlist was to delete
+  // that copy. Nothing said so, and the only feedback was the Summary flipping
+  // to "Wantlist" afterwards.
+
+  /**
+   * Owned or wanted, as something you can choose.
+   *
+   * A view over `copies` and not a field of its own: at least one copy means
+   * owned, none means wantlist (rule 3), and there is no `owned` flag to add.
+   * `linkedSignal` is what makes it both — writable, because a radio group has
+   * to move the moment it is clicked, and reset from the copies whenever they
+   * change, so removing the last copy with its own ✕ or adding one with "Add
+   * copy" moves the radio too.
+   */
+  protected readonly ownership = linkedSignal<string | null>(() =>
+    this.copies().length ? 'owned' : 'wanted',
+  );
+
+  /**
+   * Moves the item between the vault and the wantlist.
+   *
+   * A wantlist entry has no copies, so choosing it destroys them — and it asks
+   * with exactly the question a single copy's ✕ asks, because it is exactly the
+   * same loss: a price paid, a condition, a date, notes and any per-copy field,
+   * none of it recorded anywhere else. An untouched blank copy holds nothing
+   * and goes without a question, the same bargain {@link removeCopy} makes.
+   *
+   * A declined question must put the control back: the radio has already moved
+   * itself by then, and a control left showing "wantlist" over an item that
+   * still has copies is a form that would save something other than what it
+   * shows.
+   */
+  protected async setOwnership(choice: string): Promise<void> {
+    if (choice === 'wanted' && this.copies().length) {
+      if (this.copies().some(copyDraftHasContent)) {
+        const confirmed = await this.confirm.ask({
+          titleKey: 'confirm.removeCopy.title',
+          bodyKey:
+            this.copies().length === 1 ? 'confirm.removeCopy.bodyLast' : 'confirm.removeCopy.body',
+          confirmKey: 'confirm.removeCopy.confirm',
+          tone: 'danger',
+        });
+        if (!confirmed) {
+          this.syncOwnership();
+          return;
+        }
+      }
+      this.copies.set([]);
+    } else if (choice === 'owned' && !this.copies().length) {
+      this.copies.set([toDraft(newCopy())]);
+    }
+    this.syncOwnership();
+  }
+
+  /** Puts the control back on whatever the copies actually say. */
+  private syncOwnership(): void {
+    this.ownership.set(this.copies().length ? 'owned' : 'wanted');
   }
 
   // --- copies ---
@@ -446,12 +599,18 @@ export class ItemFormPage {
     return field.type === 'text' ? 'text' : field.type;
   }
 
-  /** Names the group-fields section — "no group" is a name too, not a blank. */
+  /**
+   * Names the group-fields section — "no group" is a name too, not a blank.
+   *
+   * Not upper-cased here: the heading is a `ui-section-label`, which applies
+   * the case in CSS. A group name is user data, and rewriting somebody's
+   * capitalisation on the way *into* a string is how it ends up shouted
+   * somewhere that did not ask for it.
+   */
   protected readonly groupLabel = computed(() => {
     const collection = this.collection();
     if (!collection) return '';
-    const name = groupById(collection.groups, this.groupId())?.name;
-    return (name ?? this.i18n.t('group.none')).toUpperCase();
+    return groupById(collection.groups, this.groupId())?.name ?? this.i18n.t('group.none');
   });
 
   /**
@@ -537,9 +696,15 @@ export class ItemFormPage {
     if (!collection) return;
     const name = this.name().trim();
     if (!name) {
-      this.toast.flash(this.i18n.t('toast.item.needsName'));
+      // Reported once, at the field: the message renders under it, the field is
+      // marked invalid and described by that message, and the focus lands on
+      // it. A toast in the far corner said the same thing and took the reader's
+      // place in the form with it.
+      this.nameError.set(true);
+      this.focusNameAt.update(n => n + 1);
       return;
     }
+    this.nameError.set(false);
 
     const existing = this.editing();
     const item: Item = { ...this.draftItem(), id: existing?.id ?? `i${Date.now()}` };

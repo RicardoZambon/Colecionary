@@ -35,6 +35,19 @@ h1 {
   }
 }
 
+/* Its title is an <h2> now — the tab had exactly one heading and it was the
+   page's — so the browser's own heading metrics are replaced by the ones this
+   block already read as. */
+.backup {
+  .heading {
+    margin: 0 0 var(--sp-1);
+    font-family: inherit;
+    font-size: var(--fs-md);
+    font-weight: 600;
+    color: var(--text);
+  }
+}
+
 .groups-card {
   padding: 14px 16px;
   display: flex;
@@ -54,14 +67,9 @@ h1 {
     gap: var(--sp-1) var(--sp-2);
     padding-bottom: var(--sp-2);
 
-    .heading {
-      @include mono-label;
-      // Uppercase is presentation — the dictionary keeps sentence case.
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-
-    ui-button {
+    // `ui-section-label` already paints this; what it does not know is that in
+    // a 260px column beside a link the head must not break.
+    :is(.heading, ui-button) {
       white-space: nowrap;
     }
   }
@@ -98,7 +106,7 @@ h1 {
     width: 56px;
     text-align: right;
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   /* Wide enough for a five-digit run, narrow enough to read as a number rather
@@ -109,21 +117,20 @@ h1 {
   }
 }
 
-.detail__name,
-.detail__parent,
-.detail__order,
-.detail__fields,
-.detail__sections {
+:is(.detail__name, .detail__parent, .detail__order, .detail__fields, .detail__sections) {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
   padding: 10px 0 0;
+}
 
-  .fields-label {
-    @include mono-label(var(--fs-xs), 0.1em);
-    text-transform: uppercase;
-  }
+/* One labelled control per row, so the field takes the row. `ui-field` stacks
+   its own label above the control, which is what replaced the styled spans that
+   sat beside these and named nothing. */
+:is(.detail__name, .detail__parent) ui-field {
+  flex: 1;
+  min-width: 170px;
 }
 
 /* One declaration per line, for fields and sections alike. Both are lists of
@@ -132,19 +139,13 @@ h1 {
    pills they wrapped at arbitrary points and nothing lined up with anything.
    Full-width children are what break the flex row, so the label takes a line
    of its own and the trailing buttons still share the last one. */
-.detail__fields,
-.detail__sections {
-  .fields-label,
-  .field-chip,
-  .section-chip {
+/* `:is()` rather than the nested comma lists this used to be. Angular stamps a
+   `[_ngcontent-…]` attribute onto every selector it emits, so a 2×3 cross
+   product cost six scoped selectors — and this component is the one the 6 kB
+   per-component style budget actually bites. */
+:is(.detail__fields, .detail__sections) {
+  :is(.fields-label, .decl-row) {
     width: 100%;
-  }
-}
-
-.detail__parent {
-  .parent {
-    flex: 1;
-    min-width: 170px;
   }
 }
 
@@ -180,7 +181,7 @@ h1 {
 
   &__note {
     margin: var(--sp-2) 0 0;
-    color: var(--muted);
+    color: var(--muted-strong);
     font-size: var(--fs-xs);
   }
 
@@ -197,49 +198,87 @@ h1 {
   }
 }
 
+/* Two fields on one line. `flex-end`, not `center`: each one now carries its
+   own label above its control, so aligning the boxes is what puts the two
+   controls on the same baseline. */
 .detail__order {
+  align-items: flex-end;
+  gap: var(--sp-1) var(--sp-3);
+
+  .order-field {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+
+  /* The direction qualifies the answer above it, so it shares that field's
+     label rather than asking for one of its own. */
+  .order-field__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+
   .order-by {
-    min-width: 170px;
+    flex: 1 1 150px;
+    min-width: 0;
   }
 
   .direction {
-    min-width: 86px;
+    flex: 0 1 86px;
   }
 
-  .fields-label.spaced {
-    margin-left: 10px;
+  .target-field {
+    flex: none;
   }
+}
+
+/* The label above a list of declarations, and above the move preview. Only the
+   full-width behaviour is here: `ui-section-label` paints itself. */
+:is(.detail__fields, .detail__sections, .move-preview) .fields-label {
+  letter-spacing: 0.1em;
 }
 
 /* The shared row. A declared field and a section are the same kind of thing to
    the eye — something this group declares, with its own controls — so they get
    the same frame. Not the pill radius they used to carry: at full width a pill
    reads as a button, and neither row is clickable. */
-.field-chip,
-.section-chip {
+.decl-row .name {
+  flex: 1;
+  min-width: 0;
+}
+
+.decl-row {
   display: flex;
   align-items: center;
+  /* Wraps at every width, not only under $bp-md: the "new" rows now end in an
+     explicit Add and Cancel, and a row that cannot wrap overflows the card
+     rather than taking a second line. */
+  flex-wrap: wrap;
   gap: 8px;
   /* Matches a row whose left side is a text input, so a list of fields and a
      list of sections keep the same rhythm down the card. */
   min-height: 38px;
   padding: 3px 4px 3px 10px;
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
   font-size: 12.5px;
   color: var(--text2);
-
-  .name {
-    flex: 1;
-    min-width: 0;
-  }
 
   /* Dashed accent for the row that does not exist yet, in both lists. */
   &--new {
     border-style: dashed;
     border-color: var(--accent);
   }
+}
+
+/* Commit and discard, kept together so they wrap as a pair. Nothing here
+   writes on blur any more, so these two are the only way in and out. */
+.chip-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: none;
 }
 
 .field-chip {
@@ -283,19 +322,12 @@ h1 {
   }
 }
 
-/* The inline editor inside a "new" row. It has to read as the row it is about
-   to become — same height, same metrics, filling the line — which is why it is
-   no longer the 120px, 11px inline scrap that suited a pill. */
+/* The inline editor inside a "new" row. Only its place in the row is declared
+   here: it is a `ui-text-input` now, and the panel2 background, the border, the
+   radius and the body face it used to hand-roll are the component's. */
 .field-input {
-  flex: 1;
+  flex: 1 1 150px;
   min-width: 0;
-  padding: 7px 10px;
-  color: var(--text);
-  font-size: 12.5px;
-  font-family: var(--font-body);
-  background: var(--panel2);
-  border: var(--bw) solid var(--border);
-  border-radius: var(--radius);
 }
 
 .new-group {
@@ -307,33 +339,29 @@ h1 {
   flex-wrap: wrap;
   gap: 6px 10px;
   padding: 8px 0;
-  border-top: 1px solid var(--border);
+  border-top: var(--bw) solid var(--border);
 
   .context {
     width: 100%;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-xs);
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-strong);
     flex: none;
   }
 
+  /* Layout only — `ui-text-input` paints it. The dashed accent it used to carry
+     said "this does not exist yet"; the Add button beside it now says it in
+     words, which is the thing that was missing. */
   &__input {
-    flex: 1;
+    flex: 1 1 150px;
     min-width: 0;
-    background: var(--panel2);
-    border: var(--bw) dashed var(--accent);
-    color: var(--text);
-    border-radius: var(--radius);
-    padding: 7px 10px;
-    font-family: var(--font-body);
-    font-size: 12.5px;
   }
 }
 
 .fine-print {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-strong);
   padding-top: 10px;
 
   a {
@@ -372,7 +400,7 @@ h1 {
   padding: 9px 0;
 
   & + & {
-    border-top: 1px solid var(--border);
+    border-top: var(--bw) solid var(--border);
   }
 }
 
@@ -389,7 +417,7 @@ h1 {
   .email {
     display: block;
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 }
 
@@ -415,14 +443,37 @@ h1 {
   background: var(--bg);
   border-top: var(--bw) solid var(--border);
 
+  &__status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--sp-1) var(--sp-2);
+    min-width: 0;
+  }
+
   &__note {
     font-size: var(--fs-xs);
-    color: var(--muted);
+    color: var(--muted-strong);
+  }
+
+  /* The observation behind the sentence beside it. Type, so it takes the
+     readable secondary layer rather than the decorative grey, and it says
+     which state it is in rather than relying on the colour to. */
+  &__state {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.08em;
+    color: var(--muted-strong);
+    transition: color var(--dur-fast) var(--ease-out);
+
+    &--saved {
+      color: var(--accent2-strong);
+    }
   }
 }
 
 .missing {
-  color: var(--muted);
+  color: var(--muted-strong);
   font-size: 13px;
 }
 
@@ -444,7 +495,11 @@ h1 {
    short one instead. */
 .groups-split {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  /* `minmax`, not a fixed 280px: a track that cannot shrink below its declared
+     width overflows the page rather than the pane the moment the grid is
+     narrower than 280px plus whatever the editor needs. With room it still
+     resolves to 280px, because the fr track only takes what is left. */
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
   gap: var(--sp-3);
   align-items: stretch;
   min-height: 60vh;
@@ -472,14 +527,19 @@ h1 {
   align-items: center;
   gap: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--bw) solid var(--border);
 }
 
+/* An <h2> now — it titles the pane — so everything a heading brings with it is
+   reset. The paint is unchanged: a breadcrumb is not a display heading. */
 .detail__path {
   flex: 1;
   min-width: 0;
+  margin: 0;
+  font-family: inherit;
   font-size: 12.5px;
-  color: var(--muted);
+  font-weight: 400;
+  color: var(--muted-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -499,7 +559,24 @@ h1 {
 
 .detail__empty {
   padding: 28px 10px;
-  color: var(--muted);
+  color: var(--muted-strong);
   font-size: 12.5px;
   text-align: center;
+}
+
+/*
+ * The two compact creators — "+ Sub" on a group and "+ Section" on its dividers.
+ *
+ * Both already reach 44px tall from the global rule in `styles.scss`, but they
+ * measured 33px and 42px *wide* at 390px: a short label makes a short target,
+ * and width counts as much as height. Scoped here rather than added to
+ * `ui-button`'s link variant globally, because that variant is also used for
+ * links inside a sentence (the CSV dialog's "Template", the item form's
+ * settings link) where a 44px floor would pad a word mid-paragraph.
+ */
+@include upto($bp-lg) {
+  .detail__head ui-button > button,
+  .sections ui-button > button {
+    min-width: var(--tap);
+  }
 }

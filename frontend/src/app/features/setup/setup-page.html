@@ -6,15 +6,26 @@
       <span class="brand__sub">{{ 'setup.brandSub' | t }}</span>
     </div>
 
+    <!--
+      The step list is navigation, not decoration. It used to be five inert
+      <li>s, so the only way back to a finished step was pressing Back once per
+      step. A page-local <button> rather than a `ui-button`: no kit variant
+      encodes done / current / not-yet-reachable, and a stepper is a one-off,
+      non-reusable control (standards rule 2) — it still consumes only tokens
+      and inherits the app's one focus ring.
+    -->
     <ol class="steps" [attr.aria-label]="'setup.stepsAria' | t">
       @for (key of stepKeys; track key; let i = $index) {
-        <li
-          class="steps__item"
-          [class.active]="i === step()"
-          [class.done]="i < step()"
-          [attr.aria-current]="i === step() ? 'step' : null"
-        >
-          <span class="steps__num">{{ i + 1 }}</span>{{ key | t }}
+        <li class="steps__item" [class.active]="i === step()" [class.done]="isDone(i)">
+          <button
+            type="button"
+            class="steps__go"
+            [disabled]="!canOpen(i) || busy()"
+            [attr.aria-current]="i === step() ? 'step' : null"
+            (click)="goTo(i)"
+          >
+            <span class="steps__num">{{ i + 1 }}</span>{{ key | t }}
+          </button>
         </li>
       }
     </ol>
@@ -46,7 +57,7 @@
         <ui-field [label]="'setup.db.password' | t">
           <ui-text-input type="password" [value]="password()" (valueChange)="password.set($event)" />
         </ui-field>
-        <ui-field [label]="'setup.db.trustCert' | t">
+        <ui-field [label]="'setup.db.trustCert' | t" [hint]="'setup.db.trustCertHint' | t">
           <ui-toggle
             [ariaLabel]="'setup.db.trustCert' | t"
             [on]="trustCert()"
@@ -54,6 +65,14 @@
           />
         </ui-field>
       </div>
+      <!--
+        No longer optional. The wizard exists to provision this database, so a
+        connection that does not answer is not a detail to discover at Finish —
+        `dbProven` gates Next, and the note below says which of the six
+        outcomes it was. Editing any field expires a previous pass and clears
+        the note with it, so re-testing is always available and never
+        pre-answered.
+      -->
       <div class="test-row">
         <ui-button variant="ghost" size="sm" [disabled]="testing() || !dbValid() || !tokenValid()" (click)="test()">
           {{ (testing() ? 'setup.db.testing' : 'setup.db.test') | t }}
@@ -119,20 +138,48 @@
     <!-- 4 — Review -->
     @if (step() === 4) {
       <p class="hint">{{ 'setup.review.hint' | t }}</p>
+      <!--
+        Every row echoes the rendering the step that made the choice used: the
+        token as the token (it was typed in the clear), the theme and the
+        currency by their names rather than by their storage keys. A review that
+        prints a different representation of the same decision is the one screen
+        where that is not a detail.
+      -->
       <dl class="review">
+        <dt>{{ 'setup.token.label' | t }}</dt><dd class="mono">{{ token() }}</dd>
         <dt>{{ 'setup.review.database' | t }}</dt><dd>{{ server() }},{{ port() }} / {{ database() }}</dd>
         <dt>{{ 'setup.review.organization' | t }}</dt><dd>{{ organizationName() }}</dd>
         <dt>{{ 'setup.review.owner' | t }}</dt><dd>{{ ownerName() }} &lt;{{ ownerEmail() }}&gt;</dd>
         <dt>{{ 'setup.review.theme' | t }}</dt><dd>{{ themeLabel() }}</dd>
-        <dt>{{ 'setup.review.currency' | t }}</dt><dd>{{ defaultCurrency() }}</dd>
+        <dt>{{ 'setup.review.currency' | t }}</dt><dd>{{ currencyName() }}</dd>
       </dl>
     }
 
+    <!--
+      The only place a failure can land. This page runs before the shell, so it
+      has no `ui-toast` behind it and no load-error panel to inherit: whatever
+      `apply` or the restart poll refuses is either this note or nothing at all.
+      That is why `messageFrom` never returns an empty string.
+    -->
     @if (error(); as message) {
       <p class="note" role="alert">
         <ui-icon class="note__icon" name="alert" [size]="13" [strokeWidth]="2.1" />
         <span>{{ message }}</span>
       </p>
+    }
+
+    <!--
+      Applying stops the API and waits for it to come back, which takes several
+      seconds and used to be reported by a button label alone — a screen where
+      nothing moves reads as a screen that has died. `ui-skeleton` is the one
+      thing in the app allowed to look like it is in motion; it is aria-hidden,
+      so the region owns the announcement and the busy state.
+    -->
+    @if (busy()) {
+      <div class="waiting" role="status" aria-busy="true">
+        <p class="waiting__text">{{ 'setup.applying' | t }}</p>
+        <ui-skeleton [lines]="2" />
+      </div>
     }
 
     <div class="nav">
@@ -141,11 +188,11 @@
         <ui-button
           variant="primary"
           size="sm"
-          [disabled]="(step() === 0 && !tokenValid()) || (step() === 1 && !dbValid()) || (step() === 2 && !adminValid())"
+          [disabled]="!canOpen(step() + 1)"
           (click)="next()"
         >{{ 'setup.next' | t }}</ui-button>
       } @else {
-        <ui-button variant="primary" size="sm" [disabled]="busy() || !adminValid()" (click)="finish()">
+        <ui-button variant="primary" size="sm" [disabled]="busy() || !canFinish()" (click)="finish()">
           {{ (busy() ? 'setup.applying' : 'setup.finish') | t }}
         </ui-button>
       }

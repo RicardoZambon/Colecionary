@@ -172,7 +172,7 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
     header p {
       margin: 4px 0 0;
       font-size: 12px;
-      color: var(--muted);
+      color: var(--muted-strong);
     }
 
     .body {
@@ -230,10 +230,10 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
 
     .preview__label {
       font-family: var(--font-mono);
-      font-size: 9px;
+      font-size: var(--fs-xs);
       letter-spacing: 0.13em;
       text-transform: uppercase;
-      color: var(--muted);
+      color: var(--muted-strong);
     }
 
     .preview__frame {
@@ -263,9 +263,9 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
       display: grid;
       place-items: center;
       font-family: var(--font-mono);
-      font-size: 8px;
+      font-size: var(--fs-xs);
       letter-spacing: 0.08em;
-      color: var(--muted);
+      color: var(--muted-strong);
       border-top: var(--bw) dashed var(--border);
     }
 
@@ -279,8 +279,8 @@ const SURFACES: Record<ImageUsage, readonly Surface[]> = {
 
     .coords {
       font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--muted);
+      font-size: var(--fs-xs);
+      color: var(--muted-strong);
     }
 
     .actions {

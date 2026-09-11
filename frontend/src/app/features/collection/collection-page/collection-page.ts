@@ -72,7 +72,7 @@ import {
 } from './item-selection';
 import { readHidden, toggleHidden, visibleFields, writeHidden } from './column-prefs';
 import { TPipe } from '../../../shared/pipes/t.pipe';
-import { UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSkeleton } from '../../../shared/ui';
+import { UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSectionLabel, UiSkeleton } from '../../../shared/ui';
 import { ViewMode, resolveView, viewParam } from './view-mode';
 import {
   initialExpanded,
@@ -85,13 +85,22 @@ import {
 /** Reordering writes the whole collection back, so coalesce rapid drags. */
 const ORDER_DEBOUNCE_MS = 400;
 
-/** Below this the shell's own 226px sidebar leaves no room for a second column. */
-const WIDE_ENOUGH = '(min-width: 1200px)';
+/**
+ * Below this the shell's own 226px sidebar leaves no room for a second column.
+ *
+ * The same boundary as the `from($bp-xl)` query in `collection-page.scss`, and
+ * now written the same way round. `$bp-xl` is 1200px and `from()` means "wider
+ * than it", so both say 1201. This said 1200 and the stylesheet said 1200 via a
+ * hand-written media query, which agreed only because nobody had used the
+ * mixin — the mixin adds the pixel and this did not, so the two would have
+ * disagreed at exactly 1200px the moment the raw query was tidied away.
+ */
+const WIDE_ENOUGH = '(min-width: 1201px)';
 
 @Component({
   selector: 'app-collection-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BulkBar, CollectionFilters, CollectionHero, CollectionToolbar, CsvImportDialog, GroupBreadcrumb, GroupDashboard, GroupTree, ItemGrid, ItemList, RouterLink, TPipe, UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSkeleton],
+  imports: [BulkBar, CollectionFilters, CollectionHero, CollectionToolbar, CsvImportDialog, GroupBreadcrumb, GroupDashboard, GroupTree, ItemGrid, ItemList, RouterLink, TPipe, UiButton, UiDialog, UiEmpty, UiReadOnlyNotice, UiSectionLabel, UiSkeleton],
   templateUrl: './collection-page.html',
   styleUrl: './collection-page.scss',
 })
@@ -469,6 +478,36 @@ export class CollectionPage {
    */
   protected readonly chunks = computed<SectionChunk[]>(() =>
     chunkBySection(this.items(), this.groupSections(), !this.filtering()),
+  );
+
+  /**
+   * The open group's *own* items, in the order the grid would show them.
+   *
+   * Derived from `items()` rather than from `directItems()` so the dashboard's
+   * inline grid is the same sequence, sorted and section-ordered, that the item
+   * views use — `directItems` is a raw filter over the source and exists only
+   * for the counting the dashboard's empty state still needs. Filtering a list
+   * that is already in order preserves that order, which is all
+   * `chunkBySection` requires.
+   */
+  protected readonly directVisible = computed(() => {
+    const id = this.g();
+    if (!id || id === UNGROUPED_ID) return [];
+    return this.items().filter(item => item.groupId === id);
+  });
+
+  /**
+   * Those items cut into their section runs.
+   *
+   * The entry indices in these chunks are positions in `directVisible()`, not
+   * in `collection.items`, so they cannot drive a reorder — manual order is
+   * persisted by index (rule 4) and a move computed against a filtered subset
+   * would rewrite the wrong rows. The dashboard therefore passes
+   * `manual = false`, which is also the honest answer: a board showing
+   * sub-groups beside items is not the surface you arrange an ordered run on.
+   */
+  protected readonly directChunks = computed<SectionChunk[]>(() =>
+    chunkBySection(this.directVisible(), this.groupSections(), !this.filtering()),
   );
 
   // --- selection ----------------------------------------------------------

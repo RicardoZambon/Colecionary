@@ -5,52 +5,62 @@
     >
 
     @if (canBrowse()) {
-      <nav
-        class="browse"
-        [attr.aria-label]="'item.browse.aria' | t"
-        [title]="'item.browse.keyboardHint' | t"
-      >
-        @if (browse().previous; as prev) {
-          <a
-            class="browse__step"
-            [routerLink]="browseLink(prev)"
-            queryParamsHandling="preserve"
-            [attr.aria-label]="'item.browse.previous' | t: { name: prev.name }"
-          >
-            <ui-icon class="browse__chev" name="chevron-left" [size]="13" />
-            <span class="browse__name">{{ prev.name }}</span>
-          </a>
-        } @else {
-          <span class="browse__step browse__step--off" aria-disabled="true">
-            <ui-icon class="browse__chev" name="chevron-left" [size]="13" />
-            <span class="browse__name">{{ 'item.browse.start' | t }}</span>
-          </span>
-        }
+      <!-- The pill and, under it, the shortcut that does the same thing without
+           a pointer. The shortcut used to live in a `title` on this nav: a
+           tooltip no touch device ever shows and no keyboard user hovers to
+           find, which made the one affordance aimed at keyboard users the only
+           undiscoverable thing on the page. -->
+      <div class="browse-wrap">
+        <nav class="browse" [attr.aria-label]="'item.browse.aria' | t">
+          @if (browse().previous; as prev) {
+            <a
+              class="browse__step"
+              [routerLink]="browseLink(prev)"
+              queryParamsHandling="preserve"
+              [attr.aria-label]="'item.browse.previous' | t: { name: prev.name }"
+              [attr.aria-describedby]="hintId"
+            >
+              <ui-icon class="browse__chev" name="chevron-left" [size]="13" />
+              <span class="browse__name">{{ prev.name }}</span>
+            </a>
+          } @else {
+            <span class="browse__step browse__step--off" aria-disabled="true">
+              <ui-icon class="browse__chev" name="chevron-left" [size]="13" />
+              <span class="browse__name">{{ 'item.browse.start' | t }}</span>
+            </span>
+          }
 
-        @if (browse().position) {
-          <span
-            class="browse__pos"
-            [attr.aria-label]="'item.browse.positionAria' | t: { i: browse().position, n: browse().total }"
-          >{{ 'item.browse.position' | t: { i: browse().position, n: browse().total } }}</span>
-        }
+          @if (browse().position) {
+            <span
+              class="browse__pos"
+              [attr.aria-label]="'item.browse.positionAria' | t: { i: browse().position, n: browse().total }"
+            >{{ 'item.browse.position' | t: { i: browse().position, n: browse().total } }}</span>
+          }
 
-        @if (browse().next; as next) {
-          <a
-            class="browse__step"
-            [routerLink]="browseLink(next)"
-            queryParamsHandling="preserve"
-            [attr.aria-label]="'item.browse.next' | t: { name: next.name }"
-          >
-            <span class="browse__name">{{ next.name }}</span>
-            <ui-icon class="browse__chev" name="chevron-right" [size]="13" />
-          </a>
-        } @else {
-          <span class="browse__step browse__step--off" aria-disabled="true">
-            <span class="browse__name">{{ 'item.browse.end' | t }}</span>
-            <ui-icon class="browse__chev" name="chevron-right" [size]="13" />
-          </span>
-        }
-      </nav>
+          @if (browse().next; as next) {
+            <a
+              class="browse__step"
+              [routerLink]="browseLink(next)"
+              queryParamsHandling="preserve"
+              [attr.aria-label]="'item.browse.next' | t: { name: next.name }"
+              [attr.aria-describedby]="hintId"
+            >
+              <span class="browse__name">{{ next.name }}</span>
+              <ui-icon class="browse__chev" name="chevron-right" [size]="13" />
+            </a>
+          } @else {
+            <span class="browse__step browse__step--off" aria-disabled="true">
+              <span class="browse__name">{{ 'item.browse.end' | t }}</span>
+              <ui-icon class="browse__chev" name="chevron-right" [size]="13" />
+            </span>
+          }
+        </nav>
+
+        <!-- Named by both arrows, so a screen reader hears the shortcut at the
+             moment it applies rather than only if the user happens to read
+             past the pill. -->
+        <p class="browse-hint" [id]="hintId">{{ 'item.browse.keyboardHint' | t }}</p>
+      </div>
     }
   </div>
 
@@ -90,13 +100,19 @@
             ></button>
           }
           @if (it.photoIds.length < 8 && canEdit()) {
+            <!-- Icon-only, so the aria-label is the whole accessible name. It
+                 writes as soon as a file is chosen, so it also has to stop
+                 offering itself while that upload and save are in flight. -->
             <button
               type="button"
               class="thumb thumb--add"
+              [disabled]="addingPhoto() || saving()"
               [attr.aria-label]="'item.addPhoto' | t"
               [title]="'item.addPhoto' | t"
               (click)="addPhoto()"
-            >+</button>
+            >
+              <ui-icon name="plus" [size]="16" />
+            </button>
           }
         </div>
         @if (mainPhoto(); as photo) {
@@ -104,9 +120,14 @@
             <ui-button variant="ghost" size="sm" (click)="viewerOpen.set(true)">
               {{ 'item.viewLarge' | t }}
             </ui-button>
-            <ui-button variant="ghost" size="sm" (click)="reframe(photo.id)">
-              {{ 'item.adjustFraming' | t }}
-            </ui-button>
+            <!-- Framing writes the image's focal point, so it belongs behind
+                 the same gate as every other write on this page. Viewing does
+                 not, and stays. -->
+            @if (canEdit()) {
+              <ui-button variant="ghost" size="sm" (click)="reframe(photo.id)">
+                {{ 'item.adjustFraming' | t }}
+              </ui-button>
+            }
           </div>
         }
       </div>
@@ -119,26 +140,39 @@
       />
 
       <div class="details">
-        <div>
-          <h1>{{ it.name }}</h1>
-          <!-- Real links, not decoration: a tag is the fastest way to the rest
-               of the set, and it used to be dead mono text. `ui-chip` with
-               `link` renders an <a>, so middle-click and open-in-new-tab work.
-               The label carries the tag itself, and the tooltip says what the
-               click does. -->
-          @if (tags().length) {
-            <div class="tags">
-              <span class="sr-only">{{ 'itemPage.tags.aria' | t }}</span>
-              @for (tag of tags(); track tag.name) {
-                <ui-chip
-                  [small]="true"
-                  [link]="collectionLink()"
-                  [queryParams]="tag.params"
-                  [ariaLabel]="'itemPage.tags.filterBy' | t: { tag: tag.name }"
-                  [hint]="'itemPage.tags.filterBy' | t: { tag: tag.name }"
-                  >#{{ tag.name }}</ui-chip
-                >
-              }
+        <div class="head">
+          <div class="head__title">
+            <h1>{{ it.name }}</h1>
+            <!-- Real links, not decoration: a tag is the fastest way to the rest
+                 of the set, and it used to be dead mono text. `ui-chip` with
+                 `link` renders an <a>, so middle-click and open-in-new-tab work.
+                 The label carries the tag itself, and the tooltip says what the
+                 click does. -->
+            @if (tags().length) {
+              <div class="tags">
+                <span class="sr-only">{{ 'itemPage.tags.aria' | t }}</span>
+                @for (tag of tags(); track tag.name) {
+                  <ui-chip
+                    [small]="true"
+                    [link]="collectionLink()"
+                    [queryParams]="tag.params"
+                    [ariaLabel]="'itemPage.tags.filterBy' | t: { tag: tag.name }"
+                    [hint]="'itemPage.tags.filterBy' | t: { tag: tag.name }"
+                    >#{{ tag.name }}</ui-chip
+                  >
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Beside the name, not under four cards: the edit route is refused
+               by canEditGuard and the delete earns a 403, so for a reader this
+               row is two buttons that cannot work — and for everyone else it
+               was a scroll away from the item it acts on. -->
+          @if (canEdit()) {
+            <div class="actions">
+              <ui-button [routerLink]="['/c', coll.id, 'items', it.id, 'edit']" queryParamsHandling="preserve">{{ 'item.edit' | t }}</ui-button>
+              <ui-button class="actions__danger" variant="danger" (click)="deleteItem()">{{ 'item.delete' | t }}</ui-button>
             </div>
           }
         </div>
@@ -160,14 +194,24 @@
         @if (!owned()) {
           <div class="wantlist">
             <span>{{ 'item.onWantlist' | t }}</span>
-            <ui-button size="sm" (click)="markOwned()">{{ 'item.markOwned' | t }}</ui-button>
+            <!-- The sentence is a fact about the item and stays for a reader.
+                 The button adds a copy — a write — so it is gated like the
+                 rest, and it says so while its own save is in flight. -->
+            @if (canEdit()) {
+              <ui-button size="sm" [disabled]="saving()" (click)="markOwned()">
+                <span class="own-label">
+                  <ui-icon name="check" [size]="12" [strokeWidth]="2.4" />
+                  {{ (saving() ? 'item.markingOwned' : 'item.markOwned') | t }}
+                </span>
+              </ui-button>
+            }
           </div>
         }
 
         <p class="description">{{ it.description }}</p>
 
         <ui-card class="fields">
-          <ui-section-label class="fields__heading">{{ 'item.details' | t }}</ui-section-label>
+          <ui-section-label class="fields__heading" level="h2">{{ 'item.details' | t }}</ui-section-label>
           <div class="field-row"><span class="key">{{ 'item.year' | t }}</span><span>{{ it.year }}</span></div>
           <div class="field-row"><span class="key">{{ 'item.group' | t }}</span><span>{{ groupPath() }}</span></div>
           <div class="field-row"><span class="key">{{ valuePerCopyKey() | t }}</span><span>{{ unitValue() | itemValue: currency() : fromPaid() }}</span></div>
@@ -175,7 +219,7 @@
 
         @if (owned()) {
           <ui-card class="fields copies">
-            <ui-section-label class="fields__heading">{{ 'item.copiesHeading' | t: { n: it.copies.length } }}</ui-section-label>
+            <ui-section-label class="fields__heading" level="h2">{{ 'item.copiesHeading' | t: { n: it.copies.length } }}</ui-section-label>
             @for (copy of copyRows(); track copy.id) {
               <div class="copy-row">
                 <ui-badge [tone]="copy.tone">{{ copy.conditionKey | t }}</ui-badge>
@@ -208,20 +252,11 @@
 
         @if (groupFieldRows().length) {
           <ui-card class="fields">
-            <ui-section-label class="fields__heading">{{ 'item.groupFields' | t: { name: groupName() } }}</ui-section-label>
+            <ui-section-label class="fields__heading" level="h2">{{ 'item.groupFields' | t: { name: groupName() } }}</ui-section-label>
             @for (row of groupFieldRows(); track row.key) {
               <div class="field-row"><span class="key">{{ row.key }}</span><span>{{ row.value }}</span></div>
             }
           </ui-card>
-        }
-
-        <!-- The edit route is refused by canEditGuard, and the delete earns a
-             403, so for a reader this row is two buttons that cannot work. -->
-        @if (canEdit()) {
-          <div class="actions">
-            <ui-button [routerLink]="['/c', coll.id, 'items', it.id, 'edit']" queryParamsHandling="preserve">{{ 'item.edit' | t }}</ui-button>
-            <ui-button variant="danger" (click)="deleteItem()">{{ 'item.delete' | t }}</ui-button>
-          </div>
         }
       </div>
     </div>

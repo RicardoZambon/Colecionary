@@ -26,22 +26,24 @@ h1 {
   gap: 12px;
 }
 
-.heading {
-  @include mono-label(10.5px);
-  // Uppercase is presentation, so it lives here and not in the dictionary —
-  // translators get sentence case (docs/frontend-standards.md §2.8).
-  text-transform: uppercase;
-}
-
 .sub {
   font-size: 12.5px;
   color: var(--text2);
   margin: 5px 0 0;
 }
 
-// Opens a second block inside a section that already had one — the
-// per-collection backups under the vault-wide ones.
-.heading.spaced {
+/*
+ * Opens a second block inside a section that already had one — the
+ * per-collection backups under the vault-wide ones.
+ *
+ * This is all that is left of the old `.heading` rule, which was `mono-label`
+ * plus uppercase, i.e. a hand-rolled copy of `ui-section-label` — and a `<div>`,
+ * so every section title on this page painted as a heading and was announced as
+ * nothing. The kit component owns the paint now, including the uppercasing,
+ * which is presentation and so never reaches the dictionary (translators get
+ * sentence case; docs/frontend-standards.md §2.8).
+ */
+ui-section-label.spaced {
   margin-top: 22px;
 }
 
@@ -67,15 +69,46 @@ h1 {
   gap: 14px;
 }
 
+/*
+ * The real control around a theme or language card.
+ *
+ * `ui-card` is a plain custom element, so the (click) it used to carry was
+ * mouse-only and neither picker had a keyboard path at all. The button is the
+ * grid item now, which is why it has to flex the card through: `grid-auto-rows:
+ * 1fr` stretches the button, and a card asking for `height: 100%` inside an
+ * auto-height button resolves the percentage against its own content and stops
+ * there — the same trap `group-card`'s anchor documents.
+ *
+ * Everything below the display is a reset of the UA button paint; the corner
+ * radius is here only so the focus ring follows the card's own corners instead
+ * of drawing a square around them.
+ */
+.pick {
+  display: flex;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
 .theme-card {
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 9px;
+  flex: 1;
+  min-width: 0;
 
   &--active {
     border-color: var(--accent);
-    border-width: 2px;
+    // Twice the theme's own border, not a literal 2px: `--bw` is 2px in one
+    // theme, where 2px would have made the *selected* card the thinner one.
+    border-width: calc(var(--bw) * 2);
   }
 
   .swatches {
@@ -85,8 +118,12 @@ h1 {
     span {
       width: 24px;
       height: 24px;
-      border-radius: 4px;
-      border: 1px solid rgba(128, 128, 128, 0.35);
+      border-radius: var(--radius);
+      /* A hairline that has to read against an arbitrary swatch colour on
+         either a light or a dark panel, so it is mixed from the theme's own ink
+         rather than being a fixed grey — the same color-mix pattern
+         `collection-hero` uses for its veil. */
+      border: var(--bw) solid color-mix(in srgb, var(--text) 35%, transparent);
     }
   }
 
@@ -97,19 +134,24 @@ h1 {
 
   .desc {
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
     line-height: 1.45;
   }
 
   .state {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-strong);
+    // The tick sits on this line, so the row is a flex box rather than leaving
+    // an inline svg to hang off a text baseline.
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
 
     &.active {
-      color: var(--accent);
+      color: var(--accent-strong);
     }
   }
 }
@@ -144,7 +186,8 @@ h1 {
 
   &--active {
     border-color: var(--accent);
-    border-width: 2px;
+    // See `.theme-card--active`: twice the theme's own border, never a literal.
+    border-width: calc(var(--bw) * 2);
   }
 
   &__head {
@@ -163,7 +206,7 @@ h1 {
   &__price {
     font-size: 13px;
     font-weight: 700;
-    color: var(--accent2);
+    color: var(--accent2-strong);
   }
 
   &__features {
@@ -186,6 +229,15 @@ h1 {
       color: var(--accent);
     }
   }
+}
+
+// The tick beside "Current plan", inside the ui-button that says it. A span
+// rather than a bare icon because a block button lays its content out on a text
+// baseline, which is where an inline svg hangs a couple of pixels low.
+.current {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
 }
 
 /*
@@ -223,7 +275,7 @@ h1 {
   padding: 10px 0;
 
   & + & {
-    border-top: 1px solid var(--border);
+    border-top: var(--bw) solid var(--border);
   }
 }
 
@@ -245,7 +297,7 @@ h1 {
   .email {
     display: block;
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
     margin-top: 2px;
   }
 }
@@ -282,10 +334,23 @@ h1 {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--accent);
-  border: 1px solid var(--accent);
+  color: var(--accent-strong);
+  border: var(--bw) solid var(--accent);
   border-radius: var(--pill);
   padding: 3px 10px;
+}
+
+/*
+ * A skeleton's host is `display: flex; width: 100%` — right when it fills a
+ * line box, wrong as a direct child of one of these rows, where it would claim
+ * the width `.who` (flex: 1, basis 0) needs and squeeze the identity to
+ * nothing. Every placeholder that lands here stands in for something of fixed
+ * size: an avatar, or a `size="sm"` button.
+ */
+.member-row > ui-skeleton,
+.account-card > ui-skeleton {
+  flex: none;
+  width: auto;
 }
 
 // The picker is a single control in a full-width section; left unbounded it

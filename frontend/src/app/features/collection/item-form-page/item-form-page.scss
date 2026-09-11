@@ -1,14 +1,24 @@
 @use '../../../../styles/mixins' as *;
 
 /* One name for the page gutter, because the sticky bar has to bleed to exactly
-   the same edge and a second literal would drift from the first. */
+   the same edge and a second literal would drift from the first.
+
+   `--bar-h` is the commit bar's own height, and the bottom padding reserves it:
+   the bar is sticky at the foot of the form, so while it is stuck it paints
+   over whatever sits at the bottom of the scrollport — which is how the last
+   card came to be read from behind it. Reserving the bar's height at the end of
+   the scrolling content means the region it can cover at the furthest scroll
+   position is region nothing is drawn in. The row is one button between two
+   `--sp-3` rules plus its top border; `--tap` stands in for the button, since
+   that is the smallest a target may be and reserving it can never come short. */
 :host {
   --page-x: var(--sp-8);
+  --bar-h: calc(var(--sp-3) * 2 + var(--bw) + var(--tap));
 
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: var(--sp-6) var(--page-x);
+  padding: var(--sp-6) var(--page-x) var(--bar-h);
   max-width: 980px;
 }
 
@@ -16,8 +26,16 @@
   :host {
     --page-x: var(--sp-4);
 
-    padding: var(--sp-4) var(--page-x) var(--sp-2);
+    padding: var(--sp-4) var(--page-x) var(--bar-h);
     gap: var(--sp-3);
+  }
+}
+
+/* The bar wraps onto two rows below this width — see the .actions rule — so the
+   reserve grows by the state line and the gap above it. */
+@include upto($bp-sm) {
+  :host {
+    --bar-h: calc(var(--sp-3) * 2 + var(--bw) + var(--tap) + var(--sp-5));
   }
 }
 
@@ -29,6 +47,12 @@
   gap: var(--sp-1);
   font-size: 12.5px;
   font-weight: 600;
+
+  /* Hover does not exist on touch, and a link that does not visibly take the
+     press reads as broken and gets tapped twice. */
+  &:active {
+    color: var(--accent-strong);
+  }
 }
 
 h1 {
@@ -42,10 +66,15 @@ h1 {
  * overflow a phone — a 300px column plus a 360px minimum plus 26px of gap
  * cannot fit 390px, so the row simply stuck out. `minmax(0, 1fr)` says the same
  * thing about the form ("take the rest") without ever claiming a floor.
+ *
+ * Both tracks state a minimum rather than a size, for the same reason: the
+ * photo column was a flat `300px`, and a fixed track cannot give way, so
+ * between $bp-lg and the width where 300 + 26 + the form finally fits, it was
+ * the form that had to overflow.
  */
 .layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
   gap: 26px;
   align-items: start;
 }
@@ -63,6 +92,58 @@ h1 {
   flex-direction: column;
   gap: 14px;
   min-width: 0;
+}
+
+/*
+ * A fieldset, because the two radios are one question: the legend is the
+ * question, and the platform reads it with each option. Reset first — a
+ * browser's own fieldset brings a border and padding of its own.
+ */
+.ownership {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius);
+  /* A fieldset carries `min-inline-size: min-content` in the UA stylesheet, so
+     it refuses to shrink below its widest line — which is how a box like this
+     one pushes a 390px document sideways. */
+  min-inline-size: 0;
+
+  &__legend {
+    @include mono-label;
+    text-transform: uppercase;
+    padding: 0 var(--sp-1);
+  }
+
+  /* A minimum, never a count: two 180px columns side by side where they fit and
+     stacked where they do not. */
+  &__choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0 var(--sp-4);
+  }
+
+  &__hint {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--muted-strong);
+  }
+}
+
+/* The name field and the message a refused submit renders under it. */
+.named {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+
+  &__error {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--danger);
+  }
 }
 
 .pair {
@@ -90,11 +171,6 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 8px;
-
-  &__heading {
-    @include mono-label;
-    text-transform: uppercase;
-  }
 
   &__rows {
     display: grid;
@@ -132,10 +208,6 @@ h1 {
   gap: 12px;
   overflow: visible;
 
-  &__heading {
-    @include mono-label;
-  }
-
   &__row {
     display: flex;
     flex-direction: column;
@@ -152,32 +224,15 @@ h1 {
 
     .tag {
       font-family: var(--font-mono);
-      font-size: 10px;
+      font-size: var(--fs-xs);
       letter-spacing: 0.06em;
-      color: var(--muted);
+      color: var(--muted-strong);
       white-space: nowrap;
     }
 
     ui-select {
       flex: 1;
       min-width: 0;
-    }
-  }
-
-  &__remove {
-    margin-left: auto;
-    border: var(--bw) solid var(--border);
-    border-radius: var(--radius);
-    background: transparent;
-    color: var(--muted);
-    font-size: 11px;
-    line-height: 1;
-    padding: 5px 7px;
-    cursor: pointer;
-
-    &:hover {
-      color: var(--danger);
-      border-color: var(--danger);
     }
   }
 
@@ -199,7 +254,7 @@ h1 {
 
   &__empty {
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   &__actions {
@@ -212,7 +267,9 @@ h1 {
 @include upto($bp-md) {
   .copies__fields,
   .copies__custom {
-    grid-template-columns: 1fr;
+    /* A minimum, not a bare `1fr`: a track with no floor can be squeezed below
+       the width of what is in it, and a hint under a field is what does it. */
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -223,10 +280,6 @@ h1 {
   gap: 10px;
   overflow: visible;
 
-  &__heading {
-    @include mono-label;
-  }
-
   &__row {
     display: grid;
     grid-template-columns: minmax(80px, 1fr) minmax(0, 1.4fr);
@@ -236,21 +289,25 @@ h1 {
     .key {
       font-family: var(--font-mono);
       font-size: 11px;
-      color: var(--muted);
+      color: var(--muted-strong);
     }
   }
 
   &__empty {
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   &__hint {
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
 
     a {
       font-weight: 600;
+
+      &:active {
+        color: var(--accent-strong);
+      }
     }
   }
 }
@@ -284,9 +341,10 @@ h1 {
     /* Reserves the line so the bar does not jump the first time it appears. */
     min-height: 1em;
 
+    /* An icon takes its colour from the text, so this is the only declaration
+       the mark needs — the size is an input on the component. */
     .dot {
       color: var(--warn);
-      font-size: 9px;
     }
   }
 }
@@ -326,6 +384,6 @@ h1 {
 }
 
 .missing {
-  color: var(--muted);
+  color: var(--muted-strong);
   font-size: 13px;
 }

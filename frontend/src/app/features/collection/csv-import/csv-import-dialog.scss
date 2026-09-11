@@ -16,19 +16,52 @@
   margin-top: 2px;
 }
 
-.sources {
+/* Demoted on purpose. A bordered button of its own put "download an example"
+   at the same weight as the two gestures that actually supply the data; as a
+   link closing the sentence that explains the format, it is where someone who
+   does not know the format is already reading. */
+.format__template {
+  margin-left: var(--sp-1);
+}
+
+/*
+ * The paste field, the file button and the provenance badge are one box.
+ *
+ * That is the whole fix for two controls that used to sit side by side and
+ * silently overwrite each other: a control drawn inside the field it fills
+ * cannot read as a competing input, and the badge under it names which gesture
+ * put the rows there.
+ */
+.source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  border-radius: var(--radius);
+}
+
+/*
+ * Lit only while a drag carrying a file is over it. An outline rather than a
+ * border so nothing reflows when it appears, and the offset puts it clear of
+ * the textarea's own edge instead of doubling it.
+ */
+.source--dropping {
+  outline: var(--bw) dashed var(--accent);
+  outline-offset: var(--sp-1);
+}
+
+.source__bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
 }
 
-.sources__file {
+.source__from {
   font-size: var(--fs-sm);
   color: var(--muted-strong);
 }
 
-.sources__error {
+.source__error {
   font-size: var(--fs-sm);
   color: var(--danger);
 }
@@ -40,9 +73,8 @@
   border-radius: var(--radius);
   background: var(--panel2);
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2) var(--sp-4);
+  flex-direction: column;
+  gap: var(--sp-2);
 }
 
 .duplicates legend {
@@ -51,24 +83,26 @@
   @include mono-label;
 }
 
-.duplicates label {
+/* No label rule and no gap above: ui-radio brings its own padding, which is
+   both the spacing between the options and their hover/press area. */
+.duplicates__options {
   display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  font-size: var(--fs-md);
-  cursor: pointer;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+}
 
-  /* Below the large breakpoint nothing interactive renders under the tap
-     target (rule 17). The radio itself must not grow — a 44px dot is a
-     different control — so the label carries the target instead. */
-  @include upto($bp-lg) {
-    position: relative;
+/* Below the large breakpoint nothing interactive renders under the tap target
+   (rule 17). The dot itself must not grow — a 44px radio is a different
+   control — so the option's own box carries the target. */
+@include upto($bp-lg) {
+  .duplicates__options ui-radio {
+    display: flex;
+    align-items: center;
     min-height: var(--tap);
   }
 }
 
 .duplicates__hint {
-  flex-basis: 100%;
   margin: 0;
   font-size: var(--fs-sm);
   color: var(--text2);

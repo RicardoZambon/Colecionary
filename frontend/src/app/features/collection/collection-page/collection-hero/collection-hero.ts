@@ -105,6 +105,22 @@ export class CollectionHero {
 
   protected readonly heading = computed(() => this.scopeName() || this.collection().name);
 
+  /** Whether there is a banner photograph to show. */
+  protected readonly hasBanner = computed(() => !!this.collection().bannerImageId);
+
+  /**
+   * Whether to reserve any banner strip at all.
+   *
+   * The banner was a flat 150px whether or not there was a picture in it, and
+   * the header overlaps it by 68px, so an unbannered collection opened with
+   * roughly 80px of nothing above the title — on every collection page, above
+   * the fold, where the items should be. For an editor that space is at least
+   * an invitation (the slot is a dropzone), so it stays, shorter. For a reader
+   * it is empty by definition: they cannot fill it, and a decorative void is
+   * not worth the only screenful anyone reads.
+   */
+  protected readonly showBanner = computed(() => this.hasBanner() || this.canEdit());
+
   /** True while a group narrows what the numbers describe. */
   protected readonly narrowed = computed(() => !!this.scopeName());
 

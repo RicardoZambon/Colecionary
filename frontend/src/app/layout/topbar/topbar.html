@@ -20,10 +20,24 @@
 
 <span class="spacer"></span>
 
+<!--
+  `ariaLabel` as well as the placeholder. A placeholder is not an accessible
+  name — it is announced as a value hint where it is announced at all, and it
+  disappears the moment anyone types — so this was the one unnamed control on
+  every screen in the app.
+
+  `clearable` because there was no way out of a search: the only thing that
+  emptied this field was the collection page's `clearFilters()`, offered solely
+  inside the "nothing matches" empty state. A query that found something could
+  not be undone from here.
+-->
 <ui-text-input
   class="search"
   variant="subtle"
   [placeholder]="'topbar.search' | t"
+  [ariaLabel]="'topbar.search' | t"
+  [clearable]="true"
+  [clearLabel]="'collection.searchClear' | t"
   [value]="store.query()"
   (valueChange)="store.query.set($event)"
 />
@@ -94,7 +108,15 @@
 </a>
 
 <ui-dropdown #profileMenu [width]="200">
-  <button ddTrigger type="button" class="avatar-trigger" [title]="'topbar.account' | t">
+  <!-- `title` alone is not a name: it is advisory, skipped by some screen
+       readers and absent on touch. The trigger's only content is an avatar. -->
+  <button
+    ddTrigger
+    type="button"
+    class="avatar-trigger"
+    [title]="'topbar.account' | t"
+    [attr.aria-label]="'topbar.account' | t"
+  >
     <ui-avatar [initials]="store.profile()?.initials ?? '··'" />
   </button>
   <ng-container ddPanel>

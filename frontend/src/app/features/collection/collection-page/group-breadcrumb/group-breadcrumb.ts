@@ -136,7 +136,7 @@ export interface ChildChip {
       border: var(--bw) dashed var(--border);
       border-radius: var(--pill);
       background: transparent;
-      color: var(--muted);
+      color: var(--muted-strong);
       font-family: var(--font-body);
       font-size: 11.5px;
       padding: 4px 12px;
@@ -157,7 +157,7 @@ export interface ChildChip {
       align-items: center;
       gap: var(--sp-1);
       font-size: 11.5px;
-      color: var(--muted);
+      color: var(--muted-strong);
       white-space: nowrap;
 
       &:hover {

@@ -361,10 +361,84 @@ for (const [name, url] of routes) {
         hatched.push(`${el.tagName.toLowerCase()}.${String(el.className).slice(0, 24)}`);
       }
     }
-    return { short, hatched: [...new Set(hatched)] };
+    // Every interactive element on the page, not just the hero row.
+    //
+    // This is the check that cannot be a unit test, twice over: it needs real
+    // layout, and it needs the *target* rather than the paint. Several controls
+    // here are deliberately smaller than 44px and grow their hit area with an
+    // absolutely positioned ::after instead (a chip in a dense filter bar, a
+    // table checkbox, a tree twisty, the reframe pip) — measuring the element
+    // reports a failure that is not there, which is how a first pass at this
+    // produced 2,295 phantom findings on a 1,122-item collection. So: union the
+    // box with any absolute ::after, and for a checkbox or radio measure the
+    // host or wrapping <label> that carries the grown area.
+    const tiny = [];
+    const box = el0 => {
+      let el = el0;
+      const type = el0.getAttribute?.('type') ?? '';
+      if (el0.tagName === 'INPUT' && (type === 'checkbox' || type === 'radio')) {
+        el = el0.closest('ui-checkbox, ui-radio, label') ?? el0;
+      }
+      const r = el.getBoundingClientRect();
+      let w = r.width;
+      let h = r.height;
+      const after = getComputedStyle(el, '::after');
+      if (after.content !== 'none' && after.position === 'absolute') {
+        for (const v of [after.width, after.minWidth]) {
+          if (Number.isFinite(parseFloat(v))) w = Math.max(w, parseFloat(v));
+        }
+        if (Number.isFinite(parseFloat(after.height))) h = Math.max(h, parseFloat(after.height));
+      }
+      return { w, h };
+    };
+    const CONTROLS = 'a,button,input,select,textarea,[role=button],[role=tab],[role=switch]';
+    for (const el of document.querySelectorAll(CONTROLS)) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      // A link inside a sentence is exempt (WCAG 2.5.5, the 'inline' case):
+      // growing it would break the line it sits in.
+      if (el.tagName === 'A' && getComputedStyle(el).display === 'inline') continue;
+      // A disabled control is not a target.
+      if (el.hasAttribute('disabled')) continue;
+      const { w, h } = box(el);
+      if (w < tap || h < tap) {
+        const label = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 22);
+        tiny.push(`${el.tagName.toLowerCase()} ${Math.round(w)}x${Math.round(h)} ${JSON.stringify(label)}`);
+      }
+    }
+
+    // A control nobody can name is a control a screen reader announces as
+    // 'button'. A placeholder is deliberately not accepted as a name.
+    const nameless = [];
+    for (const el of document.querySelectorAll(CONTROLS)) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) continue;
+      if ((el.textContent ?? '').trim() || el.getAttribute('title')) continue;
+      if (el.closest('label')) continue;
+      if (el.id && document.querySelector(`label[for="${el.id}"]`)) continue;
+      nameless.push(`${el.tagName.toLowerCase()}.${String(el.className).slice(0, 22)}`);
+    }
+
+    return {
+      short,
+      hatched: [...new Set(hatched)],
+      tiny: [...new Set(tiny)].slice(0, 8),
+      nameless: [...new Set(nameless)].slice(0, 8),
+    };
   });
   check(`hero actions meet --tap at 390px: ${name}`, found.short.length === 0, found.short.join(', '));
   check(`no hatched placeholder: ${name}`, found.hatched.length === 0, found.hatched.join(', '));
+  check(
+    `every target reaches --tap at 390px: ${name}`,
+    found.tiny.length === 0,
+    found.tiny.join(' | '),
+  );
+  check(
+    `every control has an accessible name: ${name}`,
+    found.nameless.length === 0,
+    found.nameless.join(', '),
+  );
 }
 await touch.close();
 

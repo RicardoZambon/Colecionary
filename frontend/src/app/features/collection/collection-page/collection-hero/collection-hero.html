@@ -1,19 +1,24 @@
-<div class="banner">
-  <!-- `fillable` and `reframable` both follow canEdit: replacing the banner and
-       reframing it are two separate writes, and both answer 403 to a reader. -->
-  <ui-image-slot
-    [src]="images.url(collection().bannerImageId, 'display')"
-    [focal]="focus.position(collection().bannerImageId)"
-    [fillable]="canEdit()"
-    [reframable]="canEdit() && !!collection().bannerImageId"
-    [placeholder]="'hero.bannerPlaceholder' | t"
-    (fileSelected)="setImage('banner', $event)"
-    (reframeRequested)="reframe('banner')"
-  />
-  <div class="banner__fade"></div>
-</div>
+<!-- Rendered only when there is something in it or somebody who could put
+     something in it — see `showBanner`. A reader with no banner gets no strip
+     at all rather than 80px of decorative nothing above the fold. -->
+@if (showBanner()) {
+  <div class="banner" [class.banner--empty]="!hasBanner()">
+    <!-- `fillable` and `reframable` both follow canEdit: replacing the banner and
+         reframing it are two separate writes, and both answer 403 to a reader. -->
+    <ui-image-slot
+      [src]="images.url(collection().bannerImageId, 'display')"
+      [focal]="focus.position(collection().bannerImageId)"
+      [fillable]="canEdit()"
+      [reframable]="canEdit() && !!collection().bannerImageId"
+      [placeholder]="'hero.bannerPlaceholder' | t"
+      (fileSelected)="setImage('banner', $event)"
+      (reframeRequested)="reframe('banner')"
+    />
+    <div class="banner__fade"></div>
+  </div>
+}
 
-<div class="header">
+<div class="header" [class.header--flush]="!hasBanner()">
   <div class="header__icon">
     <ui-image-slot
       icon="diamond"
@@ -103,6 +108,7 @@
          its own name once it is no longer wrapped in a named anchor. -->
     @if (canEdit()) {
       <a
+        class="faces"
         [routerLink]="['/c', collection().id, 'settings']"
         [queryParams]="{ tab: 'sharing' }"
         [attr.aria-label]="'hero.manageSharing' | t"

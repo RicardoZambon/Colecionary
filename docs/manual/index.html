@@ -486,9 +486,24 @@ npm run build            <span class="c"># precisa passar antes de qualquer merg
       <td>Checagem por coleção no serviço</td>
     </tr>
     <tr>
+      <td>O barrel <code>shared/ui/index.ts</code> torna o kit inteiro <em>eager</em></td>
+      <td>Quem abre o app baixa <code>ui-lightbox</code>, <code>ui-photo-manager</code>,
+          <code>ui-image-focus</code> e <code>ui-reorder</code> antes de ver o painel —
+          componentes que só páginas lazy usam. Verificado no bundle de produção: as
+          strings deles estão no chunk inicial. Cada componente novo do kit custa o
+          bundle inicial, que é o que empurrou o orçamento para 512 kB (ADR-84)</td>
+      <td>Parar de importar o barrel do código eager, ou quebrá-lo por área. O consumo
+          comprimido de hoje (127,5 kB) não é urgente, mas o número só sobe — e o
+          orçamento vai continuar sendo o lugar onde isso aparece</td>
+    </tr>
+    <tr>
       <td>A lista de itens não é virtualizada</td>
       <td>Uma coleção de 286 itens renderiza 286 linhas. Ainda responde; em
-          milhares, não vai</td>
+          milhares, não vai. <strong>Medido</strong> numa coleção de 1.122
+          itens: a view de tabela põe <strong>12.744 nós</strong> no DOM contra
+          499 da view de grade no mesmo grupo, e 2.295 elementos interativos —
+          o que também torna qualquer varredura de acessibilidade dessa tela
+          uma medida do tamanho da coleção, não do layout</td>
       <td>Virtualização na tabela, mais paginação no contrato — hoje
           <code>GET /api/collections</code> devolve o vault inteiro</td>
     </tr>

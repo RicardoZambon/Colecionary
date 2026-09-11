@@ -230,6 +230,12 @@ textarea::placeholder {
 @include upto($bp-lg) {
   ui-button > button,
   ui-date-input input,
+  /* The rest of the form kit, for the same reason as the date input: a 30px
+     role select in a member row and a 37px text field are targets before they
+     are fields, and a mis-tap in a form costs the whole entry. */
+  ui-text-input input,
+  ui-textarea textarea,
+  ui-select select,
   .view-toggle button,
   .theme-row,
   .signout,
@@ -252,7 +258,13 @@ textarea::placeholder {
    */
   ui-button > button.btn.btn--icon,
   .view-toggle button,
-  .toast__close {
+  .toast__close,
+  /* The text field's own clear button. Its height already follows the field,
+     which this block grows; only the width is short. It lives here and not in
+     `text-input.ts` because an inline styles block cannot `@use` the
+     breakpoint mixins, which is the same reason `ui-checkbox` is reached from
+     here. */
+  ui-text-input .clear {
     min-width: var(--tap);
   }
 
@@ -291,6 +303,15 @@ textarea::placeholder {
       transform: translate(-50%, -50%);
     }
   }
+
+  /* A radio row is a label beside a 16px dot, and the label is part of the
+     target — so unlike the checkbox this one grows the box, which a stack of
+     options can afford where a table row cannot. It matters more here than
+     almost anywhere: every one of these five rows is the last question before
+     an irreversible act, and a mis-tap picks the wrong disposition. */
+  ui-radio label {
+    min-height: var(--tap);
+  }
 }
 
 /**
@@ -311,5 +332,114 @@ button.reframe {
     width: var(--tap);
     height: var(--tap);
     transform: translate(-50%, -50%);
+  }
+}
+
+/* ==========================================================================
+ * Cards whose title carries the click
+ *
+ * `ui-card` is a plain custom element, so `(click)`/`[routerLink]` on it is
+ * mouse-only (see the note on the component). Where the card holds nothing
+ * else interactive the fix is to wrap it in a real anchor. Where it does — the
+ * item grid has a selection checkbox and a reorder pair inside every card —
+ * a wrapper would nest a control inside a link, which is invalid and breaks
+ * both.
+ *
+ * So the card's *title* becomes the real `<a>`/`<button>` and takes this
+ * class: the element stays where it is and where it reads, while its hit area
+ * spreads over the whole card. Focus lands on the title, which is also the
+ * card's accessible name, so the heading list and the tab order agree with
+ * what the eye sees.
+ *
+ * Two requirements at the usage site, both cheap and both load-bearing:
+ *   - the card (or an ancestor inside it) must be a positioning context, or
+ *     the overlay escapes to the viewport;
+ *   - anything else clickable in the card needs `position: relative` and a
+ *     `z-index` above 1, or the overlay swallows its clicks.
+ * ========================================================================== */
+
+.stretch-hit {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    /* The whole card, not just the title's own box. */
+    inset: 0;
+    /* Above the card's own background and any decorative layer, below the
+       controls that opt out with a higher z-index. */
+    z-index: 1;
+  }
+}
+
+/* ==========================================================================
+ * Targets the block above does not reach
+ *
+ * Everything here measured under 44px at phone width. They are gathered in
+ * this file rather than fixed in fourteen stylesheets for the reason stated at
+ * the top of the section: a hit area is a property of the pointer, and 44px is
+ * written once.
+ *
+ * Split by whether the box may grow. Rows and options in a menu may — they are
+ * already list-shaped, and a taller row is a better target with no cost to
+ * density. Twisties, sortable column heads and section toggles may not: they
+ * sit in a dense tree or a table header where 44px of height would push the
+ * content they label off the screen, so those grow the target only.
+ * ========================================================================== */
+
+@include upto($bp-lg) {
+  /* Menu and tree rows: growing the box is the correct answer. */
+  .sort-option,
+  .row__link,
+  .pick__link,
+  .field-input,
+  .new-group__input,
+  .chip-input,
+  .choice label {
+    min-height: var(--tap);
+  }
+
+  /* A tree row is a flex line; min-height alone leaves the label at the top. */
+  .row__link,
+  .pick__link,
+  .choice label {
+    display: flex;
+    align-items: center;
+  }
+
+  /*
+   * Target-only, because the paint must not move. A twisty is 14px because it
+   * sits between the indent guide and the group name; a sortable column head is
+   * the height of one table row by definition; the section toggle is a heading.
+   * Each gets a centred 44px ::after instead.
+   */
+  .row__twisty,
+  .pick__twisty,
+  .head__collapse,
+  .sec__toggle,
+  .col--sortable,
+  .undo__link,
+  /* The back link at the head of the item form, the item page and collection
+     settings — the same 16px-tall text link, styled separately in all three,
+     and the only way out of those pages on a phone. Target-only: it sits on one
+     line above the h1, and 44px of height there would push the title down on
+     every one of them. */
+  .back,
+  /* The × on a tag. It measured 10×10 — the smallest target in the app — and it
+     deletes something. It cannot grow: it sits inside a pill whose height is
+     the text it holds. */
+  ui-tag-input .tag__remove {
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      min-width: var(--tap);
+      width: 100%;
+      height: var(--tap);
+      transform: translate(-50%, -50%);
+    }
   }
 }

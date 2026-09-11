@@ -13,7 +13,7 @@ import { Collection, GroupField } from '../../../core/models';
 import { toCsv } from '../../../core/utils/csv.util';
 import { saveFile } from '../../../core/utils/download.util';
 import { TPipe } from '../../../shared/pipes/t.pipe';
-import { UiButton, UiDialog, UiField, UiTextarea } from '../../../shared/ui';
+import { UiButton, UiDialog, UiField, UiRadio, UiTextarea } from '../../../shared/ui';
 import {
   CsvImportIssue,
   CsvImportPlan,
@@ -79,11 +79,23 @@ const OUTCOME_KEYS: Record<RowOutcome, MessageKey> = {
  * group, the same cell names a sub-group *of that group* and a blank one means
  * the group itself — so importing straight into what is open needs a file of
  * nothing but names.
+ *
+ * ## One box, three gestures
+ *
+ * Paste, pick a file, drop a file: all three fill the *same* textarea, which is
+ * the only thing `plan` ever reads. That is deliberate. Presented as two
+ * controls of equal weight side by side, the file button looked like a second
+ * input mode and silently replaced whatever had been pasted; presented as a
+ * control *of* the box, replacing its content is the visible, obvious result of
+ * pressing it. `fileName` is the box's provenance — set when a file filled it,
+ * cleared the moment someone types over it — and it is announced, so the swap
+ * is never silent. The template download is not an input at all and no longer
+ * sits among them.
  */
 @Component({
   selector: 'app-csv-import-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiButton, UiDialog, UiField, UiTextarea],
+  imports: [TPipe, UiButton, UiDialog, UiField, UiRadio, UiTextarea],
   templateUrl: './csv-import-dialog.html',
   styleUrl: './csv-import-dialog.scss',
 })
@@ -108,7 +120,17 @@ export class CsvImportDialog {
   protected readonly duplicates = signal<DuplicateMode>('skip');
   /** Set when a picked file could not be read; cleared by the next attempt. */
   protected readonly fileError = signal(false);
+  /**
+   * Where the rows in the box came from, when they came from a file.
+   *
+   * Empty means "whatever is in the box was typed or pasted", which is why
+   * `typed` clears it: after an edit the content is no longer that file's, and a
+   * badge still naming it would be the same lie the old two-control layout told
+   * in the other direction.
+   */
   protected readonly fileName = signal('');
+  /** A drag carrying a file is over the paste area. Purely a visual state. */
+  protected readonly dropping = signal(false);
 
   /**
    * Recomputed from the text and the duplicate rule, and from nothing else.
@@ -217,6 +239,23 @@ export class CsvImportDialog {
     return this.i18n.t(issue.key, issue.params);
   }
 
+  /** The duplicate rule. Narrowed here so the template stays free of casts. */
+  protected pickDuplicates(mode: string): void {
+    this.duplicates.set(mode === 'update' ? 'update' : 'skip');
+  }
+
+  /**
+   * Someone edited the box, so the box is the source again.
+   *
+   * Dropping the file's name is the point: the badge says where the rows on
+   * screen came from, and after one keystroke they no longer came from there.
+   */
+  protected typed(value: string): void {
+    this.text.set(value);
+    this.fileName.set('');
+    this.fileError.set(false);
+  }
+
   protected async readFile(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -224,8 +263,47 @@ export class CsvImportDialog {
     // file after a failed attempt fires no `change` event and the button looks
     // dead. The same reason the archive import clears its own.
     input.value = '';
-    if (!file) return;
+    if (file) await this.accept(file);
+  }
 
+  /**
+   * Highlights the paste area, but only for a drag that actually carries a
+   * file.
+   *
+   * The `preventDefault` is what makes the drop land here at all, so it has to
+   * stay behind that test: claiming every drag would also swallow a *text*
+   * drag, and dragging a selection into a textarea is a native gesture this has
+   * no business breaking.
+   */
+  protected dragOver(event: DragEvent): void {
+    if (!carriesFile(event)) return;
+    event.preventDefault();
+    this.dropping.set(true);
+  }
+
+  /**
+   * Crossing from the textarea to the button fires `dragleave` on the way out
+   * of the child, which would flicker the highlight off and on; a move to
+   * something still inside the box is not a departure.
+   */
+  protected dragLeave(event: DragEvent): void {
+    const box = event.currentTarget as HTMLElement;
+    const to = event.relatedTarget as Node | null;
+    if (to && box.contains(to)) return;
+    this.dropping.set(false);
+  }
+
+  protected async onDrop(event: DragEvent): Promise<void> {
+    this.dropping.set(false);
+    const file = event.dataTransfer?.files?.[0];
+    // No file means a text drag, which belongs to the textarea underneath.
+    if (!file) return;
+    event.preventDefault();
+    await this.accept(file);
+  }
+
+  /** The one place a file becomes the content of the box. */
+  private async accept(file: File): Promise<void> {
     this.fileError.set(false);
     try {
       this.text.set(await file.text());
@@ -256,4 +334,14 @@ export class CsvImportDialog {
     if (!this.writes() || this.saving()) return;
     this.confirmed.emit(this.plan());
   }
+}
+
+/**
+ * Whether a drag is carrying a file rather than text.
+ *
+ * `dataTransfer.files` is empty until the drop itself, so mid-drag the only
+ * thing to read is `types`.
+ */
+function carriesFile(event: DragEvent): boolean {
+  return [...(event.dataTransfer?.types ?? [])].includes('Files');
 }

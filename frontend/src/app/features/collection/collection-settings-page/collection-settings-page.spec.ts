@@ -213,6 +213,19 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
     [...el.querySelectorAll('.move-preview__actions button')] as HTMLElement[];
   const byLabel = (aria: string) =>
     el.querySelector(`[aria-label="${aria}"]`) as HTMLInputElement & HTMLSelectElement;
+  /**
+   * A control the pane labels with a `ui-field` rather than an `aria-label`.
+   *
+   * The four in the detail pane sat beside a styled `<span>` that named
+   * nothing; they are inside a real `ui-field` now, which associates its own
+   * `<label for>` — so their accessible name is the visible label and there is
+   * no aria-label left to look them up by. Which is the point: an aria-label
+   * would *replace* that visible name, and "Sits under" would stop being
+   * sayable to a voice control.
+   */
+  const inField = (cls: string) =>
+    detail().querySelector(`${cls} input, ${cls} select`) as HTMLInputElement &
+      HTMLSelectElement;
 
   return {
     api,
@@ -234,6 +247,7 @@ async function mount(opts: { collection?: Collection; tab?: string; g?: string }
     confirmButton,
     moveButtons,
     byLabel,
+    inField,
     /** The document the last save sent to the API. */
     lastPut: () => api.puts[api.puts.length - 1],
   };
@@ -276,7 +290,7 @@ describe('CollectionSettingsPage', () => {
       tab: 'groups',
       g: 'zeta',
     });
-    const target = page.byLabel('Target for zeta');
+    const target = page.inField('.target');
     expect(target.value).toBe('120');
 
     for (const raw of ['', '0', '-3', 'abc']) {
@@ -296,15 +310,129 @@ describe('CollectionSettingsPage', () => {
   it('starts a new group with the nullable fields present and null', async () => {
     const page = await mount({ tab: 'groups' });
     page.click(page.el.querySelector('.groups-card__head ui-button button')!);
-    page.type(page.el.querySelector('.new-group__input') as HTMLInputElement, 'Alpha');
-    page.el
-      .querySelector('.new-group__input')!
-      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const field = page.el.querySelector('.new-group__input input') as HTMLInputElement;
+    page.type(field, 'Alpha');
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     page.fixture.detectChanges();
     await page.done();
 
     const added = page.lastPut().groups.find(g => g.name === 'Alpha')!;
     expect(added).toMatchObject({ parentId: null, fields: [], sort: null, target: null });
+  });
+
+  // --- the three inline creators commit explicitly, never on blur ---
+
+  it('never creates a group because focus left the field', async () => {
+    // The field committed on **blur**, so clicking anywhere else created a
+    // group — a destructive-by-accident write dressed as a text field, in one
+    // of the three places in the app that can create a group at all.
+    const page = await mount({ tab: 'groups' });
+    page.click(page.el.querySelector('.groups-card__head ui-button button')!);
+    const field = page.el.querySelector('.new-group__input input') as HTMLInputElement;
+    page.type(field, 'Alpha');
+    field.dispatchEvent(new FocusEvent('blur'));
+    page.fixture.detectChanges();
+    await page.done();
+
+    expect(page.lastPut().groups.some(g => g.name === 'Alpha')).toBe(false);
+    // And the draft is still standing: a blur that threw the name away would
+    // destroy the Add button on its way to being clicked.
+    expect(page.el.querySelector('.new-group__input input')).not.toBeNull();
+  });
+
+  it('commits a group from the Add button, and discards it on Escape', async () => {
+    const page = await mount({ tab: 'groups' });
+
+    // Escape first: the row goes, and nothing was written.
+    page.click(page.el.querySelector('.groups-card__head ui-button button')!);
+    const first = page.el.querySelector('.new-group__input input') as HTMLInputElement;
+    page.type(first, 'Gamma');
+    first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    page.fixture.detectChanges();
+    expect(page.el.querySelector('.new-group__input')).toBeNull();
+    await page.done();
+    expect(page.lastPut().groups.some(g => g.name === 'Gamma')).toBe(false);
+
+    // Then the button, which is the mouse's only way to create one.
+    page.click(page.el.querySelector('.groups-card__head ui-button button')!);
+    page.type(page.el.querySelector('.new-group__input input') as HTMLInputElement, 'Delta');
+    const add = [...page.el.querySelectorAll('.new-group .chip-actions button')][0];
+    page.click(add);
+    await page.done();
+    expect(page.lastPut().groups.some(g => g.name === 'Delta')).toBe(true);
+  });
+
+  it('puts the cursor in the creator it just opened', async () => {
+    // The raw inputs these replaced carried `autofocus`, which a
+    // `ui-text-input` cannot take. Pinned because the field creator lives
+    // inside an `ng-template` reached by `ngTemplateOutlet`, and a view query
+    // that quietly failed to see through it would cost a click per field with
+    // nothing on screen to say why.
+    const page = await mount({
+      collection: collection({ groups: [group('zeta')] }),
+      tab: 'groups',
+      g: 'zeta',
+    });
+
+    page.click(page.el.querySelector('.groups-card__head ui-button button')!);
+    expect(document.activeElement).toBe(page.el.querySelector('.new-group__input input'));
+
+    const addField = [...page.detail().querySelectorAll('.detail__fields button')].find(b =>
+      b.textContent?.includes('+ Field'),
+    )!;
+    page.click(addField);
+    expect(document.activeElement).toBe(
+      page.detail().querySelector('.field-chip--new .field-input input'),
+    );
+
+    const addSection = [...page.detail().querySelectorAll('.detail__sections button')].find(b =>
+      b.textContent?.includes('+ Section'),
+    )!;
+    page.click(addSection);
+    expect(document.activeElement).toBe(
+      page.detail().querySelector('.section-chip--new .field-input input'),
+    );
+  });
+
+  it('never declares a field or a section because focus left the field', async () => {
+    const page = await mount({
+      collection: collection({ groups: [group('zeta')] }),
+      tab: 'groups',
+      g: 'zeta',
+    });
+
+    // The declaration row inside the detail pane, not the collection's card.
+    const fieldRow = [...page.detail().querySelectorAll('.detail__fields button')].find(b =>
+      b.textContent?.includes('+ Field'),
+    )!;
+    page.click(fieldRow);
+    const fieldInput = page.detail().querySelector('.field-chip--new .field-input input')!;
+    page.type(fieldInput as HTMLInputElement, 'Casta');
+    fieldInput.dispatchEvent(new FocusEvent('blur'));
+    page.fixture.detectChanges();
+
+    const sectionRow = [...page.detail().querySelectorAll('.detail__sections button')].find(b =>
+      b.textContent?.includes('+ Section'),
+    )!;
+    page.click(sectionRow);
+    const sectionInput = page.detail().querySelector('.section-chip--new .field-input input')!;
+    page.type(sectionInput as HTMLInputElement, 'Bronze');
+    sectionInput.dispatchEvent(new FocusEvent('blur'));
+    page.fixture.detectChanges();
+    await page.done();
+
+    expect(page.lastPut().groups[0].fields).toEqual([]);
+    expect(page.lastPut().sections).toEqual([]);
+
+    // Both explicit commits still work, from the buttons.
+    page.click([...page.detail().querySelectorAll('.field-chip--new .chip-actions button')][0]);
+    page.click([...page.detail().querySelectorAll('.section-chip--new .chip-actions button')][0]);
+    await page.done();
+
+    expect(page.lastPut().groups[0].fields).toEqual([
+      { name: 'Casta', type: 'text', scope: 'item' },
+    ]);
+    expect(page.lastPut().sections.map(s => s.name)).toEqual(['Bronze']);
   });
 
   // --- fields declared by the collection (rule 22) ---
@@ -315,7 +443,7 @@ describe('CollectionSettingsPage', () => {
 
     page.click(card.querySelector('ui-button button')!);
     page.fixture.detectChanges();
-    const input = card.querySelector('.field-input') as HTMLInputElement;
+    const input = card.querySelector('.field-input input') as HTMLInputElement;
     page.type(input, 'Prateleira');
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     page.fixture.detectChanges();
@@ -362,7 +490,7 @@ describe('CollectionSettingsPage', () => {
       tab: 'groups',
       g: 'zeta',
     });
-    const orderBy = page.byLabel('Order the items in zeta by');
+    const orderBy = page.inField('.order-by');
     expect(orderBy.value).toBe('name');
 
     page.pick(orderBy, 'inherit');
@@ -439,7 +567,7 @@ describe('CollectionSettingsPage', () => {
     // leave out what it cannot accept, so there is nothing to reject after the
     // gesture — and nothing to explain.
     const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
-    const picker = page.byLabel('Parent group of marvel');
+    const picker = page.inField('.parent');
 
     const values = [...picker.options].map(o => o.value);
     expect(values).not.toContain('marvel');
@@ -452,7 +580,7 @@ describe('CollectionSettingsPage', () => {
 
   it('says what the move changes before it changes anything', async () => {
     const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
-    page.pick(page.byLabel('Parent group of marvel'), 'bonecos');
+    page.pick(page.inField('.parent'), 'bonecos');
 
     const preview = page.el.querySelector('.move-preview')!;
     // Both items in the subtree hold an Editora value, and Bonecos does not
@@ -465,7 +593,7 @@ describe('CollectionSettingsPage', () => {
 
   it('leaves the group where it is when the preview is declined', async () => {
     const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
-    page.pick(page.byLabel('Parent group of marvel'), 'bonecos');
+    page.pick(page.inField('.parent'), 'bonecos');
     page.click(page.moveButtons()[0]);
     await page.done();
 
@@ -475,7 +603,7 @@ describe('CollectionSettingsPage', () => {
 
   it('reparents through the ordinary debounced draft path once confirmed', async () => {
     const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
-    page.pick(page.byLabel('Parent group of marvel'), 'bonecos');
+    page.pick(page.inField('.parent'), 'bonecos');
     page.click(page.moveButtons()[1]);
     await page.done();
 
@@ -490,7 +618,7 @@ describe('CollectionSettingsPage', () => {
 
   it('can move a group out to the top level', async () => {
     const page = await mount({ collection: shelf(), tab: 'groups', g: 'marvel' });
-    page.pick(page.byLabel('Parent group of marvel'), '');
+    page.pick(page.inField('.parent'), '');
     page.click(page.moveButtons()[1]);
     await page.done();
 
@@ -509,7 +637,7 @@ describe('CollectionSettingsPage', () => {
       tab: 'groups',
       g: 'marvel',
     });
-    page.pick(page.byLabel('Parent group of marvel'), 'bonecos');
+    page.pick(page.inField('.parent'), 'bonecos');
 
     expect(page.el.querySelector('.move-preview__clash')).not.toBeNull();
     page.click(page.moveButtons()[1]);
@@ -672,6 +800,10 @@ describe('CollectionSettingsPage', () => {
       b.textContent?.includes('Turn sub-groups into sections'),
     )!;
     page.click(convert);
+    // It asks first now: it destroys every sub-group and re-files the whole
+    // branch, and a divider can carry neither the fields nor the order those
+    // groups declared.
+    await page.answerConfirm();
     await page.done();
 
     const saved = page.lastPut();
@@ -685,6 +817,37 @@ describe('CollectionSettingsPage', () => {
       saved.sections[0].id,
       saved.sections[1].id,
     ]);
+  });
+
+  it('asks before turning sub-groups into sections, and a no changes nothing', async () => {
+    // It was a plain `link` button beside "+ Add section": one click destroyed
+    // every sub-group, re-filed the whole branch and discarded whatever those
+    // groups declared, with no preview and no way back.
+    const page = await mount({
+      collection: collection({
+        groups: [
+          group('espanha'),
+          group('bronze', { parentId: 'espanha' }),
+          group('prata', { parentId: 'espanha' }),
+        ],
+        sections: [],
+        items: [item('seiya', 'bronze')],
+      }),
+      tab: 'groups',
+      g: 'espanha',
+    });
+
+    const convert = [...page.el.querySelectorAll('.detail__sections button')].find(b =>
+      b.textContent?.includes('Turn sub-groups into sections'),
+    )!;
+    page.click(convert);
+    await page.answerConfirm(false);
+    await page.done();
+
+    const saved = page.lastPut();
+    expect(saved.groups.map(g => g.id).sort()).toEqual(['bronze', 'espanha', 'prata']);
+    expect(saved.sections).toEqual([]);
+    expect(saved.items[0].groupId).toBe('bronze');
   });
 
   it('does not offer the conversion when a sub-group carries fields of its own', async () => {
@@ -900,5 +1063,23 @@ describe('CollectionSettingsPage — nothing is destroyed without a question', (
     page.click(page.el.querySelector('.danger-row ui-button button, .general ui-button[variant="danger"] button')!);
     await page.answerConfirm(true);
     expect(deleted).toEqual(['c1']);
+  });
+
+  // --- the autosave says so (rule 15's other half: state what happened) ---
+
+  it('confirms the autosave instead of only reporting its failures', async () => {
+    // The foot of the page promises that every change is saved as it is made,
+    // and nothing ever backed it: a save that worked looked exactly like a save
+    // that never happened, and the only signal either way was a toast on
+    // failure. The live region is in the DOM from the start — a status
+    // container that appears with its own text is never announced.
+    const page = await mount({ tab: 'groups', g: 'zeta' });
+    const state = () => page.el.querySelector('.done-row__state')!;
+    expect(state().textContent!.trim()).toBe('');
+
+    page.type(page.detail().querySelector('.rename input') as HTMLInputElement, 'alpha');
+    await page.done();
+
+    expect(state().textContent).toContain('All changes saved');
   });
 });

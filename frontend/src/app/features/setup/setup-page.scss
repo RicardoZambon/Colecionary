@@ -1,3 +1,5 @@
+@use '../../../styles/mixins' as *;
+
 .setup {
   min-height: 100vh;
   display: grid;
@@ -36,10 +38,10 @@
 
   &__sub {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 }
 
@@ -51,15 +53,11 @@
   padding: 0;
   margin: 0;
 
+  /* The <li> keeps the state colour and the button inherits it, so "done" and
+     "current" are stated once rather than once per selector. */
   &__item {
     display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-strong);
 
     &.active {
       color: var(--text);
@@ -67,6 +65,57 @@
 
     &.done {
       color: var(--good);
+    }
+  }
+
+  /* A real button, so a completed step is reachable by click, by Tab and by
+     Enter; the global :focus-visible ring applies untouched. */
+  &__go {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: inherit;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out);
+
+    &:hover:not(:disabled) {
+      color: var(--accent);
+    }
+
+    /* Hover does not exist on touch, and a control that does not visibly take
+       the press reads as broken and gets tapped twice. */
+    &:active:not(:disabled) {
+      color: var(--accent-strong);
+    }
+
+    /* A step forward of the first unanswered one. Not reachable, and it says so
+       by being inert rather than by a colour nobody can name. */
+    &:disabled {
+      cursor: default;
+    }
+
+    /* Below the large breakpoint nothing interactive renders under the tap
+       target (rule 17). Five 44px-tall chips would be a wall where a wizard
+       needs a caption, so the target grows and the type does not. */
+    @include upto($bp-lg) {
+      position: relative;
+
+      &::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: var(--tap);
+        transform: translateY(-50%);
+      }
     }
   }
 
@@ -131,6 +180,25 @@
   }
 }
 
+/* The restart takes several seconds and nothing else on screen moves during
+   it. Bordered like a note, because that is what it is — one with no fault to
+   report. */
+.waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border: var(--bw) dashed var(--border);
+  border-radius: var(--radius);
+
+  &__text {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text2);
+  }
+}
+
 .review {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -140,10 +208,10 @@
 
   dt {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-strong);
     align-self: center;
   }
 

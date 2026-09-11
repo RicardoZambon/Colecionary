@@ -25,6 +25,7 @@ import {
   UserProfile,
 } from '../../core/models';
 import { I18nService } from '../../core/i18n';
+import { ThemeService } from '../../core/state/theme.service';
 import { ToastService } from '../../core/state/toast.service';
 import { VaultStore } from '../../core/state/vault.store';
 import { CurrencyCode } from '../../core/utils/money.util';
@@ -36,6 +37,8 @@ const EDITOR: Member = { name: 'Ana', email: 'ana@example.com', initials: 'AN', 
 class FakeVaultApi extends VaultApi {
   settings: TenantSettings = { defaultCurrency: 'USD' };
   members: Member[] = [OWNER, EDITOR];
+  /** The signed-in user's own role — what `canAdminister()` is derived from. */
+  role: Member['role'] = 'Owner';
   /** Set to reject the next tenant-settings write, as the server does for a non-Owner. */
   rejectSettings = false;
   readonly settingsWrites: TenantSettings[] = [];
@@ -90,7 +93,7 @@ class FakeVaultApi extends VaultApi {
     return of({ ...settings });
   }
   getProfile(): Observable<UserProfile> {
-    return of({ name: OWNER.name, email: OWNER.email, initials: OWNER.initials, plan: 'free', role: 'Owner' });
+    return of({ name: OWNER.name, email: OWNER.email, initials: OWNER.initials, plan: 'free', role: this.role });
   }
   updateProfile(profile: UserProfile): Observable<UserProfile> {
     return of(profile);
@@ -119,10 +122,16 @@ class FakeArchiveApi {
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
 async function mount(
-  opts: { tab?: string; currency?: CurrencyCode; plan?: ImportPlan | null } = {},
+  opts: {
+    tab?: string;
+    currency?: CurrencyCode;
+    plan?: ImportPlan | null;
+    role?: Member['role'];
+  } = {},
 ) {
   const api = new FakeVaultApi();
   api.settings = { defaultCurrency: opts.currency ?? 'USD' };
+  api.role = opts.role ?? 'Owner';
   const archives = new FakeArchiveApi();
   archives.plan = opts.plan ?? null;
 
@@ -171,6 +180,33 @@ async function mount(
     toast: () => TestBed.inject(ToastService).message(),
     tabs: () => [...el.querySelectorAll('[role="tab"]')] as HTMLElement[],
     byLabel: (aria: string) => el.querySelector(`[aria-label="${aria}"]`) as HTMLSelectElement,
+    /**
+     * The theme or language picker buttons, in the order the page lists them.
+     *
+     * Deliberately `.themes > button` rather than the card inside it: what this
+     * asks is whether the *control* is a real button, which is the whole of the
+     * defect. Both grids share the class, so the language half is told apart by
+     * the card it wraps.
+     */
+    picks: (kind: 'theme' | 'lang') =>
+      ([...el.querySelectorAll('.themes > button')] as HTMLButtonElement[]).filter(
+        button => !!button.querySelector('.lang-card') === (kind === 'lang'),
+      ),
+    /** The real `<button>` inside the `ui-button` whose label reads exactly this. */
+    action: (label: string) =>
+      ([...el.querySelectorAll('ui-button > button')] as HTMLButtonElement[]).find(
+        button => button.textContent?.trim() === label,
+      ),
+    /** Hands the hidden file input an archive, as picking one from disk does. */
+    pickArchive: async () => {
+      const input = el.querySelector('input[type="file"]') as HTMLInputElement;
+      Object.defineProperty(input, 'files', {
+        value: [new File([new Uint8Array(2)], 'vault.zip', { type: 'application/zip' })],
+      });
+      input.dispatchEvent(new Event('change'));
+      await tick();
+      fixture.detectChanges();
+    },
   };
 }
 
@@ -300,5 +336,172 @@ describe('SettingsPage', () => {
     await page.click(page.el.querySelector('app-import-dialog .actions ui-button:last-of-type button')!);
 
     expect(page.archives.attempts.at(-1)).toEqual([{ id: 'c1', version: '"4"' }]);
+  });
+
+  it('answers a collision with neither option preselected', async () => {
+    // The last question asked before a request that can destroy a collection,
+    // so a distracted Enter must not be able to answer it — and "create new"
+    // used to be drawn checked because it was inferred from the absence of an
+    // overwrite. Both options now bind one selection, which is also what stops
+    // the pair disagreeing with the browser about which one is on.
+    const plan: ImportPlan = {
+      entries: [{ name: 'Vinyl', existingId: 'c1', existingVersion: '"1"' }],
+    };
+    const page = await mount({ tab: 'account', plan });
+    await page.pickArchive();
+
+    const radios = [
+      ...page.el.querySelectorAll('app-import-dialog .choice input[type="radio"]'),
+    ] as HTMLInputElement[];
+
+    expect(radios).toHaveLength(2);
+    expect(radios.some(radio => radio.checked)).toBe(false);
+    // A real platform radio, so the role, the checked state and arrow-key
+    // movement within the set come from the browser rather than from us.
+    expect(radios[0].name).toBe(radios[1].name);
+  });
+
+  it('opens with focus on the first option', async () => {
+    // Focus has to land inside for a screen reader to announce the dialog and
+    // for Escape to be a sensible thing to press. It is also the one thing that
+    // fails *silently* when a template ref resolves to the component rather
+    // than to its host element — nothing throws, focus simply stays outside.
+    const plan: ImportPlan = {
+      entries: [{ name: 'Vinyl', existingId: 'c1', existingVersion: '"1"' }],
+    };
+    const page = await mount({ tab: 'account', plan });
+    await page.pickArchive();
+    await tick();
+
+    const first = page.el.querySelector('app-import-dialog .choice input[type="radio"]');
+    expect(document.activeElement).toBe(first);
+  });
+
+  // --- the archive import is account-scale, so it is Owner-only (rule 9) ---
+
+  it('refuses the archive import to a non-admin, and leaves the export alone', async () => {
+    // The element carried *two* [disabled] bindings and only one can take
+    // effect, so the `canAdminister` half could simply never apply — on the one
+    // control in the app whose single request can overwrite every collection in
+    // the vault.
+    const page = await mount({ tab: 'account', role: 'Viewer' });
+    const i18n = TestBed.inject(I18nService);
+
+    expect(page.action(i18n.t('settings.account.import'))?.disabled).toBe(true);
+    // Export is a read of the account's own data by somebody already looking at
+    // it, and is deliberately not gated. The asymmetry is the point.
+    expect(page.action(i18n.t('settings.account.export'))?.disabled).toBe(false);
+  });
+
+  it('still offers the import to an owner, so the gate is the role and not a constant', async () => {
+    const page = await mount({ tab: 'account' });
+    const i18n = TestBed.inject(I18nService);
+
+    expect(page.action(i18n.t('settings.account.import'))?.disabled).toBe(false);
+  });
+
+  // --- the theme and language pickers are controls, not painted cards ---
+
+  it('wraps every theme card in a real button, so a keyboard can reach it', async () => {
+    // `ui-card` is a plain custom element — no role, no tabindex, no href — so
+    // the (click) that used to sit on it was mouse-only: there was no way to
+    // change the theme from a keyboard at all. Nothing inside these cards is
+    // interactive, so the whole card is wrapped rather than its title.
+    const page = await mount();
+    const theme = TestBed.inject(ThemeService);
+
+    const picks = page.picks('theme');
+    expect(picks).toHaveLength(theme.themes.length);
+    for (const button of picks) {
+      expect(button.tagName).toBe('BUTTON');
+      // Not the UA default "submit": these act, they do not send a form.
+      expect(button.type).toBe('button');
+    }
+    // No card left carrying the click itself.
+    expect(
+      [...page.el.querySelectorAll('.themes ui-card')].every(
+        card => card.closest('button') !== null,
+      ),
+    ).toBe(true);
+  });
+
+  it('applies a theme from its button and announces which one is on', async () => {
+    const page = await mount();
+    const theme = TestBed.inject(ThemeService);
+    const pressed = () => page.picks('theme').map(b => b.getAttribute('aria-pressed'));
+
+    // Exactly one selection, and it is stated rather than only coloured: the
+    // active theme used to be an accent border and an accent line of text.
+    expect(pressed().filter(v => v === 'true')).toHaveLength(1);
+
+    const target = pressed().indexOf('false');
+    await page.click(page.picks('theme')[target]);
+
+    expect(theme.current()).toBe(theme.themes[target].id);
+    expect(pressed()[target]).toBe('true');
+    expect(pressed().filter(v => v === 'true')).toHaveLength(1);
+  });
+
+  it('changes the language from its button too', async () => {
+    const page = await mount();
+    const i18n = TestBed.inject(I18nService);
+
+    const picks = page.picks('lang');
+    expect(picks).toHaveLength(i18n.langs.length);
+    for (const button of picks) {
+      expect(button.tagName).toBe('BUTTON');
+      expect(button.type).toBe('button');
+    }
+
+    const target = picks.map(b => b.getAttribute('aria-pressed')).indexOf('false');
+    await page.click(picks[target]);
+
+    expect(i18n.current()).toBe(i18n.langs[target].id);
+    expect(page.picks('lang')[target].getAttribute('aria-pressed')).toBe('true');
+  });
+
+  // --- heading hierarchy ---
+
+  it('renders its section titles as real headings under the one h1', async () => {
+    // The page rendered exactly one <h1> and no other heading, so a screen
+    // reader's heading list — the primary way a non-visual user skims a screen —
+    // was one entry long, and reaching the currency picker meant walking the
+    // whole document.
+    const page = await mount();
+    const i18n = TestBed.inject(I18nService);
+
+    expect(page.el.querySelectorAll('h1')).toHaveLength(1);
+    const headings = [...page.el.querySelectorAll('h2')].map(h => h.textContent?.trim());
+    expect(headings).toContain(i18n.t('settings.theme.heading'));
+    expect(headings).toContain(i18n.t('settings.language.heading'));
+    expect(headings).toContain(i18n.t('settings.currency.heading'));
+  });
+
+  // --- the vault has not landed yet ---
+
+  it('draws skeletons rather than blank member rows while the vault loads', async () => {
+    const page = await mount({ tab: 'access' });
+    page.store.loaded.set(false);
+    page.fixture.detectChanges();
+
+    const members = page.el.querySelector('.members')!;
+    expect(members.getAttribute('aria-busy')).toBe('true');
+    expect(members.querySelectorAll('ui-skeleton').length).toBeGreaterThan(0);
+    // One announcement on the region, not one per unnamed graphic.
+    expect(members.querySelectorAll('[role="status"]')).toHaveLength(1);
+    // And no half-rendered identity: a nameless row is a statement about a
+    // member, where a skeleton is a statement about the request.
+    expect(members.textContent).not.toContain(OWNER.name);
+  });
+
+  it('does not claim an empty account while its collections are still arriving', async () => {
+    const page = await mount({ tab: 'account' });
+    const i18n = TestBed.inject(I18nService);
+    page.store.loaded.set(false);
+    page.fixture.detectChanges();
+
+    expect(page.el.querySelector('.account')!.getAttribute('aria-busy')).toBe('true');
+    expect(page.el.textContent).not.toContain(i18n.t('settings.account.noCollections'));
+    expect(page.el.querySelectorAll('ui-skeleton').length).toBeGreaterThan(0);
   });
 });

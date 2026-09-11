@@ -27,6 +27,49 @@
 }
 
 /**
+ * The pill and the keyboard hint that repeats it, stacked so the hint reads as
+ * a caption on the control it describes rather than as a third thing in the
+ * topline.
+ */
+.browse-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-1);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/**
+ * The ←/→ shortcut, as text.
+ *
+ * It was a `title` on the nav, which is the one place a keyboard user will
+ * never look and a touch device never renders — the only affordance on the page
+ * aimed squarely at keyboard users was also the only undiscoverable one.
+ *
+ * Below `$bp-md` it is clipped rather than removed: there is no keyboard to
+ * press at that width, but both arrows point at it with `aria-describedby`, and
+ * `display: none` would take the description out of the accessibility tree
+ * along with the pixels. The arrows themselves are copy, not chrome — they
+ * arrive inside the translated sentence, like the marks in `sort.util`.
+ */
+.browse-hint {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--muted-strong);
+  text-align: right;
+
+  @include upto($bp-md) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/**
  * Walking the group sits on the same line as the way out of it: leaving the
  * collection and moving inside it are the same kind of move, and both stay
  * above the fold on a phone.
@@ -59,7 +102,7 @@
     // An end of the sequence is text, not a link that takes focus and then
     // refuses to go anywhere.
     &--off {
-      color: var(--muted);
+      color: var(--muted-strong);
 
       &:hover {
         background: none;
@@ -92,9 +135,26 @@
     border-right: var(--bw) solid var(--border);
     white-space: nowrap;
   }
+
+  /*
+   * Below `$bp-lg` the arrow is a target before it is a caption: the names are
+   * already gone at `$bp-sm`, which left a 37×23 chevron — well under `--tap`
+   * in both directions. The box may grow here, and does: this is a nav row,
+   * not a dense filter bar and not an overlay on a photograph, so it takes the
+   * honest `min-` pair rather than a `::after` whose 44px would have to
+   * overlap the neighbouring arrow to fit. The dead ends grow with it, or the
+   * pill goes lopsided the moment you reach one.
+   */
+  @include upto($bp-lg) {
+    &__step {
+      min-width: var(--tap);
+      min-height: var(--tap);
+      justify-content: center;
+    }
+  }
 }
 
-@media (max-width: 560px) {
+@include upto($bp-sm) {
   // Only the arrows and the position survive on a narrow screen — the names
   // live on in the aria-label.
   .browse__name {
@@ -120,6 +180,15 @@
   flex-direction: column;
   gap: 10px;
 
+  /* A 380px column that refuses to shrink is 50px wider than a 390px phone's
+     content box, and `flex-wrap` cannot help a `flex: none` item — it wraps the
+     line, it does not narrow the box. So the width goes to 100% here, which is
+     the same measurement rule the rest of the app answers to: `scrollWidth ===
+     clientWidth` at 390/768/900. */
+  @include upto($bp-sm) {
+    width: 100%;
+  }
+
   &__main {
     height: 300px;
     /* Flat, never hatched. A diagonal hatch is the silhouette of a skeleton
@@ -132,7 +201,7 @@
     place-items: center;
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-strong);
 
     /** Framing always arrives as an inline background-position, so declaring
         one here would be dead. */
@@ -147,8 +216,12 @@
     }
   }
 
+  /* Wraps, because eight 74px thumbs and their gaps are 662px of strip and the
+     column they sit in is 380px at its widest: the fifth photo of an item was
+     already hanging out of the gallery on a desktop. */
   &__thumbs {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
   }
 }
@@ -187,18 +260,32 @@
     border-width: 2px;
   }
 
+  /* Its content is a `ui-icon` now, not a `+` character: nothing guarantees a
+     font covers a glyph, and a screen reader announced this control as "plus".
+     The size comes from the icon, so no font-size here. */
   &--add {
     background: none;
     border-style: dashed;
     display: grid;
     place-items: center;
-    color: var(--muted);
-    font-size: 15px;
+    color: var(--muted-strong);
     cursor: pointer;
 
-    &:hover {
+    &:hover:not(:disabled) {
       color: var(--accent);
       border-color: var(--accent);
+    }
+
+    &:active:not(:disabled) {
+      background: var(--panel2);
+    }
+
+    /* An upload is in flight. Adding a photo writes as soon as a file is
+       picked, and a control that still looks live through its own save invites
+       the second click the store is about to refuse. */
+    &:disabled {
+      cursor: default;
+      opacity: 0.6;
     }
   }
 }
@@ -209,6 +296,27 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/**
+ * The name and the two actions that act on it, on one line.
+ *
+ * `Edit item` and `Delete` used to close this column, below the description,
+ * the details card, the copies card and the field card — on a tall item the
+ * primary action was several screens away from the item it edits. Wraps rather
+ * than squeezes: the title keeps a readable basis and the pair drops under it.
+ */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+
+  &__title {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
 }
 
 h1 {
@@ -238,7 +346,7 @@ h1 {
 
   .note {
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 }
 
@@ -252,9 +360,19 @@ h1 {
   font-size: 12.5px;
   color: var(--text2);
 
-  span {
+  // The direct child only: the button's own label is a span too, and a
+  // descendant selector here would have handed it the row's slack.
+  > span {
     flex: 1;
   }
+}
+
+// Two adjacent elements in a template have no whitespace between them, so the
+// gap is the only thing separating the tick from what it is ticking.
+.own-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
 }
 
 .description {
@@ -279,7 +397,7 @@ h1 {
   align-items: center;
   gap: 10px;
   padding: 8px 0;
-  border-top: 1px solid var(--border);
+  border-top: var(--bw) solid var(--border);
   font-size: 12.5px;
 
   &__paid {
@@ -293,9 +411,9 @@ h1 {
   &__date,
   &__status {
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.06em;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   &__status {
@@ -304,7 +422,7 @@ h1 {
 
   &__notes {
     flex-basis: 100%;
-    color: var(--muted);
+    color: var(--muted-strong);
     font-size: 11.5px;
   }
 
@@ -326,7 +444,7 @@ h1 {
   font-size: 11.5px;
 
   dt {
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   dd {
@@ -337,27 +455,27 @@ h1 {
 
 .copies__total {
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: var(--bw) solid var(--border);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.06em;
-  color: var(--muted);
+  color: var(--muted-strong);
 }
 
 .field-row {
   display: flex;
   gap: 12px;
   padding: 7px 0;
-  border-top: 1px solid var(--border);
+  border-top: var(--bw) solid var(--border);
   font-size: 12.5px;
 
   .key {
     width: 150px;
     flex: none;
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.06em;
-    color: var(--muted);
+    color: var(--muted-strong);
     padding-top: 1px;
     text-transform: uppercase;
   }
@@ -365,11 +483,25 @@ h1 {
 
 .actions {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: none;
+
+  /*
+   * `--danger` is destruction, and destruction does not sit flush against the
+   * action next to it. A rule with space either side is what keeps a hurried
+   * click on `Edit item` from landing on `Delete` — the more so now that both
+   * sit at the top of the column where the pointer arrives.
+   */
+  &__danger {
+    margin-left: var(--sp-2);
+    padding-left: var(--sp-3);
+    border-left: var(--bw) solid var(--border);
+  }
 }
 
 .missing {
-  color: var(--muted);
+  color: var(--muted-strong);
   font-size: 13px;
 }
 

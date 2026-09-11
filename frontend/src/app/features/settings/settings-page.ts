@@ -17,7 +17,20 @@ import { VaultStore } from '../../core/state/vault.store';
 import { MemberRole } from '../../core/models';
 import { saveFile } from '../../core/utils/download.util';
 import { CurrencyCode, SUPPORTED_CURRENCIES, currencyLabel } from '../../core/utils/money.util';
-import { SelectOption, TabDef, UiAvatar, UiButton, UiCard, UiFlag, UiIcon, UiReadOnlyNotice, UiSelect, UiTabs } from '../../shared/ui';
+import {
+  SelectOption,
+  TabDef,
+  UiAvatar,
+  UiButton,
+  UiCard,
+  UiFlag,
+  UiIcon,
+  UiReadOnlyNotice,
+  UiSectionLabel,
+  UiSelect,
+  UiSkeleton,
+  UiTabs,
+} from '../../shared/ui';
 import { TPipe } from '../../shared/pipes/t.pipe';
 
 const TAB_KEYS: { id: string; label: MessageKey }[] = [
@@ -56,7 +69,20 @@ const ROLE_KEYS: { value: MemberRole; label: MessageKey }[] = [
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ImportDialog, TPipe, UiAvatar, UiButton, UiCard, UiFlag, UiIcon, UiReadOnlyNotice, UiSelect, UiTabs],
+  imports: [
+    ImportDialog,
+    TPipe,
+    UiAvatar,
+    UiButton,
+    UiCard,
+    UiFlag,
+    UiIcon,
+    UiReadOnlyNotice,
+    UiSectionLabel,
+    UiSelect,
+    UiSkeleton,
+    UiTabs,
+  ],
   templateUrl: './settings-page.html',
   styleUrl: './settings-page.scss',
 })
@@ -91,6 +117,20 @@ export class SettingsPage {
   });
 
   protected readonly activeTab = signal(DEFAULT_TAB);
+
+  /**
+   * The vault has not landed yet, so nothing on the profile, member or
+   * collection rows can be trusted to be absent rather than merely late.
+   *
+   * Same expression as every other page (`!store.loaded()`), and it exists for
+   * the same reason: this page rendered a nameless avatar, blank member rows
+   * and "no collections yet" for the whole of a slow load, which are three
+   * statements about an account rather than three placeholders.
+   */
+  protected readonly loading = computed(() => !this.store.loaded());
+
+  /** How many placeholder rows the skeleton draws. */
+  protected readonly placeholders = [0, 1, 2];
 
   /**
    * Bumped to force the member rows to be rebuilt from store state.

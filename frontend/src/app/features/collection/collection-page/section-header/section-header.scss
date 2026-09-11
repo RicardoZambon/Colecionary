@@ -3,8 +3,21 @@
   align-items: center;
   gap: 10px;
   padding: 14px 2px 6px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--bw) solid var(--border);
   margin-bottom: 10px;
+}
+
+/* Semantics only — the paint stays on `ui-section-label` inside the button, so
+   adding the heading level moved nothing.
+   Deliberately NOT `display: contents`, which would have kept the flex layout
+   byte-identical: browsers have a history of dropping `display: contents`
+   elements out of the accessibility tree, and an invisible heading is the exact
+   thing this wrapper was added to provide. A plain flex item in the button's
+   old place costs nothing instead. */
+.sec__heading {
+  margin: 0;
+  font: inherit;
+  min-width: 0;
 }
 
 .sec__toggle {

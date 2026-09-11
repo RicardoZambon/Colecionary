@@ -4,9 +4,12 @@
      is exactly what the scope selector is. -->
 <ng-template #fieldEditor let-owner="owner" let-fields="fields" let-label="label">
   <div class="detail__fields">
-    <span class="fields-label">{{ label }}</span>
+    <!-- A heading, not a styled span. It titles the list of declarations under
+         it, and a label that is announced as nothing left this page with a
+         heading list one entry long. -->
+    <ui-section-label class="fields-label" level="h3">{{ label }}</ui-section-label>
     @for (field of fields; track field.name) {
-      <span class="field-chip">
+      <span class="decl-row field-chip">
         <span class="name">{{ field.name }}</span>
         <ui-select
           class="compact type"
@@ -30,15 +33,21 @@
         ><ui-icon name="close" [size]="13" /></ui-button>
       </span>
     }
+    <!-- A draft row, not a field that writes on blur. The name lives in a
+         signal and only Enter or Add declares it; Escape and Cancel throw it
+         away. Blur does neither, deliberately: a blur that tore this row down
+         would destroy the Add button on its way to being clicked. -->
     @if (pendingFieldGroupId() === owner) {
-      <span class="field-chip field-chip--new">
-        <input
+      <span class="decl-row field-chip field-chip--new">
+        <ui-text-input
+          #fieldNameInput
           class="field-input"
+          variant="subtle"
           [placeholder]="'collSettings.groups.fieldPlaceholder' | t"
-          [attr.aria-label]="'collSettings.groups.fieldAria' | t"
-          autofocus
+          [ariaLabel]="'collSettings.groups.fieldAria' | t"
+          [value]="newFieldName()"
+          (valueChange)="newFieldName.set($event)"
           (keydown)="newFieldKeydown($event, owner)"
-          (blur)="commitNewField(owner, $any($event.target).value)"
         />
         <ui-select
           class="compact type"
@@ -54,9 +63,15 @@
           [value]="pendingFieldScope()"
           (valueChange)="pendingFieldScope.set($any($event))"
         />
+        <span class="chip-actions">
+          <ui-button size="sm" (click)="commitNewField(owner)"
+            >{{ 'collSettings.commit' | t }}</ui-button>
+          <ui-button variant="ghost" size="sm" (click)="discardNewField()"
+            >{{ 'common.cancel' | t }}</ui-button>
+        </span>
       </span>
     }
-    <ui-button variant="link" size="sm" (click)="pendingFieldGroupId.set(owner)"
+    <ui-button variant="link" size="sm" (click)="startNewField(owner)"
       >{{ 'collSettings.groups.addField' | t }}</ui-button>
   </div>
 </ng-template>
@@ -82,7 +97,8 @@
            names neither sits flush against its own edge. -->
       <ui-card class="groups-card collection-fields">
         <div class="groups-card__head">
-          <span class="heading">{{ 'collSettings.fields.heading' | t }}</span>
+          <ui-section-label class="heading" level="h2"
+            >{{ 'collSettings.fields.heading' | t }}</ui-section-label>
         </div>
         <p class="collection-fields__hint">{{ 'collSettings.fields.hint' | t }}</p>
         <ng-container
@@ -98,8 +114,9 @@
       <div class="groups-split">
         <ui-card class="groups-card groups-split__tree">
           <div class="groups-card__head">
-            <span class="heading">{{ 'collSettings.groups.heading' | t }}</span>
-            <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: null })"
+            <ui-section-label class="heading" level="h2"
+              >{{ 'collSettings.groups.heading' | t }}</ui-section-label>
+            <ui-button variant="link" (click)="startNewGroup(null)"
               >{{ 'collSettings.groups.add' | t }}</ui-button>
           </div>
 
@@ -110,17 +127,28 @@
             [(expanded)]="pickerExpanded"
           />
 
+          <!-- Creating a group is one of three places in the app that can, and
+               this one used to commit on blur: clicking anywhere else created
+               it. Now nothing but Enter or Add writes. -->
           @if (pendingGroupParent()) {
             <div class="new-group">
               <span class="context">{{ newGroupContext() }}</span>
-              <input
+              <ui-text-input
+                #groupNameInput
                 class="new-group__input"
+                variant="subtle"
                 [placeholder]="'collSettings.groups.newPlaceholder' | t"
-                [attr.aria-label]="'collSettings.groups.newGroupAria' | t"
-                autofocus
+                [ariaLabel]="'collSettings.groups.newGroupAria' | t"
+                [value]="newGroupName()"
+                (valueChange)="newGroupName.set($event)"
                 (keydown)="newGroupKeydown($event)"
-                (blur)="commitNewGroup($any($event.target).value)"
               />
+              <span class="chip-actions">
+                <ui-button size="sm" (click)="commitNewGroup()"
+                  >{{ 'collSettings.commit' | t }}</ui-button>
+                <ui-button variant="ghost" size="sm" (click)="discardNewGroup()"
+                  >{{ 'common.cancel' | t }}</ui-button>
+              </span>
             </div>
           }
         </ui-card>
@@ -128,14 +156,17 @@
         <ui-card class="groups-card groups-split__detail">
           @if (detail(); as sel) {
             <div class="detail__head">
-              <span class="detail__path">
+              <!-- The pane's title, so it belongs in the heading list: this is
+                   how a screen reader reaches the editor without walking the
+                   tree beside it. -->
+              <h2 class="detail__path">
                 @for (crumb of selectedPath(); track crumb.id; let last = $last) {
                   <span [class.detail__here]="last">{{ crumb.name }}</span>
                   @if (!last) { <ui-icon class="detail__sep" name="chevron-right" [size]="11" /> }
                 }
-              </span>
+              </h2>
               <span class="count">{{ itemCount(sel.count) }}</span>
-              <ui-button variant="link" (click)="pendingGroupParent.set({ parentId: sel.node.id })"
+              <ui-button variant="link" (click)="startNewGroup(sel.node.id)"
                 >{{ 'collSettings.groups.addSub' | t }}</ui-button>
               <ui-button
                 variant="icon"
@@ -144,15 +175,21 @@
               ><ui-icon name="close" [size]="13" /></ui-button>
             </div>
 
+            <!-- `ui-field` rather than a styled span beside the control: a span
+                 is not a label, so the visible text named nothing and the field
+                 announced "edit text, blank". No `ariaLabel` beside it — that
+                 input is for the dense rows that have no field label, and an
+                 aria-label here would *replace* the visible one as the
+                 accessible name, so "Sits under" would no longer be sayable. -->
             <div class="detail__name">
-              <span class="fields-label">{{ 'collSettings.groups.nameLabel' | t }}</span>
-              <ui-text-input
-                class="rename"
-                variant="subtle"
-                [ariaLabel]="'collSettings.groups.renameAria' | t: { name: sel.node.name }"
-                [value]="sel.node.name"
-                (valueChange)="renameGroup(sel.node.id, $event)"
-              />
+              <ui-field [label]="'collSettings.groups.nameLabel' | t">
+                <ui-text-input
+                  class="rename"
+                  variant="subtle"
+                  [value]="sel.node.name"
+                  (valueChange)="renameGroup(sel.node.id, $event)"
+                />
+              </ui-field>
             </div>
 
             <!-- Where the group sits. A picker rather than a drag: groups list
@@ -162,19 +199,20 @@
                  also owe a keyboard path. A select is keyboard-native and can
                  omit the targets it cannot accept. -->
             <div class="detail__parent">
-              <span class="fields-label">{{ 'collSettings.groups.parent' | t }}</span>
-              <ui-select
-                class="compact parent"
-                [ariaLabel]="'collSettings.groups.parentAria' | t: { name: sel.node.name }"
-                [options]="sel.parentOptions"
-                [value]="sel.parentValue"
-                (valueChange)="onParentPicked(sel.node.id, $event)"
-              />
+              <ui-field [label]="'collSettings.groups.parent' | t">
+                <ui-select
+                  class="compact parent"
+                  [options]="sel.parentOptions"
+                  [value]="sel.parentValue"
+                  (valueChange)="onParentPicked(sel.node.id, $event)"
+                />
+              </ui-field>
             </div>
 
             @if (moveImpact(); as move) {
               <div class="move-preview" role="status">
-                <span class="fields-label">{{ 'collSettings.groups.moveHeading' | t }}</span>
+                <ui-section-label class="fields-label" level="h3"
+                  >{{ 'collSettings.groups.moveHeading' | t }}</ui-section-label>
                 <p class="move-preview__head">{{ move.heading }}</p>
                 <ul class="move-preview__list">
                   @if (move.gained) {
@@ -205,35 +243,46 @@
               </div>
             }
 
+            <!-- Two labelled controls on one line, so two fields rather than
+                 four loose spans. The direction sits inside the "order by"
+                 field because it qualifies that answer rather than asking its
+                 own question. -->
             <div class="detail__order">
-              <span class="fields-label">{{ 'collSettings.groups.orderBy' | t }}</span>
-              <ui-select
-                class="compact order-by"
-                [ariaLabel]="'collSettings.groups.orderByAria' | t: { name: sel.node.name }"
-                [options]="sel.sortByOptions"
-                [value]="sel.sortBy"
-                (valueChange)="setGroupSortBy(sel.node.id, $event)"
-              />
-              @if (sel.showDirection) {
-                <ui-select
-                  class="compact direction"
-                  [ariaLabel]="'collSettings.groups.orderDirectionAria' | t: { name: sel.node.name }"
-                  [options]="directionOptions()"
-                  [value]="sel.sortDirection"
-                  (valueChange)="setGroupSortDirection(sel.node.id, $event)"
-                />
-              }
+              <ui-field class="order-field" [label]="'collSettings.groups.orderBy' | t">
+                <span class="order-field__row">
+                  <!-- The field's label names this one; the direction beside it
+                       keeps an `ariaLabel`, since only the first control in a
+                       field can be the one the label points at. -->
+                  <ui-select
+                    class="compact order-by"
+                    [options]="sel.sortByOptions"
+                    [value]="sel.sortBy"
+                    (valueChange)="setGroupSortBy(sel.node.id, $event)"
+                  />
+                  @if (sel.showDirection) {
+                    <ui-select
+                      class="compact direction"
+                      [ariaLabel]="
+                        'collSettings.groups.orderDirectionAria' | t: { name: sel.node.name }
+                      "
+                      [options]="directionOptions()"
+                      [value]="sel.sortDirection"
+                      (valueChange)="setGroupSortDirection(sel.node.id, $event)"
+                    />
+                  }
+                </span>
+              </ui-field>
 
-              <span class="fields-label spaced">{{ 'collSettings.groups.target' | t }}</span>
-              <ui-text-input
-                class="target"
-                type="number"
-                variant="subtle"
-                placeholder="—"
-                [ariaLabel]="'collSettings.groups.targetAria' | t: { name: sel.node.name }"
-                [value]="sel.target"
-                (valueChange)="setGroupTarget(sel.node.id, $event)"
-              />
+              <ui-field class="target-field" [label]="'collSettings.groups.target' | t">
+                <ui-text-input
+                  class="target"
+                  type="number"
+                  variant="subtle"
+                  placeholder="—"
+                  [value]="sel.target"
+                  (valueChange)="setGroupTarget(sel.node.id, $event)"
+                />
+              </ui-field>
             </div>
 
             <ng-container
@@ -246,9 +295,10 @@
             />
 
             <div class="detail__sections">
-              <span class="fields-label">{{ 'collSettings.sections.label' | t }}</span>
+              <ui-section-label class="fields-label" level="h3"
+                >{{ 'collSettings.sections.label' | t }}</ui-section-label>
               @for (row of sel.sections; track row.section.id; let i = $index) {
-                <span class="section-chip">
+                <span class="decl-row section-chip">
                   <ui-text-input
                     class="rename"
                     variant="subtle"
@@ -293,19 +343,29 @@
                 </span>
               }
               @if (pendingSectionGroupId() === sel.node.id) {
-                <span class="section-chip section-chip--new">
-                  <input
+                <span class="decl-row section-chip section-chip--new">
+                  <ui-text-input
+                    #sectionNameInput
                     class="field-input"
+                    variant="subtle"
                     [placeholder]="'collSettings.sections.placeholder' | t"
-                    [attr.aria-label]="'collSettings.sections.newAria' | t"
-                    autofocus
+                    [ariaLabel]="'collSettings.sections.newAria' | t"
+                    [value]="newSectionName()"
+                    (valueChange)="newSectionName.set($event)"
                     (keydown)="newSectionKeydown($event, sel.node.id)"
-                    (blur)="commitNewSection(sel.node.id, $any($event.target).value)"
                   />
+                  <span class="chip-actions">
+                    <ui-button size="sm" (click)="commitNewSection(sel.node.id)"
+                      >{{ 'collSettings.commit' | t }}</ui-button>
+                    <ui-button variant="ghost" size="sm" (click)="discardNewSection()"
+                      >{{ 'common.cancel' | t }}</ui-button>
+                  </span>
                 </span>
               }
-              <ui-button variant="link" size="sm" (click)="pendingSectionGroupId.set(sel.node.id)"
+              <ui-button variant="link" size="sm" (click)="startNewSection(sel.node.id)"
                 >{{ 'collSettings.sections.add' | t }}</ui-button>
+              <!-- Destructive and bulk, so it asks with the count in it — it was
+                   a plain link that migrated the whole branch on one click. -->
               @if (sel.convertible) {
                 <ui-button
                   variant="link"
@@ -334,10 +394,13 @@
     @case ('sharing') {
       <div class="sharing">
         <div class="invite-row">
+          <!-- A placeholder is not a label: it names nothing once there is text
+               in the field, and named nothing here at all. -->
           <ui-text-input
             class="invite-email"
             variant="subtle"
             [placeholder]="'collSettings.sharing.emailPlaceholder' | t"
+            [ariaLabel]="'collSettings.sharing.emailPlaceholder' | t"
             [value]="inviteEmail()"
             (valueChange)="inviteEmail.set($event)"
           />
@@ -423,7 +486,7 @@
           />
         </ui-field>
         <div class="backup">
-          <div class="heading">{{ 'collSettings.general.backup' | t }}</div>
+          <h2 class="heading">{{ 'collSettings.general.backup' | t }}</h2>
           <p class="sub">{{ 'collSettings.general.backupHint' | t }}</p>
           <ui-button variant="ghost" [disabled]="exporting()" (click)="exportCollection()">
             {{ (exporting() ? 'collSettings.general.exporting' : 'collSettings.general.export') | t }}
@@ -436,9 +499,22 @@
   }
 
   <!-- Anchored, and named after what it does. The page saves on a debounce, so
-       "Done" was describing navigation while looking like a save button. -->
+       "Done" was describing navigation while looking like a save button.
+
+       The sentence promises that every change is saved as it is made, and the
+       line under it is the only thing on the page that ever confirms it: a save
+       that worked used to look exactly like a save that never happened. The
+       live region is rendered unconditionally, because a status container that
+       appears at the same moment as its text is not announced. -->
   <div class="done-row">
-    <span class="done-row__note">{{ 'collSettings.autosave' | t }}</span>
+    <span class="done-row__status">
+      <span class="done-row__note">{{ 'collSettings.autosave' | t }}</span>
+      <span
+        class="done-row__state"
+        role="status"
+        [class.done-row__state--saved]="saveState() === 'saved'"
+      >@if (saveStateKey(); as key) { {{ key | t }} }</span>
+    </span>
     <ui-button (click)="done()">{{ 'collSettings.done' | t }}</ui-button>
   </div>
 

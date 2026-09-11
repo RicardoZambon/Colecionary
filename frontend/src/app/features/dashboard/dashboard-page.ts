@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { ImagesApi } from '../../core/api/images-api';
@@ -12,7 +12,17 @@ import { formatRelative } from '../../core/utils/date.util';
 import { CurrencyCode, formatMoney } from '../../core/utils/money.util';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { TPipe } from '../../shared/pipes/t.pipe';
-import { UiCard, UiImageSlot, UiSectionLabel, UiSkeleton } from '../../shared/ui';
+import {
+  UiButton,
+  UiCard,
+  UiDialog,
+  UiEmpty,
+  UiField,
+  UiImageSlot,
+  UiSectionLabel,
+  UiSkeleton,
+  UiTextInput,
+} from '../../shared/ui';
 
 interface RecentEntry {
   collectionId: string;
@@ -30,7 +40,20 @@ const RECENT_COUNT = 4;
 @Component({
   selector: 'app-dashboard-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, TPipe, UiCard, UiImageSlot, UiSectionLabel, UiSkeleton],
+  imports: [
+    RouterLink,
+    MoneyPipe,
+    TPipe,
+    UiButton,
+    UiCard,
+    UiDialog,
+    UiEmpty,
+    UiField,
+    UiImageSlot,
+    UiSectionLabel,
+    UiSkeleton,
+    UiTextInput,
+  ],
   templateUrl: './dashboard-page.html',
   styleUrl: './dashboard-page.scss',
 })
@@ -41,6 +64,28 @@ export class DashboardPage {
    * A courtesy, not a control — see the doc comment on VaultStore.canEdit.
    */
   protected readonly canEdit = computed(() => this.store.canEdit());
+
+  /**
+   * Whether the naming dialog is open.
+   *
+   * The button used to create the collection outright and jump to its settings,
+   * which put a row called "New collection" in the sidebar of anybody who
+   * clicked it by accident — a half-made record that only a delete could undo.
+   * Nothing is written now until the dialog is confirmed.
+   */
+  protected readonly naming = signal(false);
+
+  /** What has been typed into the dialog. Cleared each time it opens. */
+  protected readonly newName = signal('');
+
+  /** The create is in flight; the confirm stops offering itself. */
+  protected readonly creating = signal(false);
+
+  /**
+   * A collection has to be called something, so a blank name leaves the confirm
+   * inert rather than writing a placeholder — the very thing this replaced.
+   */
+  protected readonly canCreate = computed(() => !!this.newName().trim() && !this.creating());
 
   protected readonly store = inject(VaultStore);
   protected readonly images = inject(ImagesApi);
@@ -182,22 +227,58 @@ export class DashboardPage {
   }
 
   /**
-   * Creates an empty collection and opens it for naming.
+   * The card's accessible name: the three things it prints, spoken.
+   *
+   * The anchor wraps the whole card, so without this its name would be the run
+   * of its own text nodes. Composed from the same helpers the card renders,
+   * following `app-group-card` — a second wording here would drift out of
+   * agreement with the card on its own.
+   */
+  protected collectionAria(collection: Collection): string {
+    return [
+      collection.name,
+      this.collectionMeta(collection),
+      formatMoney(
+        this.ownedValue(collection.id),
+        this.i18n.locale(),
+        this.store.currencyFor(collection.id),
+      ),
+    ].join(', ');
+  }
+
+  /** Opens the naming dialog on an empty field. Writes nothing. */
+  protected askNewCollection(): void {
+    this.newName.set('');
+    this.naming.set(true);
+  }
+
+  /**
+   * Creates the collection the dialog named, then opens it for the rest of its
+   * settings.
    *
    * The `catch` is the point: this is `await`ed straight from a click, so a
    * refused create used to reject into nothing — an unhandled promise, no
    * message, and a button that looked broken. Nothing is navigated to on a
-   * failure either, since the collection it would open does not exist.
+   * failure either, since the collection it would open does not exist, and the
+   * dialog stays open holding the name that was typed: the screen is the only
+   * copy of it.
    */
-  protected async newCollection(): Promise<void> {
+  protected async createCollection(): Promise<void> {
+    const name = this.newName().trim();
+    if (!name || this.creating()) return;
+
     let created;
+    this.creating.set(true);
     try {
-      created = await this.store.createCollection(this.i18n.t('dashboard.newCollectionName'), '');
+      created = await this.store.createCollection(name, '');
     } catch {
       // `errorInterceptor` has already said *why*; this says what it was for.
       this.toast.error(this.i18n.t('toast.collection.createFailed'));
       return;
+    } finally {
+      this.creating.set(false);
     }
+    this.naming.set(false);
     this.toast.success(this.i18n.t('toast.collection.created'));
     void this.router.navigate(['/c', created.id, 'settings'], { queryParams: { tab: 'general' } });
   }

@@ -93,6 +93,33 @@
             [directItems]="directItems()"
             (newGroup)="startNewGroup()"
           />
+
+          <!-- The group's own items, in place.
+               This board used to end in a tile reading "22 items filed here",
+               which was not a place but a switch to ?v=grid: the question you
+               opened the group with was answered with its own count. A group
+               holds sub-groups and items, so the board shows both.
+               `manual` is false on purpose — see `directChunks`. -->
+          @if (directVisible().length) {
+            <ui-section-label class="direct__heading" level="h2">
+              {{ 'groupDashboard.itemsHere' | t }}
+            </ui-section-label>
+
+            <app-item-grid
+              [canEdit]="canEdit()"
+              [items]="directVisible()"
+              [chunks]="directChunks()"
+              [sectionStats]="sectionStats()"
+              [activeSection]="sectionFilter()"
+              [collectionId]="coll.id"
+              [manual]="false"
+              [sortFieldName]="sortFieldName()"
+              [groupNames]="groupNames()"
+              [selectedIds]="selectedIds()"
+              (sectionToggled)="toggleSection($event)"
+              (picked)="pickRow($event)"
+            />
+          }
         }
         @case ('list') {
           <app-item-list

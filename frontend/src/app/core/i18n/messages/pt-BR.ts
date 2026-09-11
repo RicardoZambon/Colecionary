@@ -47,7 +47,7 @@ export const ptBR: Record<MessageKey, string> = {
   'confirm.removePhoto.confirm': 'Remover a foto',
   'common.collectionNotFound': 'Coleção não encontrada —',
   'common.backToDashboard': 'voltar ao painel',
-  'common.active': '● Ativo',
+  'common.active': 'Ativo',
   'common.clickToApply': 'Clique para aplicar',
   'common.loading': 'Carregando…',
   'common.cancel': 'Cancelar',
@@ -123,7 +123,6 @@ export const ptBR: Record<MessageKey, string> = {
   'dashboard.collections': 'Coleções',
   'dashboard.collectionMeta': '{owned}/{total} na coleção · {groups}',
   'dashboard.newCollection': '+ Criar coleção',
-  'dashboard.newCollectionName': 'Nova coleção',
   'dashboard.recent': 'Adicionados recentemente',
   'dashboard.recentSub': '{collection} · adicionado {when}',
 
@@ -134,7 +133,7 @@ export const ptBR: Record<MessageKey, string> = {
   'store.curated': 'Curada',
   'store.listingMeta': 'por {publisher} · {items} · {groups}',
   'store.estimate': 'est. {value}',
-  'store.inVault': '✓ Já no seu acervo',
+  'store.inVault': 'Já no seu acervo',
   'store.add': '+ Adicionar ao acervo',
 
   // --- shared/ui ---------------------------------------------------------
@@ -209,7 +208,7 @@ export const ptBR: Record<MessageKey, string> = {
   'settings.plan.onPro': 'Você está no Pro — obrigado por apoiar o Vault.',
   'settings.plan.onFree':
     'Você está no Free — assine o Pro para liberar campos personalizados, fotos e backups.',
-  'settings.plan.current': '● Plano atual',
+  'settings.plan.current': 'Plano atual',
   'settings.plan.unavailable': 'Ainda não disponível',
   'settings.plan.billingNote':
     'A cobrança ainda não existe, então não é possível trocar de plano por aqui — e hoje nada no aplicativo é limitado pelo seu plano. Isto é o que cada faixa vai cobrir.',
@@ -478,7 +477,7 @@ export const ptBR: Record<MessageKey, string> = {
   'item.paid': 'pago {value}',
   'item.marketEstimate': 'estimativa de mercado',
   'item.onWantlist': 'Está na sua wishlist — ainda não é seu.',
-  'item.markOwned': '✓ Tenho um — adicionar exemplar',
+  'item.markOwned': 'Tenho um — adicionar exemplar',
   'item.details': 'Detalhes',
   'item.year': 'Ano',
   'item.group': 'Grupo',
@@ -689,6 +688,8 @@ export const ptBR: Record<MessageKey, string> = {
   'setup.db.username': 'Usuário',
   'setup.db.password': 'Senha',
   'setup.db.trustCert': 'Confiar no certificado do servidor',
+  'setup.db.trustCertHint':
+    'Aceitar um certificado que o servidor não consegue comprovar. Um SQL Server em contêiner assina o próprio certificado, então uma instalação local ou self-hosted normalmente precisa disso.',
   'setup.db.test': 'Testar conexão',
   'setup.db.testing': 'Testando…',
 
@@ -700,7 +701,7 @@ export const ptBR: Record<MessageKey, string> = {
   'setup.test.loginRejected':
     '{target} recusou este usuário e senha. Confira as credenciais e verifique se o servidor aceita autenticação do SQL Server (e não só do Windows).',
   'setup.test.unreachable':
-    'Não foi possível encontrar um SQL Server em {target}. Confira o host e a porta, se o servidor está rodando e aceitando conexões TCP, e se nenhum firewall está no caminho.',
+    'Não foi possível encontrar um SQL Server em {target}. Confira o host e a porta, se o servidor está rodando e aceitando conexões TCP, e se nenhum firewall está no caminho. Um servidor com certificado autoassinado também responde assim — se for o seu caso, ligue Confiar no certificado do servidor.',
   'setup.test.unknown':
     'A conexão com {target} falhou por um motivo não reconhecido. Revise os dados e tente de novo.',
 
@@ -777,7 +778,7 @@ export const ptBR: Record<MessageKey, string> = {
   'import.cancel': 'Cancelar',
   'import.confirm': 'Importar',
   'import.importing': 'Importando…',
-  'toast.collection.created': 'Coleção criada — dê um nome a ela aqui',
+  'toast.collection.created': 'Coleção criada',
   'toast.collection.createFailed': 'Não foi possível criar a coleção',
   'toast.collection.added': 'Adicionada ao seu acervo ✓',
   'toast.collection.addFailed': 'Não foi possível adicionar a checklist',
@@ -914,6 +915,7 @@ export const ptBR: Record<MessageKey, string> = {
   'csvImport.formatMore':
     'Qualquer outra coluna vira um campo seu. Um item que já esteja no grupo de destino é reconhecido pelo nome.',
   'csvImport.pasteLabel': 'Cole suas linhas',
+  'csvImport.dropHint': 'Cole as linhas, escolha um arquivo, ou solte um nesta caixa.',
   'csvImport.pastePlaceholder':
     'Nome;Grupo;Ano;Exemp.;Estado;Valor\nSeiya Pegaso;Cavaleiros de Bronze;2006;1;Perfeito;120\nShiryu Dragon;Cavaleiros de Bronze;2006;0;Quero;—',
   'csvImport.chooseFile': 'Escolher um arquivo…',
@@ -972,5 +974,41 @@ export const ptBR: Record<MessageKey, string> = {
   'toast.csvImport.done.one': '1 item importado ✓',
   'toast.csvImport.done.other': '{n} itens importados ✓',
   'toast.csvImport.failed': 'Não deu para importar — nada foi gravado',
+
+  // --- UI/UX pass: states, labels and validation -------------------------
+  'dashboard.empty.title': 'Nenhuma coleção ainda',
+  'dashboard.empty.body':
+    'Uma coleção é uma estante — consoles, um set de cards, uma série de quadrinhos. Tudo que você cataloga fica arquivado em uma delas.',
+  'dashboard.recent.empty': 'Nada arquivado ainda. Os itens que você adicionar aparecem aqui.',
+  'dashboard.newCollection.title': 'Nova coleção',
+  'dashboard.newCollection.nameLabel': 'Nome',
+  'dashboard.newCollection.namePlaceholder': 'Consoles retrô, Topps 1985, …',
+  'dashboard.newCollection.confirm': 'Criar coleção',
+  'store.empty.title': 'Nada publicado ainda',
+  'store.empty.body': 'A loja não tem checklists no momento. Suas coleções não são afetadas.',
+  'store.adding': 'Adicionando…',
+  'toast.store.addFailed': 'Não deu para adicionar essa coleção — nada foi gravado',
+
+  'form.required': 'obrigatório',
+  'itemForm.error.name': 'Dê um nome ao item antes de salvar.',
+  'itemForm.hint.value': 'Deixe vazio e o item vale o que você pagou por ele.',
+  'itemForm.hint.copyValue':
+    'Deixe vazio para seguir a estimativa do item, ou o que este exemplar custou.',
+  'itemForm.ownership.heading': 'Posse',
+  'itemForm.ownership.owned': 'No meu acervo',
+  'itemForm.ownership.wanted': 'Na minha lista de desejos',
+  'itemForm.ownership.hint':
+    'Um item da lista de desejos não tem exemplares. Adicione um e ele entra no seu acervo.',
+  'item.markingOwned': 'Adicionando…',
+
+  'groupDashboard.subgroups': 'Subgrupos',
+  'groupDashboard.itemsHere': 'Itens arquivados aqui',
+  'collection.searchClear': 'Limpar a busca',
+  'collection.searchScope': 'Busca na coleção aberta',
+  'collSettings.sections.convertConfirm.title': 'Transformar {n} subgrupos em divisórias?',
+  'collSettings.sections.convertConfirm.body':
+    'Cada subgrupo se torna uma divisória neste grupo e os itens dele sobem para cá. Uma divisória não tem campos nem ordem próprios, então o que aqueles grupos declaravam é perdido. Isso não pode ser desfeito — exporte antes se estiver em dúvida.',
+  'collSettings.sections.convertConfirm.confirm': 'Transformar em divisórias',
+  'collSettings.commit': 'Adicionar',
 
 };

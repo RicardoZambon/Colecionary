@@ -121,9 +121,9 @@ import { UiIcon } from '../icon/icon';
 
     .counter {
       font-family: var(--font-mono);
-      font-size: 10px;
+      font-size: var(--fs-xs);
       letter-spacing: 0.1em;
-      color: var(--muted);
+      color: var(--muted-strong);
     }
 
     .controls {

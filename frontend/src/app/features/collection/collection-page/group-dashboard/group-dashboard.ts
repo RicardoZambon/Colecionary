@@ -15,7 +15,7 @@ import { ImageFocusService } from '../../../../core/state/image-focus.service';
 import { GroupStats, UNGROUPED_ID } from '../../../../core/utils/group-stats.util';
 import { childrenOf } from '../../../../core/utils/groups.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { MosaicTile, UiEmpty, UiIcon } from '../../../../shared/ui';
+import { MosaicTile, UiEmpty, UiSectionLabel } from '../../../../shared/ui';
 import { GroupCard } from '../group-card/group-card';
 
 interface CardView {
@@ -28,11 +28,24 @@ interface CardView {
 /**
  * The sub-groups of whatever is open, as cards — the answer to "where am I
  * short?" without opening each one in turn.
+ *
+ * ## It used to answer "what is in here?" with a number
+ *
+ * A group can hold sub-groups *and* items of its own, and this board used to
+ * show the sub-groups while demoting the group's own items to a single tile
+ * reading "22 items filed here" — a tile that was not a place at all but a
+ * switch to `?v=grid`. Standing in a group with 22 items in it, the page
+ * answered the only question you came with by telling you how many there were
+ * and making you click again.
+ *
+ * The items now render underneath this board, in place, by the page that owns
+ * them (`collection-page.html`) — so structure and contents are one screen and
+ * there is one fewer destination that turns out to be a view.
  */
 @Component({
   selector: 'app-group-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [GroupCard, RouterLink, TPipe, UiEmpty, UiIcon],
+  imports: [GroupCard, TPipe, UiEmpty, UiSectionLabel],
   templateUrl: './group-dashboard.html',
   styleUrl: './group-dashboard.scss',
 })
@@ -62,7 +75,14 @@ export class GroupDashboard {
   readonly stats = input.required<ReadonlyMap<string, GroupStats>>();
   /** The open group, or null at the collection root. */
   readonly parentId = input<string | null>(null);
-  /** Items filed directly on the open group rather than in a sub-group. */
+  /**
+   * Items filed directly on the open group rather than in a sub-group.
+   *
+   * The page renders these itself, below this board. They are still passed in
+   * because the empty state depends on them: a group with no sub-groups but
+   * twenty items of its own is not empty, and saying so over a full item grid
+   * would be the same lie the old "filed here" tile told, in reverse.
+   */
   readonly directItems = input.required<Item[]>();
 
   readonly newGroup = output<void>();
@@ -97,14 +117,6 @@ export class GroupDashboard {
 
   /** How many items sit on the open group itself rather than below it. */
   protected readonly directCount = computed(() => this.directItems().length);
-
-  protected readonly filedHere = computed(() =>
-    this.i18n.plural(
-      this.directCount(),
-      'groupDashboard.filedHere.one',
-      'groupDashboard.filedHere.other',
-    ),
-  );
 
   private tilesFor(stats: GroupStats): MosaicTile[] {
     return stats.coverPhotoIds.map(id => ({

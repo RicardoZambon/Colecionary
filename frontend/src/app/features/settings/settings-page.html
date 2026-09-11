@@ -6,7 +6,14 @@
   @case ('plan') {
     <section class="section">
       <div>
-        <div class="heading">{{ 'settings.plan.heading' | t }}</div>
+        <!--
+          A real heading, through the kit's own micro-heading. Every one of
+          these was a <div class="heading"> — styled as a heading and announced
+          as nothing — so this page offered a screen reader a heading list one
+          entry long, and the only way to reach the currency picker was to walk
+          the whole document.
+        -->
+        <ui-section-label [level]="'h2'">{{ 'settings.plan.heading' | t }}</ui-section-label>
         <p class="sub">{{ planSub() }}</p>
       </div>
       <p class="sub">{{ 'settings.plan.billingNote' | t }}</p>
@@ -28,8 +35,21 @@
                 </div>
               }
             </div>
-            @if (store.profile()?.plan === plan.id) {
-              <ui-button variant="ghost" [block]="true" [disabled]="true">{{ 'settings.plan.current' | t }}</ui-button>
+            @if (loading()) {
+              <!-- Which plan is current is a fact about the profile, so until
+                   the vault lands neither card can claim it — and "billing
+                   unavailable" on the plan you are already on says the wrong
+                   thing rather than nothing. -->
+              <ui-skeleton height="37px" radius="var(--radius)" />
+            } @else if (store.profile()?.plan === plan.id) {
+              <ui-button variant="ghost" [block]="true" [disabled]="true">
+                <!-- The tick is back as a drawn mark. It used to be baked into
+                     the translation as a raw glyph, which no font is guaranteed
+                     to cover and a screen reader reads out by its Unicode name;
+                     it stays aria-hidden because the words beside it already
+                     say the same thing. -->
+                <span class="current"><ui-icon name="check" [size]="12" [strokeWidth]="2.4" />{{ 'settings.plan.current' | t }}</span>
+              </ui-button>
             } @else {
               <!-- Disabled, and it says why. This used to be a live button that
                    set the plan from the browser and toasted a welcome; there is
@@ -47,43 +67,66 @@
       <ui-read-only-notice scope="administer" />
     <section class="section access">
       <div>
-        <div class="heading">{{ 'settings.access.heading' | t }}</div>
+        <ui-section-label [level]="'h2'">{{ 'settings.access.heading' | t }}</ui-section-label>
         <p class="sub">
           {{ 'settings.access.subBefore' | t }} <span class="mono">acme-vault</span>{{ 'settings.access.subAfter' | t }}
         </p>
       </div>
-      <ui-card class="members">
-        @for (member of store.tenantMembers(); track member.email + '#' + memberRev()) {
-          <div class="member-row">
-            <ui-avatar [initials]="member.initials" />
-            <span class="who">
-              <span class="name">{{ member.name }}</span>
-              <span class="email">{{ member.email }}</span>
-            </span>
-            <!-- Membership is CanAdminister, not CanWrite: an Editor is
-                 refused it too, so this is `canAdminister` and not `canEdit`.
-                 The Owner's own row keeps its existing disabled/muted treatment,
-                 which explains why the *Owner* cannot be demoted — a different
-                 question from whether you may change anybody at all. -->
-            @if (store.canAdminister()) {
-              <ui-select
-                class="compact"
-                [ariaLabel]="'settings.access.memberRoleAria' | t: { name: member.name }"
-                [options]="roleOptions()"
-                [value]="member.role"
-                [disabled]="member.role === 'Owner'"
-                (valueChange)="setMemberRole(member.email, $event)"
-              />
-              <ui-button
-                variant="icon"
-                [muted]="member.role === 'Owner'"
-                [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
-                (click)="removeMember(member.email)"
-              ><ui-icon name="close" [size]="13" /></ui-button>
-            } @else {
-              <span class="role-static">{{ roleLabel(member.role) | t }}</span>
-            }
-          </div>
+      <ui-card class="members" [attr.aria-busy]="loading() ? 'true' : null">
+        @if (loading()) {
+          <!--
+            The rows used to render as blank name/email pairs until the vault
+            landed, which reads as an account with nameless members rather than
+            as a list still arriving. `aria-busy` and the one announcement live
+            on the card; the skeletons themselves are aria-hidden, because a
+            reader hearing "loading" once is served and hearing six unnamed
+            graphics is not.
+          -->
+          <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
+          @for (row of placeholders; track row) {
+            <div class="member-row">
+              <!-- 30px is what a `size="md"` ui-avatar resolves to, so the row
+                   comes out the same height either way. -->
+              <ui-skeleton variant="circle" width="30px" height="30px" />
+              <span class="who">
+                <span class="name"><ui-skeleton width="42%" height="1lh" /></span>
+                <span class="email"><ui-skeleton width="64%" height="1lh" /></span>
+              </span>
+            </div>
+          }
+        } @else {
+          @for (member of store.tenantMembers(); track member.email + '#' + memberRev()) {
+            <div class="member-row">
+              <ui-avatar [initials]="member.initials" />
+              <span class="who">
+                <span class="name">{{ member.name }}</span>
+                <span class="email">{{ member.email }}</span>
+              </span>
+              <!-- Membership is CanAdminister, not CanWrite: an Editor is
+                   refused it too, so this is `canAdminister` and not `canEdit`.
+                   The Owner's own row keeps its existing disabled/muted treatment,
+                   which explains why the *Owner* cannot be demoted — a different
+                   question from whether you may change anybody at all. -->
+              @if (store.canAdminister()) {
+                <ui-select
+                  class="compact"
+                  [ariaLabel]="'settings.access.memberRoleAria' | t: { name: member.name }"
+                  [options]="roleOptions()"
+                  [value]="member.role"
+                  [disabled]="member.role === 'Owner'"
+                  (valueChange)="setMemberRole(member.email, $event)"
+                />
+                <ui-button
+                  variant="icon"
+                  [muted]="member.role === 'Owner'"
+                  [ariaLabel]="'settings.access.removeMember' | t: { name: member.name }"
+                  (click)="removeMember(member.email)"
+                ><ui-icon name="close" [size]="13" /></ui-button>
+              } @else {
+                <span class="role-static">{{ roleLabel(member.role) | t }}</span>
+              }
+            </div>
+          }
         }
       </ui-card>
 
@@ -98,30 +141,56 @@
     </section>
   }
   @case ('account') {
-    <section class="account">
+    <section class="account" [attr.aria-busy]="loading() ? 'true' : null">
+      @if (loading()) {
+        <!-- One announcement for the whole tab: the profile, the totals and the
+             per-collection rows all arrive with the same load. -->
+        <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
+      }
       <ui-card class="account-card">
-        <ui-avatar size="lg" [initials]="store.profile()?.initials ?? '··'" />
-        <span class="who">
-          <span class="name">{{ store.profile()?.name }}</span>
-          <span class="email">{{ store.profile()?.email }}</span>
-        </span>
-        <span class="plan-chip">{{ store.profile()?.plan?.toUpperCase() }}</span>
+        @if (loading()) {
+          <!-- 44px is what a `size="lg"` ui-avatar resolves to. -->
+          <ui-skeleton variant="circle" width="44px" height="44px" />
+          <span class="who">
+            <span class="name"><ui-skeleton width="52%" height="1lh" /></span>
+            <span class="email"><ui-skeleton width="78%" height="1lh" /></span>
+          </span>
+        } @else {
+          <ui-avatar size="lg" [initials]="store.profile()?.initials ?? '··'" />
+          <span class="who">
+            <span class="name">{{ store.profile()?.name }}</span>
+            <span class="email">{{ store.profile()?.email }}</span>
+          </span>
+          <span class="plan-chip">{{ store.profile()?.plan?.toUpperCase() }}</span>
+        }
       </ui-card>
       <ui-card class="account-card">
         <span class="who">
           <span class="name">{{ 'settings.account.data' | t }}</span>
           <span class="email">{{ dataSub() }}</span>
         </span>
+        <!-- Export is deliberately NOT role-gated, and that asymmetry with
+             Import beside it is the point: this is a read of the account's own
+             data by somebody who can already see every collection on screen, so
+             a Viewer taking a copy of what they are looking at is not a
+             privilege. Import is a write at account scale — see below. -->
         <ui-button variant="ghost" size="sm" [disabled]="exporting()" (click)="exportArchive()">
           {{ (exporting() ? 'settings.account.exporting' : 'settings.account.export') | t }}
         </ui-button>
         <!-- The input stays hidden and the button drives it: a bare file input
              cannot be labelled or styled like the rest of the app, and it is the
-             button that has to look like every other action on this page. -->
+             button that has to look like every other action on this page.
+
+             One [disabled], not two. This element carried both
+             `importing()` and `importing() || !store.canAdminister()`, and only
+             one binding per property can take effect — so the admin half of the
+             gate may simply never have applied, on the single control in the
+             app whose one request can overwrite every collection in the vault
+             (rule 9). The 403 is still the real answer; this only stops the app
+             offering what the server would refuse. -->
         <ui-button
           variant="ghost"
           size="sm"
-          [disabled]="importing()"
           [disabled]="importing() || !store.canAdminister()"
           (click)="archiveInput.click()"
         >
@@ -137,29 +206,48 @@
       </ui-card>
       <p class="sub">{{ 'settings.account.importHint' | t }}</p>
 
-      <div class="heading spaced">{{ 'settings.account.perCollection' | t }}</div>
+      <ui-section-label class="spaced" [level]="'h2'">{{ 'settings.account.perCollection' | t }}</ui-section-label>
       <p class="sub">{{ 'settings.account.perCollectionHint' | t }}</p>
-      @for (collection of store.collections(); track collection.id) {
-        <ui-card class="account-card">
-          <span class="who">
-            <span class="name">{{ collection.name }}</span>
-            <span class="email">{{ itemCount(collection.items.length) }}</span>
-          </span>
-          <ui-button
-            variant="ghost"
-            size="sm"
-            [disabled]="exportingCollection() === collection.id"
-            (click)="exportCollection(collection.id)"
-          >
-            {{
-              (exportingCollection() === collection.id
-                ? 'settings.account.exporting'
-                : 'settings.account.export') | t
-            }}
-          </ui-button>
-        </ui-card>
-      } @empty {
-        <p class="sub">{{ 'settings.account.noCollections' | t }}</p>
+      @if (loading()) {
+        @for (row of placeholders; track row) {
+          <ui-card class="account-card">
+            <span class="who">
+              <span class="name"><ui-skeleton width="46%" height="1lh" /></span>
+              <span class="email"><ui-skeleton width="30%" height="1lh" /></span>
+            </span>
+            <!-- The height a `size="sm"` ui-button resolves to, the same figure
+                 `store-page` uses; deliberately not `variant="block"`, whose
+                 `min-height: var(--sp-12)` floor would silently override a
+                 smaller height and make the row 16px taller than the real one. -->
+            <ui-skeleton width="88px" height="32px" radius="var(--radius)" />
+          </ui-card>
+        }
+      } @else {
+        @for (collection of store.collections(); track collection.id) {
+          <ui-card class="account-card">
+            <span class="who">
+              <span class="name">{{ collection.name }}</span>
+              <span class="email">{{ itemCount(collection.items.length) }}</span>
+            </span>
+            <ui-button
+              variant="ghost"
+              size="sm"
+              [disabled]="exportingCollection() === collection.id"
+              (click)="exportCollection(collection.id)"
+            >
+              {{
+                (exportingCollection() === collection.id
+                  ? 'settings.account.exporting'
+                  : 'settings.account.export') | t
+              }}
+            </ui-button>
+          </ui-card>
+        } @empty {
+          <!-- Ordered after the loading branch, and that order is the point:
+               "the store holds no collections yet" and "this account has none"
+               are the same expression at two different moments. -->
+          <p class="sub">{{ 'settings.account.noCollections' | t }}</p>
+        }
       }
 
       <app-import-dialog
@@ -173,55 +261,88 @@
   @default {
     <section class="section">
       <div>
-        <div class="heading">{{ 'settings.theme.heading' | t }}</div>
+        <ui-section-label [level]="'h2'">{{ 'settings.theme.heading' | t }}</ui-section-label>
         <p class="sub">{{ 'settings.theme.sub' | t }}</p>
       </div>
       <div class="themes">
         @for (t of theme.themes; track t.id) {
-          <ui-card
-            class="theme-card"
-            [interactive]="true"
-            [class.theme-card--active]="t.id === theme.current()"
+          <!--
+            The real control is this <button>, not the card. `ui-card` is a
+            plain custom element — no role, no tabindex, no href — so the
+            (click) that used to sit on it was mouse-only: a keyboard user could
+            not change theme at all. Nothing inside the card is interactive, so
+            wrapping is the simple shape, the same one `app-group-card` uses
+            (with an <a>, because that one navigates; these act).
+
+            `aria-pressed` is what says which theme is on. It was communicated
+            by an accent border and an accent-coloured line of text, i.e. by
+            colour alone.
+          -->
+          <button
+            type="button"
+            class="pick"
+            [attr.aria-pressed]="t.id === theme.current()"
             (click)="theme.apply(t.id)"
           >
-            <div class="swatches">
-              @for (swatch of t.swatches; track $index) {
-                <span [style.background]="swatch"></span>
-              }
-            </div>
-            <div class="name">{{ t.name }}</div>
-            <div class="desc">{{ t.descriptionKey | t }}</div>
-            <div class="state" [class.active]="t.id === theme.current()">
-              {{ (t.id === theme.current() ? 'common.active' : 'common.clickToApply') | t }}
-            </div>
-          </ui-card>
+            <ui-card
+              class="theme-card"
+              [interactive]="true"
+              [class.theme-card--active]="t.id === theme.current()"
+            >
+              <div class="swatches">
+                @for (swatch of t.swatches; track $index) {
+                  <span [style.background]="swatch"></span>
+                }
+              </div>
+              <div class="name">{{ t.name }}</div>
+              <div class="desc">{{ t.descriptionKey | t }}</div>
+              <div class="state" [class.active]="t.id === theme.current()">
+                @if (t.id === theme.current()) {
+                  <ui-icon name="check" [size]="10" [strokeWidth]="2.6" />{{ 'common.active' | t }}
+                } @else {
+                  {{ 'common.clickToApply' | t }}
+                }
+              </div>
+            </ui-card>
+          </button>
         }
       </div>
 
       <div>
-        <div class="heading">{{ 'settings.language.heading' | t }}</div>
+        <ui-section-label [level]="'h2'">{{ 'settings.language.heading' | t }}</ui-section-label>
         <p class="sub">{{ 'settings.language.sub' | t }}</p>
       </div>
       <div class="themes">
         @for (lang of i18n.langs; track lang.id) {
-          <ui-card
-            class="theme-card lang-card"
-            [interactive]="true"
-            [class.theme-card--active]="lang.id === i18n.current()"
+          <!-- Same shape, same reason as the theme cards above. -->
+          <button
+            type="button"
+            class="pick"
+            [attr.aria-pressed]="lang.id === i18n.current()"
             (click)="i18n.apply(lang.id)"
           >
-            <ui-flag [lang]="lang.id" [size]="34" />
-            <div class="name">{{ lang.name }}</div>
-            <div class="desc mono">{{ lang.locale }}</div>
-            <div class="state" [class.active]="lang.id === i18n.current()">
-              {{ (lang.id === i18n.current() ? 'common.active' : 'common.clickToApply') | t }}
-            </div>
-          </ui-card>
+            <ui-card
+              class="theme-card lang-card"
+              [interactive]="true"
+              [class.theme-card--active]="lang.id === i18n.current()"
+            >
+              <ui-flag [lang]="lang.id" [size]="34" />
+              <div class="name">{{ lang.name }}</div>
+              <div class="desc mono">{{ lang.locale }}</div>
+              <div class="state" [class.active]="lang.id === i18n.current()">
+                @if (lang.id === i18n.current()) {
+                  <ui-icon name="check" [size]="10" [strokeWidth]="2.6" />{{ 'common.active' | t }}
+                } @else {
+                  {{ 'common.clickToApply' | t }}
+                }
+              </div>
+            </ui-card>
+          </button>
         }
       </div>
 
       <div>
-        <div class="heading">{{ 'settings.currency.heading' | t }}</div>
+        <ui-section-label [level]="'h2'">{{ 'settings.currency.heading' | t }}</ui-section-label>
         <p class="sub">{{ 'settings.currency.sub' | t }}</p>
       </div>
       <div class="currency">

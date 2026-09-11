@@ -5,10 +5,18 @@
   </div>
   <p class="tagline">{{ 'login.tagline' | t }}</p>
 
+  <!--
+    `ui-field` renders a <label> with no `for` and the control is its sibling,
+    so the visible label names nothing; a placeholder is not an accessible name
+    either, and the password field's is a row of dots. So the name goes on the
+    control itself through `ariaLabel` — the same arrangement the topbar search
+    and the item form document, and the reason that input exists.
+  -->
   <form (submit)="$event.preventDefault(); submit()">
     <ui-field [label]="'login.email' | t">
       <ui-text-input
         type="email"
+        [ariaLabel]="'login.email' | t"
         [placeholder]="'login.emailPlaceholder' | t"
         [value]="email()"
         (valueChange)="email.set($event)"
@@ -17,6 +25,7 @@
     <ui-field [label]="'login.password' | t">
       <ui-text-input
         type="password"
+        [ariaLabel]="'login.password' | t"
         placeholder="••••••••"
         [value]="password()"
         (valueChange)="password.set($event)"

@@ -9,7 +9,7 @@ import {
 } from '../../../../core/utils/group-delete.util';
 import { groupById } from '../../../../core/utils/groups.util';
 import { TPipe } from '../../../../shared/pipes/t.pipe';
-import { UiButton, UiDialog } from '../../../../shared/ui';
+import { UiButton, UiDialog, UiRadio } from '../../../../shared/ui';
 
 /** How many sub-groups are named before the line turns into "and N more". */
 const NAMED_SUB_GROUPS = 4;
@@ -33,7 +33,7 @@ const NAMED_SUB_GROUPS = 4;
 @Component({
   selector: 'app-group-delete-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiButton, UiDialog],
+  imports: [TPipe, UiButton, UiDialog, UiRadio],
   template: `
     @if (group(); as node) {
       <ui-dialog
@@ -58,20 +58,22 @@ const NAMED_SUB_GROUPS = 4;
             {{ 'collSettings.groups.delete.choiceAria' | t: { name: node.name } }}
           </legend>
 
+          <!-- ui-radio, not a hand-rolled input and label. This is the choice
+               that decides whether a group's items are re-parented, unfiled or
+               destroyed, which is the worst place in the app to be
+               reimplementing a control. Nothing is preselected — the component
+               never selects anything by itself, which is exactly the behaviour
+               this dialog already depended on. -->
           @for (choice of choices(); track choice.value) {
-            <label class="choice" [class.choice--picked]="chosen() === choice.value">
-              <input
-                type="radio"
+            <div class="choice" [class.choice--picked]="chosen() === choice.value">
+              <ui-radio
                 name="disposition"
-                [checked]="chosen() === choice.value"
-                [attr.aria-describedby]="undoId + '-' + choice.value"
-                (change)="chosen.set(choice.value)"
-              />
-              <span class="choice__body">
-                <span class="choice__title">{{ choice.label }}</span>
-                <span class="choice__sub" [id]="undoId + '-' + choice.value">{{ choice.sub }}</span>
-              </span>
-            </label>
+                [optionValue]="choice.value"
+                [value]="chosen()"
+                [hint]="choice.sub"
+                (picked)="chosen.set(choice.value)"
+              >{{ choice.label }}</ui-radio>
+            </div>
           }
         </fieldset>
 
@@ -110,7 +112,7 @@ const NAMED_SUB_GROUPS = 4;
       flex-direction: column;
       gap: var(--sp-1);
       font-size: var(--fs-sm);
-      color: var(--muted);
+      color: var(--muted-strong);
     }
 
     .choices {
@@ -122,44 +124,23 @@ const NAMED_SUB_GROUPS = 4;
       gap: var(--sp-2);
     }
 
+    /*
+     * The card around one option. ui-radio pulls its own row out by --sp-2 on
+     * each side and pads it back, so its label fills this box exactly: the
+     * whole card stays clickable without the wrapper claiming to be a label it
+     * is not. Hence no vertical padding here — the radio's own is the card's,
+     * and adding a second layer would inset the text further down than in.
+     */
     .choice {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--sp-3);
-      padding: var(--sp-3);
+      padding: 0 var(--sp-2);
       border: var(--bw) solid var(--border);
       border-radius: var(--radius);
       background: var(--panel2);
-      cursor: pointer;
       transition: border-color var(--dur-fast) var(--ease-out);
     }
 
     .choice--picked {
       border-color: var(--accent);
-    }
-
-    .choice input {
-      margin: 2px 0 0;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-
-    .choice__body {
-      display: flex;
-      flex-direction: column;
-      gap: var(--sp-1);
-      min-width: 0;
-    }
-
-    .choice__title {
-      font-size: var(--fs-md);
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .choice__sub {
-      font-size: var(--fs-sm);
-      color: var(--muted);
     }
 
     .undo {

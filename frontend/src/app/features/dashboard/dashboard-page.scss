@@ -23,7 +23,7 @@ h1 {
 
 .sub {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--muted-strong);
   margin: 6px 0 0;
 }
 
@@ -93,6 +93,37 @@ h1 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 14px;
+
+  /* The empty state is the row, not a card in it: dropped into one 260px track
+     it would read as a fifth collection that failed to load. */
+  &__empty {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+ * The real control around a card that holds nothing else interactive.
+ *
+ * Flex all the way down for the same reason `group-card` needs it: the grid
+ * stretches the anchor, and a `height: 100%` on the card would resolve against
+ * an auto-height anchor and stop at the content — so a row of cards with
+ * different amounts to say would draw different heights inside identical boxes.
+ */
+.card-link {
+  display: flex;
+  min-width: 0;
+  color: inherit;
+
+  &:hover {
+    text-decoration: none;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 .banner {
@@ -121,7 +152,7 @@ h1 {
 
   .meta {
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
   }
 
   .value {
@@ -131,21 +162,37 @@ h1 {
   }
 }
 
+/*
+ * A real <button> wrapping a ui-card, the shape group-card uses for a card that
+ * is entirely one control.
+ *
+ * The dashed border, the radius, the hover and — the part that was missing —
+ * the press state all come from the kit rather than being drawn again here:
+ * this was a raw styled <button> with a hand-rolled border and a :hover and no
+ * :active at all, which on a phone reads as an inert tile and gets tapped
+ * twice. The button keeps no box of its own, so the card is the whole target;
+ * at 120px tall and a full grid track wide it clears --tap at every width.
+ */
 .new-tile {
-  border: var(--bw) dashed var(--border);
-  border-radius: var(--radius);
+  display: flex;
+  min-width: 0;
+  padding: 0;
+  border: 0;
   background: none;
-  display: grid;
-  place-items: center;
-  font-size: 12.5px;
   font-family: var(--font-body);
-  color: var(--muted);
-  min-height: 120px;
   cursor: pointer;
 
-  &:hover {
-    color: var(--accent);
-    border-color: var(--accent);
+  &__card {
+    display: grid;
+    place-items: center;
+    flex: 1;
+    min-width: 0;
+    min-height: 120px;
+    padding: var(--sp-4);
+    text-align: center;
+    font-size: var(--fs-sm);
+    /* Type, so the readable variant: this is a label, not a fill. */
+    color: var(--accent-strong);
   }
 }
 
@@ -164,13 +211,26 @@ h1 {
     justify-content: space-between;
     align-items: center;
     padding: 9px 2px;
-    border-top: 1px solid var(--border);
+    border-top: var(--bw) solid var(--border);
     color: inherit;
 
     &:hover {
       background: var(--panel2);
       text-decoration: none;
     }
+
+    /* Hover does not exist on touch, and a row that does not take the press
+       reads as inert. */
+    &:active {
+      background: var(--panel2);
+      border-color: var(--accent);
+    }
+  }
+
+  /* The card's own border already frames this, so the compact form keeps it a
+     caption rather than a second box inside a box. */
+  &__empty {
+    padding: var(--sp-3) 0 var(--sp-1);
   }
 
   &__name {
@@ -182,7 +242,7 @@ h1 {
   &__sub {
     display: block;
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--muted-strong);
     margin-top: 2px;
   }
 
@@ -190,5 +250,23 @@ h1 {
     font-size: 13px;
     font-weight: 700;
     color: var(--accent2);
+  }
+
+  /*
+   * The placeholder row's two halves, sized here rather than left to the
+   * skeletons. A skeleton host is `width: 100%`, so as a flex item it would
+   * claim the whole row and the lines beside it would resolve their percentages
+   * against nothing.
+   */
+  &__lines {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__bar {
+    flex: none;
+    width: 64px;
+    /* `1lh` resolves against this — the size the amount itself renders at. */
+    font-size: 13px;
   }
 }

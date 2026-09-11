@@ -44,7 +44,9 @@
 </div>
 
 <section class="collections">
-  <ui-section-label>{{ 'dashboard.collections' | t }}</ui-section-label>
+  <!-- A real <h2>: identical paint, but the page's heading list stops being one
+       entry long. See the `level` note on ui-section-label. -->
+  <ui-section-label level="h2">{{ 'dashboard.collections' | t }}</ui-section-label>
   <div class="grid" [attr.aria-busy]="loading() ? 'true' : null">
     @if (loading()) {
       <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
@@ -62,40 +64,120 @@
         </ui-card>
       }
     } @else {
+      <!--
+        The card is wrapped in a real anchor, exactly as app-group-card is.
+        `ui-card` is a plain custom element, so `[routerLink]` on it registered
+        a click listener and nothing else — no href, no tab stop, no
+        middle-click, nothing for a screen reader to announce. These cards are
+        the only way into a collection from here, and on a keyboard they could
+        not be reached at all. `[interactive]` stays: it is the paint, and the
+        real control is now the anchor around it.
+      -->
       @for (collection of store.collections(); track collection.id) {
-        <ui-card [interactive]="true" [routerLink]="['/c', collection.id]">
-          <div class="banner">
-            <ui-image-slot
-              [src]="images.url(collection.bannerImageId, 'thumb')"
-              [focal]="focus.position(collection.bannerImageId)"
-              [placeholder]="collection.name"
-            />
-          </div>
-          <div class="card-body">
-            <div class="name">{{ collection.name }}</div>
-            <div class="meta">
-              {{ collectionMeta(collection) }}
+        <a
+          class="card-link"
+          [routerLink]="['/c', collection.id]"
+          [attr.aria-label]="collectionAria(collection)"
+        >
+          <ui-card class="card" [interactive]="true">
+            <div class="banner">
+              <ui-image-slot
+                [src]="images.url(collection.bannerImageId, 'thumb')"
+                [focal]="focus.position(collection.bannerImageId)"
+                [placeholder]="collection.name"
+              />
             </div>
-            <div class="value">{{ ownedValue(collection.id) | money: store.currencyFor(collection.id) }}</div>
-          </div>
-        </ui-card>
+            <div class="card-body">
+              <div class="name">{{ collection.name }}</div>
+              <div class="meta">
+                {{ collectionMeta(collection) }}
+              </div>
+              <div class="value">{{ ownedValue(collection.id) | money: store.currencyFor(collection.id) }}</div>
+            </div>
+          </ui-card>
+        </a>
+      } @empty {
+        <!-- A vault with nothing in it used to render a section heading over a
+             bare dashed tile, which reads as a layout that failed rather than
+             as a state. The way out is projected, so a Viewer gets the fact
+             without an action they would be refused. -->
+        <ui-empty
+          class="grid__empty"
+          icon="grid"
+          [title]="'dashboard.empty.title' | t"
+          [body]="'dashboard.empty.body' | t"
+        >
+          <ng-container emptyActions>
+            @if (canEdit()) {
+              <ui-button (click)="askNewCollection()">{{ 'dashboard.newCollection' | t }}</ui-button>
+            }
+          </ng-container>
+        </ui-empty>
       }
-      @if (canEdit()) {
-        <button type="button" class="new-tile" (click)="newCollection()">{{ 'dashboard.newCollection' | t }}</button>
+      @if (canEdit() && store.collections().length) {
+        <button type="button" class="new-tile" (click)="askNewCollection()">
+          <ui-card class="new-tile__card" [dashed]="true" [interactive]="true">
+            {{ 'dashboard.newCollection' | t }}
+          </ui-card>
+        </button>
       }
     }
   </div>
 </section>
 
-<ui-card class="recent">
-  <ui-section-label class="recent__heading">{{ 'dashboard.recent' | t }}</ui-section-label>
-  @for (entry of recent(); track entry.itemId) {
-    <a class="recent__row" [routerLink]="['/c', entry.collectionId, 'items', entry.itemId]">
-      <span>
-        <span class="recent__name">{{ entry.name }}</span>
-        <span class="recent__sub">{{ entry.sub }}</span>
-      </span>
-      <span class="recent__value">{{ entry.value | money: entry.currency }}</span>
-    </a>
+<!--
+  The heading used to sit over nothing twice: while the vault was in flight, and
+  again when nothing had ever been filed. Loading now reserves the rows it is
+  about to draw — same classes, `1lh` bars — and an empty vault says so in the
+  compact form, since the card it sits in already has a border. `aria-busy` and
+  the one announcement live on the card; the bars are `aria-hidden`.
+-->
+<ui-card class="recent" [attr.aria-busy]="loading() ? 'true' : null">
+  <ui-section-label class="recent__heading" level="h2">{{ 'dashboard.recent' | t }}</ui-section-label>
+  @if (loading()) {
+    <p class="sr-only" role="status">{{ 'common.loading' | t }}</p>
+    @for (row of placeholders; track row) {
+      <div class="recent__row">
+        <span class="recent__lines">
+          <span class="recent__name"><ui-skeleton width="52%" height="1lh" /></span>
+          <span class="recent__sub"><ui-skeleton width="76%" height="1lh" /></span>
+        </span>
+        <ui-skeleton class="recent__bar" height="1lh" />
+      </div>
+    }
+  } @else {
+    @for (entry of recent(); track entry.itemId) {
+      <a class="recent__row" [routerLink]="['/c', entry.collectionId, 'items', entry.itemId]">
+        <span>
+          <span class="recent__name">{{ entry.name }}</span>
+          <span class="recent__sub">{{ entry.sub }}</span>
+        </span>
+        <span class="recent__value">{{ entry.value | money: entry.currency }}</span>
+      </a>
+    } @empty {
+      <ui-empty
+        class="recent__empty"
+        [compact]="true"
+        icon="tag"
+        [title]="'dashboard.recent.empty' | t"
+      />
+    }
   }
 </ui-card>
+
+@if (naming()) {
+  <ui-dialog [title]="'dashboard.newCollection.title' | t" (dismissed)="naming.set(false)">
+    <ui-field [label]="'dashboard.newCollection.nameLabel' | t">
+      <ui-text-input
+        [(value)]="newName"
+        [placeholder]="'dashboard.newCollection.namePlaceholder' | t"
+      />
+    </ui-field>
+    <ng-container dlgActions>
+      <ui-button variant="ghost" (click)="naming.set(false)">{{ 'common.cancel' | t }}</ui-button>
+      <ui-button [disabled]="!canCreate()" (click)="createCollection()">
+        {{ 'dashboard.newCollection.confirm' | t }}
+      </ui-button>
+    </ng-container>
+  </ui-dialog>
+}

@@ -109,15 +109,6 @@ export class ItemGrid {
     return this.i18n.t('select.item', { name: item.name });
   }
 
-  /**
-   * The card itself carries the routerLink, so the checkbox has to swallow its
-   * own click — otherwise ticking a card opens it. Exactly what `ui-reorder`
-   * does with the buttons it overlays, and for the same reason.
-   */
-  protected contain(event: Event): void {
-    event.stopPropagation();
-  }
-
   /** Same contract as the table's; see `ItemList.pick` for the shift path. */
   protected pick(item: Item, event: { checked: boolean; shift: boolean }): void {
     const already = this.isSelected(item);

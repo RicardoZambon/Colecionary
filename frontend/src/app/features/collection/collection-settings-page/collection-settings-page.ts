@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  afterRenderEffect,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 
@@ -53,6 +63,7 @@ import {
   UiCard,
   UiField,
   UiIcon,
+  UiSectionLabel,
   UiSelect,
   UiSkeleton,
   UiTabs,
@@ -138,6 +149,7 @@ const PERSIST_DEBOUNCE_MS = 400;
     UiCard,
     UiField,
     UiIcon,
+    UiSectionLabel,
     UiSelect,
     UiSkeleton,
     UiTabs,
@@ -233,6 +245,51 @@ export class CollectionSettingsPage {
   protected readonly pendingFieldType = signal<GroupFieldType>('text');
   protected readonly pendingFieldScope = signal<FieldScope>('item');
 
+  /*
+   * The three inline creators keep their draft name here rather than in the
+   * DOM, and that is the whole fix for "clicking away created a group".
+   *
+   * Each used to be a bare input that committed on **blur**: the name was read
+   * off the element by whichever event fired first, so moving focus anywhere —
+   * to the type select beside it, to another tab, to nothing at all — created a
+   * record. Group creation is one of three places in the app that can create a
+   * group, so the accident was easy to repeat and impossible to notice.
+   *
+   * With the text in a signal the row is a draft with two explicit exits:
+   * {@link commitNewGroup} (Enter, or the Add button) and {@link discardNewGroup}
+   * (Escape, or Cancel). Blur is not one of them and deliberately does nothing:
+   * a blur handler that tore the row down would also destroy the Add button
+   * under the pointer on its way to being clicked.
+   */
+  protected readonly newGroupName = signal('');
+  protected readonly newFieldName = signal('');
+  protected readonly newSectionName = signal('');
+
+  /**
+   * What the autosave last did, for the indicator at the foot of the page.
+   *
+   * The standing sentence there ("every change here is saved as you make it")
+   * was the only thing on screen backing a claim about the user's data, and
+   * nothing ever confirmed it: a save that worked looked exactly like a save
+   * that never happened, and the sole signal either way was a toast when it
+   * failed. This is deliberately not a Save button — the page is built around
+   * the debounce and the sentence is true — it is the observation that makes the
+   * sentence checkable.
+   */
+  protected readonly saveState = signal<'idle' | 'saving' | 'saved'>('idle');
+
+  /** The indicator's label, as a key; null while nothing has been saved yet. */
+  protected readonly saveStateKey = computed<MessageKey | null>(() => {
+    switch (this.saveState()) {
+      case 'saving':
+        return 'nav.sync.saving';
+      case 'saved':
+        return 'nav.sync.synced';
+      default:
+        return null;
+    }
+  });
+
   /** Exposed so the shared field editor can be pointed at the collection. */
   protected readonly collectionOwner = COLLECTION_FIELDS;
   protected readonly inviteEmail = signal('');
@@ -248,7 +305,53 @@ export class CollectionSettingsPage {
   private draftFor: string | null = null;
   private autoSelectedFor: string | null = null;
 
+  private readonly groupNameInput = viewChild<UiTextInput>('groupNameInput');
+  private readonly fieldNameInput = viewChild<UiTextInput>('fieldNameInput');
+  private readonly sectionNameInput = viewChild<UiTextInput>('sectionNameInput');
+
+  /**
+   * The inline creator that asked for the cursor, as a fresh object per ask.
+   *
+   * Identity rather than a name, and rather than reading the three pending
+   * signals: all three creators can be open at once — a half-typed group in the
+   * tree while you go and declare a field — so "which one is open" has no single
+   * answer and a fixed precedence would keep handing focus to the same one.
+   * {@link handledFocus} then makes each ask fire exactly once, so a later
+   * render does not pull the cursor back out of the select the user tabbed into.
+   */
+  private readonly focusRequest = signal<{ which: 'group' | 'field' | 'section' } | null>(null);
+  private handledFocus: object | null = null;
+
   constructor() {
+    /*
+     * Focus whichever inline creator just opened.
+     *
+     * The raw inputs these replaced carried `autofocus`, which a `ui-text-input`
+     * cannot take; without this, "+ Add group" is two clicks for one intent.
+     * Through the component's own `focus()` rather than by querying its DOM —
+     * reaching into another component for its input is the thing that method
+     * exists to stop.
+     *
+     * Reading the view queries is what makes it wait: on the render where the
+     * ask arrives the control may not exist yet, and the query going non-null
+     * re-runs this.
+     */
+    afterRenderEffect({
+      read: () => {
+        const ask = this.focusRequest();
+        if (!ask || ask === this.handledFocus) return;
+        const target =
+          ask.which === 'group'
+            ? this.groupNameInput()
+            : ask.which === 'field'
+              ? this.fieldNameInput()
+              : this.sectionNameInput();
+        if (!target) return;
+        this.handledFocus = ask;
+        target.focus();
+      },
+    });
+
     effect(() => {
       const collection = this.store.collection(this.collectionId());
       if (collection && this.draftFor !== collection.id) {
@@ -518,8 +621,10 @@ export class CollectionSettingsPage {
     clearTimeout(this.persistTimer);
     const draft = this.draft();
     if (!draft) return;
+    this.saveState.set('saving');
     try {
       await this.store.updateCollection(draft);
+      this.saveState.set('saved');
     } catch (err) {
       // Refused here rather than sent, because another write of this collection
       // was still in flight. Nothing is lost and nothing is said: this page's
@@ -529,9 +634,16 @@ export class CollectionSettingsPage {
       // that had quietly stopped saving, which is the failure this method's own
       // docblock exists because of.
       if (err instanceof VaultBusyError) {
+        // Still saving, as far as anyone reading the indicator is concerned: the
+        // debounce is re-armed and the draft will go out a beat later. Claiming
+        // 'saved' here — or falling back to silence — would be the one thing the
+        // indicator exists to stop.
         this.persistTimer = setTimeout(() => void this.persist(), PERSIST_DEBOUNCE_MS);
         return;
       }
+      // The failure is reported by the interceptor or by the toast below; the
+      // indicator only has to stop claiming anything.
+      this.saveState.set('idle');
       if (isReportedWriteFailure(err)) return;
       this.toast.flash(
         err instanceof Error ? err.message : this.i18n.t('toast.collection.saveFailed'),
@@ -730,20 +842,41 @@ export class CollectionSettingsPage {
         );
   }
 
+  /** Opens the creator on an empty draft, so a cancelled name never comes back. */
+  protected startNewGroup(parentId: string | null): void {
+    this.newGroupName.set('');
+    this.pendingGroupParent.set({ parentId });
+    this.focusRequest.set({ which: 'group' });
+  }
+
   protected newGroupKeydown(event: KeyboardEvent): void {
-    const input = event.target as HTMLInputElement;
-    if (event.key === 'Enter') this.commitNewGroup(input.value);
-    else if (event.key === 'Escape') {
-      input.value = '';
-      this.pendingGroupParent.set(null);
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.commitNewGroup();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.discardNewGroup();
     }
   }
 
-  protected commitNewGroup(name: string): void {
-    const pending = this.pendingGroupParent();
+  /** Escape, or Cancel. The one exit that is guaranteed not to write. */
+  protected discardNewGroup(): void {
+    this.newGroupName.set('');
     this.pendingGroupParent.set(null);
-    const trimmed = name.trim();
+  }
+
+  /**
+   * Creates the group, and only on an explicit commit.
+   *
+   * An empty name leaves the row open rather than closing it: nothing was
+   * asked for, so nothing is created — and silently dismissing the row would
+   * make a mistyped Enter look like a failure of the button.
+   */
+  protected commitNewGroup(): void {
+    const pending = this.pendingGroupParent();
+    const trimmed = this.newGroupName().trim();
     if (!pending || !trimmed) return;
+    this.discardNewGroup();
     const node: GroupNode = {
       id: `g${Date.now()}`,
       name: trimmed,
@@ -892,28 +1025,50 @@ export class CollectionSettingsPage {
     if (scope === 'copy') this.clearSortsFor(name);
   }
 
+  /** Opens the declaration row for one owner, on a blank draft. */
+  protected startNewField(owner: string): void {
+    this.newFieldName.set('');
+    this.pendingFieldType.set('text');
+    this.pendingFieldScope.set('item');
+    this.pendingFieldGroupId.set(owner);
+    this.focusRequest.set({ which: 'field' });
+  }
+
   protected newFieldKeydown(event: KeyboardEvent, owner: string): void {
-    const input = event.target as HTMLInputElement;
-    if (event.key === 'Enter') this.commitNewField(owner, input.value);
-    else if (event.key === 'Escape') {
-      input.value = '';
-      this.pendingFieldGroupId.set(null);
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.commitNewField(owner);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.discardNewField();
     }
   }
 
-  protected commitNewField(owner: string, name: string): void {
-    if (this.pendingFieldGroupId() !== owner) return;
-    const type = this.pendingFieldType();
-    const scope = this.pendingFieldScope();
+  protected discardNewField(): void {
+    this.newFieldName.set('');
     this.pendingFieldGroupId.set(null);
     this.pendingFieldType.set('text');
     this.pendingFieldScope.set('item');
-    const trimmed = name.trim();
+  }
+
+  /**
+   * Declares the field, on an explicit commit only.
+   *
+   * A duplicate name leaves the row standing with the name still in it: the
+   * type and the scope beside it were chosen too, and throwing all three away
+   * because one word clashed is the expensive way to say "pick another".
+   */
+  protected commitNewField(owner: string): void {
+    if (this.pendingFieldGroupId() !== owner) return;
+    const trimmed = this.newFieldName().trim();
     if (!trimmed) return;
     if (this.fieldsOf(owner).some(f => f.name === trimmed)) {
       this.toast.flash(this.i18n.t('toast.field.duplicate', { name: trimmed }));
       return;
     }
+    const type = this.pendingFieldType();
+    const scope = this.pendingFieldScope();
+    this.discardNewField();
     this.mutateFields(owner, fields => [...fields, { name: trimmed, type, scope }]);
     this.toast.flash(this.i18n.t('toast.field.added', { name: trimmed }));
   }
@@ -953,20 +1108,32 @@ export class CollectionSettingsPage {
    * group there is no tree to drop one into, and the only thing that needs
    * arranging — their order — is a property of the group they belong to.
    */
+  protected startNewSection(groupId: string): void {
+    this.newSectionName.set('');
+    this.pendingSectionGroupId.set(groupId);
+    this.focusRequest.set({ which: 'section' });
+  }
+
   protected newSectionKeydown(event: KeyboardEvent, groupId: string): void {
-    const input = event.target as HTMLInputElement;
-    if (event.key === 'Enter') this.commitNewSection(groupId, input.value);
-    else if (event.key === 'Escape') {
-      input.value = '';
-      this.pendingSectionGroupId.set(null);
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.commitNewSection(groupId);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.discardNewSection();
     }
   }
 
-  protected commitNewSection(groupId: string, name: string): void {
-    if (this.pendingSectionGroupId() !== groupId) return;
+  protected discardNewSection(): void {
+    this.newSectionName.set('');
     this.pendingSectionGroupId.set(null);
-    const trimmed = name.trim();
+  }
+
+  protected commitNewSection(groupId: string): void {
+    if (this.pendingSectionGroupId() !== groupId) return;
+    const trimmed = this.newSectionName().trim();
     if (!trimmed) return;
+    this.discardNewSection();
     this.mutate(d => ({
       ...d,
       sections: [...d.sections, { id: `s${Date.now()}`, groupId, name: trimmed, target: null }],
@@ -1060,8 +1227,33 @@ export class CollectionSettingsPage {
    * the parent under that section, and the child group is deleted. Order starts
    * alphabetical — the order those children were already displayed in — and is
    * then the user's to arrange, which is the whole point.
+   *
+   * It asks first, and the count is why. This is the largest bulk write on the
+   * page and there is no undo: every sub-group is destroyed, every item in the
+   * branch is re-filed, and a section can carry neither the fields nor the order
+   * those groups declared (rule 5), so whatever they declared is gone. It used
+   * to be a bare `link` button beside "+ Add section" — one click, no preview,
+   * no way back — which made the safest-looking control on the pane the most
+   * expensive one.
    */
-  protected convertChildrenToSections(groupId: string): void {
+  protected async convertChildrenToSections(groupId: string): Promise<void> {
+    const first = this.draft();
+    if (!first) return;
+    const count = childrenOf(first.groups, groupId).length;
+    if (!count) return;
+
+    const confirmed = await this.confirm.ask({
+      titleKey: 'collSettings.sections.convertConfirm.title',
+      bodyKey: 'collSettings.sections.convertConfirm.body',
+      params: { n: count },
+      confirmKey: 'collSettings.sections.convertConfirm.confirm',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    // Re-read rather than closing over what the question was asked about: the
+    // draft is live while the dialog is up, and the graph that gets written has
+    // to be derived from the graph that exists now.
     const draft = this.draft();
     if (!draft) return;
     const children = childrenOf(draft.groups, groupId);

@@ -7,65 +7,99 @@
   <p id="csv-import-lede" class="lede">{{ lede() }}</p>
   <p class="format">
     {{ format() }}
-    <span class="format__more">{{ 'csvImport.formatMore' | t }}</span>
+    <span class="format__more">
+      {{ 'csvImport.formatMore' | t }}
+      <!-- The template teaches the format; it is not a third way to supply
+           data. So it reads as a link at the end of the paragraph that explains
+           the format, rather than as a bordered button of equal weight beside
+           "Choose a file…". -->
+      <ui-button class="format__template" variant="link" size="sm" (click)="downloadTemplate()">
+        {{ 'csvImport.template' | t }}
+      </ui-button>
+    </span>
   </p>
 
-  <ui-field [label]="'csvImport.pasteLabel' | t">
-    <ui-textarea
-      [mono]="true"
-      [rows]="8"
-      [value]="text()"
-      (valueChange)="text.set($event)"
-      [placeholder]="'csvImport.pastePlaceholder' | t"
-    />
-  </ui-field>
+  <!--
+    One box, two gestures — never two competing sources.
 
-  <div class="sources">
-    <!-- The input is hidden and driven by a real button: a bare file input
-         cannot be styled to look like every other action on the screen, and it
-         is the one control here that is not a `ui-*` component. -->
-    <ui-button variant="ghost" size="sm" (click)="fileInput.click()">
-      {{ 'csvImport.chooseFile' | t }}
-    </ui-button>
-    <input
-      #fileInput
-      type="file"
-      accept=".csv,.txt,text/csv,text/plain"
-      hidden
-      [attr.aria-label]="'csvImport.chooseFile' | t"
-      (change)="readFile($event)"
-    />
-    <ui-button variant="ghost" size="sm" (click)="downloadTemplate()">
-      {{ 'csvImport.template' | t }}
-    </ui-button>
-    @if (fileName()) {
-      <span class="sources__file">{{ 'csvImport.fileChosen' | t: { name: fileName() } }}</span>
-    }
-    @if (fileError()) {
-      <span class="sources__error" role="status">{{ 'csvImport.fileFailed' | t }}</span>
-    }
-  </div>
+    The paste area, the file button and the badge that names the file are one
+    field: whichever gesture was used last, the rows are in the box you can see,
+    and the badge beside the button says where they came from. It is a live
+    region, so picking a file over a paste is announced rather than silently
+    swapping the text under the cursor; typing clears it, because the content is
+    then no longer the file's.
+
+    The whole area is also a drop target. A CSV arrives as a file and dropping
+    it is the desktop reflex; the keyboard path to the same act is the file
+    button, which is why the drop needs no affordance of its own (rule 12).
+  -->
+  <ui-field [label]="'csvImport.pasteLabel' | t" [hint]="'csvImport.dropHint' | t">
+    <div
+      class="source"
+      [class.source--dropping]="dropping()"
+      (dragenter)="dragOver($event)"
+      (dragover)="dragOver($event)"
+      (dragleave)="dragLeave($event)"
+      (drop)="onDrop($event)"
+    >
+      <ui-textarea
+        [mono]="true"
+        [rows]="8"
+        [value]="text()"
+        (valueChange)="typed($event)"
+        [placeholder]="'csvImport.pastePlaceholder' | t"
+      />
+
+      <div class="source__bar">
+        <!-- The input is hidden and driven by a real button: a bare file input
+             cannot be styled to look like every other action on the screen, and
+             it is the one control here that is not a `ui-*` component. -->
+        <ui-button variant="ghost" size="sm" (click)="fileInput.click()">
+          {{ 'csvImport.chooseFile' | t }}
+        </ui-button>
+        <input
+          #fileInput
+          type="file"
+          accept=".csv,.txt,text/csv,text/plain"
+          hidden
+          [attr.aria-label]="'csvImport.chooseFile' | t"
+          (change)="readFile($event)"
+        />
+        @if (fileName(); as name) {
+          <span class="source__from" role="status">{{ 'csvImport.fileChosen' | t: { name } }}</span>
+        }
+        @if (fileError()) {
+          <span class="source__error" role="status">{{ 'csvImport.fileFailed' | t }}</span>
+        }
+      </div>
+    </div>
+  </ui-field>
 
   <fieldset class="duplicates">
     <legend>{{ 'csvImport.duplicatesLegend' | t }}</legend>
-    <label>
-      <input
-        type="radio"
+    <!--
+      ui-radio, not a hand-rolled input plus a hand-styled label. This is the
+      question that decides whether the file overwrites items that are already
+      here, which is the worst place in the app to be reimplementing a control.
+
+      Both options bind the same selection, so exactly one thing decides which
+      is checked — two independent checked expressions is how a radio pair ends
+      up with the browser and the model disagreeing.
+    -->
+    <div class="duplicates__options">
+      <ui-radio
         name="csv-duplicates"
-        [checked]="duplicates() === 'skip'"
-        (change)="duplicates.set('skip')"
-      />
-      <span>{{ 'csvImport.duplicatesSkip' | t }}</span>
-    </label>
-    <label>
-      <input
-        type="radio"
+        optionValue="skip"
+        [value]="duplicates()"
+        (picked)="pickDuplicates($event)"
+      >{{ 'csvImport.duplicatesSkip' | t }}</ui-radio>
+      <ui-radio
         name="csv-duplicates"
-        [checked]="duplicates() === 'update'"
-        (change)="duplicates.set('update')"
-      />
-      <span>{{ 'csvImport.duplicatesUpdate' | t }}</span>
-    </label>
+        optionValue="update"
+        [value]="duplicates()"
+        (picked)="pickDuplicates($event)"
+      >{{ 'csvImport.duplicatesUpdate' | t }}</ui-radio>
+    </div>
     @if (duplicates() === 'update') {
       <p class="duplicates__hint">{{ 'csvImport.duplicatesHint' | t }}</p>
     }

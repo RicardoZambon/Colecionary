@@ -3,7 +3,10 @@ import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, injec
 import { ImportPlan } from '../../../core/api/archive-api';
 import { I18nService } from '../../../core/i18n';
 import { TPipe } from '../../../shared/pipes/t.pipe';
-import { UiButton } from '../../../shared/ui';
+import { UiButton, UiRadio } from '../../../shared/ui';
+
+/** What a single collision can be answered with. Nothing chosen yet is null. */
+type Choice = 'new' | 'overwrite';
 
 /**
  * Asks which collections an archive should overwrite.
@@ -18,12 +21,18 @@ import { UiButton } from '../../../shared/ui';
  * backup can hold seven collections where one is worth restoring over and six
  * are not, and a single answer would force the same fate on all of them.
  * Nothing is preselected — overwriting cannot be undone from here, so it is
- * never what a distracted Enter keypress does.
+ * never what a distracted Enter keypress does. That is now true of *both*
+ * options: "create new" used to be drawn checked, because it was inferred from
+ * the absence of an overwrite, and a set with one member per overwrite has no
+ * way to tell "they said create a new one" from "they have not answered". The
+ * default outcome is unchanged — confirming without answering still creates new
+ * collections and destroys nothing — but the screen no longer claims a choice
+ * the user did not make.
  */
 @Component({
   selector: 'app-import-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TPipe, UiButton],
+  imports: [TPipe, UiButton, UiRadio],
   host: { '(document:keydown)': 'onKeydown($event)' },
   template: `
     @if (plan(); as p) {
@@ -40,25 +49,32 @@ import { UiButton } from '../../../shared/ui';
               @if (entry.existingId; as existing) {
                 <fieldset class="choice">
                   <legend class="sr-only">{{ 'import.choiceFor' | t: { name: entry.name } }}</legend>
-                  <label>
-                    <input
-                      #firstControl
-                      type="radio"
-                      [name]="'entry' + $index"
-                      [checked]="!replacing().has(existing)"
-                      (change)="choose(existing, false)"
-                    />
-                    <span>{{ 'import.createNew' | t }}</span>
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      [name]="'entry' + $index"
-                      [checked]="replacing().has(existing)"
-                      (change)="choose(existing, true)"
-                    />
-                    <span>{{ 'import.overwrite' | t }}</span>
-                  </label>
+                  <!--
+                    ui-radio, not a hand-rolled input plus a hand-styled label.
+                    This is the last question asked before one request can
+                    overwrite every collection in the vault, which is the worst
+                    place in the app to be reimplementing a control - and the
+                    kit component is the one that keeps the platform role, the
+                    checked state and arrow-key movement within the set.
+
+                    Both options bind the same selection, so exactly one thing
+                    decides which is checked. Two independent checked
+                    expressions is how a radio pair ends up with the browser and
+                    the model disagreeing about which one is on.
+                  -->
+                  <ui-radio
+                    #firstControl
+                    [name]="'entry' + $index"
+                    optionValue="new"
+                    [value]="choiceFor(existing)"
+                    (picked)="choose(existing, $event)"
+                  >{{ 'import.createNew' | t }}</ui-radio>
+                  <ui-radio
+                    [name]="'entry' + $index"
+                    optionValue="overwrite"
+                    [value]="choiceFor(existing)"
+                    (picked)="choose(existing, $event)"
+                  >{{ 'import.overwrite' | t }}</ui-radio>
                 </fieldset>
               } @else {
                 <span class="entry__fresh">{{ 'import.willBeCreated' | t }}</span>
@@ -154,21 +170,16 @@ import { UiButton } from '../../../shared/ui';
       white-space: nowrap;
     }
 
+    /* No top margin and no label rule: ui-radio brings its own padding, which
+       is both the spacing above the first option and the hover/press area. The
+       gap is the width at which two of those areas meet without overlapping. */
     .choice {
       border: 0;
-      margin: 6px 0 0;
+      margin: 0;
       padding: 0;
       display: flex;
       flex-wrap: wrap;
-      gap: 14px;
-    }
-
-    .choice label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12.5px;
-      cursor: pointer;
+      gap: var(--sp-4);
     }
 
     .warning {
@@ -206,9 +217,38 @@ export class ImportDialog {
   readonly confirmed = output<string[]>();
   readonly cancelled = output<void>();
 
-  private readonly firstControl = viewChild<ElementRef<HTMLInputElement>>('firstControl');
+  /**
+   * The host of the first option, so focus can be moved to the platform radio
+   * it wraps.
+   *
+   * Read as an `ElementRef` deliberately: a template ref on an element that
+   * carries a component resolves to the *component instance* by default, and
+   * `UiRadio` has no focus method to call — so without the `read` this silently
+   * hands back an object with no `nativeElement` and the dialog opens with
+   * focus still outside it.
+   */
+  private readonly firstControl = viewChild('firstControl', { read: ElementRef });
 
-  protected readonly replacing = signal(new Set<string>());
+  /**
+   * One answer per colliding collection, keyed by the live collection's id.
+   *
+   * Empty means nothing has been answered yet, which is the state the dialog
+   * opens in and the reason it is a map of choices rather than a set of
+   * overwrites: a set can only say "overwrite" or "not yet said", so "create a
+   * new one" had to be inferred from absence — and an inferred answer is
+   * indistinguishable from an unanswered question, both to the code and to the
+   * radio pair, which is exactly the ambiguity the two hand-rolled inputs
+   * encoded twice and disagreed about.
+   */
+  private readonly choices = signal(new Map<string, Choice>());
+
+  /** Ids the user has answered with "overwrite the one already here". */
+  protected readonly replacing = computed(
+    () =>
+      new Set(
+        [...this.choices()].filter(([, choice]) => choice === 'overwrite').map(([id]) => id),
+      ),
+  );
 
   // Both go through `plural` rather than a hand-rolled `=== 1` ternary: one
   // place decides what "singular" means, so a language that ever disagrees is a
@@ -235,11 +275,17 @@ export class ImportDialog {
 
       // A fresh plan starts with nothing selected, so reopening the dialog can
       // never carry a previous run's overwrite decisions into this one.
-      this.replacing.set(new Set());
+      this.choices.set(new Map());
 
       // Same reason as the lightbox: focus has to move inside for Escape to
       // reach the handler and for a screen reader to announce the dialog.
-      queueMicrotask(() => this.firstControl()?.nativeElement.focus());
+      // The host is a custom element and so not focusable; the platform radio
+      // it wraps is the real control, and Tab entering a set with nothing
+      // chosen lands on its first option, which is where this puts it.
+      queueMicrotask(() => {
+        const host = this.firstControl()?.nativeElement as HTMLElement | undefined;
+        host?.querySelector('input')?.focus();
+      });
 
       const previous = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
@@ -249,16 +295,13 @@ export class ImportDialog {
     });
   }
 
-  protected choose(existingId: string, overwrite: boolean): void {
-    this.replacing.update(current => {
-      const next = new Set(current);
-      if (overwrite) {
-        next.add(existingId);
-      } else {
-        next.delete(existingId);
-      }
-      return next;
-    });
+  /** What this collision is currently answered with; null while unanswered. */
+  protected choiceFor(existingId: string): Choice | null {
+    return this.choices().get(existingId) ?? null;
+  }
+
+  protected choose(existingId: string, choice: string): void {
+    this.choices.update(current => new Map(current).set(existingId, choice as Choice));
   }
 
   protected onKeydown(event: KeyboardEvent): void {
